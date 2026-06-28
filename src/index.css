@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Global Print Configuration */
+@media print {
+  /* Hide all elements on the page */
+  body * {
+    visibility: hidden;
+    background-color: transparent !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  /* Show only the designated printable voucher container */
+  #voucher-sheet-printable, #voucher-sheet-printable * {
+    visibility: visible;
+  }
+  
+  /* Reset layout for the printed voucher page */
+  #voucher-sheet-printable {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 10px !important;
+    margin: 0 !important;
+    background-color: white !important;
+    color: black !important;
+  }
+
+  /* Force standard margins and hide headers/footers of the browser where possible */
+  @page {
+    margin: 1.5cm;
+  }
+}
