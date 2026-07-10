@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB } from './db';
 import { AppUser, Language, Theme, Transaction } from './types';
+import { auth } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import Layout from './components/Layout';
 import { Download, X, Smartphone, ArrowDown, Sparkles, ShieldAlert } from 'lucide-react';
 
@@ -155,6 +157,39 @@ export default function App() {
     return () => {
       window.removeEventListener('custody_db_updated', handleUpdate);
     };
+  }, []);
+
+  // Monitor Firebase auth state to ensure session validity and multi-tenancy sync
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        const stored = localStorage.getItem('custody_active_user');
+        const currentLocalUser = stored ? JSON.parse(stored) : null;
+        
+        if (!currentLocalUser || currentLocalUser.email?.toLowerCase().trim() !== firebaseUser.email?.toLowerCase().trim()) {
+          const users = CustodyDB.getUsers();
+          const matchedUser = users.find(u => u.email.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim());
+          if (matchedUser) {
+            // Synchronize ID if needed to enforce rules
+            if (matchedUser.id !== firebaseUser.uid) {
+              matchedUser.id = firebaseUser.uid;
+              CustodyDB.saveUsers(users.map(u => u.email.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim() ? { ...u, id: firebaseUser.uid } : u));
+            }
+            CustodyDB.setActiveUser(matchedUser);
+            setActiveUser(matchedUser);
+          }
+        }
+      } else {
+        // Firebase says signed out - clear session immediately to prevent local hijacking
+        const stored = localStorage.getItem('custody_active_user');
+        if (stored) {
+          CustodyDB.setActiveUser(null);
+          setActiveUser(null);
+        }
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Apply theme classes to standard document element

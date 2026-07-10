@@ -80,6 +80,8 @@ export default function Dashboard({
   const [notifications, setNotifications] = useState(() => CustodyDB.getNotifications());
   const [dashboardTab, setDashboardTab] = useState<'activity' | 'notifications'>('activity');
   const [chartTab, setChartTab] = useState<'station' | 'category'>('station');
+  const [pendingLimit, setPendingLimit] = useState(10);
+  const [settledLimit, setSettledLimit] = useState(10);
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -831,7 +833,7 @@ export default function Dashboard({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {pendingTxs.map((tx) => {
+                  {pendingTxs.slice(0, pendingLimit).map((tx) => {
                     const st = allStations.find(s => s.id === tx.station_id);
                     const stationLabel = st ? st.station_name : 'N/A';
                     return (
@@ -877,6 +879,18 @@ export default function Dashboard({
                 </tbody>
               </table>
             </div>
+
+            {pendingTxs.length > pendingLimit && (
+              <div className="flex justify-center p-2.5 border-t border-slate-100 dark:border-slate-800/30">
+                <button
+                  onClick={() => setPendingLimit(prev => prev + 10)}
+                  className="px-3 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded transition-all flex items-center gap-1"
+                >
+                  <span>{isRtl ? 'عرض المزيد من المعاملات المعلقة' : 'Load More Pending Operations'}</span>
+                  <span className="text-[9px] text-slate-400 font-normal">({pendingTxs.length - pendingLimit} {isRtl ? 'متبقي' : 'remaining'})</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -910,7 +924,7 @@ export default function Dashboard({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {underSettlementTxs.map((tx) => {
+                  {underSettlementTxs.slice(0, settledLimit).map((tx) => {
                     const st = allStations.find(s => s.id === tx.station_id);
                     const stationLabel = st ? st.station_name : 'N/A';
                     return (
@@ -985,6 +999,18 @@ export default function Dashboard({
                 </tbody>
               </table>
             </div>
+
+            {underSettlementTxs.length > settledLimit && (
+              <div className="flex justify-center p-2.5 border-t border-slate-100 dark:border-slate-800/30">
+                <button
+                  onClick={() => setSettledLimit(prev => prev + 10)}
+                  className="px-3 py-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 rounded transition-all flex items-center gap-1"
+                >
+                  <span>{isRtl ? 'عرض المزيد من المستندات' : 'Load More Vouchers'}</span>
+                  <span className="text-[9px] text-slate-400 font-normal">({underSettlementTxs.length - settledLimit} {isRtl ? 'متبقي' : 'remaining'})</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

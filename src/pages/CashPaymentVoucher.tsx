@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB } from '../db';
 import { translations, Language, Theme, Transaction, CashVoucher, Company, Station } from '../types';
+import { getArabicTafqeet, getEnglishTafqeet } from '../utils/tafqeet';
 import { 
   FileCheck, 
   FileText, 
@@ -31,151 +32,6 @@ interface CashPaymentVoucherProps {
   onNavigate: (tab: string) => void;
   selectedTx: Transaction | null;
   setSelectedTx: (tx: Transaction | null) => void;
-}
-
-// ============================================================================
-// ARABIC TAFQEET HELPER (NUMBER TO WORDS)
-// ============================================================================
-function getArabicTafqeet(amount: number): string {
-  const parts = amount.toFixed(2).split('.');
-  const pounds = parseInt(parts[0], 10);
-  const piastres = parseInt(parts[1], 10);
-
-  const units = ['', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة', 'عشرة'];
-  const teens = ['عشرة', 'أحد عشر', 'اثنا عشر', 'ثلاثة عشر', 'أربعة عشر', 'خمسة عشر', 'ستة عشر', 'سبعة عشر', 'ثمانية عشر', 'تسعة عشر'];
-  const tens = ['', 'عشرة', 'عشرون', 'ثلاثون', 'أربعون', 'خمسون', 'ستون', 'سبعون', 'ثمانون', 'تسعون'];
-  const hundreds = ['', 'مائة', 'مائتان', 'ثلاثمائة', 'أربعمائة', 'خمسمائة', 'ستمائة', 'سبعمائة', 'ثمانمائة', 'تسعمائة'];
-
-  function convertBelowHundred(n: number): string {
-    if (n === 0) return '';
-    if (n <= 10) return units[n];
-    if (n < 20) return teens[n - 10];
-    const u = n % 10;
-    const t = Math.floor(n / 10);
-    if (u > 0) {
-      return units[u] + ' و' + tens[t];
-    }
-    return tens[t];
-  }
-
-  function convertBelowThousand(n: number): string {
-    if (n === 0) return '';
-    const h = Math.floor(n / 100);
-    const rest = n % 100;
-    let result = '';
-    
-    if (h > 0) {
-      result += hundreds[h];
-    }
-    
-    if (rest > 0) {
-      if (h > 0) result += ' و';
-      result += convertBelowHundred(rest);
-    }
-    return result;
-  }
-
-  function formatPounds(p: number): string {
-    if (p === 0) return 'صفر';
-    if (p === 1) return 'جنيه واحد';
-    if (p === 2) return 'جنيهان';
-    if (p >= 3 && p <= 10) return convertBelowThousand(p) + ' جنيهات';
-    
-    let result = '';
-    const th = Math.floor(p / 1000);
-    const rem = p % 1000;
-
-    if (th > 0) {
-      if (th === 1) result += 'ألف';
-      else if (th === 2) result += 'ألفان';
-      else if (th >= 3 && th <= 10) result += convertBelowThousand(th) + ' آلاف';
-      else result += convertBelowThousand(th) + ' ألف';
-    }
-
-    if (rem > 0) {
-      if (th > 0) result += ' و';
-      result += convertBelowThousand(rem);
-    }
-
-    return result + ' جنيه';
-  }
-
-  let text = formatPounds(pounds);
-  
-  if (pounds > 10 && pounds % 100 !== 0) {
-    text = text.replace(' جنيه', ' جنيهاً');
-  }
-
-  if (piastres > 0) {
-    let piastreText = convertBelowHundred(piastres);
-    if (piastres === 1) piastreText = 'قرش واحد';
-    else if (piastres === 2) piastreText = 'قرشان';
-    else if (piastres >= 3 && piastres <= 10) piastreText += ' قروش';
-    else piastreText += ' قرشاً';
-    text += ' و' + piastreText;
-  }
-  
-  return 'فقط ' + text + ' لا غير';
-}
-
-// ============================================================================
-// ENGLISH TAFQEET HELPER (NUMBER TO WORDS)
-// ============================================================================
-function getEnglishTafqeet(amount: number): string {
-  const pounds = Math.floor(amount);
-  const piastres = Math.round((amount % 1) * 100);
-
-  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
-  function convertLessThanThousand(n: number): string {
-    if (n === 0) return '';
-    let result = '';
-    const h = Math.floor(n / 100);
-    const rest = n % 100;
-    if (h > 0) {
-      result += ones[h] + ' Hundred';
-    }
-    if (rest > 0) {
-      if (h > 0) result += ' and ';
-      if (rest < 20) {
-        result += ones[rest];
-      } else {
-        const u = rest % 10;
-        const t = Math.floor(rest / 10);
-        result += tens[t];
-        if (u > 0) result += '-' + ones[u];
-      }
-    }
-    return result;
-  }
-
-  function convert(n: number): string {
-    if (n === 0) return 'Zero';
-    let result = '';
-    const m = Math.floor(n / 1000000);
-    const th = Math.floor((n % 1000000) / 1000);
-    const rest = n % 1000;
-
-    if (m > 0) {
-      result += convertLessThanThousand(m) + ' Million ';
-    }
-    if (th > 0) {
-      result += convertLessThanThousand(th) + ' Thousand ';
-    }
-    if (rest > 0) {
-      result += convertLessThanThousand(rest);
-    }
-    return result.trim();
-  }
-
-  let text = convert(pounds) + ' Egyptian Pounds';
-  if (piastres > 0) {
-    text += ' and ' + convertLessThanThousand(piastres) + ' Piastres';
-  } else {
-    text += ' Only';
-  }
-  return text;
 }
 
 // ============================================================================
@@ -449,6 +305,7 @@ export default function CashPaymentVoucher({
 
   // Past Vouchers List search state
   const [voucherSearch, setVoucherSearch] = useState('');
+  const [vouchersLimit, setVouchersLimit] = useState(15);
 
   // Main Voucher Parameters Form state
   const [voucherNo, setVoucherNo] = useState('');
@@ -1418,7 +1275,7 @@ export default function CashPaymentVoucher({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredVouchers.map(vc => {
+                  {filteredVouchers.slice(0, vouchersLimit).map(vc => {
                     const vcCompany = companies.find(c => c.id === vc.company_id);
                     const vcStation = stations.find(s => s.id === vc.station_id);
 
@@ -1512,6 +1369,18 @@ export default function CashPaymentVoucher({
                 </tbody>
               </table>
             </div>
+
+            {filteredVouchers.length > vouchersLimit && (
+              <div className="flex justify-center p-3 border-t border-slate-100 dark:border-slate-800/30">
+                <button
+                  onClick={() => setVouchersLimit(prev => prev + 15)}
+                  className="px-4 py-1.5 text-xs font-bold bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <span>{isRtl ? 'عرض المزيد من السندات' : 'Load More Vouchers'}</span>
+                  <span className="text-[10px] opacity-75">({filteredVouchers.length - vouchersLimit} {isRtl ? 'متبقي' : 'remaining'})</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

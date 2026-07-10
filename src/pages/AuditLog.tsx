@@ -45,6 +45,7 @@ export default function AuditLogView({ language, theme }: AuditLogProps) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [logsLimit, setLogsLimit] = useState(15);
 
   // Refresh
   const handleRefresh = () => {
@@ -369,7 +370,7 @@ export default function AuditLogView({ language, theme }: AuditLogProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
-              {filteredLogs.map((log) => {
+              {filteredLogs.slice(0, logsLimit).map((log) => {
                 const isExpanded = expandedLogId === log.id;
                 const hasDetails = log.details && (log.details.before || log.details.after);
                 
@@ -524,6 +525,18 @@ export default function AuditLogView({ language, theme }: AuditLogProps) {
             </tbody>
           </table>
         </div>
+
+        {filteredLogs.length > logsLimit && (
+          <div className="flex justify-center p-4 border-t border-slate-100 dark:border-slate-800/40">
+            <button
+              onClick={() => setLogsLimit(prev => prev + 15)}
+              className="px-4 py-2 text-xs font-bold bg-indigo-500/10 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
+            >
+              <span>{isRtl ? 'عرض المزيد من السجلات' : 'Load More Records'}</span>
+              <span className="text-[10px] opacity-75">({filteredLogs.length - logsLimit} {isRtl ? 'متبقي' : 'remaining'})</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

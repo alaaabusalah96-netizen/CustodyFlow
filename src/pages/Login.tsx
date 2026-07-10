@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { CustodyDB } from '../db';
 import { translations, Language, Theme, AppUser, UserRole, SignupRequest } from '../types';
+import { auth, dbDeleteDoc } from '../firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { Coins, ShieldAlert, User, Lock, ArrowRight, Languages, UserPlus, LogIn, CheckCircle2, Building, Mail, KeyRound, RefreshCw, ExternalLink, Inbox } from 'lucide-react';
+import SMTPConfigModal from '../components/SMTPConfigModal';
 
 interface LoginProps {
   language: Language;
@@ -52,20 +55,9 @@ export default function Login({
 
   // SMTP Configuration States
   const [showSmtpModal, setShowSmtpModal] = useState(false);
-  const [smtpAdminEmail, setSmtpAdminEmail] = useState('alaaabusalah96@gmail.com');
-  const [smtpAdminPassword, setSmtpAdminPassword] = useState('');
-  const [smtpSecurityPin, setSmtpSecurityPin] = useState('');
-  const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
-  const [smtpPort, setSmtpPort] = useState('587');
-  const [smtpUser, setSmtpUser] = useState('');
-  const [smtpPass, setSmtpPass] = useState('');
-  const [isSavingSmtp, setIsSavingSmtp] = useState(false);
-  const [isTestingSmtp, setIsTestingSmtp] = useState(false);
   const [smtpConfiguredStatus, setSmtpConfiguredStatus] = useState<{ configured: boolean; host?: string; user?: string } | null>(null);
-  const [modalError, setModalError] = useState('');
-  const [modalSuccess, setModalSuccess] = useState('');
 
-  React.useEffect(() => {
+  const refreshSmtpStatus = () => {
     fetch('/api/auth/smtp-config')
       .then(res => res.json())
       .then(data => {
@@ -74,88 +66,11 @@ export default function Login({
         }
       })
       .catch(err => console.error("Error fetching SMTP status:", err));
+  };
+
+  React.useEffect(() => {
+    refreshSmtpStatus();
   }, [showSmtpModal]);
-
-  const handleSaveSmtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setModalError('');
-    setModalSuccess('');
-    setIsSavingSmtp(true);
-
-    try {
-      const res = await fetch('/api/auth/smtp-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          adminEmail: smtpAdminEmail,
-          adminPassword: smtpAdminPassword,
-          securityPin: smtpSecurityPin,
-          smtpHost,
-          smtpPort,
-          smtpUser,
-          smtpPass
-        })
-      });
-      const data = await res.json();
-      setIsSavingSmtp(false);
-
-      if (data.success) {
-        setModalSuccess(data.message || (isRtl ? 'تم حفظ الإعدادات بنجاح!' : 'SMTP settings saved successfully!'));
-        // Clear sensitive inputs
-        setSmtpAdminPassword('');
-        setSmtpSecurityPin('');
-        
-        // Refresh status
-        fetch('/api/auth/smtp-config')
-          .then(r => r.json())
-          .then(statusData => {
-            if (statusData.success) {
-              setSmtpConfiguredStatus(statusData);
-            }
-          });
-      } else {
-        setModalError(data.message || (isRtl ? 'تعذر تنفيذ الطلب.' : 'The request could not be processed.'));
-      }
-    } catch (err) {
-      setIsSavingSmtp(false);
-      setModalError(isRtl ? 'تعذر تنفيذ الطلب.' : 'The request could not be processed.');
-    }
-  };
-
-  const handleTestSmtp = async () => {
-    if (!smtpHost || !smtpPort || !smtpUser || !smtpPass) {
-      setModalError(isRtl ? 'يرجى ملء جميع حقول SMTP أولاً لاختبار الاتصال.' : 'Please fill all SMTP fields first to test the connection.');
-      return;
-    }
-
-    setModalError('');
-    setModalSuccess('');
-    setIsTestingSmtp(true);
-
-    try {
-      const res = await fetch('/api/auth/smtp-config/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          smtpHost,
-          smtpPort,
-          smtpUser,
-          smtpPass
-        })
-      });
-      const data = await res.json();
-      setIsTestingSmtp(false);
-
-      if (data.success) {
-        setModalSuccess(data.message || (isRtl ? 'تم إرسال البريد التجريبي بنجاح!' : 'Test email sent successfully!'));
-      } else {
-        setModalError(data.message || (isRtl ? 'فشل اختبار الاتصال.' : 'Connection test failed.'));
-      }
-    } catch (err) {
-      setIsTestingSmtp(false);
-      setModalError(isRtl ? 'تعذر الاتصال بالخادم للاختبار.' : 'Could not reach server for connection test.');
-    }
-  };
 
   const companies = CustodyDB.getCompanies();
   const activeCompanies = companies.filter(c => c.is_active !== false && c.subscription_status === 'active');
@@ -308,59 +223,120 @@ export default function Login({
     }
   };
 
+  const syncWithFirebaseAuth = async (emailStr: string, passStr: string): Promise<any> => {
+    try {
+      const emailLower = emailStr.trim().toLowerCase();
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, emailLower, passStr);
+        return userCredential.user;
+      } catch (authErr: any) {
+        if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/invalid-email') {
+          try {
+            const userCredential = await createUserWithEmailAndPassword(auth, emailLower, passStr);
+            return userCredential.user;
+          } catch (createErr: any) {
+            console.error('Firebase Auth auto-creation failed:', createErr);
+          }
+        } else {
+          console.error('Firebase Auth signin error:', authErr);
+        }
+      }
+    } catch (err) {
+      console.warn('Firebase Auth synchronization failed:', err);
+    }
+    return null;
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
     const users = CustodyDB.getUsers();
-    const foundUser = users.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
+    const emailLower = email.toLowerCase().trim();
+    const foundUser = users.find(u => u.email.toLowerCase().trim() === emailLower);
 
     if (!foundUser) {
       setError(isRtl ? 'البريد الإلكتروني غير مسجل بالنظام.' : 'Email address not found in system.');
       return;
     }
 
-    const isPlatformAdmin = foundUser.email.toLowerCase().trim() === 'alaaabusalah96@gmail.com' || foundUser.email.toLowerCase().trim() === 'alaabusalah96@gmail.com';
+    const isPlatformAdmin = emailLower === 'alaaabusalah96@gmail.com' || emailLower === 'alaabusalah96@gmail.com';
+
+    // Verify Password (Plain Text or Hash)
+    const storedPassword = foundUser.password || (isPlatformAdmin ? '' : '123456');
+    const enteredHash = CustodyDB.hashPassword(password);
+    const isPlainMatch = storedPassword !== '' && storedPassword === password;
+    const isHashMatch = storedPassword !== '' && storedPassword === enteredHash;
+
+    if (storedPassword !== '' && !isPlainMatch && !isHashMatch) {
+      setError(isRtl ? 'كلمة المرور غير صحيحة.' : 'Incorrect password.');
+      return;
+    }
+
+    // Auto migrate legacy plain-text password to hash
+    const needsMigration = storedPassword !== '' && isPlainMatch;
+    if (needsMigration) {
+      const updatedUsers = users.map(u => {
+        if (u.id === foundUser.id) {
+          return { ...u, password: enteredHash };
+        }
+        return u;
+      });
+      CustodyDB.saveUsers(updatedUsers);
+      foundUser.password = enteredHash;
+    }
+
+    // Sync with Firebase Authentication
+    const firebaseUser = await syncWithFirebaseAuth(emailLower, password);
+
+    // Migrate user document ID to Firebase Auth UID to enforce multi-tenancy rules
+    if (firebaseUser) {
+      const currentUsers = CustodyDB.getUsers();
+      const legacyUser = currentUsers.find(u => u.email.toLowerCase().trim() === emailLower && u.id !== firebaseUser.uid);
+      if (legacyUser) {
+        // Delete legacy doc from Firestore
+        try {
+          await dbDeleteDoc('users', legacyUser.id);
+        } catch (delErr) {
+          console.warn('Failed to delete legacy user document:', delErr);
+        }
+
+        // Save under new Firebase uid
+        const updatedUsers = currentUsers.map(u => {
+          if (u.id === legacyUser.id) {
+            return { ...u, id: firebaseUser.uid, password: enteredHash };
+          }
+          return u;
+        });
+        CustodyDB.saveUsers(updatedUsers);
+        foundUser.id = firebaseUser.uid;
+      }
+    }
 
     if (isPlatformAdmin) {
-      const storedPassword = foundUser.password || '';
-      
-      // If a password is already registered/saved, we must validate it first!
-      if (storedPassword !== '' && storedPassword !== password) {
-        setError(isRtl ? 'كلمة المرور غير صحيحة لحساب أدمن المنصة.' : 'Incorrect password for Platform Admin.');
-        return;
-      }
-
-      // First-time Platform Admin login - set password and default security pin
+      // First-time Platform Admin setup for default security pin
       if (storedPassword === '') {
-        const usersList = CustodyDB.getUsers();
-        const updatedUsers = usersList.map(u => {
-          if (u.email.toLowerCase().trim() === foundUser.email.toLowerCase().trim()) {
+        const currentUsers = CustodyDB.getUsers();
+        const updatedUsers = currentUsers.map(u => {
+          if (u.email.toLowerCase().trim() === emailLower) {
             return { 
               ...u, 
-              password: password, 
+              password: enteredHash, 
               is_active: true,
-              security_pin: '1234' // Default recovery security pin for admin if first time
+              security_pin: '1234'
             };
           }
           return u;
         });
         CustodyDB.saveUsers(updatedUsers);
-        foundUser.password = password;
+        foundUser.password = enteredHash;
         foundUser.security_pin = '1234';
       }
 
       foundUser.is_active = true;
       CustodyDB.setActiveUser(foundUser);
       onLoginSuccess(foundUser);
-      return;
-    }
-
-    // Normal user password verification
-    const userPassword = foundUser.password || '123456';
-    if (userPassword !== password) {
-      setError(isRtl ? 'كلمة المرور غير صحيحة.' : 'Incorrect password.');
       return;
     }
 
@@ -404,12 +380,28 @@ export default function Login({
         }
 
         // Save the typed password to the database (removes default password completely)
+        const hashedEntered = CustodyDB.hashPassword(adminLoginEnteredPassword);
         const users = CustodyDB.getUsers();
+        
+        // Sync with Firebase Auth
+        const firebaseUser = await syncWithFirebaseAuth(adminLoginUser.email, adminLoginEnteredPassword);
+        const targetId = firebaseUser ? firebaseUser.uid : adminLoginUser.id;
+        
+        // Delete old user document if ID changed
+        if (firebaseUser && adminLoginUser.id !== firebaseUser.uid) {
+          try {
+            await dbDeleteDoc('users', adminLoginUser.id);
+          } catch (delErr) {
+            console.warn('Failed to delete legacy user document in admin verification:', delErr);
+          }
+        }
+
         const updatedUsers = users.map(u => {
-          if (u.id === adminLoginUser.id) {
+          if (u.id === adminLoginUser.id || (firebaseUser && u.email.toLowerCase().trim() === adminLoginUser.email.toLowerCase().trim())) {
             return { 
               ...u, 
-              password: adminLoginEnteredPassword,
+              id: targetId,
+              password: hashedEntered,
               security_pin: isFirstTime ? adminSelectedSecurityPin.trim() : u.security_pin
             };
           }
@@ -419,7 +411,8 @@ export default function Login({
 
         const finalUser = { 
           ...adminLoginUser, 
-          password: adminLoginEnteredPassword,
+          id: targetId,
+          password: hashedEntered,
           security_pin: isFirstTime ? adminSelectedSecurityPin.trim() : adminLoginUser.security_pin
         };
         
@@ -1108,244 +1101,13 @@ export default function Login({
       </div>
 
       {/* SMTP Configuration Modal */}
-      {showSmtpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-lg rounded-3xl border shadow-2xl p-6 ${
-            theme === 'dark' ? 'bg-[#0f172a] border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
-          }`}>
-            <div className="flex justify-between items-start border-b border-indigo-500/10 pb-4 mb-4">
-              <div className="text-right flex-1" style={{ direction: isRtl ? 'rtl' : 'ltr' }}>
-                <h3 className="text-sm font-black flex items-center gap-2 text-indigo-500 justify-start">
-                  <Mail size={16} />
-                  <span>{isRtl ? 'إعدادات خادم البريد السري (SMTP)' : 'SMTP Private Mailer Settings'}</span>
-                </h3>
-                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                  {isRtl 
-                    ? 'قم بإدخال بيانات حساب Gmail الخاص بك وكلمة مرور التطبيق ذات الـ 16 حرفاً لتفعيل إرسال أكواد الـ OTP تلقائياً.' 
-                    : 'Input your Gmail account details and the 16-character App Password to authorize secure OTP dispatch.'}
-                </p>
-              </div>
-              <button 
-                type="button" 
-                onClick={() => {
-                  setShowSmtpModal(false);
-                  setModalError('');
-                  setModalSuccess('');
-                }}
-                className="text-slate-400 hover:text-red-500 font-bold transition-all text-sm px-2"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Modal Internal Alerts */}
-            {modalSuccess && (
-              <div className="p-3 mb-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-start gap-2 text-right" style={{ direction: isRtl ? 'rtl' : 'ltr' }}>
-                <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
-                <span>{modalSuccess}</span>
-              </div>
-            )}
-
-            {modalError && (
-              <div className="p-3 mb-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-semibold flex items-start gap-2 text-right" style={{ direction: isRtl ? 'rtl' : 'ltr' }}>
-                <ShieldAlert size={16} className="shrink-0 mt-0.5" />
-                <span>{modalError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveSmtp} className="space-y-4 text-right" style={{ direction: isRtl ? 'rtl' : 'ltr' }}>
-              {/* Part 1: Admin Authorization */}
-              <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl text-right">
-                <span className="text-[10px] font-bold text-indigo-400 block mb-2">
-                  🔐 {isRtl ? 'تأكيد هوية أدمن المنصة لإجراء التغيير' : 'Verify Platform Admin Identity'}
-                </span>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] text-slate-400 mb-1">{isRtl ? 'بريد الأدمن' : 'Admin Email'}</label>
-                    <input 
-                      type="email" 
-                      value={smtpAdminEmail}
-                      onChange={(e) => setSmtpAdminEmail(e.target.value)}
-                      className={`w-full px-3 py-1.5 rounded-lg border text-xs focus:outline-none ${
-                        theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-200'
-                      }`}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-400 mb-1">{isRtl ? 'كلمة المرور' : 'Password'}</label>
-                    <input 
-                      type="password" 
-                      placeholder="••••••••"
-                      value={smtpAdminPassword}
-                      onChange={(e) => setSmtpAdminPassword(e.target.value)}
-                      className={`w-full px-3 py-1.5 rounded-lg border text-xs focus:outline-none ${
-                        theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-200'
-                      }`}
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="mt-2 text-right">
-                  <label className="block text-[10px] text-slate-400 mb-1">{isRtl ? 'كود أمان استعادة حساب أدمن المنصة (Security PIN)' : 'Security PIN'}</label>
-                  <input 
-                    type="password" 
-                    placeholder="e.g. 1234"
-                    value={smtpSecurityPin}
-                    onChange={(e) => setSmtpSecurityPin(e.target.value)}
-                    className={`w-full px-3 py-1.5 rounded-lg border text-xs focus:outline-none ${
-                      theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-200'
-                    }`}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Part 2: SMTP server details */}
-              <div className="space-y-3">
-                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">
-                  📬 {isRtl ? 'تكوين خادم SMTP وبوابة الإرسال' : 'SMTP Server Credentials'}
-                </span>
-                
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-2">
-                    <label className="block text-[10px] text-slate-400 mb-1">{isRtl ? 'خادم SMTP' : 'SMTP Host'}</label>
-                    <input 
-                      type="text" 
-                      placeholder="smtp.gmail.com"
-                      value={smtpHost}
-                      onChange={(e) => setSmtpHost(e.target.value)}
-                      className={`w-full px-3 py-1.5 rounded-lg border text-xs focus:outline-none ${
-                        theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-200'
-                      }`}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-400 mb-1">{isRtl ? 'المنفذ (Port)' : 'Port'}</label>
-                    <input 
-                      type="text" 
-                      placeholder="587"
-                      value={smtpPort}
-                      onChange={(e) => setSmtpPort(e.target.value)}
-                      className={`w-full px-3 py-1.5 rounded-lg border text-xs focus:outline-none ${
-                        theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-200'
-                      }`}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-1">{isRtl ? 'عنوان بريد المُرسِل (Gmail Email Address)' : 'Sender Email Address'}</label>
-                  <input 
-                    type="email" 
-                    placeholder="your-email@gmail.com"
-                    value={smtpUser}
-                    onChange={(e) => setSmtpUser(e.target.value)}
-                    className={`w-full px-3 py-1.5 rounded-lg border text-xs font-mono focus:outline-none ${
-                      theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-200'
-                    }`}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] text-slate-400">{isRtl ? 'رمز مرور التطبيق ذو الـ 16 حرفاً (Gmail App Password)' : 'Gmail App Password (16 chars)'}</label>
-                    <a 
-                      href="https://myaccount.google.com/apppasswords" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-[10px] text-indigo-400 hover:underline flex items-center gap-0.5"
-                    >
-                      <span>{isRtl ? 'صفحة كلمات مرور التطبيق' : 'App Passwords page'}</span>
-                      <ExternalLink size={10} />
-                    </a>
-                  </div>
-                  <input 
-                    type="password" 
-                    placeholder="abcd efgh ijkl mnop"
-                    value={smtpPass}
-                    onChange={(e) => setSmtpPass(e.target.value)}
-                    className={`w-full px-3 py-1.5 rounded-lg border text-xs font-mono tracking-widest text-center focus:outline-none ${
-                      theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-200'
-                    }`}
-                    required
-                  />
-                  <p className="text-[10px] text-amber-500 mt-1 leading-relaxed">
-                    💡 {isRtl 
-                      ? 'أدخل الرمز المكون من 16 حرفاً الذي حصلت عليه من حساب جوجل بدون مسافات، وتأكد من تفعيل ميزة التحقق بخطوتين.' 
-                      : 'Provide the 16-character code from Google settings without spaces, and ensure 2-Step Verification is enabled on your account.'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Submit Buttons */}
-              <div className="flex flex-col gap-2 pt-2">
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={isTestingSmtp || isSavingSmtp}
-                    onClick={handleTestSmtp}
-                    className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      theme === 'dark' 
-                        ? 'bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/20 text-amber-300' 
-                        : 'bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800'
-                    }`}
-                  >
-                    {isTestingSmtp ? (
-                      <>
-                        <RefreshCw size={12} className="animate-spin" />
-                        <span>{isRtl ? 'جاري إرسال البريد التجريبي...' : 'Sending Test...'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Mail size={12} />
-                        <span>{isRtl ? 'إرسال بريد تجريبي ✉️' : 'Send Test Email ✉️'}</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={isSavingSmtp || isTestingSmtp}
-                    className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 text-white font-bold text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    {isSavingSmtp ? (
-                      <>
-                        <RefreshCw size={12} className="animate-spin" />
-                        <span>{isRtl ? 'جاري الحفظ...' : 'Saving...'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 size={12} />
-                        <span>{isRtl ? 'حفظ إعدادات الخادم 💾' : 'Save Config 💾'}</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSmtpModal(false);
-                    setModalError('');
-                    setModalSuccess('');
-                  }}
-                  className={`w-full py-2 rounded-xl text-xs font-bold transition-all border ${
-                    theme === 'dark' 
-                      ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300' 
-                      : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
-                  }`}
-                >
-                  {isRtl ? 'إغلاق النافذة' : 'Close'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <SMTPConfigModal
+        isOpen={showSmtpModal}
+        onClose={() => setShowSmtpModal(false)}
+        theme={theme}
+        isRtl={isRtl}
+        onConfigUpdated={refreshSmtpStatus}
+      />
 
       {/* Footer copyright */}
       <div className="text-[10px] font-mono text-slate-400 mt-6">

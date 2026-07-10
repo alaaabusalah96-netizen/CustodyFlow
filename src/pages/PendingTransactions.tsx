@@ -122,6 +122,7 @@ export default function PendingTransactions({
 
   // Search and Filter states
   const [searchTerm, setSearchTerm] = useState('');
+  const [visibleCount, setVisibleCount] = useState(15);
   const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Rejected'>('All');
   const [companyFilter, setCompanyFilter] = useState<string>('All');
   const [stationFilter, setStationFilter] = useState<string>('All');
@@ -729,7 +730,7 @@ export default function PendingTransactions({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filtered.map((tx) => {
+              {filtered.slice(0, visibleCount).map((tx) => {
                 const isRejected = tx.status === 'Rejected';
                 const isSelected = selectedIds.includes(tx.id);
 
@@ -882,6 +883,18 @@ export default function PendingTransactions({
             </tbody>
           </table>
         </div>
+
+        {filtered.length > visibleCount && (
+          <div className="flex justify-center p-4 border-t border-slate-100 dark:border-slate-800/40">
+            <button
+              onClick={() => setVisibleCount(prev => prev + 15)}
+              className="px-4 py-2 text-xs font-bold bg-amber-500/10 text-amber-600 hover:bg-amber-600 hover:text-white rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
+            >
+              <span>{isRtl ? 'عرض المزيد من الحركات' : 'Load More Transactions'}</span>
+              <span className="text-[10px] opacity-75">({filtered.length - visibleCount} {isRtl ? 'متبقي' : 'remaining'})</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* BULK VOUCHER SETTLEMENT MODAL */}

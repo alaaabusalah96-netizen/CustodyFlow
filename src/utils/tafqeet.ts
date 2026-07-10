@@ -1,4 +1,3 @@
-// Arabic Tafqeet (number to words) helper function
 export function getArabicTafqeet(amount: number): string {
   const parts = amount.toFixed(2).split('.');
   const pounds = parseInt(parts[0], 10);
@@ -81,52 +80,75 @@ export function getArabicTafqeet(amount: number): string {
   return 'فقط ' + text + ' لا غير';
 }
 
-// English Tafqeet (number to words) helper function
 export function getEnglishTafqeet(amount: number): string {
-  const parts = amount.toFixed(2).split('.');
-  const pounds = parseInt(parts[0], 10);
-  const piastres = parseInt(parts[1], 10);
+  const pounds = Math.floor(amount);
+  const piastres = Math.round((amount % 1) * 100);
 
-  const ones = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
-  const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 
-  function convertBelowThousand(num: number): string {
-    if (num === 0) return '';
-    if (num < 20) return ones[num];
-    if (num < 100) {
-      const rest = num % 10;
-      return tens[Math.floor(num / 10)] + (rest > 0 ? '-' + ones[rest] : '');
+  function convertLessThanThousand(n: number): string {
+    if (n === 0) return '';
+    let result = '';
+    const h = Math.floor(n / 100);
+    const rest = n % 100;
+    if (h > 0) {
+      result += ones[h] + ' Hundred';
     }
-    const h = Math.floor(num / 100);
-    const rest = num % 100;
-    return ones[h] + ' hundred' + (rest > 0 ? ' and ' + convertBelowThousand(rest) : '');
+    if (rest > 0) {
+      if (h > 0) result += ' and ';
+      if (rest < 20) {
+        result += ones[rest];
+      } else {
+        const u = rest % 10;
+        const t = Math.floor(rest / 10);
+        result += tens[t];
+        if (u > 0) result += '-' + ones[u];
+      }
+    }
+    return result;
   }
 
-  function formatPounds(p: number): string {
-    if (p === 0) return 'zero';
+  function convertPounds(p: number): string {
+    if (p === 0) return 'Zero';
     let result = '';
     
-    const millions = Math.floor(p / 1000000);
-    let rem = p % 1000000;
-    const thousands = Math.floor(rem / 1000);
-    rem = rem % 1000;
+    const billions = Math.floor(p / 1000000000);
+    const millions = Math.floor((p % 1000000000) / 1000000);
+    const thousands = Math.floor((p % 1000000) / 1000);
+    const remaining = p % 1000;
 
+    if (billions > 0) {
+      result += convertLessThanThousand(billions) + ' Billion ';
+    }
     if (millions > 0) {
-      result += convertBelowThousand(millions) + ' million ';
+      result += convertLessThanThousand(millions) + ' Million ';
     }
     if (thousands > 0) {
-      result += convertBelowThousand(thousands) + ' thousand ';
+      result += convertLessThanThousand(thousands) + ' Thousand ';
     }
-    if (rem > 0) {
-      result += convertBelowThousand(rem);
+    if (remaining > 0) {
+      result += convertLessThanThousand(remaining);
     }
     return result.trim();
   }
 
-  let poundsStr = formatPounds(pounds);
-  let res = `Only ${poundsStr} Egyptian Pound${pounds !== 1 ? 's' : ''}`;
+  let text = convertPounds(pounds) + ' Egyptian Pounds';
+  
   if (piastres > 0) {
-    res += ` and ${convertBelowThousand(piastres)} Piastre${piastres !== 1 ? 's' : ''}`;
+    let piastreText = '';
+    if (piastres < 20) {
+      piastreText = ones[piastres];
+    } else {
+      const u = piastres % 10;
+      const t = Math.floor(piastres / 10);
+      piastreText = tens[t];
+      if (u > 0) piastreText += '-' + ones[u];
+    }
+    text += ' and ' + piastreText + ' Piastres';
+  } else {
+    text += ' Only';
   }
-  return res + ' only';
+
+  return 'Only ' + text;
 }
