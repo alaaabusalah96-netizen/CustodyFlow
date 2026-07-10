@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building, 
   ArrowLeft, 
@@ -118,6 +118,13 @@ export default function StationDetails({
 }: StationDetailsProps) {
   const t = translations[language];
   const isRtl = language === 'ar';
+
+  const [dbVersion, setDbVersion] = useState(0);
+  useEffect(() => {
+    const handleUpdate = () => setDbVersion(prev => prev + 1);
+    window.addEventListener('custody_db_updated', handleUpdate);
+    return () => window.removeEventListener('custody_db_updated', handleUpdate);
+  }, []);
   
   const stations = CustodyDB.getStations();
   const station = stations.find(s => s.id === stationId);
@@ -568,7 +575,7 @@ export default function StationDetails({
                 <div className="space-y-3">
                   <div className="flex justify-between text-xs">
                     <span className="text-slate-500">{isRtl ? 'الإقليم المشرف:' : 'Supervising Region:'}</span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300">{region?.name} ({region?.code})</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">{region?.name}</span>
                   </div>
                   <div className="flex justify-between text-xs border-t pt-2">
                     <span className="text-slate-500">{isRtl ? 'مستوى الوصول المتاح:' : 'Station Access Scope:'}</span>
@@ -846,7 +853,7 @@ export default function StationDetails({
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto max-h-[75vh] bg-slate-100 dark:bg-slate-900/40">
+            <div className="p-4 md:p-6 overflow-auto max-h-[75vh] bg-slate-100 dark:bg-slate-900/40">
               {/* Actual interactive preview box */}
               {renderVoucherSheet(selectedTxForVoucher)}
             </div>

@@ -3,15 +3,34 @@ export type UserRole = 'SystemAdmin' | 'Admin' | 'RegionalManager' | 'StationAdm
 export interface Company {
   id: string;
   name: string;
-  custody_value: number;
+  custody_value?: number;
+  is_active?: boolean;
+  subscription_status?: 'active' | 'suspended' | 'trial' | 'expired';
+  subscription_expiry?: string;
+  subscription_plan?: 'Basic' | 'Professional' | 'Enterprise';
+  tenantId?: string;
+  organizationId?: string;
 }
 
 export interface UserPermissions {
-  manage_settings: boolean;
   create_expense: boolean;
-  settle_voucher: boolean;
+  edit_expense?: boolean;
   delete_expense: boolean;
+  create_voucher?: boolean;
+  approve_voucher?: boolean;
+  reject_voucher?: boolean;
+  create_custody?: boolean;
+  edit_custody?: boolean;
+  replace_custody?: boolean;
   view_reports: boolean;
+  manage_users?: boolean;
+  manage_companies?: boolean;
+  manage_regions?: boolean;
+  manage_stations?: boolean;
+  manage_roles?: boolean;
+  manage_settings: boolean;
+  // Backward compatibility
+  settle_voucher: boolean;
 }
 
 export interface AppUser {
@@ -23,13 +42,21 @@ export interface AppUser {
   station_id?: string;
   region_id?: string;
   company_id?: string;
+  is_active?: boolean;
+  password?: string;
+  security_pin?: string;
+  impersonator?: AppUser;
+  tenantId?: string;
+  organizationId?: string;
 }
 
 export interface Region {
   id: string;
   name: string;
-  code: string;
+  code?: string;
   company_id?: string;
+  tenantId?: string;
+  organizationId?: string;
 }
 
 export interface Station {
@@ -40,6 +67,8 @@ export interface Station {
   custody_amount: number;
   is_active: boolean;
   company_id?: string;
+  tenantId?: string;
+  organizationId?: string;
 }
 
 export interface ExpenseCategory {
@@ -48,7 +77,16 @@ export interface ExpenseCategory {
   name_ar: string;
 }
 
-export type TransactionStatus = 'Pending' | 'Under Settlement' | 'Settled' | 'Rejected';
+export type TransactionStatus = 'Draft' | 'Pending' | 'Under Settlement' | 'Settled' | 'Rejected' | 'Deleted';
+
+export interface Attachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string; // Stored as base64 or temporary object URL
+  uploaded_at: string;
+}
 
 export interface TransactionItem {
   description: string;
@@ -76,6 +114,9 @@ export interface Transaction {
   updated_at: string;
   station_id?: string; // Every transaction belongs to ONE station
   company_id?: string;
+  attachments?: Attachment[];
+  tenantId?: string;
+  organizationId?: string;
 }
 
 export interface ActivityLog {
@@ -85,6 +126,12 @@ export interface ActivityLog {
   action: string;
   details: string;
   timestamp: string;
+  station_id?: string;
+  company_id?: string;
+  amount?: number;
+  notes?: string;
+  tenantId?: string;
+  organizationId?: string;
 }
 
 export interface CustodyConfig {
@@ -121,6 +168,7 @@ export const translations = {
     recentLogs: 'Recent Audit Logs',
     
     // Status
+    statusDraft: 'Draft',
     statusPending: 'Pending',
     statusSettled: 'Under Settlement',
     statusFullySettled: 'Fully Settled (Approved)',
@@ -254,6 +302,7 @@ export const translations = {
     recentLogs: 'سجل التدقيق والمراجعة',
     
     // Status
+    statusDraft: 'مسودة',
     statusPending: 'معلقة',
     statusSettled: 'تحت التسوية',
     statusFullySettled: 'معتمدة ومسواة نهائياً',
@@ -364,3 +413,148 @@ export const translations = {
     inactive: 'غير نشط'
   }
 };
+
+// Sprint 2 - New Database Collections Interfaces
+export interface Expense {
+  id: string;
+  station_id: string;
+  company_id: string;
+  category_id: string;
+  amount: number;
+  description: string;
+  date: string;
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Settled';
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  receipt_url?: string;
+  invoice_no?: string;
+  tenantId?: string;
+  organizationId?: string;
+}
+
+export interface CashVoucher {
+  id: string;
+  voucher_no: string;
+  date: string;
+  station_id: string;
+  company_id: string;
+  amount: number;
+  amount_in_words: {
+    ar: string;
+    en: string;
+  };
+  recipient_name: string;
+  received_by?: string;
+  approved_by?: string;
+  status: 'Draft' | 'Pending_Approval' | 'Approved' | 'Rejected' | 'Settled';
+  expense_ids: string[];
+  created_at: string;
+  updated_at: string;
+  tenantId?: string;
+  organizationId?: string;
+}
+
+export interface TransactionHistory {
+  id: string;
+  transaction_id: string;
+  action: string;
+  performed_by: string;
+  performed_by_name: string;
+  timestamp: string;
+  previous_status?: string;
+  new_status?: string;
+  notes?: string;
+}
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  title_ar: string;
+  title_en: string;
+  message_ar: string;
+  message_en: string;
+  is_read: boolean;
+  type: 'info' | 'warning' | 'success' | 'error';
+  related_id?: string;
+  created_at: string;
+  tenantId?: string;
+  organizationId?: string;
+}
+
+export interface AuditLog {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_role: string;
+  ip_address?: string;
+  device?: string;
+  action_type: string;
+  description: string;
+  timestamp: string;
+  details?: Record<string, any>;
+  tenantId?: string;
+  organizationId?: string;
+}
+
+export interface SystemPermission {
+  id: string;
+  name_en: string;
+  name_ar: string;
+  description_en: string;
+  description_ar: string;
+  category: 'expenses' | 'vouchers' | 'custody' | 'admin' | 'reports';
+}
+
+export interface SystemRole {
+  id: string;
+  name_en: string;
+  name_ar: string;
+  permissions: Record<string, boolean>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DeletedTransaction {
+  id: string;
+  transaction_id: string;
+  transaction_no: string;
+  transaction_data: Transaction;
+  transaction_type: string; // "Expense" or "CashVoucher" or generic "Transaction"
+  amount: number;
+  created_by_name: string; // Original creator
+  deleted_by_name: string;
+  deleted_by_role: string;
+  deleted_at: string;
+  delete_reason: string;
+  station_name: string;
+  region_name: string;
+  branch?: string; // For additional matching
+  company_id: string;
+  description?: string;
+  original_status?: string;
+  tenantId?: string;
+  organizationId?: string;
+}
+
+export interface SignupRequest {
+  id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  company_id: string;
+  region_id?: string;
+  station_id?: string;
+  password?: string;
+  created_at: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  rejection_reason?: string;
+  tenantId?: string;
+  organizationId?: string;
+}
+
+export * from './types/enterprise';
+
+
+
+

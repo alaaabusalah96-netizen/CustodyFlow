@@ -34,7 +34,7 @@ export default function RegionalDashboard({
   
   // Scoped to manager's region
   const regions = CustodyDB.getScopedRegions();
-  const regionId = activeUser?.region_id || regions[0]?.id || 'reg-1';
+  const regionId = activeUser?.region_id || regions[0]?.id || 'reg-1-1';
   const currentRegion = regions.find(r => r.id === regionId);
   const stations = CustodyDB.getScopedStations().filter(s => s.region_id === regionId);
   
@@ -56,7 +56,7 @@ export default function RegionalDashboard({
     const stMetrics = CustodyDB.getReconciliation(s.id);
     return {
       name: s.station_name,
-      custody: s.custody_amount,
+      custody: stMetrics.custodyValue,
       available: stMetrics.cashAvailable,
       pending: stMetrics.pendingTotal,
       settled: stMetrics.underSettlementTotal
@@ -197,7 +197,7 @@ export default function RegionalDashboard({
       {/* Visual Analytics Block */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Custody Share Bar Chart */}
-        <div className={`lg:col-span-2 p-6 rounded-2xl border ${
+        <div className={`lg:col-span-2 p-6 rounded-2xl border min-w-0 overflow-hidden ${
           theme === 'dark' ? 'bg-[#1e293b]/40 border-[#334155]' : 'bg-white border-slate-200'
         }`} id="station-custody-breakdown-chart">
           <h4 className="text-sm font-bold tracking-tight text-slate-400 uppercase mb-4">
@@ -227,7 +227,7 @@ export default function RegionalDashboard({
         </div>
 
         {/* State Breakdown Pie Chart */}
-        <div className={`p-6 rounded-2xl border ${
+        <div className={`p-6 rounded-2xl border min-w-0 overflow-hidden ${
           theme === 'dark' ? 'bg-[#1e293b]/40 border-[#334155]' : 'bg-white border-slate-200'
         }`} id="regional-status-breakdown-pie">
           <h4 className="text-sm font-bold tracking-tight text-slate-400 uppercase mb-4">
@@ -314,7 +314,7 @@ export default function RegionalDashboard({
                   return (
                     <tr key={tx.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
                       <td className="p-3 font-mono font-bold text-slate-900 dark:text-white">
-                        {tx.transaction_no}
+                        {tx.transaction_no || (isRtl ? 'قيد الانتظار' : 'Pending')}
                       </td>
                       <td className="p-3">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-700 dark:text-slate-300">
@@ -345,7 +345,7 @@ export default function RegionalDashboard({
                       </td>
                       <td className="p-3 text-center whitespace-nowrap">
                         <button
-                          onClick={() => viewStationDetails(tx.station_id || 'stn-1')}
+                          onClick={() => viewStationDetails(tx.station_id || 'stn-1-1-1')}
                           className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded text-[10px] font-bold transition-colors"
                         >
                           {t.viewDashboard}

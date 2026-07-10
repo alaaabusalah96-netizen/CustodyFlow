@@ -348,7 +348,7 @@ export default function Reports({ language, theme }: ReportsProps) {
                   return (
                     <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20">
                       <td className="py-3 px-3 font-semibold text-emerald-600">{st?.station_name || 'N/A'}</td>
-                      <td className="py-3 px-3 font-mono font-bold text-slate-600 dark:text-slate-400">{tx.transaction_no}</td>
+                      <td className="py-3 px-3 font-mono font-bold text-slate-600 dark:text-slate-400">{tx.transaction_no || (isRtl ? 'قيد الانتظار' : 'Pending')}</td>
                       <td className="py-3 px-3 font-mono text-slate-500 dark:text-slate-400">{tx.date}</td>
                       <td className="py-3 px-3 font-medium">
                         {tx.status === 'Pending' ? (

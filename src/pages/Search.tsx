@@ -36,6 +36,14 @@ export default function Search({
   }
 
   const allowedIds = allowedStations.map(s => s.id);
+  
+  const [dbVersion, setDbVersion] = useState(0);
+  useEffect(() => {
+    const handleUpdate = () => setDbVersion(prev => prev + 1);
+    window.addEventListener('custody_db_updated', handleUpdate);
+    return () => window.removeEventListener('custody_db_updated', handleUpdate);
+  }, []);
+
   const allTransactions = CustodyDB.getScopedTransactions().filter(tx => tx.station_id && allowedIds.includes(tx.station_id));
 
   // Search & Filter states
@@ -89,7 +97,7 @@ export default function Search({
     filtered.sort((a, b) => b.date.localeCompare(a.date));
 
     setResults(filtered);
-  }, [query, statusFilter, minAmount, maxAmount]);
+  }, [query, statusFilter, minAmount, maxAmount, allTransactions]);
 
   const handleClearFilters = () => {
     setQuery('');

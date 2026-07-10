@@ -4,7 +4,8 @@ import {
   Clock, 
   FileCheck, 
   Activity, 
-  TrendingDown, 
+  TrendingDown,
+  TrendingUp, 
   Coins, 
   AlertTriangle,
   History,
@@ -14,7 +15,16 @@ import {
   Search,
   Filter,
   CheckCircle,
-  Calendar
+  Calendar,
+  ShieldCheck,
+  XCircle,
+  Folder,
+  ChevronRight,
+  ChevronDown,
+  Globe,
+  Building2,
+  MapPin,
+  Layers
 } from 'lucide-react';
 import { CustodyDB } from '../db';
 import { translations, Language, Theme, Transaction, Station } from '../types';
@@ -47,31 +57,159 @@ export default function Dashboard({
   const user = CustodyDB.getActiveUser();
   const allStations = CustodyDB.getScopedStations();
   const isAdmin = user && (user.role === 'Admin' || user.role === 'SystemAdmin');
+  const isManager = user && (user.role === 'RegionalManager' || user.role === 'Admin' || user.role === 'SystemAdmin');
+  const isSystemAdmin = user && user.role === 'SystemAdmin';
+
+  // Multi-Company and Hierarchy Selection State
+  const [companies, setCompanies] = useState(() => CustodyDB.getCompanies());
+  const [selectedCompanyId, setSelectedCompanyId] = useState(() => CustodyDB.getSelectedCompanyId());
+  const [selectedSection, setSelectedSection] = useState<{
+    type: 'all' | 'region' | 'station';
+    id: string;
+    name: string;
+  }>({
+    type: 'all',
+    id: 'all',
+    name: isRtl ? 'جميع أقسام وفروع الشركة' : 'All Company Sections'
+  });
 
   // Local state for instant reactivity
   const [metrics, setMetrics] = useState(() => CustodyDB.getReconciliation());
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [logs, setLogs] = useState(() => CustodyDB.getLogs().slice(0, 5));
+  const [notifications, setNotifications] = useState(() => CustodyDB.getNotifications());
+  const [dashboardTab, setDashboardTab] = useState<'activity' | 'notifications'>('activity');
+  const [chartTab, setChartTab] = useState<'station' | 'category'>('station');
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modal / Feedback state
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
   const [revertingTx, setRevertingTx] = useState<Transaction | null>(null);
   const [printingTx, setPrintingTx] = useState<Transaction | null>(null);
+  const [approvingTx, setApprovingTx] = useState<Transaction | null>(null);
+  const [rejectingTx, setRejectingTx] = useState<Transaction | null>(null);
   const [toastMessage, setToastMessage] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
   const refreshData = () => {
-    setMetrics(CustodyDB.getReconciliation());
-    setAllTransactions(CustodyDB.getScopedTransactions());
+    // Dynamically retrieve metrics according to selected section
+    const stId = selectedSection.type === 'station' ? selectedSection.id : undefined;
+    const regId = selectedSection.type === 'region' ? selectedSection.id : undefined;
+    setMetrics(CustodyDB.getReconciliation(stId, regId));
+
+    // Retrieve scoped transactions of the active company
+    const scopedTxs = CustodyDB.getScopedTransactions();
+    
+    // Filter transactions by selected section
+    if (selectedSection.type === 'station') {
+      setAllTransactions(scopedTxs.filter(t => t.station_id === selectedSection.id));
+    } else if (selectedSection.type === 'region') {
+      // Find stations belonging to selected region or empty/none in company context
+      const stations = CustodyDB.getScopedStations();
+      const regionStations = stations.filter(s => s.region_id === selectedSection.id || !s.region_id || s.region_id === '' || s.region_id === 'none');
+      const targetStationIds = regionStations.map(s => s.id);
+      setAllTransactions(scopedTxs.filter(t => t.station_id && targetStationIds.includes(t.station_id)));
+    } else {
+      setAllTransactions(scopedTxs);
+    }
+
     setLogs(CustodyDB.getLogs().slice(0, 5));
+    setNotifications(CustodyDB.getNotifications());
+  };
+
+  const handleCompanyChange = (id: string) => {
+    CustodyDB.setSelectedCompanyId(id);
+    setSelectedCompanyId(id);
+    // Reset selection to view all of the newly chosen company
+    setSelectedSection({
+      type: 'all',
+      id: 'all',
+      name: isRtl ? 'جميع أقسام وفروع الشركة' : 'All Company Sections'
+    });
+    // Trigger global update across the app
+    window.dispatchEvent(new Event('custody_db_updated'));
+  };
+
+  const handleStructureChange = (val: string) => {
+    if (val === 'all') {
+      setSelectedSection({
+        type: 'all',
+        id: 'all',
+        name: isRtl ? 'جميع أقسام وفروع الشركة' : 'All Company Sections'
+      });
+    } else {
+      const parts = val.split(':');
+      const type = parts[0] as 'region' | 'station';
+      const id = parts[1];
+      if (type === 'region') {
+        const r = CustodyDB.getScopedRegions().find(reg => reg.id === id);
+        if (r) {
+          setSelectedSection({
+            type: 'region',
+            id: r.id,
+            name: isRtl ? `قطاع: ${r.name}` : `Sector: ${r.name}`
+          });
+        }
+      } else if (type === 'station') {
+        const s = CustodyDB.getScopedStations().find(stn => stn.id === id);
+        if (s) {
+          setSelectedSection({
+            type: 'station',
+            id: s.id,
+            name: isRtl ? `فرع: ${s.station_name}` : `Branch: ${s.station_name}`
+          });
+        }
+      }
+    }
+  };
+
+  const handleMarkAsRead = (id: string) => {
+    CustodyDB.markNotificationAsRead(id);
+    setNotifications(CustodyDB.getNotifications());
+    showToast(isRtl ? 'تم تحديد التنبيه كمقروء.' : 'Notification marked as read.');
+  };
+
+  const handleNotificationClick = (notif: any) => {
+    if (!notif.is_read) {
+      CustodyDB.markNotificationAsRead(notif.id);
+      setNotifications(CustodyDB.getNotifications());
+    }
+    if (notif.related_id && notif.related_id.startsWith('del-')) {
+      const activeUser = CustodyDB.getActiveUser();
+      if (activeUser) {
+        if (activeUser.role === 'SystemAdmin') {
+          onNavigate('super-admin');
+        } else if (activeUser.role === 'Admin') {
+          onNavigate('company-admin');
+        } else if (activeUser.role === 'RegionalManager') {
+          onNavigate('region-admin');
+        }
+      }
+    }
+  };
+
+  const handleMarkAllAsRead = () => {
+    notifications.forEach(n => {
+      if (!n.is_read) {
+        CustodyDB.markNotificationAsRead(n.id);
+      }
+    });
+    setNotifications(CustodyDB.getNotifications());
+    showToast(isRtl ? 'تم تمييز جميع التنبيهات كمقروءة.' : 'All notifications marked as read.');
   };
 
   useEffect(() => {
     refreshData();
-  }, []);
+    
+    // Live update when Firebase/Firestore database updates
+    window.addEventListener('custody_db_updated', refreshData);
+    return () => {
+      window.removeEventListener('custody_db_updated', refreshData);
+    };
+  }, [selectedSection, selectedCompanyId]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -79,12 +217,17 @@ export default function Dashboard({
   };
 
   // Delete handler
-  const handleDelete = (id: string) => {
-    const success = CustodyDB.deleteTransaction(id);
+  const handleDelete = async (id: string) => {
+    if (!deleteReason.trim()) {
+      alert(isRtl ? 'الرجاء إدخال سبب الحذف الإجباري!' : 'Please enter the mandatory deletion reason!');
+      return;
+    }
+    const success = await CustodyDB.deleteTransaction(id, deleteReason);
     if (success) {
       showToast(isRtl ? 'تم حذف الحركة والعملية بالكامل بنجاح.' : 'Transaction successfully deleted.');
       refreshData();
       setDeletingId(null);
+      setDeleteReason('');
     } else {
       setAuthError(isRtl ? 'عذراً، يحتاج الحذف إلى صلاحيات مدير النظام (Admin)' : 'Unauthorized: Deletion requires Admin permissions.');
       setDeletingId(null);
@@ -94,9 +237,7 @@ export default function Dashboard({
   // Revert settlement status
   const handleRevert = (tx: Transaction) => {
     CustodyDB.updateTransaction(tx.id, {
-      status: 'Pending',
-      voucher_no: undefined,
-      voucher_date: undefined
+      status: 'Pending'
     });
     // Additional log for revert
     CustodyDB.addLog(
@@ -110,6 +251,52 @@ export default function Dashboard({
     setRevertingTx(null);
   };
 
+  // Approve / Settle Final Handler (For RegionalManager or Admin)
+  const handleApprove = (tx: Transaction) => {
+    if (!isManager) {
+      setAuthError(isRtl ? 'عذراً، يتطلب اعتماد وتسوية الحركات صلاحية مدير المنطقة أو الأدمن.' : 'Unauthorized: Requires Regional Manager or Admin credentials.');
+      setApprovingTx(null);
+      return;
+    }
+
+    CustodyDB.updateTransaction(tx.id, {
+      status: 'Settled'
+    });
+
+    CustodyDB.addLog(
+      user?.id || 'unknown',
+      user?.full_name || 'Anonymous',
+      'Final Approve & Settle',
+      `Approved and settled transaction ${tx.transaction_no} (voucher ${tx.voucher_no}) worth ${tx.amount.toLocaleString()} EGP.`
+    );
+    showToast(isRtl ? 'تم اعتماد ومطابقة مستند الصرف بنجاح وتنزيله من العهدة.' : 'Voucher successfully approved and settled against custody.');
+    refreshData();
+    setApprovingTx(null);
+  };
+
+  // Reject transaction handler (Sets status to 'Rejected')
+  const handleReject = (tx: Transaction) => {
+    if (!isManager) {
+      setAuthError(isRtl ? 'عذراً، يحتاج هذا الإجراء إلى صلاحيات الإدارة أو مدير المنطقة.' : 'Unauthorized: Rejecting requires Manager or Admin permissions.');
+      setRejectingTx(null);
+      return;
+    }
+
+    CustodyDB.updateTransaction(tx.id, {
+      status: 'Rejected'
+    });
+
+    CustodyDB.addLog(
+      user?.id || 'unknown',
+      user?.full_name || 'Anonymous',
+      'Reject Voucher',
+      `Rejected voucher ${tx.voucher_no} (transaction ${tx.transaction_no}) worth ${tx.amount.toLocaleString()} EGP.`
+    );
+    showToast(isRtl ? 'تم رفض مستند الصرف وتحديث الحالة إلى مرفوض.' : 'Voucher successfully rejected.');
+    refreshData();
+    setRejectingTx(null);
+  };
+
   // Start settlement
   const handleStartSettle = (tx: Transaction) => {
     if (onSelectTransactionForSettle) {
@@ -117,7 +304,7 @@ export default function Dashboard({
       onNavigate('voucher');
     } else {
       // Fallback: quick settle
-      const tempVoucherNo = 'TEMP-' + Math.floor(1000 + Math.random() * 9000);
+      const tempVoucherNo = tx.transaction_no;
       const tempDate = new Date().toISOString().split('T')[0];
       CustodyDB.updateTransaction(tx.id, {
         status: 'Under Settlement',
@@ -151,9 +338,33 @@ export default function Dashboard({
     };
   }).filter(item => item.amount > 0);
 
-  const finalChartData = chartData.length > 0 ? chartData : [
-    { name: isRtl ? 'لا توجد حركات بعد' : 'No movements yet', amount: 0, color: '#94a3b8' }
-  ];
+  // Category Spend Chart calculation
+  const allCategories = CustodyDB.getCategories();
+  const categorySpendMap = new Map<string, number>();
+  allTransactions.forEach(tx => {
+    const catId = tx.category_id || 'other';
+    categorySpendMap.set(catId, (categorySpendMap.get(catId) || 0) + tx.amount);
+  });
+
+  const categoryChartData = allCategories.map((cat, idx) => {
+    const amount = categorySpendMap.get(cat.id) || 0;
+    return {
+      name: isRtl ? cat.name_ar : cat.name_en,
+      amount,
+      color: [
+        '#8b5cf6', // violet
+        '#ec4899', // pink
+        '#f59e0b', // amber
+        '#3b82f6', // blue
+        '#10b981', // emerald
+        '#ef4444'  // red
+      ][idx % 6]
+    };
+  }).filter(item => item.amount > 0);
+
+  const finalChartData = chartTab === 'station'
+    ? (chartData.length > 0 ? chartData : [{ name: isRtl ? 'لا توجد حركات بعد' : 'No movements yet', amount: 0, color: '#94a3b8' }])
+    : (categoryChartData.length > 0 ? categoryChartData : [{ name: isRtl ? 'لا توجد حركات بعد' : 'No movements yet', amount: 0, color: '#94a3b8' }]);
 
   const formatCurrency = (val: number) => {
     return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' EGP';
@@ -205,8 +416,265 @@ export default function Dashboard({
         </div>
       )}
 
-      {/* Dynamic KPI Cards Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Platform Admin Central Control Portal */}
+      {isSystemAdmin && (
+        <div className={`p-5 rounded-2xl border ${
+          theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
+        }`}>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-1">
+              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Globe size={14} className="text-indigo-500" />
+                <span>{isRtl ? 'بوابة إدارة المنصة والتحكم المركزي:' : 'Platform Central Administration Portal:'}</span>
+              </h3>
+              <p className="text-[11px] text-slate-400 leading-normal">
+                {isRtl 
+                  ? 'اختر الشركة وسياق الهيكل الإداري المطلوب لمتابعة الحركات وتدقيق العمليات.' 
+                  : 'Select active company and administrative structure context to review active ledger transactions.'}
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+              {/* Dropdown 1: الشركات */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                  {isRtl ? 'الشركات' : 'Companies'}
+                </label>
+                <select
+                  value={selectedCompanyId}
+                  onChange={(e) => handleCompanyChange(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-200 min-w-[200px] cursor-pointer"
+                >
+                  {companies.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Dropdown 2: الهيكل الإداري */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                  {isRtl ? 'الهيكل الإداري' : 'Administrative Structure'}
+                </label>
+                <select
+                  value={selectedSection.type === 'all' ? 'all' : `${selectedSection.type}:${selectedSection.id}`}
+                  onChange={(e) => handleStructureChange(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-200 min-w-[200px] cursor-pointer"
+                >
+                  <option value="all">{isRtl ? 'جميع أقسام وفروع الشركة' : 'All Company Sections'}</option>
+                  <optgroup label={isRtl ? 'القطاعات والمناطق الإقليمية' : 'Regional Sectors'}>
+                    {CustodyDB.getScopedRegions().map(r => (
+                      <option key={r.id} value={`region:${r.id}`}>
+                        {isRtl ? `قطاع: ${r.name}` : `Sector: ${r.name}`}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label={isRtl ? 'الفروع والمحطات' : 'Branches & Stations'}>
+                    {CustodyDB.getScopedStations().map(s => (
+                      <option key={s.id} value={`station:${s.id}`}>
+                        {isRtl ? `فرع: ${s.station_name}` : `Branch: ${s.station_name}`}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Filter Division/Branch Indicator Badge */}
+      <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row gap-3 sm:items-center justify-between ${
+        theme === 'dark' ? 'bg-[#1e293b]/60 border-[#334155]' : 'bg-indigo-50/20 border-indigo-100'
+      }`}>
+        <div className="flex items-center gap-2.5">
+          <div className="h-7 w-7 rounded-lg bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
+            <Layers size={14} />
+          </div>
+          <div>
+            <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+              {isRtl ? 'القسم أو الفرع المصفى حالياً باللوحة:' : 'Currently Filtered Division / Branch:'}
+            </div>
+            <div className="font-extrabold text-xs text-slate-800 dark:text-slate-200 mt-0.5">
+              {selectedSection.name}
+            </div>
+          </div>
+        </div>
+        
+        {selectedSection.type !== 'all' && (
+          <button
+            onClick={() => setSelectedSection({
+              type: 'all',
+              id: 'all',
+              name: isRtl ? 'جميع أقسام وفروع الشركة' : 'All Company Sections'
+            })}
+            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-bold transition-all shrink-0 self-start sm:self-auto"
+          >
+            {isRtl ? 'عرض الهيكل بالكامل (عرض الكل)' : 'Show Full Hierarchy (View All)'}
+          </button>
+        )}
+      </div>
+
+      {/* Two-Column Layout split */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* RIGHT COLUMN (RTL): COMPANY STRUCTURE TREE HIERARCHY */}
+        {!isSystemAdmin && (
+          <div className="lg:col-span-1 space-y-4">
+          <div className={`p-4 rounded-2xl border ${
+            theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
+          }`}>
+            <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 border-b pb-2 mb-3">
+              <Layers size={14} className="text-indigo-500" />
+              <span>{isRtl ? 'شجرة عهد وأقسام الشركة' : 'Company Hierarchy Tree'}</span>
+            </h3>
+
+            {/* Tree Root - All Company Sections */}
+            <button
+              onClick={() => setSelectedSection({
+                type: 'all',
+                id: 'all',
+                name: isRtl ? 'جميع أقسام وفروع الشركة' : 'All Company Sections'
+              })}
+              className={`w-full text-right p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${
+                selectedSection.type === 'all'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Building2 size={14} />
+                <span>{isRtl ? 'كل الهيكل الإداري' : 'All Divisions & Branches'}</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                selectedSection.type === 'all' ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+              }`}>
+                {CustodyDB.getScopedStations().length}
+              </span>
+            </button>
+
+            {/* Regional Sectors Section */}
+            <div className="mt-4 space-y-2">
+              <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-1">
+                {isRtl ? 'القطاعات والمناطق الإقليمية' : 'Regional Sectors'}
+              </div>
+
+              {CustodyDB.getScopedRegions().map(r => {
+                const regionStations = CustodyDB.getScopedStations().filter(s => s.region_id === r.id);
+                const isSelected = selectedSection.type === 'region' && selectedSection.id === r.id;
+                return (
+                  <div key={r.id} className="space-y-1">
+                    {/* Region Row */}
+                    <button
+                      onClick={() => setSelectedSection({
+                        type: 'region',
+                        id: r.id,
+                        name: isRtl ? `قطاع: ${r.name}` : `Sector: ${r.name}`
+                      })}
+                      className={`w-full text-right p-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-between ${
+                        isSelected
+                          ? 'bg-indigo-500/10 border-r-4 border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-500'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Folder size={14} className={isSelected ? 'text-indigo-500' : 'text-amber-500'} />
+                        <span className="truncate max-w-[120px]">{r.name}</span>
+                      </div>
+                      <span className="text-[9px] px-1 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded">
+                        {regionStations.length} {isRtl ? 'موقع' : 'hubs'}
+                      </span>
+                    </button>
+
+                    {/* Region Stations Sub-items */}
+                    <div className={`pr-4 border-r border-slate-100 dark:border-slate-800 ${isRtl ? 'mr-2' : 'ml-2'} space-y-1`}>
+                      {regionStations.map(s => {
+                        const isStnSelected = selectedSection.type === 'station' && selectedSection.id === s.id;
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => setSelectedSection({
+                              type: 'station',
+                              id: s.id,
+                              name: isRtl ? `فرع: ${s.station_name}` : `Branch: ${s.station_name}`
+                            })}
+                            className={`w-full text-right p-1.5 rounded text-[11px] font-medium transition-all flex items-center justify-between ${
+                              isStnSelected
+                                ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1">
+                              <MapPin size={11} className={isStnSelected ? 'text-indigo-500 animate-pulse' : 'text-slate-400'} />
+                              <span className="truncate max-w-[100px]">{s.station_name}</span>
+                            </div>
+                            <span className="font-mono text-[9px] text-slate-400">
+                              {CustodyDB.getStationDeductedCustody(s.id).toLocaleString()} EGP
+                            </span>
+                          </button>
+                        );
+                      })}
+                      {regionStations.length === 0 && (
+                        <div className="text-[10px] text-slate-400 px-2 py-0.5 italic">
+                          {isRtl ? 'لا توجد فروع تابعة' : 'No child branches'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Direct Branches Section */}
+            {(() => {
+              const compRegions = CustodyDB.getScopedRegions();
+              const compStations = CustodyDB.getScopedStations();
+              const directBranches = compStations.filter(s => !s.region_id || s.region_id === 'none' || s.region_id === '' || !compRegions.some(r => r.id === s.region_id));
+              if (directBranches.length > 0) {
+                return (
+                  <div className="mt-4 space-y-1">
+                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-1">
+                      {isRtl ? 'الفروع المستقلة / المباشرة' : 'Direct Independent Branches'}
+                    </div>
+                    {directBranches.map(s => {
+                      const isSelected = selectedSection.type === 'station' && selectedSection.id === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => setSelectedSection({
+                            type: 'station',
+                            id: s.id,
+                            name: isRtl ? `فرع مباشر: ${s.station_name}` : `Direct Branch: ${s.station_name}`
+                          })}
+                          className={`w-full text-right p-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-between ${
+                            isSelected
+                              ? 'bg-indigo-500/10 border-r-4 border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-500'
+                              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <MapPin size={13} className={isSelected ? 'text-indigo-500' : 'text-slate-400'} />
+                            <span className="truncate max-w-[120px]">{s.station_name}</span>
+                          </div>
+                          <span className="font-mono text-[10px] text-slate-400">
+                            {CustodyDB.getStationDeductedCustody(s.id).toLocaleString()} EGP
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              }
+              return null;
+            })()}
+          </div>
+        </div>
+        )}
+
+        {/* LEFT COLUMN (RTL): METRICS, CHARTS AND OPERATION LISTS */}
+        <div className={`${isSystemAdmin ? 'lg:col-span-4' : 'lg:col-span-3'} space-y-6`}>
+          {/* Dynamic KPI Cards Grid */}
+          {!isSystemAdmin && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Custody Value */}
         <div className={`p-5 rounded-2xl border transition-all ${
           theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
@@ -297,6 +765,7 @@ export default function Dashboard({
           </div>
         </div>
       </div>
+      )}
 
       {/* QUICK FILTER BAR ON DASHBOARD */}
       <div className={`p-4 rounded-2xl border flex flex-col md:flex-row gap-3 items-center justify-between ${
@@ -333,7 +802,7 @@ export default function Dashboard({
       {/* UNIFIED TABLES SIDE-BY-SIDE OR STACKED ON ONE PAGE */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* 1. PENDING TRANSACTIONS TABLE */}
-        <div className={`p-5 rounded-2xl border flex flex-col justify-between ${
+        <div className={`p-5 rounded-2xl border flex flex-col justify-between min-w-0 overflow-hidden ${
           theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
         }`}>
           <div>
@@ -368,7 +837,7 @@ export default function Dashboard({
                     return (
                       <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td className="py-3 font-mono font-bold text-slate-700 dark:text-slate-300">
-                          <div>{tx.transaction_no}</div>
+                          <div>{tx.transaction_no || (isRtl ? 'قيد الانتظار' : 'Pending')}</div>
                           <div className="text-[9px] text-slate-400 font-normal">{tx.date}</div>
                         </td>
                         <td className="py-3 text-slate-600 dark:text-slate-400 max-w-[120px] truncate" title={tx.description}>
@@ -412,7 +881,7 @@ export default function Dashboard({
         </div>
 
         {/* 2. TRANSACTIONS UNDER SETTLEMENT TABLE */}
-        <div className={`p-5 rounded-2xl border flex flex-col justify-between ${
+        <div className={`p-5 rounded-2xl border flex flex-col justify-between min-w-0 overflow-hidden ${
           theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
         }`}>
           <div>
@@ -458,30 +927,48 @@ export default function Dashboard({
                           {tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
+                          <div className="flex items-center justify-center gap-1 flex-wrap">
                             <button
                               onClick={() => setPrintingTx(tx)}
-                              className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 transition-all flex items-center gap-0.5 font-bold text-[9px]"
+                              className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 transition-all flex items-center gap-0.5 font-bold text-[9px]"
                             >
                               <Printer size={10} />
                               <span>{isRtl ? 'سند' : 'Voucher'}</span>
                             </button>
-                            {isAdmin && (
+                            {isManager && (
                               <>
                                 <button
+                                  onClick={() => setApprovingTx(tx)}
+                                  className="px-1.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white transition-all font-bold text-[9px] flex items-center gap-0.5"
+                                  title={isRtl ? 'اعتماد وتسوية الحركة نهائياً' : 'Approve & Settle'}
+                                >
+                                  <ShieldCheck size={10} />
+                                  <span>{isRtl ? 'اعتماد' : 'Approve'}</span>
+                                </button>
+                                <button
+                                  onClick={() => setRejectingTx(tx)}
+                                  className="px-1.5 py-0.5 rounded bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-600 transition-all font-bold text-[9px] flex items-center gap-0.5"
+                                  title={isRtl ? 'رفض المستند نهائياً' : 'Reject Voucher'}
+                                >
+                                  <XCircle size={10} />
+                                  <span>{isRtl ? 'رفض' : 'Reject'}</span>
+                                </button>
+                                <button
                                   onClick={() => setRevertingTx(tx)}
-                                  className="px-1 py-0.5 rounded bg-amber-500/10 hover:bg-amber-600 text-amber-600 hover:text-white transition-all flex items-center gap-0.5 font-bold text-[9px]"
+                                  className="px-1.5 py-0.5 rounded bg-amber-500/10 hover:bg-amber-600 text-amber-600 hover:text-white transition-all flex items-center gap-0.5 font-bold text-[9px]"
                                 >
                                   <CornerUpLeft size={10} />
                                   <span>{isRtl ? 'إرجاع' : 'Revert'}</span>
                                 </button>
-                                <button
-                                  onClick={() => setDeletingId(tx.id)}
-                                  className="p-1 rounded bg-rose-500/10 hover:bg-rose-600 text-rose-600 hover:text-white transition-all"
-                                >
-                                  <Trash2 size={10} />
-                                </button>
                               </>
+                            )}
+                            {isAdmin && (
+                              <button
+                                onClick={() => setDeletingId(tx.id)}
+                                className="p-1 rounded bg-rose-500/10 hover:bg-rose-600 hover:text-white text-rose-600 transition-all"
+                              >
+                                <Trash2 size={10} />
+                              </button>
                             )}
                           </div>
                         </td>
@@ -505,17 +992,46 @@ export default function Dashboard({
       {/* CHART & RECENT LOGS SECTION */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* spend station pie/bar distribution */}
-        <div className={`lg:col-span-2 p-5 rounded-2xl border flex flex-col justify-between ${
+        {!isSystemAdmin && (
+          <div className={`lg:col-span-2 p-5 rounded-2xl border flex flex-col justify-between min-w-0 overflow-hidden ${
           theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
         }`}>
-          <div>
-            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">
-              {isRtl ? 'تحليل المصروفات حسب المحطة' : 'Expense Distribution by Station'}
+          <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800 mb-4">
+            <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <TrendingUp size={14} className="text-indigo-500" />
+              <span>
+                {chartTab === 'station'
+                  ? (isRtl ? 'تحليل المصروفات حسب المحطة' : 'Expense Distribution by Station')
+                  : (isRtl ? 'تحليل المصروفات حسب التصنيف' : 'Expense Distribution by Category')
+                }
+              </span>
             </h3>
+            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 animate-fade-in">
+              <button
+                onClick={() => setChartTab('station')}
+                className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${
+                  chartTab === 'station'
+                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                {isRtl ? 'المحطات' : 'Stations'}
+              </button>
+              <button
+                onClick={() => setChartTab('category')}
+                className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${
+                  chartTab === 'category'
+                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                {isRtl ? 'التصنيفات' : 'Categories'}
+              </button>
+            </div>
           </div>
           
           <div className="h-64 w-full">
-            {chartData.length === 0 ? (
+            {finalChartData.length === 1 && finalChartData[0].amount === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-400">
                 <AlertTriangle size={32} className="mb-2 text-slate-300" />
                 <p className="text-xs">{isRtl ? 'لا توجد حركات مصروفة حتى الآن لعرضها بيانيا.' : 'No active expenses logged yet to display on chart.'}</p>
@@ -557,40 +1073,125 @@ export default function Dashboard({
             ))}
           </div>
         </div>
+        )}
 
         {/* Audit Log / Activity Tracking Column */}
-        <div className={`p-5 rounded-2xl border ${
+        <div className={`${isSystemAdmin ? 'lg:col-span-3' : 'lg:col-span-1'} p-5 rounded-2xl border flex flex-col justify-between ${
           theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
         }`}>
-          <div className="flex items-center gap-2 mb-4 border-b pb-3 border-slate-100 dark:border-slate-800">
-            <History size={16} className="text-emerald-500" />
-            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              {t.recentLogs}
-            </h3>
-          </div>
-
-          <div className="space-y-4 max-h-72 overflow-y-auto pr-1">
-            {logs.map((log) => (
-              <div key={log.id} className="text-xs flex flex-col gap-1 border-b pb-2.5 last:border-0 border-slate-100 dark:border-slate-800">
-                <div className="flex justify-between items-start">
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">
-                    {log.action}
-                  </span>
-                  <span className="text-[10px] font-mono text-slate-400">
-                    {new Date(log.timestamp).toLocaleTimeString(language, {hour: '2-digit', minute:'2-digit'})}
-                  </span>
-                </div>
-                <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
-                  {log.details}
-                </p>
-                <div className="text-[10px] font-mono font-medium text-emerald-500/80">
-                  By: {log.user_name}
-                </div>
+          <div>
+            <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800 mb-3">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDashboardTab('activity')}
+                  className={`text-xs font-bold uppercase tracking-wider pb-1 transition-all border-b-2 ${
+                    dashboardTab === 'activity'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  {t.recentLogs}
+                </button>
+                <button
+                  onClick={() => setDashboardTab('notifications')}
+                  className={`text-xs font-bold uppercase tracking-wider pb-1 transition-all border-b-2 flex items-center gap-1 ${
+                    dashboardTab === 'notifications'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <span>{isRtl ? 'التنبيهات' : 'Notifications'}</span>
+                  {notifications.filter(n => !n.is_read).length > 0 && (
+                    <span className="bg-rose-500 text-white text-[9px] font-extrabold h-4 w-4 rounded-full flex items-center justify-center animate-pulse">
+                      {notifications.filter(n => !n.is_read).length}
+                    </span>
+                  )}
+                </button>
               </div>
-            ))}
+
+              {dashboardTab === 'notifications' && notifications.filter(n => !n.is_read).length > 0 && (
+                <button
+                  onClick={handleMarkAllAsRead}
+                  className="text-[10px] font-bold text-indigo-500 hover:text-indigo-600"
+                >
+                  {isRtl ? 'تحديد الكل' : 'Dismiss All'}
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+              {dashboardTab === 'activity' ? (
+                logs.map((log) => (
+                  <div key={log.id} className="text-xs flex flex-col gap-1 border-b pb-2.5 last:border-0 border-slate-100 dark:border-slate-800 animate-fade-in">
+                    <div className="flex justify-between items-start">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">
+                        {log.action}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">
+                        {new Date(log.timestamp).toLocaleTimeString(language, {hour: '2-digit', minute:'2-digit'})}
+                      </span>
+                    </div>
+                    <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
+                      {log.details}
+                    </p>
+                    <div className="text-[10px] font-mono font-medium text-emerald-500/80">
+                      By: {log.user_name}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                notifications.map((notif) => (
+                  <div 
+                    key={notif.id} 
+                    onClick={() => handleNotificationClick(notif)}
+                    className={`text-xs p-2.5 rounded-xl border flex flex-col gap-1 transition-all animate-fade-in cursor-pointer hover:scale-[1.01] ${
+                      notif.is_read 
+                        ? 'bg-slate-50/50 dark:bg-slate-800/10 border-slate-100 dark:border-slate-800 text-slate-400' 
+                        : 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-100 dark:border-indigo-900/40 text-slate-800 dark:text-slate-200 hover:border-indigo-200 dark:hover:border-indigo-800'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <span className={`h-2 w-2 rounded-full ${
+                          notif.type === 'warning' ? 'bg-amber-500' : notif.type === 'error' ? 'bg-rose-500' : 'bg-sky-500'
+                        }`} />
+                        <span className={notif.is_read ? 'text-slate-400' : 'text-indigo-950 dark:text-indigo-300'}>
+                          {isRtl ? notif.title_ar : notif.title_en}
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-mono text-slate-400">
+                        {new Date(notif.created_at).toLocaleTimeString(language, {hour: '2-digit', minute:'2-digit'})}
+                      </span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400 font-medium whitespace-pre-line">
+                      {isRtl ? notif.message_ar : notif.message_en}
+                    </p>
+                    {!notif.is_read && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkAsRead(notif.id);
+                        }}
+                        className="self-end text-[9px] font-extrabold text-indigo-500 hover:text-indigo-600 bg-white dark:bg-slate-800 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-950 shadow-xs"
+                      >
+                        {isRtl ? 'تحديد كمقروء' : 'Dismiss'}
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+              {dashboardTab === 'notifications' && notifications.length === 0 && (
+                <div className="py-12 text-center text-slate-400 text-xs">
+                  {isRtl ? 'لا توجد تنبيهات نشطة حاليا.' : 'No active notifications.'}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      </div> {/* closes lg:col-span-3 Content Area */}
+    </div> {/* closes grid-cols-1 lg:grid-cols-4 Split Layout */}
 
       {/* PRINT VOUCHER MODAL */}
       <VoucherModal
@@ -610,7 +1211,7 @@ export default function Dashboard({
               <AlertTriangle className="h-6 w-6 shrink-0" />
               <h3 className="font-bold text-base">{isRtl ? 'تأكيد الحذف النهائي' : 'Confirm Permanent Delete'}</h3>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
               {isRtl 
                 ? 'هل أنت متأكد من رغبتك في حذف هذه الحركة نهائياً من قاعدة البيانات؟ لا يمكن التراجع عن هذا الإجراء.'
                 : 'Are you sure you want to permanently delete this transaction from the database? This action cannot be undone.'}
@@ -620,16 +1221,32 @@ export default function Dashboard({
                 </span>
               )}
             </p>
+            <div className="mb-4">
+              <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                {isRtl ? 'سبب الحذف (إجباري) *' : 'Reason for Deletion (Mandatory) *'}
+              </label>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder={isRtl ? 'أدخل سبب مقنع للحذف...' : 'Enter a valid reason for deletion...'}
+                className="w-full p-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-rose-500 resize-none h-16"
+                required
+              />
+            </div>
             <div className="flex justify-end gap-2">
               <button
-                onClick={() => setDeletingId(null)}
+                onClick={() => {
+                  setDeletingId(null);
+                  setDeleteReason('');
+                }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-100 ${theme === 'dark' ? 'hover:bg-slate-800' : ''}`}
               >
                 {isRtl ? 'إلغاء' : 'Cancel'}
               </button>
               <button
                 onClick={() => handleDelete(deletingId)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500 hover:bg-rose-600 text-white"
+                disabled={!deleteReason.trim()}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500 hover:bg-rose-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {isRtl ? 'حذف نهائي' : 'Delete'}
               </button>
@@ -665,6 +1282,72 @@ export default function Dashboard({
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white"
               >
                 {isRtl ? 'تأكيد الإرجاع' : 'Confirm Revert'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* APPROVE CONFIRMATION DIALOG */}
+      {approvingTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-sm p-5 rounded-2xl border shadow-xl ${
+            theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200'
+          }`}>
+            <div className="flex items-center gap-3 text-emerald-500 mb-3">
+              <ShieldCheck className="h-6 w-6 shrink-0" />
+              <h3 className="font-bold text-base">{isRtl ? 'اعتماد ومطابقة السند نهائياً' : 'Approve & Settle'}</h3>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
+              {isRtl 
+                ? `هل أنت متأكد من اعتماد مستند الصرف رقم (${approvingTx.voucher_no || approvingTx.transaction_no}) وتنزيله نهائياً من رصيد العهدة النقدية؟`
+                : `Are you sure you want to approve voucher (${approvingTx.voucher_no || approvingTx.transaction_no}) and finalize its settlement from custody?`}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setApprovingTx(null)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-100 ${theme === 'dark' ? 'hover:bg-slate-800' : ''}`}
+              >
+                {isRtl ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                onClick={() => handleApprove(approvingTx)}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white"
+              >
+                {isRtl ? 'تأكيد الاعتماد' : 'Confirm Approve'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REJECT CONFIRMATION DIALOG */}
+      {rejectingTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-sm p-5 rounded-2xl border shadow-xl ${
+            theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200'
+          }`}>
+            <div className="flex items-center gap-3 text-rose-500 mb-3">
+              <XCircle className="h-6 w-6 shrink-0" />
+              <h3 className="font-bold text-base">{isRtl ? 'رفض مستند الصرف' : 'Reject Voucher'}</h3>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
+              {isRtl 
+                ? `هل أنت متأكد من رفض مستند الصرف رقم (${rejectingTx.voucher_no || rejectingTx.transaction_no})؟ سيتم تغيير الحالة إلى "مرفوض" وإتاحته مجدداً للتصحيح.`
+                : `Are you sure you want to reject voucher (${rejectingTx.voucher_no || rejectingTx.transaction_no})? This changes its status to "Rejected" allowing correction.`}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setRejectingTx(null)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-100 ${theme === 'dark' ? 'hover:bg-slate-800' : ''}`}
+              >
+                {isRtl ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                onClick={() => handleReject(rejectingTx)}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white"
+              >
+                {isRtl ? 'تأكيد الرفض' : 'Confirm Reject'}
               </button>
             </div>
           </div>

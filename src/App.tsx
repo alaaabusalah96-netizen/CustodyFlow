@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CustodyDB } from './db';
 import { AppUser, Language, Theme, Transaction } from './types';
 import Layout from './components/Layout';
+import { Download, X, Smartphone, ArrowDown, Sparkles, ShieldAlert } from 'lucide-react';
 
 // Pages
 import Login from './pages/Login';
@@ -17,12 +18,14 @@ import Settings from './pages/Settings';
 import RegionalDashboard from './pages/RegionalDashboard';
 import Stations from './pages/Stations';
 import StationDetails from './pages/StationDetails';
+import AuditLogView from './pages/AuditLog';
+import SuperAdmin from './pages/SuperAdmin';
+import CompanyAdminDashboard from './pages/CompanyAdminDashboard';
+import RegionAdminDashboard from './pages/RegionAdminDashboard';
 
 export default function App() {
   // Try to load any existing active session, or default to null
   const [activeUser, setActiveUser] = useState<AppUser | null>(() => {
-    // If we want the app to start with standard Login view, we don't auto-seed active_user in DB initially.
-    // Let's check what is in localStorage.
     try {
       const stored = localStorage.getItem('custody_active_user');
       return stored ? JSON.parse(stored) : null;
@@ -31,7 +34,29 @@ export default function App() {
     }
   });
 
-  const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    try {
+      const stored = localStorage.getItem('custody_active_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.role === 'SystemAdmin') {
+          return 'super-admin';
+        }
+        if (parsed.role === 'Admin') {
+          return 'company-admin';
+        }
+        if (parsed.role === 'RegionalManager') {
+          return 'region-admin';
+        }
+        if (parsed.role !== 'Admin' && parsed.role !== 'SystemAdmin') {
+          return 'reconciliation';
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return 'reports';
+  });
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const [language, setLanguage] = useState<Language>('ar');
   const [theme, setTheme] = useState<Theme>('light');
@@ -41,6 +66,71 @@ export default function App() {
 
   const [dbVersion, setDbVersion] = useState(0);
 
+  // PWA Install Prompt State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isIOS, setIsIOS] = useState(false);
+  const [showPwaBanner, setShowPwaBanner] = useState(false);
+
+  useEffect(() => {
+    // Detect iOS devices
+    const isApple = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    setIsIOS(isApple);
+
+    // Only show banner if not in standalone and hasn't dismissed it in this session
+    const isDismissed = sessionStorage.getItem('pwa_banner_dismissed') === 'true';
+    if (!isStandalone && !isDismissed) {
+      // For iOS, show it because we cannot capture beforeinstallprompt
+      if (isApple) {
+        setShowPwaBanner(true);
+      }
+    }
+
+    const handleBeforeInstall = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      if (!isDismissed && !isStandalone) {
+        setShowPwaBanner(true);
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    };
+  }, []);
+
+  const handlePwaInstall = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log('PWA installation outcome:', outcome);
+      if (outcome === 'accepted') {
+        setShowPwaBanner(false);
+      }
+      setDeferredPrompt(null);
+    } else if (isIOS) {
+      alert(
+        language === 'ar'
+          ? 'لتثبيت التطبيق على جهاز iPhone/iPad:\n1. اضغط على زر "مشاركة" (Share) في أسفل المتصفح.\n2. اختر "إضافة إلى الشاشة الرئيسية" (Add to Home Screen).\n3. اضغط "إضافة" (Add) في الزاوية العلوية.'
+          : 'To install on iPhone/iPad:\n1. Tap the "Share" button at the bottom of Safari.\n2. Scroll down and tap "Add to Home Screen".\n3. Tap "Add" in the top-right corner.'
+      );
+    }
+  };
+
+  const dismissPwaBanner = () => {
+    sessionStorage.setItem('pwa_banner_dismissed', 'true');
+    setShowPwaBanner(false);
+  };
+
+  // Redirect non-admin users if needed
+  useEffect(() => {
+    if (activeUser) {
+      const isAdminOrSystemAdmin = activeUser.role === 'Admin' || activeUser.role === 'SystemAdmin';
+      // No redirect needed as reports is default
+    }
+  }, [activeUser, currentTab]);
+
   useEffect(() => {
     const handleUpdate = () => {
       setDbVersion(prev => prev + 1);
@@ -49,7 +139,13 @@ export default function App() {
       const stored = localStorage.getItem('custody_active_user');
       if (stored) {
         try {
-          setActiveUser(JSON.parse(stored));
+          const parsed = JSON.parse(stored);
+          setActiveUser(prev => {
+            if (!prev || prev.id !== parsed.id || prev.role !== parsed.role || JSON.stringify(prev.permissions) !== JSON.stringify(parsed.permissions) || JSON.stringify(prev.impersonator) !== JSON.stringify(parsed.impersonator)) {
+              return parsed;
+            }
+            return prev;
+          });
         } catch {
           // Ignore
         }
@@ -73,7 +169,15 @@ export default function App() {
 
   const handleLoginSuccess = (user: AppUser) => {
     setActiveUser(user);
-    setCurrentTab('dashboard');
+    if (user.role === 'SystemAdmin') {
+      setCurrentTab('super-admin');
+    } else if (user.role === 'Admin') {
+      setCurrentTab('company-admin');
+    } else if (user.role === 'RegionalManager') {
+      setCurrentTab('region-admin');
+    } else {
+      setCurrentTab('reconciliation');
+    }
   };
 
   const handleLogout = () => {
@@ -86,17 +190,41 @@ export default function App() {
     setSelectedPendingTx(tx);
   };
 
+  const renderAccessDenied = () => {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] p-6 text-center space-y-4">
+        <div className="p-4 bg-rose-500/10 text-rose-500 rounded-2xl border border-rose-500/20">
+          <ShieldAlert className="h-10 w-10" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 font-sans tracking-tight">
+          {isRtl ? 'غير مصرح بالوصول' : 'Access Denied'}
+        </h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md leading-relaxed font-semibold">
+          {isRtl 
+            ? 'عذراً، تم تقييد هذا الحساب (Company Admin / SaaS Super Admin) من الوصول المباشر لهذه الشاشة للحفاظ على حوكمة فصل المهام وحماية سلامة العهد والقيود المالية.' 
+            : 'Access restricted: This role (Company Admin / SaaS Super Admin) is restricted from directly accessing this screen to maintain segregation of duties and financial integrity.'}
+        </p>
+        <button 
+          onClick={() => setCurrentTab(activeUser?.role === 'SystemAdmin' ? 'super-admin' : (activeUser?.role === 'Admin' ? 'reports' : 'reconciliation'))} 
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+        >
+          {isRtl ? 'العودة للصفحة الرئيسية' : 'Return to Home'}
+        </button>
+      </div>
+    );
+  };
+
   // Main Page Router Dispatcher
   const renderPage = () => {
     switch (currentTab) {
       case 'dashboard':
-        if (activeUser?.role === 'RegionalManager') {
+        if (activeUser?.role !== 'Admin' && activeUser?.role !== 'SystemAdmin') {
           return (
-            <RegionalDashboard
+            <CashReconciliation
               language={language}
               theme={theme}
-              setCurrentTab={setCurrentTab}
-              setSelectedStationId={setSelectedStationId}
+              onNavigate={setCurrentTab}
+              onSelectTransactionForSettle={handleSelectTxForSettle}
             />
           );
         }
@@ -120,13 +248,16 @@ export default function App() {
       case 'station-details':
         return (
           <StationDetails
-            stationId={selectedStationId || 'stn-1'}
+            stationId={selectedStationId || 'stn-1-1-1'}
             language={language}
             theme={theme}
             onBack={() => setCurrentTab('stations')}
           />
         );
       case 'new-expense':
+        if ((activeUser?.role === 'Admin' || activeUser?.role === 'SystemAdmin') && !activeUser?.impersonator) {
+          return renderAccessDenied();
+        }
         return (
           <NewExpense 
             language={language} 
@@ -144,6 +275,9 @@ export default function App() {
           />
         );
       case 'voucher':
+        if ((activeUser?.role === 'Admin' || activeUser?.role === 'SystemAdmin') && !activeUser?.impersonator) {
+          return renderAccessDenied();
+        }
         return (
           <CashPaymentVoucher
             language={language}
@@ -162,6 +296,9 @@ export default function App() {
           />
         );
       case 'reconciliation':
+        if (activeUser?.role === 'SystemAdmin' && !activeUser?.impersonator) {
+          return renderAccessDenied();
+        }
         return (
           <CashReconciliation 
             language={language} 
@@ -193,14 +330,50 @@ export default function App() {
             theme={theme} 
           />
         );
+      case 'audit-log':
+        return (
+          <AuditLogView
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'super-admin':
+        return (
+          <SuperAdmin
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'company-admin':
+        if (activeUser?.role !== 'Admin' && activeUser?.role !== 'SystemAdmin') {
+          return renderAccessDenied();
+        }
+        return (
+          <CompanyAdminDashboard
+            activeUser={activeUser!}
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'region-admin':
+        if (activeUser?.role !== 'RegionalManager' && activeUser?.role !== 'SystemAdmin') {
+          return renderAccessDenied();
+        }
+        return (
+          <RegionAdminDashboard
+            activeUser={activeUser!}
+            language={language}
+            theme={theme}
+          />
+        );
       default:
-        if (activeUser?.role === 'RegionalManager') {
+        if (activeUser?.role !== 'Admin' && activeUser?.role !== 'SystemAdmin') {
           return (
-            <RegionalDashboard
+            <CashReconciliation
               language={language}
               theme={theme}
-              setCurrentTab={setCurrentTab}
-              setSelectedStationId={setSelectedStationId}
+              onNavigate={setCurrentTab}
+              onSelectTransactionForSettle={handleSelectTxForSettle}
             />
           );
         }
@@ -215,15 +388,68 @@ export default function App() {
     }
   };
 
+  const isRtl = language === 'ar';
+
+  const renderPwaBanner = () => {
+    if (!showPwaBanner) return null;
+    return (
+      <div 
+        dir={isRtl ? 'rtl' : 'ltr'}
+        className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-[420px] z-[9999] bg-gradient-to-r from-slate-900/95 to-slate-950/95 border border-emerald-500/30 text-white rounded-2xl p-4 shadow-2xl shadow-emerald-950/30 flex items-start gap-3.5 backdrop-blur-md animate-bounce-subtle"
+      >
+        <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 shrink-0 border border-emerald-500/20">
+          <Smartphone size={20} className="animate-pulse" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <h4 className="text-xs font-black text-slate-100 uppercase tracking-wider">
+              {isRtl ? 'تثبيت تطبيق CustodyFlow' : 'Install CustodyFlow App'}
+            </h4>
+            <Sparkles size={12} className="text-amber-400" />
+          </div>
+          <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+            {isRtl 
+              ? 'ثبت التطبيق الآن على جهازك للوصول المباشر السريع بنقرة واحدة وتجربة تصفح مذهلة وفائقة السرعة!'
+              : 'Install the app on your device for instant one-tap access and a lightning-fast experience!'}
+          </p>
+          <div className="flex items-center gap-2 mt-3">
+            <button
+              onClick={handlePwaInstall}
+              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-emerald-900/20 active:scale-95 cursor-pointer"
+            >
+              <Download size={12} />
+              <span>{isRtl ? 'تثبيت الآن' : 'Install Now'}</span>
+            </button>
+            <button
+              onClick={dismissPwaBanner}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition-all cursor-pointer"
+            >
+              {isRtl ? 'ليس الآن' : 'Not Now'}
+            </button>
+          </div>
+        </div>
+        <button 
+          onClick={dismissPwaBanner}
+          className="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-slate-800/50 transition-all shrink-0 cursor-pointer"
+        >
+          <X size={14} />
+        </button>
+      </div>
+    );
+  };
+
   // If user is not logged in, force Login screen
   if (!activeUser) {
     return (
-      <Login
-        language={language}
-        setLanguage={setLanguage}
-        theme={theme}
-        onLoginSuccess={handleLoginSuccess}
-      />
+      <>
+        <Login
+          language={language}
+          setLanguage={setLanguage}
+          theme={theme}
+          onLoginSuccess={handleLoginSuccess}
+        />
+        {renderPwaBanner()}
+      </>
     );
   }
 
@@ -238,9 +464,10 @@ export default function App() {
       activeUser={activeUser}
       onLogout={handleLogout}
     >
-      <div key={dbVersion}>
+      <div>
         {renderPage()}
       </div>
+      {renderPwaBanner()}
     </Layout>
   );
 }

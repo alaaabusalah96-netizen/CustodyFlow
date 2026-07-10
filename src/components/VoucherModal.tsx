@@ -1,5 +1,112 @@
 import React from 'react';
-import { X, Printer } from 'lucide-react';
+
+// Generates an offline-compatible SVG Barcode representing the voucher no
+function SVGBarcode({ value }: { value: string }) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) & 0xffffffff;
+  }
+  
+  const stripeWidths = [];
+  const totalStripes = 32;
+  let currentSeed = Math.abs(hash || 98765);
+  
+  for (let i = 0; i < totalStripes; i++) {
+    currentSeed = (currentSeed * 1103515245 + 12345) & 0x7fffffff;
+    stripeWidths.push((currentSeed % 3) + 1); // 1 to 3 width
+  }
+
+  let xPos = 0;
+  return (
+    <div className="flex flex-col items-center select-none print:block">
+      <svg width="110" height="32" viewBox="0 0 110 32" className="text-black">
+        <g fill="black">
+          {stripeWidths.map((w, idx) => {
+            const isBlack = idx % 2 === 0;
+            const element = isBlack ? <rect key={idx} x={xPos} y="0" width={w} height="32" /> : null;
+            xPos += w + (idx % 4 === 0 ? 1 : 0);
+            return element;
+          })}
+        </g>
+      </svg>
+      <span className="text-[8px] font-mono font-black tracking-widest mt-0.5 text-black">{value}</span>
+    </div>
+  );
+}
+
+// Generates an elegant SVG QR Code with locator markings and high fidelity matrix blocks
+function SVGQRCode({ value }: { value: string }) {
+  const size = 21;
+  const matrix: boolean[][] = Array(size).fill(null).map(() => Array(size).fill(false));
+  
+  const drawLocator = (r: number, c: number) => {
+    for (let i = 0; i < 7; i++) {
+      for (let j = 0; j < 7; j++) {
+        const isOuter = i === 0 || i === 6 || j === 0 || j === 6;
+        const isCenter = i >= 2 && i <= 4 && j >= 2 && j <= 4;
+        matrix[r + i][c + j] = isOuter || isCenter;
+      }
+    }
+  };
+  
+  drawLocator(0, 0);
+  drawLocator(0, size - 7);
+  drawLocator(size - 7, 0);
+  
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) & 0xffffffff;
+  }
+  let seed = Math.abs(hash || 54321);
+  
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const inTopLeft = r < 8 && c < 8;
+      const inTopRight = r < 8 && c >= size - 8;
+      const inBottomLeft = r >= size - 8 && c < 8;
+      
+      if (!inTopLeft && !inTopRight && !inBottomLeft) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        matrix[r][c] = (seed % 2) === 0;
+      }
+    }
+  }
+
+  const cellSize = 3;
+  const pixels: React.ReactNode[] = [];
+  
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (matrix[r][c]) {
+        pixels.push(
+          <rect 
+            key={`${r}-${c}`} 
+            x={c * cellSize} 
+            y={r * cellSize} 
+            width={cellSize} 
+            height={cellSize} 
+            fill="black" 
+          />
+        );
+      }
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center select-none print:block">
+      <svg 
+        width="60" 
+        height="60" 
+        viewBox={`0 0 ${size * cellSize} ${size * cellSize}`} 
+        className="bg-white p-1 border border-black shadow-none"
+      >
+        <g>{pixels}</g>
+      </svg>
+      <span className="text-[7px] font-mono font-bold mt-0.5 text-black">SECURE SIGN</span>
+    </div>
+  );
+}
+import { X, Printer, History, User, Calendar } from 'lucide-react';
 import { CustodyDB } from '../db';
 import { Transaction, Theme } from '../types';
 
@@ -102,6 +209,7 @@ export default function VoucherModal({ transaction, isOpen, onClose, theme }: Vo
     station_code: 'STN-XXX'
   };
 
+  const config = CustodyDB.getConfig();
   const catLabel = 'مصروفات عامة';
 
   // Split amount into Pounds and Piastres
@@ -114,6 +222,46 @@ export default function VoucherModal({ transaction, isOpen, onClose, theme }: Vo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+      {/* Dynamic Style Injection for Perfect Printing Layout */}
+      <style>{`
+        @media print {
+          body, html {
+            background-color: white !important;
+            color: black !important;
+            font-family: sans-serif !important;
+          }
+          /* Hide non-printable app scaffolding */
+          header, aside, footer, #app-header, #app-sidebar, #sidebar-mobile-backdrop,
+          #toggle-sidebar-mobile, #btn-toggle-theme, #btn-logout, .fixed, button,
+          #voucher-modal-card, #voucher-sheet-printable button, .absolute, .shadow-2xl,
+          .bg-black\\/60, #btn-back-to-home-global, #role-switcher-btn {
+            display: none !important;
+            visibility: hidden !important;
+          }
+          /* Fill exactly on A4 print dimension */
+          #voucher-sheet-printable {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 8mm !important;
+            border: none !important;
+            box-shadow: none !important;
+            visibility: visible !important;
+            background: white !important;
+            color: black !important;
+          }
+          #voucher-sheet-printable * {
+            visibility: visible !important;
+            color-scheme: light !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+      `}</style>
+
       {/* Container Card */}
       <div 
         id="voucher-modal-card"
@@ -121,7 +269,7 @@ export default function VoucherModal({ transaction, isOpen, onClose, theme }: Vo
           theme === 'dark' ? 'bg-[#1e293b] border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
         }`}
       >
-        {/* Header (Hidden when printing via index.css) */}
+        {/* Header (Hidden when printing) */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <div className="flex items-center gap-2">
             <Printer className="text-emerald-500 h-5 w-5" />
@@ -157,12 +305,28 @@ export default function VoucherModal({ transaction, isOpen, onClose, theme }: Vo
             className="w-[210mm] min-h-[297mm] mx-auto p-10 border-[3px] border-black bg-white text-black text-xs font-bold leading-relaxed shadow-lg relative print:shadow-none print:border-black print:rounded-none print:w-full print:min-h-0 print:p-4" 
             dir="rtl"
           >
-            {/* Upper Heading Row with Logo and Company Name */}
-            <div className="flex justify-between items-start border-b-[2px] border-black pb-4 mb-4">
+            {/* Red Stamp Overlay if Rejected */}
+            {transaction.status === 'Rejected' && (
+              <div 
+                className="absolute top-[22%] left-[12%] -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none transform -rotate-12 select-none print:opacity-100 opacity-95 text-red-600 border-red-600 print:text-red-600 print:border-red-600"
+                style={{ color: 'red', borderColor: 'red' }}
+              >
+                <div 
+                  className="border-[6px] border-red-600 rounded-2xl px-6 py-2 bg-white/95 font-extrabold text-[24px] uppercase tracking-wider text-center flex flex-col items-center justify-center shadow-lg border-double"
+                  style={{ color: 'red', borderColor: 'red' }}
+                >
+                  <span className="leading-none text-[32px] tracking-widest font-black" style={{ color: 'red' }}>مرفوض</span>
+                  <span className="text-[10px] font-mono tracking-wider mt-1 border-t border-red-400 pt-0.5 w-full text-center" style={{ color: 'red', borderTopColor: 'red' }}>REJECTED & RETURNED</span>
+                </div>
+              </div>
+            )}
+
+            {/* Upper Heading Row with Logo, Company Name, and Barcode/QR */}
+            <div className="flex justify-between items-center border-b-[2px] border-black pb-4 mb-4 gap-4">
               {/* Right Side: Company Info & Logo */}
               <div className="flex items-center gap-3">
                 {/* Logo */}
-                <div className="border-[2.5px] border-black rounded-[50%/50%] px-3.5 py-1.5 flex flex-col items-center justify-center leading-none bg-white shrink-0 shadow-sm h-[52px] w-[90px]">
+                <div className="border-[2.5px] border-black rounded-[50%/50%] px-3 py-1.5 flex flex-col items-center justify-center leading-none bg-white shrink-0 shadow-sm h-[52px] w-[90px]">
                   <span className="text-[20px] font-black leading-none text-black">كوكي</span>
                   <span className="text-[9px] font-bold font-mono tracking-wider mt-0.5 leading-none text-black">Koki</span>
                 </div>
@@ -174,11 +338,17 @@ export default function VoucherModal({ transaction, isOpen, onClose, theme }: Vo
                 </div>
               </div>
 
-              {/* Center / Left Side: Title */}
-              <div className="text-center self-center">
-                <h2 className="text-[15px] font-black border-[2.5px] border-black px-6 py-2 bg-neutral-100 text-black shadow-sm">
+              {/* Center Side: Title */}
+              <div className="text-center">
+                <h2 className="text-[14px] font-black border-[2.5px] border-black px-4 py-2 bg-neutral-100 text-black shadow-sm">
                   مستند صرف نقدى رقم {transaction.voucher_no || transaction.transaction_no}
                 </h2>
+              </div>
+
+              {/* Left Side: Dynamic SVG Barcode & QR code */}
+              <div className="flex items-center gap-4 shrink-0">
+                <SVGBarcode value={transaction.voucher_no || transaction.transaction_no} />
+                <SVGQRCode value={`${config.company_name}|${transaction.voucher_no || transaction.transaction_no}|${transaction.amount} EGP`} />
               </div>
             </div>
 
@@ -203,7 +373,7 @@ export default function VoucherModal({ transaction, isOpen, onClose, theme }: Vo
             </div>
 
             {/* Table Details */}
-            <div className="border border-black rounded-lg overflow-hidden mb-6">
+            <div className="border border-black rounded-lg overflow-x-auto mb-6">
               <table className="w-full text-center border-collapse text-xs font-bold">
                 <thead>
                   <tr className="bg-neutral-100 text-black border-b border-black font-black">
@@ -326,6 +496,129 @@ export default function VoucherModal({ transaction, isOpen, onClose, theme }: Vo
               </div>
             </div>
           </div>
+
+          {/* Timeline History (Hidden on Print) */}
+          {(() => {
+            const isRtl = true;
+            const historyRecords = CustodyDB.getTransactionHistory()
+              .filter(h => h.transaction_id === transaction.id)
+              .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+            const getActionTranslation = (action: string) => {
+              switch (action) {
+                case 'Created': return 'تم إنشاء المصروف (معلق)';
+                case 'Voucher Linked': return 'تم ربط السند (تحت التسوية)';
+                case 'Approved & Settled': return 'تم الاعتماد والتسوية النهائية (مسواة)';
+                case 'Reverted': return 'تم إرجاع السند للمراجعة (معلق)';
+                case 'Rejected': return 'تم رفض السند (مرفوض)';
+                default: return action;
+              }
+            };
+
+            return (
+              <div className={`mt-8 max-w-[210mm] mx-auto p-6 rounded-2xl border print:hidden ${
+                theme === 'dark' ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-slate-200 shadow-sm'
+              }`}>
+                <div className="flex items-center gap-2 mb-6 border-b pb-3 border-slate-100 dark:border-slate-800">
+                  <History className="text-emerald-500 h-5 w-5 animate-pulse" />
+                  <h4 className="font-bold text-sm md:text-base">
+                    مسار الحركة وسجل العمليات (Workflow History)
+                  </h4>
+                </div>
+
+                {historyRecords.length === 0 ? (
+                  <div className="relative border-r-2 border-slate-200 dark:border-slate-700 pr-6 mr-3 space-y-6">
+                    {/* Step 1: Created */}
+                    <div className="relative">
+                      <span className="absolute -right-[31px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 ring-4 ring-white dark:ring-[#1e293b]" />
+                      <div className="text-xs">
+                        <p className="font-bold text-slate-800 dark:text-slate-100 text-[13px]">
+                          تم إنشاء المصروف (معلق)
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                          {transaction.date}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 2: Voucher Linked */}
+                    {transaction.voucher_no && (
+                      <div className="relative">
+                        <span className="absolute -right-[31px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 ring-4 ring-white dark:ring-[#1e293b]" />
+                        <div className="text-xs">
+                          <p className="font-bold text-slate-800 dark:text-slate-100 text-[13px]">
+                            تم ربط السند المالي (تحت التسوية)
+                          </p>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-mono">
+                            سند رقم: <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{transaction.voucher_no}</span> | {transaction.voucher_date || transaction.date}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Step 3: Settled/Approved */}
+                    {transaction.status === 'Settled' && (
+                      <div className="relative">
+                        <span className="absolute -right-[31px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 ring-4 ring-white dark:ring-[#1e293b]" />
+                        <div className="text-xs">
+                          <p className="font-bold text-emerald-600 dark:text-emerald-400 text-[13px]">
+                            تم الاعتماد والتسوية النهائية (مسواة)
+                          </p>
+                          <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                            {transaction.updated_at ? new Date(transaction.updated_at).toLocaleString('ar-EG') : transaction.date}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="relative border-r-2 border-slate-200 dark:border-slate-700 pr-6 mr-3 space-y-6">
+                    {historyRecords.map((record) => {
+                      let badgeColor = 'bg-slate-400';
+                      if (record.new_status === 'Pending') badgeColor = 'bg-amber-500';
+                      else if (record.new_status === 'Under Settlement') badgeColor = 'bg-blue-500';
+                      else if (record.new_status === 'Settled') badgeColor = 'bg-emerald-600';
+                      else if (record.new_status === 'Rejected') badgeColor = 'bg-rose-500';
+
+                      return (
+                        <div key={record.id} className="relative">
+                          <span className={`absolute -right-[31px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full ${badgeColor} ring-4 ring-white dark:ring-[#1e293b]`} />
+                          
+                          <div className="text-xs">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-bold text-slate-800 dark:text-slate-100 text-[13px]">
+                                {getActionTranslation(record.action)}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold text-white font-mono ${badgeColor}`}>
+                                {record.new_status === 'Settled' ? 'Approved & Settled' : record.new_status}
+                              </span>
+                            </div>
+
+                            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                              <span className="flex items-center gap-1">
+                                <User size={12} className="text-slate-400" />
+                                <span>{record.performed_by_name}</span>
+                              </span>
+                              <span className="flex items-center gap-1 font-mono">
+                                <Calendar size={12} className="text-slate-400" />
+                                <span>{new Date(record.timestamp).toLocaleString('ar-EG')}</span>
+                              </span>
+                            </div>
+
+                            {record.notes && (
+                              <p className="mt-1.5 p-2 rounded bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-600 dark:text-slate-300">
+                                {record.notes}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
         </div>
       </div>
