@@ -1,0 +1,120 @@
+import { Company } from '../types';
+import { dbSetDoc, dbDeleteDoc } from '../firebase';
+import { StorageEngine } from './storage';
+import { DEFAULT_COMPANIES } from './defaults';
+import { UsersModule } from './users';
+import { LogsModule } from './logs';
+
+export class CompaniesModule {
+  static getCompanies(): Company[] {
+    return StorageEngine.getStored<Company[]>('companies', DEFAULT_COMPANIES);
+  }
+
+  static saveCompanies(companies: Company[]): void {
+    StorageEngine.setStored('companies', companies);
+    companies.forEach(c => dbSetDoc('companies', c.id, c));
+  }
+
+  static addCompany(name: string, custodyValue?: number): Company {
+    const companies = CompaniesModule.getCompanies();
+    const val = custodyValue ?? 0;
+    const newCompany: Company = {
+      id: `comp-${Date.now()}`,
+      name,
+      custody_value: val
+    };
+    companies.push(newCompany);
+    CompaniesModule.saveCompanies(companies);
+    
+    const user = UsersModule.getActiveUser();
+    LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Add Company', `Created new company: ${name}`);
+    return newCompany;
+  }
+
+  static updateCompany(id: string, updates: Partial<Company>): void {
+    const companies = CompaniesModule.getCompanies();
+    const idx = companies.findIndex(c => c.id === id);
+    if (idx !== -1) {
+      companies[idx] = { ...companies[idx], ...updates };
+      CompaniesModule.saveCompanies(companies);
+      const user = UsersModule.getActiveUser();
+      LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Company', `Modified company: ${companies[idx].name}`);
+    }
+  }
+
+  static deleteCompany(id: string): void {
+    const companies = CompaniesModule.getCompanies().filter(c => c.id !== id);
+    CompaniesModule.saveCompanies(companies);
+    dbDeleteDoc('companies', id);
+    const user = UsersModule.getActiveUser();
+    LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Delete Company', `Deleted company ID: ${id}`);
+  }
+
+  static getSelectedCompanyId(): string {
+    const user = UsersModule.getActiveUser();
+    if (!user) return 'comp-1';
+    
+    if (user.role !== 'SystemAdmin' && user.company_id) {
+      return user.company_id;
+    }
+    
+    const saved = localStorage.getItem('custody_selected_company_id');
+    if (saved) return saved;
+    return 'comp-1';
+  }
+
+  static setSelectedCompanyId(id: string): void {
+    localStorage.setItem('custody_selected_company_id', id);
+    const user = UsersModule.getActiveUser();
+    LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Switch Company', `Viewing focus changed to company ID: ${id}`);
+  }
+
+  static toggleCompanyStatus(companyId: string, isActive: boolean): void {
+    const companies = CompaniesModule.getCompanies();
+    const idx = companies.findIndex(c => c.id === companyId);
+    if (idx !== -1) {
+      companies[idx] = { ...companies[idx], is_active: isActive };
+      CompaniesModule.saveCompanies(companies);
+      
+      const activeUser = UsersModule.getActiveUser();
+      const superAdmin = activeUser?.impersonator || activeUser;
+      const statusStr = isActive ? 'Activated' : 'Suspended';
+      LogsModule.addLog(superAdmin?.id || 'system', superAdmin?.full_name || 'System', 'Toggle Company Status', `${statusStr} company ${companies[idx].name}`);
+      LogsModule.logAudit('COMPANY_STATUS_TOGGLE', `Super Admin ${statusStr.toLowerCase()} company ${companies[idx].name}`, {
+        company_id: companyId,
+        company_name: companies[idx].name,
+        is_active: isActive
+      });
+    }
+  }
+
+  static updateCompanySubscription(
+    companyId: string,
+    plan: Company['subscription_plan'],
+    status: Company['subscription_status'],
+    expiry: string
+  ): void {
+    const companies = CompaniesModule.getCompanies();
+    const idx = companies.findIndex(c => c.id === companyId);
+    if (idx !== -1) {
+      companies[idx] = { 
+        ...companies[idx], 
+        subscription_plan: plan, 
+        subscription_status: status, 
+        subscription_expiry: expiry 
+      };
+      CompaniesModule.saveCompanies(companies);
+      
+      const activeUser = UsersModule.getActiveUser();
+      const superAdmin = activeUser?.impersonator || activeUser;
+      LogsModule.addLog(superAdmin?.id || 'system', superAdmin?.full_name || 'System', 'Update Subscription', `Updated subscription for ${companies[idx].name} to ${plan} (${status})`);
+      LogsModule.logAudit('COMPANY_SUBSCRIPTION_UPDATE', `Super Admin updated subscription for company ${companies[idx].name} to plan ${plan} with status ${status}`, {
+        company_id: companyId,
+        company_name: companies[idx].name,
+        subscription_plan: plan,
+        subscription_status: status,
+        subscription_expiry: expiry
+      });
+    }
+  }
+}
