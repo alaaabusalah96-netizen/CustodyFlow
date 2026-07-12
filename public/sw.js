@@ -1,6 +1,7 @@
 const CACHE_NAME = 'custodyflow-v1';
 const ASSETS = [
   '/',
+  '/?source=pwa',
   '/index.html',
   '/manifest.json',
   '/icon-192.png',

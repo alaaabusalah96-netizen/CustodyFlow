@@ -20,7 +20,7 @@ import {
   SignupRequest 
 } from './types';
 
-import { seedDatabaseIfEmpty, setupFirebaseSync } from './firebase';
+import { seedDatabaseIfEmpty, setupFirebaseSync, dbFetchUserByEmail } from './firebase';
 
 import { StorageEngine } from './db/storage';
 import { 
@@ -146,6 +146,14 @@ export class CustodyDB {
 
   static saveUsers(users: AppUser[]): void {
     UsersModule.saveUsers(users);
+  }
+
+  static async fetchUserByEmail(email: string): Promise<AppUser | null> {
+    return dbFetchUserByEmail(email);
+  }
+
+  static upsertLocalUser(user: AppUser): void {
+    UsersModule.upsertLocalUser(user);
   }
 
   static getScopedUsers(): AppUser[] {

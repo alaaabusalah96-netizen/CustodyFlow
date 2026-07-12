@@ -57,6 +57,22 @@ export default function Login({
   const [showSmtpModal, setShowSmtpModal] = useState(false);
   const [smtpConfiguredStatus, setSmtpConfiguredStatus] = useState<{ configured: boolean; host?: string; user?: string } | null>(null);
 
+  // Firebase Auth Warning State
+  const [showFirebaseAuthWarning, setShowFirebaseAuthWarning] = useState(false);
+
+  React.useEffect(() => {
+    const handleWarning = () => {
+      setShowFirebaseAuthWarning(true);
+    };
+    window.addEventListener('firebase_auth_provider_disabled', handleWarning);
+    if ((window as any).__firebase_auth_provider_disabled) {
+      setShowFirebaseAuthWarning(true);
+    }
+    return () => {
+      window.removeEventListener('firebase_auth_provider_disabled', handleWarning);
+    };
+  }, []);
+
   const refreshSmtpStatus = () => {
     fetch('/api/auth/smtp-config')
       .then(res => res.json())
@@ -230,12 +246,37 @@ export default function Login({
         const userCredential = await signInWithEmailAndPassword(auth, emailLower, passStr);
         return userCredential.user;
       } catch (authErr: any) {
+        if (authErr.code === 'auth/operation-not-allowed') {
+          console.warn(
+            'Firebase Auth: Email/Password sign-in provider is not enabled in your Firebase project. ' +
+            'Please go to the Firebase Console, navigate to Authentication -> Sign-in method, ' +
+            'and enable the "Email/Password" sign-in method.'
+          );
+          if (typeof window !== 'undefined') {
+            (window as any).__firebase_auth_provider_disabled = true;
+            window.dispatchEvent(new CustomEvent('firebase_auth_provider_disabled'));
+          }
+          return null;
+        }
+
         if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/invalid-email') {
           try {
             const userCredential = await createUserWithEmailAndPassword(auth, emailLower, passStr);
             return userCredential.user;
           } catch (createErr: any) {
-            console.error('Firebase Auth auto-creation failed:', createErr);
+            if (createErr.code === 'auth/operation-not-allowed') {
+              console.warn(
+                'Firebase Auth: Email/Password sign-in provider is not enabled in your Firebase project. ' +
+                'Please go to the Firebase Console, navigate to Authentication -> Sign-in method, ' +
+                'and enable the "Email/Password" sign-in method.'
+              );
+              if (typeof window !== 'undefined') {
+                (window as any).__firebase_auth_provider_disabled = true;
+                window.dispatchEvent(new CustomEvent('firebase_auth_provider_disabled'));
+              }
+            } else {
+              console.error('Firebase Auth auto-creation failed:', createErr);
+            }
           }
         } else {
           console.error('Firebase Auth signin error:', authErr);
@@ -252,8 +293,19 @@ export default function Login({
     setError('');
     setSuccess('');
 
-    const users = CustodyDB.getUsers();
     const emailLower = email.toLowerCase().trim();
+
+    // Proactively fetch user from Firestore to ensure local cache is fully hydrated & up to date
+    try {
+      const remoteUser = await CustodyDB.fetchUserByEmail(emailLower);
+      if (remoteUser) {
+        CustodyDB.upsertLocalUser(remoteUser);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch user from Firestore during login:', err);
+    }
+
+    const users = CustodyDB.getUsers();
     const foundUser = users.find(u => u.email.toLowerCase().trim() === emailLower);
 
     if (!foundUser) {
@@ -610,6 +662,51 @@ export default function Login({
             <div className="p-3 mb-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-semibold flex items-start gap-2">
               <ShieldAlert size={16} className="shrink-0 mt-0.5" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {/* Firebase Auth Provider Warning */}
+          {showFirebaseAuthWarning && (
+            <div className="p-4 mb-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs leading-relaxed space-y-2">
+              <div className="flex items-start gap-2 font-bold text-amber-500">
+                <ShieldAlert size={16} className="shrink-0 mt-0.5 animate-pulse" />
+                <span>
+                  {isRtl 
+                    ? 'تنبيه: مزود تسجيل الدخول بالبريد الإلكتروني معطل في منصة Firebase'
+                    : 'Notice: Email/Password Sign-In Provider is Disabled in Firebase'}
+                </span>
+              </div>
+              <p>
+                {isRtl
+                  ? 'يرجى تفعيل خيار تسجيل الدخول (Email/Password) في كونسول Firebase الخاص بك لضمان المزامنة السحابية الكاملة:'
+                  : 'To enable full cloud synchronization, please enable the Email/Password sign-in method in your Firebase Console:'}
+              </p>
+              <ol className="list-decimal list-inside space-y-1 pl-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                <li>
+                  {isRtl ? 'افتح كونسول Firebase للمشروع.' : 'Open your Firebase project console.'}
+                </li>
+                <li>
+                  {isRtl ? 'انتقل إلى قسم Authentication ثم Sign-in method.' : 'Go to Authentication > Sign-in method.'}
+                </li>
+                <li>
+                  {isRtl ? 'اضغط على "إضافة مزود جديد" (Add new provider) واختر "Email/Password".' : 'Click "Add new provider" and select "Email/Password".'}
+                </li>
+                <li>
+                  {isRtl ? 'قم بتمكينه (Enable) وحفظ التغييرات.' : 'Toggle "Enable" and click Save.'}
+                </li>
+              </ol>
+              <div className="pt-1.5 border-t border-amber-500/10 flex items-center justify-between text-[11px] font-bold text-slate-400">
+                <span>{isRtl ? 'المنظومة تعمل الآن بوضع البيانات المحلية المؤقتة.' : 'Running with local offline-first credentials.'}</span>
+                <a 
+                  href="https://console.firebase.google.com/project/refined-garage-5nzsc/authentication/providers" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-amber-600 hover:text-amber-500 dark:text-amber-400 dark:hover:text-amber-300 inline-flex items-center gap-0.5 underline decoration-dotted"
+                >
+                  <span>Console</span>
+                  <ExternalLink size={10} />
+                </a>
+              </div>
             </div>
           )}
 

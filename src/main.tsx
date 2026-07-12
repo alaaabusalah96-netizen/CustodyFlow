@@ -6,6 +6,7 @@ import { CustodyDB } from './db';
 
 // Initialize remote Firebase database synchronization
 CustodyDB.initializeFirebase();
+CustodyDB.initializeCacheListener();
 
 // Register Progressive Web App Service Worker
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {

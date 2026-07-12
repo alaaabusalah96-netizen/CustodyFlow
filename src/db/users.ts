@@ -106,7 +106,25 @@ export class UsersModule {
   }
 
   static getUsers(): AppUser[] {
-    const users = StorageEngine.getStored<AppUser[]>('users', DEFAULT_USERS);
+    let users = StorageEngine.getStored<AppUser[]>('users', DEFAULT_USERS);
+    
+    // Safety fallback: Ensure any SystemAdmin from DEFAULT_USERS is never missing from the returned list
+    const adminEmails = ['alaaabusalah96@gmail.com', 'alaabusalah96@gmail.com'];
+    const defaultAdmins = DEFAULT_USERS.filter(u => u.email && adminEmails.includes(u.email.toLowerCase().trim()));
+    let hasAddedMissingAdmin = false;
+    
+    defaultAdmins.forEach(defAdmin => {
+      const exists = users.some(u => u.email && u.email.toLowerCase().trim() === defAdmin.email.toLowerCase().trim());
+      if (!exists) {
+        users = [...users, defAdmin];
+        hasAddedMissingAdmin = true;
+      }
+    });
+
+    if (hasAddedMissingAdmin) {
+      StorageEngine.setStored('users', users);
+    }
+
     let changed = false;
     const updated = users.map(u => {
       const isPlatformAdminEmail = u.email && (
@@ -362,5 +380,25 @@ export class UsersModule {
     const filtered = requests.filter(r => r.id !== id);
     StorageEngine.setStored('signup_requests', filtered);
     dbDeleteDoc('signup_requests', id);
+  }
+
+  static upsertLocalUser(user: AppUser): void {
+    const users = StorageEngine.getStored<AppUser[]>('users', DEFAULT_USERS);
+    const index = users.findIndex(u => u.id === user.id || (u.email && user.email && u.email.toLowerCase().trim() === user.email.toLowerCase().trim()));
+    
+    const enrichedUser = {
+      ...user,
+      permissions: UsersModule.enrichUserPermissions(user.role, user.permissions)
+    };
+
+    let updated: AppUser[];
+    if (index > -1) {
+      updated = [...users];
+      updated[index] = { ...updated[index], ...enrichedUser };
+    } else {
+      updated = [...users, enrichedUser];
+    }
+    
+    StorageEngine.setStored('users', updated);
   }
 }

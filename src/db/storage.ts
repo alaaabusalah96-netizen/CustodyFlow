@@ -10,6 +10,11 @@ export class StorageEngine {
       window.addEventListener('custody_db_updated', () => {
         StorageEngine.cache = {};
       });
+      window.addEventListener('storage', (e) => {
+        if (e.key && e.key.startsWith('custody_')) {
+          StorageEngine.cache = {};
+        }
+      });
     }
   }
 

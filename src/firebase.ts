@@ -339,6 +339,23 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
     snapshot.forEach(doc => {
       data.push(doc.data() as AppUser);
     });
+
+    // Crucial: preserve any existing SystemAdmin users in local cache to prevent them from being wiped out by company-scoped sync!
+    try {
+      const existingStr = localStorage.getItem('custody_users');
+      if (existingStr) {
+        const existingUsers = JSON.parse(existingStr) as AppUser[];
+        const systemAdmins = existingUsers.filter(u => u.role === 'SystemAdmin');
+        systemAdmins.forEach(admin => {
+          if (!data.some(u => u.id === admin.id || (u.email && admin.email && u.email.toLowerCase().trim() === admin.email.toLowerCase().trim()))) {
+            data.push(admin);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Error preserving SystemAdmin users in snapshot sync:', e);
+    }
+
     updateLocalAndNotify('users', data);
   }, (error) => {
     handleFirestoreError(error, OperationType.GET, 'users');
@@ -612,4 +629,17 @@ export async function dbDeleteDoc(collectionName: string, docId: string) {
     console.error(`Error deleting document from Firestore (${collectionName}/${docId}):`, error);
     handleFirestoreError(error, OperationType.DELETE, `${collectionName}/${docId}`);
   }
+}
+
+export async function dbFetchUserByEmail(email: string): Promise<AppUser | null> {
+  try {
+    const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase().trim()), limit(1));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      return snap.docs[0].data() as AppUser;
+    }
+  } catch (error) {
+    console.warn(`Error fetching user by email from Firestore:`, error);
+  }
+  return null;
 }
