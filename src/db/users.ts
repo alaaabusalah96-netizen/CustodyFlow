@@ -213,6 +213,7 @@ export class UsersModule {
   }
 
   static saveUsers(users: AppUser[]): void {
+    const existing = StorageEngine.getStored<AppUser[]>('users', []);
     const enriched = users.map(u => {
       let pwd = u.password || '';
       const isHashed = /^[0-9a-f]{64}$/i.test(pwd);
@@ -225,8 +226,21 @@ export class UsersModule {
         permissions: UsersModule.enrichUserPermissions(u.role, u.permissions)
       };
     });
+
+    // Highly Optimized: Identify and isolate only users that actually changed or are new
+    const changedUsers = enriched.filter(u => {
+      const old = existing.find(ex => ex.id === u.id);
+      if (!old) return true; // New user
+      return JSON.stringify(old) !== JSON.stringify(u); // Diff check
+    });
+
     StorageEngine.setStored('users', enriched);
-    enriched.forEach(u => dbSetDoc('users', u.id, u));
+
+    // Strictly write only the targeted modified documents to prevent multi-tenant permission rejections
+    changedUsers.forEach(u => {
+      dbSetDoc('users', u.id, u);
+    });
+
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Users', 'Modified user roles and system permission profiles.');
   }

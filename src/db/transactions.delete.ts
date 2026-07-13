@@ -193,13 +193,15 @@ export class TransactionsDeleteModule {
 
     const logId = `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const logDetails = `Deleted transaction ${tx.transaction_no} worth ${tx.amount.toLocaleString()} EGP. Reason: ${reason}`;
+    const resolvedCompanyId = tx.company_id || user.company_id || '';
     const newLog: ActivityLog = {
       id: logId,
       user_id: user.id,
       user_name: user.full_name,
       action: 'Delete Transaction',
       details: logDetails,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      company_id: resolvedCompanyId
     };
 
     const auditLogId = `aud-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -211,7 +213,8 @@ export class TransactionsDeleteModule {
       action_type: 'DELETE_TRANSACTION',
       description: logDetails,
       timestamp: new Date().toISOString(),
-      details: { before: tx, delete_reason: reason }
+      details: { before: tx, delete_reason: reason },
+      company_id: resolvedCompanyId
     };
 
     try {

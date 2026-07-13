@@ -1,12 +1,13 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 import { 
   initializeFirestore, 
   doc, 
   collection, 
   setDoc, 
   deleteDoc, 
-  onSnapshot, 
+  onSnapshot as rawOnSnapshot, 
   writeBatch, 
   getDocs,
   getDoc,
@@ -18,19 +19,22 @@ import {
 import { AppUser, ExpenseCategory, Transaction, ActivityLog, CustodyConfig, Region, Station, Company, Expense, CashVoucher, TransactionHistory, Notification, AuditLog, SystemPermission, SystemRole, DeletedTransaction, SignupRequest } from './types';
 
 const firebaseConfig = {
-  projectId: "refined-garage-5nzsc",
-  appId: "1:619920731471:web:caa4ea274d68cfff45293a",
-  apiKey: "AIzaSyD_KQ7aA76ZGR-Z9zdhQBIZQIxHw-Hw5Vc",
-  authDomain: "refined-garage-5nzsc.firebaseapp.com",
-  storageBucket: "refined-garage-5nzsc.firebasestorage.app",
-  messagingSenderId: "619920731471"
+  apiKey: "AIzaSyA2I_2GIEfQhawBL2KhXyxD6CwTLJR-jFw",
+  authDomain: "custodyflow.firebaseapp.com",
+  projectId: "custodyflow",
+  storageBucket: "custodyflow.firebasestorage.app",
+  messagingSenderId: "88602135716",
+  appId: "1:88602135716:web:f73fc0a3c44fc1ec3d6a31",
+  measurementId: "G-JNEFCLF157"
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true
-}, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe");
+const isSandboxProject = firebaseConfig.projectId === "refined-garage-5nzsc";
+export const db = isSandboxProject
+  ? initializeFirestore(app, { experimentalForceLongPolling: true }, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe")
+  : initializeFirestore(app, { experimentalForceLongPolling: true });
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 
 export enum OperationType {
   CREATE = 'create',
@@ -102,6 +106,48 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
+// Global counters for collection snapshot tracking
+const snapshotCounters: Record<string, number> = {};
+
+// Custom onSnapshot wrapper to inject debug logs 6 and 7 automatically
+export function onSnapshot(
+  reference: any,
+  onNext: (snapshot: any) => void,
+  onError?: (error: any) => void
+) {
+  let key = 'unknown';
+  try {
+    if (reference) {
+      if (typeof reference.path === 'string') {
+        key = reference.path;
+      } else if (reference._query && reference._query.path) {
+        key = reference._query.path.segments?.join('/') || 'query';
+      } else if (reference.type === 'query' || reference.type === 'collection') {
+        key = reference.path || 'query';
+      } else {
+        key = reference.constructor?.name || 'query';
+      }
+    }
+  } catch (e) {
+    key = 'error_extracting_path';
+  }
+
+  const wrappedOnNext = (snapshot: any) => {
+    snapshotCounters[key] = (snapshotCounters[key] || 0) + 1;
+    if (snapshotCounters[key] === 1) {
+      console.log(`[DEBUG_LOG] 6. FIRST snapshot for collection: ${key}`);
+    }
+    const size = typeof snapshot.size === 'number' 
+      ? snapshot.size 
+      : (typeof snapshot.exists === 'function' && snapshot.exists() ? 1 : 0);
+    console.log(`[DEBUG_LOG] 7. Incoming Firestore elements count for [${key}]:`, size);
+    
+    onNext(snapshot);
+  };
+
+  return rawOnSnapshot(reference, wrappedOnNext, onError);
+}
+
 // Seed status document helper
 const SEED_DOC_PATH = 'system_meta/seed_status_v5';
 
@@ -123,16 +169,19 @@ export async function seedDatabaseIfEmpty(defaults: {
   permissions?: SystemPermission[];
   roles?: SystemRole[];
 }) {
+  console.log('[DEBUG_LOG] 3. Before executing seedDatabaseIfEmpty');
   try {
     // Check if seeded with v7 already
     let alreadySeededV7 = false;
     try {
+      console.log('[DEBUG_LOG] 1. Before reading system_meta collection');
       const snap = await getDocs(query(collection(db, 'system_meta'), limit(10)));
       snap.forEach(d => {
         if (d.id === 'seed_status_v7') {
           alreadySeededV7 = true;
         }
       });
+      console.log('[DEBUG_LOG] 2. After reading system_meta. Doc count:', snap.size, 'alreadySeededV7:', alreadySeededV7, 'docs:', snap.docs.map(d => ({id: d.id, data: d.data()})));
     } catch (e) {
       console.warn('Error checking seed_status_v7:', e);
     }
@@ -229,12 +278,14 @@ export async function seedDatabaseIfEmpty(defaults: {
       await finalBatch.commit();
 
       console.log('Seeding v7 completed successfully.');
+      console.log('[DEBUG_LOG] 4. After completing seedDatabaseIfEmpty (New seed performed)');
       
       // Force refresh of local state
       localStorage.clear();
       window.location.reload();
     } else {
       console.log('Database already seeded with v7. Skipping seed.');
+      console.log('[DEBUG_LOG] 4. After seedDatabaseIfEmpty (Database already seeded with v7, skipping)');
     }
   } catch (error) {
     console.error('Error seeding Firebase:', error);
@@ -257,6 +308,7 @@ export function clearActiveUnsubscribes() {
 }
 
 function rebuildListeners(activeUser: AppUser | null, companyId: string) {
+  console.log('[DEBUG_LOG] 5. Before running rebuildListeners(). ActiveUser ID:', activeUser?.id, 'Company ID:', companyId);
   clearActiveUnsubscribes();
 
   console.log(`Rebuilding Firestore listeners. Active user: ${activeUser?.email || 'Guest'}, Selected company: ${companyId}`);
@@ -583,10 +635,32 @@ export async function dbFetchPaginated<T>(
 function updateLocalAndNotify(key: string, data: any) {
   const localKey = `custody_${key}`;
   const currentStr = localStorage.getItem(localKey);
+  
+  // 8. Print count of elements in LocalStorage before updating
+  let countBefore = 0;
+  if (currentStr) {
+    try {
+      const parsed = JSON.parse(currentStr);
+      countBefore = Array.isArray(parsed) ? parsed.length : (parsed ? 1 : 0);
+    } catch (e) {}
+  }
+  console.log(`[DEBUG_LOG] 8. Elements in LocalStorage [${key}] before update:`, countBefore);
+
   const nextStr = JSON.stringify(data);
   if (currentStr !== nextStr) {
     localStorage.setItem(localKey, nextStr);
+    
+    // 9. Print count of elements after updateLocalAndNotify()
+    let countAfter = 0;
+    try {
+      const parsed = JSON.parse(nextStr);
+      countAfter = Array.isArray(parsed) ? parsed.length : (parsed ? 1 : 0);
+    } catch (e) {}
+    console.log(`[DEBUG_LOG] 9. Elements in LocalStorage [${key}] after updateLocalAndNotify():`, countAfter);
+
     window.dispatchEvent(new Event('custody_db_updated'));
+  } else {
+    console.log(`[DEBUG_LOG] 9. No change in LocalStorage [${key}]. Remained at:`, countBefore);
   }
 }
 

@@ -15,6 +15,7 @@ import {
   deleteDoc 
 } from "firebase/firestore";
 import nodemailer from "nodemailer";
+import rateLimit from "express-rate-limit";
 import { runTenantMigrationUp, runTenantMigrationDown } from "./src/migrations/tenantMigration";
 
 const firebaseConfig = {
@@ -139,6 +140,18 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Rate limiting for auth & OTP endpoints to prevent brute-force/DOS
+  const otpRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // Max 10 requests per 15 minutes per IP
+    message: {
+      success: false,
+      message: "تم تجاوز الحد الأقصى للطلبات من هذا الجهاز. يرجى المحاولة مرة أخرى بعد 15 دقيقة."
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   // API Route - Run Tenant Migration (UP)
   app.post("/api/migrations/up", async (req, res) => {
     try {
@@ -172,7 +185,7 @@ async function startServer() {
   });
 
   // API Route - Password Reset Request
-  app.post("/api/auth/reset-password/request", async (req, res) => {
+  app.post("/api/auth/reset-password/request", otpRateLimiter, async (req, res) => {
     try {
       const { email, securityPin } = req.body;
       if (!email) {
@@ -213,7 +226,8 @@ async function startServer() {
       await setDoc(otpDocRef, {
         email: targetEmail,
         code: otp,
-        expiresAt
+        expiresAt,
+        attempts: 0
       });
 
       // 6. Send OTP to the real email address only
@@ -231,7 +245,7 @@ async function startServer() {
   });
 
   // API Route - Password Reset OTP Verification
-  app.post("/api/auth/reset-password/verify", async (req, res) => {
+  app.post("/api/auth/reset-password/verify", otpRateLimiter, async (req, res) => {
     try {
       const { email, code } = req.body;
       if (!email || !code) {
@@ -253,8 +267,27 @@ async function startServer() {
       }
 
       const otpData = otpDoc.data();
-      if (otpData.code !== code.trim() || otpData.expiresAt < Date.now()) {
+      const attempts = otpData.attempts || 0;
+
+      if (attempts >= 5) {
+        await deleteDoc(otpDocRef);
+        return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات المقبولة. تم إبطال الرمز، يرجى طلب رمز جديد." });
+      }
+
+      if (otpData.expiresAt < Date.now()) {
+        await deleteDoc(otpDocRef);
         return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
+      }
+
+      if (otpData.code !== code.trim()) {
+        const newAttempts = attempts + 1;
+        if (newAttempts >= 5) {
+          await deleteDoc(otpDocRef);
+          return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات المقبولة. تم إبطال الرمز، يرجى طلب رمز جديد." });
+        } else {
+          await updateDoc(otpDocRef, { attempts: newAttempts });
+          return res.status(400).json({ success: false, message: `كود التحقق غير صحيح. المحاولات المتبقية: ${5 - newAttempts}` });
+        }
       }
 
       return res.json({ success: true });
@@ -265,7 +298,7 @@ async function startServer() {
   });
 
   // API Route - Password Reset Confirmation
-  app.post("/api/auth/reset-password/confirm", async (req, res) => {
+  app.post("/api/auth/reset-password/confirm", otpRateLimiter, async (req, res) => {
     try {
       const { email, code, newPassword } = req.body;
       if (!email || !code || !newPassword) {
@@ -288,8 +321,27 @@ async function startServer() {
       }
 
       const otpData = otpDoc.data();
-      if (otpData.code !== code.trim() || otpData.expiresAt < Date.now()) {
+      const attempts = otpData.attempts || 0;
+
+      if (attempts >= 5) {
+        await deleteDoc(otpDocRef);
+        return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات المقبولة. تم إبطال الرمز، يرجى طلب رمز جديد." });
+      }
+
+      if (otpData.expiresAt < Date.now()) {
+        await deleteDoc(otpDocRef);
         return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
+      }
+
+      if (otpData.code !== code.trim()) {
+        const newAttempts = attempts + 1;
+        if (newAttempts >= 5) {
+          await deleteDoc(otpDocRef);
+          return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات المقبولة. تم إبطال الرمز، يرجى طلب رمز جديد." });
+        } else {
+          await updateDoc(otpDocRef, { attempts: newAttempts });
+          return res.status(400).json({ success: false, message: `كود التحقق غير صحيح. المحاولات المتبقية: ${5 - newAttempts}` });
+        }
       }
 
       // OTP matches! Update the password in Firestore for all documents matching the email
@@ -319,7 +371,7 @@ async function startServer() {
   });
 
   // API Route - Admin Login Request
-  app.post("/api/auth/admin-login/request", async (req, res) => {
+  app.post("/api/auth/admin-login/request", otpRateLimiter, async (req, res) => {
     try {
       const { email, password } = req.body;
       if (!email) {
@@ -358,7 +410,8 @@ async function startServer() {
       await setDoc(otpDocRef, {
         email: targetEmail,
         code: otp,
-        expiresAt
+        expiresAt,
+        attempts: 0
       });
 
       // Send to real email
@@ -372,7 +425,7 @@ async function startServer() {
   });
 
   // API Route - Admin Login OTP Verification
-  app.post("/api/auth/admin-login/verify", async (req, res) => {
+  app.post("/api/auth/admin-login/verify", otpRateLimiter, async (req, res) => {
     try {
       const { email, code } = req.body;
       if (!email || !code) {
@@ -394,8 +447,27 @@ async function startServer() {
       }
 
       const otpData = otpDoc.data();
-      if (otpData.code !== code.trim() || otpData.expiresAt < Date.now()) {
+      const attempts = otpData.attempts || 0;
+
+      if (attempts >= 5) {
+        await deleteDoc(otpDocRef);
+        return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات المقبولة. تم إبطال الرمز، يرجى طلب رمز جديد." });
+      }
+
+      if (otpData.expiresAt < Date.now()) {
+        await deleteDoc(otpDocRef);
         return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
+      }
+
+      if (otpData.code !== code.trim()) {
+        const newAttempts = attempts + 1;
+        if (newAttempts >= 5) {
+          await deleteDoc(otpDocRef);
+          return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات المقبولة. تم إبطال الرمز، يرجى طلب رمز جديد." });
+        } else {
+          await updateDoc(otpDocRef, { attempts: newAttempts });
+          return res.status(400).json({ success: false, message: `كود التحقق غير صحيح. المحاولات المتبقية: ${5 - newAttempts}` });
+        }
       }
 
       // Clean up the used OTP

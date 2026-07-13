@@ -139,13 +139,15 @@ export class TransactionsRestoreModule {
 
     const logId = `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const logDetails = `Restored transaction ${tx.transaction_no} worth ${tx.amount.toLocaleString()} EGP back to status: ${originalStatus}.`;
+    const resolvedCompanyId = tx.company_id || user.company_id || '';
     const newLog: ActivityLog = {
       id: logId,
       user_id: user.id,
       user_name: user.full_name,
       action: 'Restore Transaction',
       details: logDetails,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      company_id: resolvedCompanyId
     };
 
     const auditLogId = `aud-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -157,7 +159,8 @@ export class TransactionsRestoreModule {
       action_type: 'RESTORE_TRANSACTION',
       description: logDetails,
       timestamp: new Date().toISOString(),
-      details: { transaction_id: tx.id, restored_status: originalStatus }
+      details: { transaction_id: tx.id, restored_status: originalStatus },
+      company_id: resolvedCompanyId
     };
 
     const notificationsToSend: Notification[] = [];

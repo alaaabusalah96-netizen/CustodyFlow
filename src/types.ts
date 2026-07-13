@@ -495,6 +495,7 @@ export interface AuditLog {
   details?: Record<string, any>;
   tenantId?: string;
   organizationId?: string;
+  company_id?: string;
 }
 
 export interface SystemPermission {

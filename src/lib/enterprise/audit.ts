@@ -1,5 +1,6 @@
-import { Firestore, doc, setDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { Firestore, doc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { EventEnvelope, AuditRecord } from '../../types/enterprise';
+import { dbSetDoc } from '../../firebase';
 
 /**
  * 3.5 Audit Log Engine
@@ -59,6 +60,7 @@ export class AuditLogEngine {
       description: `Domain Event: ${event.eventType}`,
       timestamp: event.timestamp || timestampStr,
       tenantId: event.tenantId,
+      company_id: event.tenantId,
       organizationId: event.organizationId || event.tenantId,
       details: event.payload,
       // Nest the clean EventEnvelope directly in the document
@@ -69,8 +71,7 @@ export class AuditLogEngine {
     // 3. Persist to Firestore if instance is provided, otherwise fallback to in-memory log
     if (this.db) {
       try {
-        const auditDocRef = doc(this.db, 'AuditLogs', record.id);
-        await setDoc(auditDocRef, backwardsCompatibleData);
+        await dbSetDoc('AuditLogs', record.id, backwardsCompatibleData);
       } catch (error) {
         console.error('AuditLogEngine persistence error:', error);
         throw error;

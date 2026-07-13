@@ -21,6 +21,10 @@ export class LogsModule {
     notes?: string
   ): void {
     const logs = LogsModule.getLogs();
+    const activeUser = StorageEngine.getStored<any>('active_user', null);
+    const savedCompanyId = typeof localStorage !== 'undefined' ? localStorage.getItem('custody_selected_company_id') : null;
+    const resolvedCompanyId = companyId || activeUser?.company_id || savedCompanyId || 'comp-1';
+
     const newLog: ActivityLog = {
       id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       user_id: userId,
@@ -29,7 +33,7 @@ export class LogsModule {
       details,
       timestamp: new Date().toISOString(),
       station_id: stationId,
-      company_id: companyId,
+      company_id: resolvedCompanyId,
       amount,
       notes
     };
@@ -98,6 +102,9 @@ export class LogsModule {
     // Auto-generate realistic client IP address
     const ipStr = '197.34.' + Math.floor(10 + Math.random() * 200) + '.' + Math.floor(10 + Math.random() * 200);
 
+    const savedCompanyId = typeof localStorage !== 'undefined' ? localStorage.getItem('custody_selected_company_id') : null;
+    const companyId = activeUser?.company_id || savedCompanyId || 'comp-1';
+
     const log: AuditLog = {
       id: `audit-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       user_id: activeUser?.id || 'system',
@@ -108,7 +115,8 @@ export class LogsModule {
       action_type: actionType,
       description,
       timestamp: new Date().toISOString(),
-      details
+      details,
+      company_id: companyId
     };
 
     LogsModule.addAuditLog(log);
