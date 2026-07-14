@@ -361,142 +361,6 @@ export default function InventoryDocumentForm({
     setItems(updated);
   };
 
-  // Smart Search component
-  const SearchableDropdown = ({
-    label,
-    placeholder,
-    value,
-    list,
-    onSelect,
-    error,
-    typeKey
-  }: {
-    label: string;
-    placeholder: string;
-    value: string;
-    list: DropdownItem[];
-    onSelect: (id: string) => void;
-    error?: string;
-    typeKey: 'dest' | number;
-  }) => {
-    const [searchQuery, setSearchQuery] = useState('');
-    const dropdownRef = useRef<HTMLDivElement>(null);
-
-    // Filter list based on smart search query
-    const filteredList = useMemo(() => {
-      const query = searchQuery.toLowerCase().trim();
-      if (!query) return list;
-      return list.filter(item => 
-        item.name.toLowerCase().includes(query) ||
-        item.code.toLowerCase().includes(query) ||
-        (item.subText && item.subText.toLowerCase().includes(query))
-      );
-    }, [list, searchQuery]);
-
-    // Close dropdown on click outside
-    useEffect(() => {
-      function handleClickOutside(event: MouseEvent) {
-        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-          setActiveDropdown(null);
-        }
-      }
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const selectedItem = list.find(item => item.id === value);
-
-    return (
-      <div className="relative w-full" ref={dropdownRef}>
-        <label className={`block text-xs font-bold mb-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
-          {label}
-        </label>
-        
-        <button
-          type="button"
-          onClick={() => setActiveDropdown(activeDropdown?.type === typeKey ? null : { type: typeKey, search: '' })}
-          className={`flex w-full items-center justify-between px-3.5 py-2 border rounded-xl text-xs font-medium text-right focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all ${
-            theme === 'dark' 
-              ? 'bg-[#1e293b] border-[#334155] text-slate-100 hover:bg-[#334155]/50' 
-              : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50'
-          } ${error ? 'border-rose-500 ring-2 ring-rose-500/10' : ''}`}
-        >
-          <span className="truncate">
-            {selectedItem ? `${selectedItem.name} [${selectedItem.code}]` : placeholder}
-          </span>
-          <ChevronDown size={14} className="text-slate-400 shrink-0" />
-        </button>
-
-        {activeDropdown?.type === typeKey && (
-          <div className={`absolute z-50 mt-1.5 w-full max-h-60 overflow-y-auto rounded-xl border p-2 shadow-xl ${
-            theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200'
-          }`}>
-            <div className="relative flex items-center mb-2 px-1">
-              <Search size={14} className="absolute right-3.5 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={isRtl ? 'ابحث بالاسم أو الكود...' : 'Search by name or code...'}
-                className={`w-full pr-8 pl-3 py-1.5 text-xs rounded-lg border focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
-                  theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200'
-                }`}
-                autoFocus
-              />
-            </div>
-            
-            <div className="space-y-0.5">
-              {filteredList.length === 0 ? (
-                <div className="text-center py-4 text-xs text-slate-400">
-                  {isRtl ? 'لا توجد نتائج مطابقة' : 'No matching results'}
-                </div>
-              ) : (
-                filteredList.map(item => {
-                  const isSelected = item.id === value;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        onSelect(item.id);
-                        setActiveDropdown(null);
-                        setSearchQuery('');
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-right ${
-                        isSelected 
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold' 
-                          : theme === 'dark' 
-                            ? 'text-slate-300 hover:bg-slate-800' 
-                            : 'text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="flex flex-col min-w-0">
-                        <span className="font-semibold truncate">{item.name}</span>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 rounded">
-                            {item.code}
-                          </span>
-                          {item.subText && (
-                            <span className="text-[10px] text-slate-400 truncate max-w-[150px]">
-                              {item.subText}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {isSelected && <Check size={14} className="text-emerald-500 shrink-0" />}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
-
-        {error && <p className="text-[10px] text-rose-500 font-semibold mt-1 flex items-center gap-1"><AlertCircle size={10} />{error}</p>}
-      </div>
-    );
-  };
-
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Document Frame / Paper-like Look */}
@@ -709,6 +573,10 @@ export default function InventoryDocumentForm({
                     onSelect={(id) => setDestEntityId(id)}
                     error={errors.destEntityId}
                     typeKey="dest"
+                    theme={theme}
+                    isRtl={isRtl}
+                    activeDropdown={activeDropdown}
+                    setActiveDropdown={setActiveDropdown}
                   />
                 </div>
 
@@ -864,6 +732,10 @@ export default function InventoryDocumentForm({
                           onSelect={(id) => handleUpdateItemValue(idx, 'product_id', id)}
                           error={errors[`item_product_${idx}`]}
                           typeKey={idx}
+                          theme={theme}
+                          isRtl={isRtl}
+                          activeDropdown={activeDropdown}
+                          setActiveDropdown={setActiveDropdown}
                         />
                       </td>
 
@@ -1022,3 +894,152 @@ export default function InventoryDocumentForm({
     </form>
   );
 }
+
+// Standalone SearchableDropdown Component to maintain stable lifecycle & styling
+interface SearchableDropdownProps {
+  label: string;
+  placeholder: string;
+  value: string;
+  list: DropdownItem[];
+  onSelect: (id: string) => void;
+  error?: string;
+  typeKey: 'dest' | number;
+  theme: 'light' | 'dark';
+  isRtl: boolean;
+  activeDropdown: { type: 'dest' | number; search: string } | null;
+  setActiveDropdown: React.Dispatch<React.SetStateAction<{ type: 'dest' | number; search: string } | null>>;
+}
+
+function SearchableDropdown({
+  label,
+  placeholder,
+  value,
+  list,
+  onSelect,
+  error,
+  typeKey,
+  theme,
+  isRtl,
+  activeDropdown,
+  setActiveDropdown
+}: SearchableDropdownProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Filter list based on smart search query
+  const filteredList = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return list;
+    return list.filter(item => 
+      item.name.toLowerCase().includes(query) ||
+      item.code.toLowerCase().includes(query) ||
+      (item.subText && item.subText.toLowerCase().includes(query))
+    );
+  }, [list, searchQuery]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setActiveDropdown(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [setActiveDropdown]);
+
+  const selectedItem = list.find(item => item.id === value);
+
+  return (
+    <div className="relative w-full" ref={dropdownRef}>
+      {label && (
+        <label className={`block text-xs font-bold mb-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+          {label}
+        </label>
+      )}
+      
+      <button
+        type="button"
+        onClick={() => setActiveDropdown(activeDropdown?.type === typeKey ? null : { type: typeKey, search: '' })}
+        className={`flex w-full items-center justify-between px-3.5 py-2 border rounded-xl text-xs font-medium text-right focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all ${
+          theme === 'dark' 
+            ? 'bg-[#1e293b] border-[#334155] text-slate-100 hover:bg-[#334155]/50' 
+            : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50'
+        } ${error ? 'border-rose-500 ring-2 ring-rose-500/10' : ''}`}
+      >
+        <span className="truncate">
+          {selectedItem ? `${selectedItem.name} [${selectedItem.code}]` : placeholder}
+        </span>
+        <ChevronDown size={14} className="text-slate-400 shrink-0" />
+      </button>
+
+      {activeDropdown?.type === typeKey && (
+        <div className={`absolute z-50 mt-1.5 w-full max-h-60 overflow-y-auto rounded-xl border p-2 shadow-xl ${
+          theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200'
+        }`}>
+          <div className="relative flex items-center mb-2 px-1">
+            <Search size={14} className="absolute right-3.5 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={isRtl ? 'ابحث بالاسم أو الكود...' : 'Search by name or code...'}
+              className={`w-full pr-8 pl-3 py-1.5 text-xs rounded-lg border focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
+                theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200'
+              }`}
+              autoFocus
+            />
+          </div>
+          
+          <div className="space-y-0.5">
+            {filteredList.length === 0 ? (
+              <div className="text-center py-4 text-xs text-slate-400">
+                {isRtl ? 'لا توجد نتائج مطابقة' : 'No matching results'}
+              </div>
+            ) : (
+              filteredList.map(item => {
+                const isSelected = item.id === value;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      onSelect(item.id);
+                      setActiveDropdown(null);
+                      setSearchQuery('');
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all text-right ${
+                      isSelected 
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold' 
+                        : theme === 'dark' 
+                          ? 'text-slate-300 hover:bg-slate-800' 
+                          : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-semibold truncate">{item.name}</span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 rounded">
+                          {item.code}
+                        </span>
+                        {item.subText && (
+                          <span className="text-[10px] text-slate-400 truncate max-w-[150px]">
+                            {item.subText}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {isSelected && <Check size={14} className="text-emerald-500 shrink-0" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {error && <p className="text-[10px] text-rose-500 font-semibold mt-1 flex items-center gap-1"><AlertCircle size={10} />{error}</p>}
+    </div>
+  );
+}
+

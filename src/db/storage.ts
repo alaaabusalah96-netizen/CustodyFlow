@@ -36,7 +36,9 @@ export class StorageEngine {
     this.cache[key] = value;
     localStorage.setItem(`custody_${key}`, JSON.stringify(value));
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('custody_db_updated'));
+      setTimeout(() => {
+        window.dispatchEvent(new Event('custody_db_updated'));
+      }, 0);
     }
   }
 }

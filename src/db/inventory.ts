@@ -224,10 +224,23 @@ export class InventoryModule {
         }
       ];
       
-      // Save them
-      const updatedList = [...list, ...seedScrap];
-      StorageEngine.setStored('warehouses', updatedList);
-      seedScrap.forEach(w => dbSetDoc('warehouses', w.id, w));
+      // Save them asynchronously to avoid side-effects during render
+      setTimeout(() => {
+        try {
+          const currentAll = StorageEngine.getStored<Warehouse[]>('warehouses', DEFAULT_WAREHOUSES);
+          const hasScrapNow = currentAll.some(w => w.company_id === companyId && (
+            w.name.includes('خردة') || w.name.includes('كهنة') || w.name.toLowerCase().includes('scrap')
+          ));
+          if (!hasScrapNow) {
+            const updatedList = [...currentAll, ...seedScrap];
+            StorageEngine.setStored('warehouses', updatedList);
+            seedScrap.forEach(w => dbSetDoc('warehouses', w.id, w));
+          }
+        } catch (e) {
+          console.error('Error seeding scrap warehouses:', e);
+        }
+      }, 0);
+      
       return [...companyWarehouses, ...seedScrap];
     }
     
