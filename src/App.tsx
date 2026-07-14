@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CustodyDB } from './db';
+import { CustodyDB, ModulesModule } from './db';
 import { AppUser, Language, Theme, Transaction } from './types';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -24,6 +24,7 @@ import AuditLogView from './pages/AuditLog';
 import SuperAdmin from './pages/SuperAdmin';
 import CompanyAdminDashboard from './pages/CompanyAdminDashboard';
 import RegionAdminDashboard from './pages/RegionAdminDashboard';
+import Inventory from './pages/Inventory';
 
 export default function App() {
   // Try to load any existing active session, or default to null
@@ -268,6 +269,10 @@ export default function App() {
 
   // Main Page Router Dispatcher
   const renderPage = () => {
+    if (activeUser?.company_id && !ModulesModule.isScreenEnabledForCompany(activeUser.company_id, currentTab)) {
+      return renderAccessDenied();
+    }
+
     switch (currentTab) {
       case 'dashboard':
         if (activeUser?.role !== 'Admin' && activeUser?.role !== 'SystemAdmin') {
@@ -385,6 +390,13 @@ export default function App() {
       case 'audit-log':
         return (
           <AuditLogView
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'inventory':
+        return (
+          <Inventory
             language={language}
             theme={theme}
           />

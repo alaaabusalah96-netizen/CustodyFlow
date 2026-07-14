@@ -10,6 +10,7 @@ export interface Company {
   subscription_plan?: 'Basic' | 'Professional' | 'Enterprise';
   tenantId?: string;
   organizationId?: string;
+  modules?: Record<string, any>;
 }
 
 export interface UserPermissions {

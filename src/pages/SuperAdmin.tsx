@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { CustodyDB } from '../db';
+import { CustodyDB, ModulesModule, ERP_MODULES_REGISTRY, CompanyModuleSettings } from '../db';
 import { Company, AppUser, Language, Theme, AuditLog, Region, Station, UserPermissions, Transaction, TransactionStatus, ActivityLog, DeletedTransaction, SignupRequest } from '../types';
 import { 
   Building2, ShieldCheck, KeyRound, UserCheck, RefreshCw, AlertTriangle, 
@@ -94,6 +94,9 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
   const [subPlan, setSubPlan] = useState<Company['subscription_plan']>('Basic');
   const [subStatus, setSubStatus] = useState<Company['subscription_status']>('active');
   const [subExpiry, setSubExpiry] = useState('');
+  const [activeModalTab, setActiveModalTab] = useState<'subscription' | 'modules'>('subscription');
+  const [companyModules, setCompanyModules] = useState<Record<string, any>>({});
+  const [copySourceCompanyId, setCopySourceCompanyId] = useState<string>('');
 
   // Password reset state
   const [selectedUserForReset, setSelectedUserForReset] = useState<AppUser | null>(null);
@@ -736,6 +739,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
     if (!editingCompany) return;
     
     CustodyDB.updateCompanySubscription(editingCompany.id, subPlan, subStatus, subExpiry);
+    ModulesModule.saveCompanyModules(editingCompany.id, companyModules);
     setEditingCompany(null);
     handleRefreshData();
   };
@@ -1106,6 +1110,8 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
                                   setSubPlan(comp.subscription_plan || 'Basic');
                                   setSubStatus(comp.subscription_status || 'active');
                                   setSubExpiry(comp.subscription_expiry || '');
+                                  setCompanyModules(ModulesModule.getCompanyModules(comp.id));
+                                  setActiveModalTab('subscription');
                                 }}
                                 className="p-1.5 rounded-md hover:bg-indigo-50 dark:hover:bg-slate-800 text-purple-500 cursor-pointer"
                                 title={isRtl ? 'إدارة الاشتراك والتراخيص' : 'Manage Subscription'}
@@ -1496,6 +1502,8 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
                                         setSubPlan(c.subscription_plan || 'Basic');
                                         setSubStatus(c.subscription_status || 'active');
                                         setSubExpiry(c.subscription_expiry || '');
+                                        setCompanyModules(ModulesModule.getCompanyModules(c.id));
+                                        setActiveModalTab('subscription');
                                       }}
                                       className="p-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-slate-800 text-purple-500 cursor-pointer transition-all"
                                       title={isRtl ? 'إدارة الاشتراك والتراخيص' : 'Manage Subscription'}
@@ -2206,56 +2214,285 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         </div>
       )}
 
-      {/* MODAL 2: Edit Subscription */}
+      {/* MODAL 2: Edit Subscription & Modules */}
       {editingCompany && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setEditingCompany(null)} />
-          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4 text-xs">
-            <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <Calendar size={20} className="text-indigo-500" />
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                {isRtl ? `إدارة اشتراك: ${editingCompany.name}` : `Manage Subscription: ${editingCompany.name}`}
-              </h3>
+          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 w-full max-w-2xl shadow-2xl space-y-4 text-xs my-8">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Calendar size={20} className="text-indigo-500" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  {isRtl ? `إدارة تراخيص واشتراكات: ${editingCompany.name}` : `Licensing & Subscription: ${editingCompany.name}`}
+                </h3>
+              </div>
+              <button onClick={() => setEditingCompany(null)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer">
+                <X size={16} className="text-slate-400" />
+              </button>
+            </div>
+
+            {/* Tab Switches */}
+            <div className="flex border-b border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('subscription')}
+                className={`py-2 px-4 font-bold border-b-2 transition-all cursor-pointer ${
+                  activeModalTab === 'subscription'
+                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                {isRtl ? 'بيانات الاشتراك الرئيسي' : 'Main Subscription'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('modules')}
+                className={`py-2 px-4 font-bold border-b-2 transition-all cursor-pointer ${
+                  activeModalTab === 'modules'
+                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                {isRtl ? 'الموديولات والأقسام (Modules)' : 'Module Management'}
+              </button>
             </div>
 
             <form onSubmit={handleSaveSubscription} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-black text-slate-400 uppercase mb-1.5">{isRtl ? 'الباقة المفعلة' : 'Select Subscription Plan'}</label>
-                <select
-                  value={subPlan}
-                  onChange={(e) => setSubPlan(e.target.value as Company['subscription_plan'])}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
-                >
-                  <option value="Basic">{isRtl ? 'الباقة الأساسية (Basic)' : 'Basic Plan'}</option>
-                  <option value="Professional">{isRtl ? 'باقة المحترفين (Professional)' : 'Professional Plan'}</option>
-                  <option value="Enterprise">{isRtl ? 'باقة الشركات الكبرى (Enterprise)' : 'Enterprise Plan'}</option>
-                </select>
-              </div>
+              {activeModalTab === 'subscription' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-400 uppercase mb-1.5">{isRtl ? 'الباقة المفعلة' : 'Select Subscription Plan'}</label>
+                    <select
+                      value={subPlan}
+                      onChange={(e) => setSubPlan(e.target.value as Company['subscription_plan'])}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                    >
+                      <option value="Basic">{isRtl ? 'الباقة الأساسية (Basic)' : 'Basic Plan'}</option>
+                      <option value="Professional">{isRtl ? 'باقة المحترفين (Professional)' : 'Professional Plan'}</option>
+                      <option value="Enterprise">{isRtl ? 'باقة الشركات الكبرى (Enterprise)' : 'Enterprise Plan'}</option>
+                    </select>
+                  </div>
 
-              <div>
-                <label className="block text-[11px] font-black text-slate-400 uppercase mb-1.5">{isRtl ? 'حالة الاشتراك' : 'Subscription Status'}</label>
-                <select
-                  value={subStatus}
-                  onChange={(e) => setSubStatus(e.target.value as Company['subscription_status'])}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
-                >
-                  <option value="active">{isRtl ? 'نشط (Active)' : 'Active'}</option>
-                  <option value="suspended">{isRtl ? 'موقوف مؤقتاً (Suspended)' : 'Suspended'}</option>
-                  <option value="trial">{isRtl ? 'فترة تجريبية (Trial)' : 'Trial Period'}</option>
-                  <option value="expired">{isRtl ? 'منتهي الصلاحية (Expired)' : 'Expired'}</option>
-                </select>
-              </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-400 uppercase mb-1.5">{isRtl ? 'حالة الاشتراك' : 'Subscription Status'}</label>
+                    <select
+                      value={subStatus}
+                      onChange={(e) => setSubStatus(e.target.value as Company['subscription_status'])}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                    >
+                      <option value="active">{isRtl ? 'نشط (Active)' : 'Active'}</option>
+                      <option value="suspended">{isRtl ? 'موقوف مؤقتاً (Suspended)' : 'Suspended'}</option>
+                      <option value="trial">{isRtl ? 'فترة تجريبية (Trial)' : 'Trial Period'}</option>
+                      <option value="expired">{isRtl ? 'منتهي الصلاحية (Expired)' : 'Expired'}</option>
+                    </select>
+                  </div>
 
-              <div>
-                <label className="block text-[11px] font-black text-slate-400 uppercase mb-1.5">{isRtl ? 'تاريخ انتهاء الاشتراك' : 'Subscription Expiry Date'}</label>
-                <input
-                  type="date"
-                  required
-                  value={subExpiry}
-                  onChange={(e) => setSubExpiry(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
-                />
-              </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-400 uppercase mb-1.5">{isRtl ? 'تاريخ انتهاء الاشتراك' : 'Subscription Expiry Date'}</label>
+                    <input
+                      type="date"
+                      required
+                      value={subExpiry}
+                      onChange={(e) => setSubExpiry(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {activeModalTab === 'modules' && (
+                <div className="space-y-4">
+                  {/* Top quick administrative actions */}
+                  <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 flex flex-wrap gap-2 items-center justify-between">
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...companyModules };
+                          Object.keys(updated).forEach(k => {
+                            updated[k] = { ...updated[k], enabled: true, status: 'active' };
+                          });
+                          setCompanyModules(updated);
+                        }}
+                        className="px-2.5 py-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg hover:bg-emerald-500/20 cursor-pointer font-bold text-[10px]"
+                      >
+                        {isRtl ? 'تفعيل الكل' : 'Enable All'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...companyModules };
+                          Object.keys(updated).forEach(k => {
+                            updated[k] = { ...updated[k], enabled: false, status: 'inactive' };
+                          });
+                          setCompanyModules(updated);
+                        }}
+                        className="px-2.5 py-1.5 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-lg hover:bg-rose-500/20 cursor-pointer font-bold text-[10px]"
+                      >
+                        {isRtl ? 'تعطيل الكل' : 'Disable All'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const defaults = ModulesModule.getDefaultModulesForPlan(subPlan);
+                          setCompanyModules(defaults);
+                        }}
+                        className="px-2.5 py-1.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-500/20 cursor-pointer font-bold text-[10px]"
+                      >
+                        {isRtl ? 'تطبيق باقة الاشتراك' : 'Apply Package'}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={copySourceCompanyId}
+                        onChange={(e) => setCopySourceCompanyId(e.target.value)}
+                        className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] text-slate-800 dark:text-white font-semibold"
+                      >
+                        <option value="">{isRtl ? 'نسخ من شركة...' : 'Copy from company...'}</option>
+                        {CustodyDB.getCompanies()
+                          .filter(c => c.id !== editingCompany.id)
+                          .map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={!copySourceCompanyId}
+                        onClick={() => {
+                          if (!copySourceCompanyId) return;
+                          const copied = ModulesModule.getCompanyModules(copySourceCompanyId);
+                          setCompanyModules(copied);
+                        }}
+                        className="px-2 py-1 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer font-bold text-[10px]"
+                      >
+                        {isRtl ? 'نسخ' : 'Copy'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Modules detail matrix list */}
+                  <div className="max-h-72 overflow-y-auto space-y-3.5 pr-1">
+                    {ERP_MODULES_REGISTRY.map(m => {
+                      const modSettings = companyModules[m.id] || {
+                        enabled: false,
+                        plan: 'Basic',
+                        status: 'inactive',
+                        activation_date: '',
+                        expiry_date: '',
+                        notes: ''
+                      };
+
+                      const updateModField = (field: keyof CompanyModuleSettings, val: any) => {
+                        setCompanyModules({
+                          ...companyModules,
+                          [m.id]: {
+                            ...modSettings,
+                            [field]: val
+                          }
+                        });
+                      };
+
+                      return (
+                        <div
+                          key={m.id}
+                          className={`p-3 rounded-2xl border transition-all ${
+                            modSettings.enabled
+                              ? 'bg-indigo-500/5 border-indigo-500/10 dark:border-indigo-500/20'
+                              : 'bg-slate-50/50 border-slate-100 dark:border-slate-850 dark:bg-slate-850/40 text-slate-400'
+                          }`}
+                        >
+                          {/* Module identity */}
+                          <div className="flex items-start justify-between gap-4 mb-2.5">
+                            <div>
+                              <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                <span className={`h-2 w-2 rounded-full ${modSettings.enabled ? 'bg-indigo-500' : 'bg-slate-300'}`} />
+                                {isRtl ? m.name_ar : m.name_en}
+                              </h4>
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                {isRtl ? m.description_ar : m.description_en}
+                              </p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={!!modSettings.enabled}
+                                onChange={(e) => {
+                                  updateModField('enabled', e.target.checked);
+                                  updateModField('status', e.target.checked ? 'active' : 'inactive');
+                                }}
+                                className="sr-only peer"
+                              />
+                              <div className="w-9 h-5 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600" />
+                            </label>
+                          </div>
+
+                          {/* Module detail fields */}
+                          {modSettings.enabled && (
+                            <div className="grid grid-cols-2 gap-2 text-[10px] mt-2 border-t border-slate-100 dark:border-slate-800/60 pt-2.5">
+                              <div>
+                                <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'مستوى الخدمة (Plan)' : 'Service Plan'}</label>
+                                <select
+                                  value={modSettings.plan}
+                                  onChange={(e) => updateModField('plan', e.target.value)}
+                                  className="w-full px-2 py-1.5 border border-slate-200 dark:border-slate-800 dark:bg-slate-950 rounded-lg text-[10px] text-slate-800 dark:text-white"
+                                >
+                                  <option value="Basic">{isRtl ? 'أساسي (Basic)' : 'Basic'}</option>
+                                  <option value="Professional">{isRtl ? 'محترف (Professional)' : 'Professional'}</option>
+                                  <option value="Enterprise">{isRtl ? 'مؤسسات (Enterprise)' : 'Enterprise'}</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'حالة التفعيل (Status)' : 'Activation Status'}</label>
+                                <select
+                                  value={modSettings.status}
+                                  onChange={(e) => updateModField('status', e.target.value)}
+                                  className="w-full px-2 py-1.5 border border-slate-200 dark:border-slate-800 dark:bg-slate-950 rounded-lg text-[10px] text-slate-800 dark:text-white"
+                                >
+                                  <option value="active">{isRtl ? 'نشط (Active)' : 'Active'}</option>
+                                  <option value="inactive">{isRtl ? 'معطل (Inactive)' : 'Inactive'}</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'تاريخ البدء' : 'Start Date'}</label>
+                                <input
+                                  type="date"
+                                  value={modSettings.activation_date || ''}
+                                  onChange={(e) => updateModField('activation_date', e.target.value)}
+                                  className="w-full px-2 py-1.5 border border-slate-200 dark:border-slate-800 dark:bg-slate-950 rounded-lg text-[10px] text-slate-800 dark:text-white font-mono"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'تاريخ الانتهاء' : 'Expiry Date'}</label>
+                                <input
+                                  type="date"
+                                  value={modSettings.expiry_date || ''}
+                                  onChange={(e) => updateModField('expiry_date', e.target.value)}
+                                  className="w-full px-2 py-1.5 border border-slate-200 dark:border-slate-800 dark:bg-slate-950 rounded-lg text-[10px] text-slate-800 dark:text-white font-mono"
+                                />
+                              </div>
+
+                              <div className="col-span-2">
+                                <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'ملاحظات' : 'Licensing Notes'}</label>
+                                <input
+                                  type="text"
+                                  placeholder={isRtl ? 'مثال: باقة تجريبية مجانية لمدير فرع جده' : 'e.g. Free demo for region admin'}
+                                  value={modSettings.notes || ''}
+                                  onChange={(e) => updateModField('notes', e.target.value)}
+                                  className="w-full px-2 py-1.5 border border-slate-200 dark:border-slate-800 dark:bg-slate-950 rounded-lg text-[10px] text-slate-800 dark:text-white"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <button
@@ -2269,7 +2506,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
                   type="submit"
                   className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-md cursor-pointer"
                 >
-                  {isRtl ? 'حفظ التعديلات' : 'Save Changes'}
+                  {isRtl ? 'حفظ التعديلات والترخيص' : 'Save & License'}
                 </button>
               </div>
             </form>

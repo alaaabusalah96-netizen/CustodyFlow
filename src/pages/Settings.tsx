@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { CustodyDB } from '../db';
+import { CustodyDB, ModulesModule } from '../db';
+import PermissionMatrix from '../components/PermissionMatrix';
 import { translations, Language, Theme, AppUser, UserRole, Region, Station, UserPermissions } from '../types';
 import { 
   Settings as SettingsIcon, 
@@ -86,7 +87,7 @@ export default function Settings({ language, theme }: SettingsProps) {
   const currentUser = CustodyDB.getActiveUser();
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'general' | 'users'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'matrix'>('general');
 
   // General Settings State
   const [companyName, setCompanyName] = useState(() => CustodyDB.getConfig().company_name);
@@ -603,6 +604,40 @@ export default function Settings({ language, theme }: SettingsProps) {
         </div>
       </div>
 
+      {/* Tab Switcher */}
+      <div className="flex border-b border-slate-200 dark:border-slate-800 gap-1 overflow-x-auto pb-px">
+        <button
+          onClick={() => setActiveTab('general')}
+          className={`px-4 py-2 text-xs font-black transition-all border-b-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'general'
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-extrabold'
+              : 'border-transparent text-slate-500 hover:text-slate-400'
+          }`}
+        >
+          {isRtl ? '⚙️ الإعدادات العامة' : '⚙️ General Settings'}
+        </button>
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`px-4 py-2 text-xs font-black transition-all border-b-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'users'
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-extrabold'
+              : 'border-transparent text-slate-500 hover:text-slate-400'
+          }`}
+        >
+          {isRtl ? '👥 الموظفون والحسابات' : '👥 Users & Accounts'}
+        </button>
+        <button
+          onClick={() => setActiveTab('matrix')}
+          className={`px-4 py-2 text-xs font-black transition-all border-b-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'matrix'
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-extrabold'
+              : 'border-transparent text-slate-500 hover:text-slate-400'
+          }`}
+        >
+          {isRtl ? '🛡️ مصفوفة الصلاحيات (Matrix)' : '🛡️ Permission Matrix'}
+        </button>
+      </div>
+
       {/* Success Toast Banner */}
       {toastMessage && (
         <div className="p-3 rounded-lg bg-emerald-500/15 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-bold animate-fade-in flex items-center gap-2">
@@ -898,7 +933,7 @@ export default function Settings({ language, theme }: SettingsProps) {
       )}
 
       {/* --- TAB 3: USER ACCOUNTS & PERMISSIONS MODULE --- */}
-      {false && (
+      {activeTab === 'users' && (
         <div className="space-y-6 animate-fade-in">
           {/* Pending Approval Requests Section (SystemAdmin Only) */}
           {currentUser.role === 'SystemAdmin' && (
@@ -1213,7 +1248,7 @@ export default function Settings({ language, theme }: SettingsProps) {
                             </div>
 
                             <div className={`grid grid-cols-2 gap-2 text-[10px] ${editUserIsDefaultMode ? 'opacity-70 font-medium' : ''}`}>
-                              {PERMISSIONS_LIST.map((p) => (
+                              {PERMISSIONS_LIST.filter(p => !currentUser?.company_id || ModulesModule.isPermissionEnabledForCompany(currentUser.company_id, p.key)).map((p) => (
                                 <label key={p.key} className={`flex items-center gap-1.5 text-slate-600 dark:text-slate-300 ${editUserIsDefaultMode ? 'cursor-not-allowed' : 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400'}`}>
                                   <input
                                     type="checkbox"
@@ -1450,6 +1485,10 @@ export default function Settings({ language, theme }: SettingsProps) {
             )}
           </div>
         </div>
+      )}
+
+      {activeTab === 'matrix' && (
+        <PermissionMatrix language={language} theme={theme} />
       )}
     </div>
   );

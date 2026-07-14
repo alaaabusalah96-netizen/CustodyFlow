@@ -24,7 +24,7 @@ import {
   UserCheck,
   Trash2
 } from 'lucide-react';
-import { CustodyDB } from '../db';
+import { CustodyDB, ModulesModule } from '../db';
 import { translations, Language, Theme, AppUser } from '../types';
 
 interface LayoutProps {
@@ -83,6 +83,7 @@ export default function Layout({
     { id: 'new-expense', label: t.newExpense, icon: PlusCircle, permission: 'create_expense' },
     { id: 'voucher', label: t.cashPaymentVoucher, icon: FileCheck, permission: 'settle_voucher' },
     { id: 'reconciliation', label: isRtl ? 'جرد ومطابقة العهدة' : 'Custody Reconciliation & Inventory', icon: TrendingUp, roleAllowed: ['Admin', 'StationAdmin', 'RegionalManager'] },
+    { id: 'inventory', label: isRtl ? 'إدارة المخازن والمستودعات' : 'Inventory & Warehouses', icon: Layers, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
     { id: 'reports', label: t.reports, icon: FileText, permission: 'view_reports' },
     { id: 'search', label: t.search, icon: SearchIcon },
     { id: 'audit-log', label: isRtl ? 'سجل الرقابة والامتثال' : 'Security & Audit Log', icon: ShieldCheck, roleAllowed: ['Admin', 'SystemAdmin'] },
@@ -92,6 +93,11 @@ export default function Layout({
   // Filter menu items by user permissions and roleAllowed scopes
   const filteredMenuItems = menuItems.filter(item => {
     if (!activeUser) return false;
+    
+    // Check if the screen/item belongs to an enabled module for the user's company
+    if (activeUser.company_id && !ModulesModule.isScreenEnabledForCompany(activeUser.company_id, item.id)) {
+      return false;
+    }
     
     // Explicitly hide specified features from Admin & SystemAdmin
     if (activeUser.role === 'SystemAdmin') {

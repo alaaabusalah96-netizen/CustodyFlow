@@ -47,8 +47,9 @@ import { CompaniesModule } from './db/companies';
 import { StationsModule } from './db/stations';
 import { NotificationsModule } from './db/notifications';
 import { TransactionsModule } from './db/transactions';
+import { ModulesModule, ERP_MODULES_REGISTRY, CompanyModuleSettings } from './db/modules';
 
-export { hashPassword };
+export { hashPassword, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings };
 
 export class CustodyDB {
   static hashPassword(password: string): string {
