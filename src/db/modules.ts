@@ -53,6 +53,14 @@ export const ERP_MODULES_REGISTRY: ERPModule[] = [
     description_en: 'Full multi-tenant activity logging, security monitoring, and transaction tracking.',
     description_ar: 'سجل تدقيق كامل للأنشطة والعمليات الإدارية، مراقبة أمنية، ومراجعة تفصيلية للقيود.',
     screens: ['audit-log']
+  },
+  {
+    id: 'fuel-comparison',
+    name_en: 'Fuel Comparison & Analytics',
+    name_ar: 'مقارنة السولار والتحليلات',
+    description_en: 'Audit fuel transaction receipts, compare fleet readings with Total sheets.',
+    description_ar: 'مراجعة وتدقيق تفويلات السولار ومطابقة قراءات السيارات مع كشوفات توتال.',
+    screens: ['fuel-comparison']
   }
 ];
 
@@ -72,7 +80,7 @@ export class ModulesModule {
     ERP_MODULES_REGISTRY.forEach(m => {
       if (!current[m.id]) {
         current[m.id] = {
-          enabled: m.id === 'custody', // Default only custody enabled
+          enabled: m.id === 'custody' || m.id === 'fuel-comparison', // Default custody and fuel-comparison enabled
           plan: 'Basic',
           status: 'active',
           activation_date: new Date().toISOString().split('T')[0],
@@ -99,11 +107,11 @@ export class ModulesModule {
         enabled = true;
         mPlan = 'Enterprise';
       } else if (plan === 'Professional') {
-        enabled = m.id !== 'inventory'; // custody, reports, audit are enabled
+        enabled = m.id !== 'inventory'; // custody, reports, audit, fuel-comparison are enabled
         mPlan = 'Professional';
       } else {
         // Basic Plan
-        enabled = m.id === 'custody'; // Only core custody
+        enabled = m.id === 'custody' || m.id === 'fuel-comparison'; // Enable core custody and fuel-comparison
         mPlan = 'Basic';
       }
       

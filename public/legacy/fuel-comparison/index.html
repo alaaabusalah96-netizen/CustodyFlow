@@ -1,0 +1,4568 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تطبيق علاء صلاح – مقارنة السولار + قراءة الريسيتات ✅</title>
+
+<!-- ═══ PWA: تثبيت الصفحة كتطبيق مستقل على الشاشة الرئيسية — إضافة فقط، بدون أي تعديل في منطق أو تصميم الصفحة ═══ -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="مقارنة السولار">
+<meta name="theme-color" content="#2563eb">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%232563eb'/%3E%3Ctext x='50' y='64' font-size='46' text-anchor='middle' fill='white' font-family='Arial'%3E⛽%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%232563eb'/%3E%3Ctext x='50' y='64' font-size='46' text-anchor='middle' fill='white' font-family='Arial'%3E⛽%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%D8%AA%D8%B7%D8%A8%D9%8A%D9%82%20%D9%85%D9%82%D8%A7%D8%B1%D9%86%D8%A9%20%D8%A7%D9%84%D8%B3%D9%88%D9%84%D8%A7%D8%B1%22%2C%22short_name%22%3A%22%D9%85%D9%82%D8%A7%D8%B1%D9%86%D8%A9%20%D8%A7%D9%84%D8%B3%D9%88%D9%84%D8%A7%D8%B1%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f0f4ff%22%2C%22theme_color%22%3A%22%232563eb%22%2C%22dir%22%3A%22rtl%22%2C%22lang%22%3A%22ar%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%253D%2527http%253A%252F%252Fwww.w3.org%252F2000%252Fsvg%2527%2520viewBox%253D%25270%25200%2520100%2520100%2527%253E%253Crect%2520width%253D%2527100%2527%2520height%253D%2527100%2527%2520rx%253D%252720%2527%2520fill%253D%2527%25232563eb%2527%252F%253E%253Ctext%2520x%253D%252750%2527%2520y%253D%252764%2527%2520font-size%253D%252746%2527%2520text-anchor%253D%2527middle%2527%2520fill%253D%2527white%2527%2520font-family%253D%2527Arial%2527%253E%25E2%259B%25BD%253C%252Ftext%253E%253C%252Fsvg%253E%22%2C%22sizes%22%3A%22any%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
+<!-- ═══ نهاية إضافات PWA ═══ -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #f0f4ff;
+    --surface:   #ffffff;
+    --surface2:  #f8faff;
+    --border:    #dde6f8;
+    --border2:   #c8d8f5;
+    --primary:   #2563eb;
+    --primary-dk:#1d4ed8;
+    --primary-lt:#eff6ff;
+    --accent:    #0ea5e9;
+    --accent-lt: #e0f2fe;
+    --success:   #16a34a;
+    --success-lt:#dcfce7;
+    --warn:      #d97706;
+    --warn-lt:   #fef3c7;
+    --danger:    #dc2626;
+    --danger-lt: #fee2e2;
+    --text:      #1e293b;
+    --text2:     #475569;
+    --text3:     #94a3b8;
+    --shadow:    0 1px 3px rgba(37,99,235,.08), 0 4px 16px rgba(37,99,235,.06);
+    --shadow-lg: 0 4px 24px rgba(37,99,235,.12), 0 1px 4px rgba(37,99,235,.08);
+    --radius:    14px;
+    --radius-sm: 8px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: 'IBM Plex Sans Arabic', 'Tajawal', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 20px 80px;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(37,99,235,.07) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 30% at 90% 20%, rgba(14,165,233,.05) 0%, transparent 60%);
+  }
+
+  /* ── HEADER ── */
+  .header {
+    text-align: center;
+    padding: 32px 0 20px;
+    max-width: 780px;
+    margin: 0 auto 28px;
+  }
+
+  /* header-logo styles defined below */
+
+  h1 {
+    font-family: 'Tajawal', sans-serif;
+    font-size: 32px;
+    font-weight: 900;
+    color: var(--text);
+    line-height: 1.2;
+    margin-bottom: 8px;
+  }
+
+  h1 span { color: var(--primary); }
+
+  .sub {
+    color: var(--text2);
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .badge-version {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--success-lt);
+    color: var(--success);
+    border: 1px solid rgba(22,163,74,.2);
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* ── CARD ── */
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 28px 28px 24px;
+    margin: 0 auto 20px;
+    max-width: 780px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 18px;
+    background: linear-gradient(180deg, var(--primary), var(--accent));
+    border-radius: 4px;
+  }
+
+  /* ── ROW ── */
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .row label.lbl {
+    min-width: 130px;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text2);
+  }
+
+  /* ── FILE BUTTON ── */
+  .filebtn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface2);
+    border: 2px dashed var(--border2);
+    border-radius: var(--radius-sm);
+    padding: 11px 16px;
+    cursor: pointer;
+    transition: all .2s ease;
+  }
+
+  .filebtn:hover {
+    background: var(--primary-lt);
+    border-color: var(--primary);
+  }
+
+  .filebtn .file-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--primary-lt);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    transition: .2s;
+  }
+
+  .filebtn:hover .file-icon { background: var(--primary); }
+
+  .filebtn span { color: var(--text3); font-size: 13px; font-weight: 500; }
+
+  .filebtn.ok {
+    border-style: solid;
+    border-color: var(--success);
+    background: var(--success-lt);
+  }
+
+  .filebtn.ok .file-icon { background: var(--success); }
+  .filebtn.ok span { color: var(--success); font-weight: 700; }
+
+  input[type=file] { display: none; }
+
+  /* ── DATE INPUTS ── */
+  input[type=date] {
+    flex: 1;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'IBM Plex Sans Arabic', sans-serif;
+    font-size: 13px;
+    outline: none;
+    transition: .2s;
+  }
+
+  input[type=date]:focus {
+    border-color: var(--primary);
+    background: var(--surface);
+    box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+  }
+
+  /* ── MAIN BUTTON ── */
+  .btn-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 20px auto 0;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dk));
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 14px 52px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: 'Tajawal', sans-serif;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(37,99,235,.35);
+    transition: all .2s ease;
+    letter-spacing: .3px;
+  }
+
+  .btn-main:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(37,99,235,.4);
+  }
+
+  .btn-main:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* ── SUMMARY CARDS ── */
+  .sum-cards {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .sc {
+    background: var(--surface);
+    border-radius: var(--radius-sm);
+    padding: 16px 20px;
+    flex: 1;
+    min-width: 110px;
+    text-align: center;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    transition: .2s;
+  }
+
+  .sc:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+
+  .sc .n { font-size: 28px; font-weight: 900; font-family: 'Tajawal', sans-serif; }
+  .sc .l { font-size: 12px; color: var(--text2); margin-top: 4px; font-weight: 600; }
+
+  .sc.ok   { border-top: 3px solid var(--success); }
+  .sc.ok   .n { color: var(--success); }
+  .sc.warn { border-top: 3px solid var(--warn); }
+  .sc.warn .n { color: var(--warn); }
+  .sc.bad  { border-top: 3px solid var(--danger); }
+  .sc.bad  .n { color: var(--danger); }
+  .sc.tot  { border-top: 3px solid var(--primary); }
+  .sc.tot  .n { color: var(--primary); }
+
+  /* ── CAR SECTION ── */
+  .car-sec { margin-bottom: 24px; max-width: 100%; }
+
+  .car-hdr {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dk));
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 12px 20px;
+    font-size: 15px;
+    font-weight: 700;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 2px 8px rgba(37,99,235,.2);
+    cursor: pointer;
+    user-select: none;
+    transition: background .2s;
+  }
+
+  .car-hdr:hover {
+    background: linear-gradient(135deg, var(--primary-dk), #1e3a8a);
+  }
+
+  .car-hdr.collapsed {
+    border-radius: var(--radius);
+  }
+
+  .toggle-arrow {
+    margin-right: auto;
+    font-size: 14px;
+    transition: transform .3s ease;
+    flex-shrink: 0;
+  }
+
+  .car-hdr.collapsed .toggle-arrow {
+    transform: rotate(-90deg);
+  }
+
+  .tw {
+    overflow-x: auto;
+    border-radius: 0 0 var(--radius) var(--radius);
+    border: 1px solid var(--border);
+    border-top: none;
+    background: var(--surface);
+  }
+
+  .tw.collapsed {
+    display: none;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    font-size: 12.5px;
+    min-width: 860px;
+  }
+
+  th {
+    background: #f1f5ff;
+    padding: 10px 8px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 12px;
+    white-space: nowrap;
+    color: var(--primary-dk);
+    border-bottom: 2px solid var(--border);
+  }
+
+  td {
+    padding: 9px 8px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    color: var(--text);
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--primary-lt) !important; }
+
+  tr.ok td   { background: rgba(22,163,74,.06); }
+  tr.warn td { background: rgba(217,119,6,.06); }
+  tr.bad td  { background: rgba(220,38,38,.06); }
+  tr.susp td { background: rgba(100,116,139,.08); }
+
+  /* ── BADGES ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .badge.ok   { background: var(--success-lt); color: var(--success); }
+  .badge.warn { background: var(--warn-lt);    color: var(--warn); }
+  .badge.bad  { background: var(--danger-lt);  color: var(--danger); }
+  .badge.susp { background: rgba(100,116,139,.15); color: #475569; }
+
+  .dp { color: var(--danger); font-weight: 700; }
+  .dn { color: var(--success); font-weight: 700; }
+  .dz { color: var(--text3); }
+  .nm { color: var(--text3); font-style: italic; }
+
+  .hidden { display: none; }
+
+  /* ── ALERTS ── */
+  .err {
+    background: var(--danger-lt);
+    border: 1px solid rgba(220,38,38,.2);
+    border-radius: var(--radius-sm);
+    padding: 14px 18px;
+    margin: 10px auto;
+    max-width: 780px;
+    font-size: 13px;
+    color: var(--danger);
+    font-weight: 600;
+  }
+
+  .info {
+    background: var(--accent-lt);
+    border: 1px solid rgba(14,165,233,.2);
+    border-radius: var(--radius-sm);
+    padding: 13px 18px;
+    margin: 10px auto 18px;
+    max-width: 780px;
+    font-size: 13px;
+    color: #0369a1;
+    line-height: 1.8;
+    font-weight: 500;
+  }
+
+  /* ── STATUS BAR ── */
+  .sbar {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -2px 16px rgba(37,99,235,.07);
+    padding: 12px 24px;
+    text-align: center;
+    color: var(--text2);
+    font-size: 13px;
+    font-weight: 600;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    font-family: 'IBM Plex Sans Arabic', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  /* ── SPINNER ── */
+  .spin {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2.5px solid rgba(255,255,255,.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: sp .7s linear infinite;
+    vertical-align: middle;
+    margin-left: 6px;
+  }
+
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* ── PRINT BUTTONS ── */
+  .pbtn {
+    background: rgba(255,255,255,.2);
+    border: 1px solid rgba(255,255,255,.3);
+    color: white;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-family: 'IBM Plex Sans Arabic', sans-serif;
+    cursor: pointer;
+    margin-right: 6px;
+    transition: .15s;
+    font-weight: 600;
+  }
+
+  .pbtn:hover { background: rgba(255,255,255,.35); }
+
+  .sub-row td { opacity: .7; font-size: 12px; }
+
+  /* ── DIVIDER ── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 18px 0;
+    max-width: 780px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* ── SUMMARY ACTION BUTTONS ── */
+  .summary-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .sbtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 18px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: 'IBM Plex Sans Arabic', sans-serif;
+    cursor: pointer;
+    border: none;
+    transition: all .2s;
+  }
+
+  .sbtn-word {
+    background: linear-gradient(135deg, #1d6dbd, #1558a0);
+    color: white;
+    box-shadow: 0 3px 10px rgba(29,109,189,.35);
+  }
+  .sbtn-word:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(29,109,189,.45); }
+
+  .sbtn-print {
+    background: linear-gradient(135deg, #374151, #1f2937);
+    color: white;
+    box-shadow: 0 3px 10px rgba(31,41,55,.3);
+  }
+  .sbtn-print:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(31,41,55,.4); }
+
+  .sbtn-copy {
+    background: linear-gradient(135deg, #059669, #047857);
+    color: white;
+    box-shadow: 0 3px 10px rgba(5,150,105,.3);
+  }
+  .sbtn-copy:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(5,150,105,.4); }
+
+  .sbtn-pdf {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    color: white;
+    box-shadow: 0 3px 10px rgba(220,38,38,.35);
+  }
+  .sbtn-pdf:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(220,38,38,.45); }
+
+  .sbtn-pdf-full {
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    color: white;
+    box-shadow: 0 3px 10px rgba(124,58,237,.35);
+  }
+  .sbtn-pdf-full:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(124,58,237,.45); }
+
+  /* ── SUMMARY DIFF BOX ── */
+  .diff-summary {
+    background: var(--surface);
+    border: 1.5px solid rgba(220,38,38,.25);
+    border-top: 4px solid var(--danger);
+    border-radius: var(--radius);
+    padding: 22px 26px;
+    max-width: 100%;
+    margin: 0 auto 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .diff-title {
+    font-size: 15px;
+    font-weight: 900;
+    color: var(--danger);
+    margin-bottom: 16px;
+    font-family: 'Tajawal', sans-serif;
+  }
+
+  .diff-car-name {
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+
+  /* ── EXPORT BUTTON ── */
+  .btn-export {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 10px 22px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'Tajawal', sans-serif;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(220,38,38,.25);
+    transition: .2s;
+  }
+
+  .btn-export:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(220,38,38,.3); }
+
+  .btn-pdf-all {
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+    box-shadow: 0 4px 16px rgba(124,58,237,.25);
+    margin-right: 8px;
+  }
+  .btn-pdf-all:hover { box-shadow: 0 6px 20px rgba(124,58,237,.3); }
+
+  /* ── SECTION HEADER ── */
+  .res-header {
+    max-width: 780px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .res-header h2 {
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--text);
+    font-family: 'Tajawal', sans-serif;
+  }
+
+  /* ── PRINT STYLES ── */
+  @media print {
+    body { background: #fff !important; color: #000 !important; padding: 0; }
+    .car-sec { display: none !important; }
+    .car-sec.printing { display: block !important; page-break-after: always; }
+    .car-hdr { background: var(--primary) !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    th { background: #e8eeff !important; color: #1e293b !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    tr.ok td { background: #dcfce7 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    tr.warn td { background: #fef3c7 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    tr.bad td { background: #fee2e2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    tr.susp td { background: #e2e8f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    td, th { color: #000 !important; border: 1px solid #ccc !important; }
+    .sbar, .pbtn, .sum-cards, .err, .info, .card, .diff-summary, .res-header .btn-export, .res-header .btn-pdf-all { display: none !important; }
+    table { min-width: unset; font-size: 10px; }
+  }
+
+  /* ── TWO PANELS ── */
+  .two-panels{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:4px}
+  @media(max-width:560px){.two-panels{grid-template-columns:1fr}}
+
+  .panel{border:1.5px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface2)}
+  .panel:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.08)}
+
+  .panel-head{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f1f5ff;border-bottom:1px solid var(--border);font-weight:700;font-size:13px;color:var(--text)}
+  .pcnt{margin-right:auto;background:var(--primary-lt);color:var(--primary);border-radius:20px;padding:1px 10px;font-size:11px;font-weight:700}
+
+  .panel-drop{display:block;cursor:pointer;padding:12px}
+  .panel-drop input[type=file]{display:none}
+  .panel-drop:hover .pd-box,.panel-drop.drag-over .pd-box{background:var(--primary-lt);border-color:var(--primary)}
+
+  .pd-box{display:flex;flex-direction:column;align-items:center;gap:3px;padding:14px 10px;border:2px dashed var(--border2);border-radius:8px;text-align:center;transition:.2s;background:var(--surface)}
+  .pd-icon{font-size:20px}
+  .pd-txt{font-size:12.5px;color:var(--text2);font-weight:600}
+  .pd-sub{font-size:11px;color:var(--text3)}
+
+  .panel-list{padding:0 12px 8px;max-height:150px;overflow-y:auto}
+  .panel-list::-webkit-scrollbar{width:3px}
+  .panel-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+  .pfile{display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--success-lt);border:1px solid rgba(22,163,74,.15);border-radius:6px;margin-top:6px;font-size:12px;animation:fadeIn .2s ease}
+  .pfile-name{flex:1;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pfile-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0 2px;border-radius:3px;transition:.15s;line-height:1}
+  .pfile-del:hover{color:var(--danger);background:var(--danger-lt)}
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .card, .car-sec, .sum-cards { animation: fadeIn .3s ease; }
+
+  /* ── REDESIGNED HEADER LOGO ── */
+  .header-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 40%, #0ea5e9 70%, #7c3aed 100%);
+    color: white;
+    border-radius: 50px;
+    padding: 10px 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 6px 28px rgba(37,99,235,.45), 0 2px 8px rgba(124,58,237,.3);
+    border: 1px solid rgba(255,255,255,.2);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .header-logo::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.08) 50%, transparent 100%);
+    animation: shimmer 3s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0%, 100% { transform: translateX(-100%); }
+    50% { transform: translateX(100%); }
+  }
+
+  .logo-cars {
+    font-size: 22px;
+    letter-spacing: 2px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,.3));
+  }
+
+  .logo-text {
+    font-family: 'Tajawal', sans-serif;
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: .5px;
+  }
+
+  .logo-alaa {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b, #fcd34d);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 1px 3px rgba(251,191,36,.4));
+  }
+
+  .logo-comma {
+    color: rgba(255,255,255,.7);
+    -webkit-text-fill-color: rgba(255,255,255,.7);
+  }
+
+  .logo-salah {
+    background: linear-gradient(135deg, #86efac, #4ade80, #34d399);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 1px 3px rgba(74,222,128,.4));
+  }
+
+  /* ── VS TEXT ── */
+  .vs-text {
+    font-size: 16px;
+    font-weight: 900;
+    font-family: 'Tajawal', sans-serif;
+    color: var(--text);
+    letter-spacing: .3px;
+  }
+
+  .vs-word {
+    display: inline-block;
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 18px;
+    font-weight: 900;
+    margin: 0 3px;
+    filter: drop-shadow(0 1px 2px rgba(37,99,235,.3));
+  }
+
+/* ── TABS ── */
+.app-tabs {
+  display: flex;
+  gap: 0;
+  max-width: 780px;
+  margin: 0 auto 28px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px;
+  box-shadow: var(--shadow);
+}
+.tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Tajawal', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .25s ease;
+  color: var(--text2);
+  background: transparent;
+}
+.tab-btn:hover { background: var(--primary-lt); color: var(--primary); }
+.tab-btn.active {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dk));
+  color: white;
+  box-shadow: 0 4px 16px rgba(37,99,235,.35);
+}
+.tab-icon { font-size: 18px; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── RECEIPT SECTION ── */
+.receipt-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 28px 28px 24px;
+  margin: 0 auto 20px;
+  max-width: 780px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.api-key-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.api-key-input {
+  flex: 1;
+  min-width: 200px;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  color: var(--text);
+  font-family: 'IBM Plex Sans Arabic', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: .2s;
+  direction: ltr;
+}
+.api-key-input:focus {
+  border-color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+}
+.receipt-drop {
+  border: 2.5px dashed var(--border2);
+  border-radius: var(--radius);
+  padding: 40px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+  background: var(--surface2);
+  position: relative;
+}
+.receipt-drop:hover, .receipt-drop.drag-over {
+  border-color: var(--primary);
+  background: var(--primary-lt);
+}
+.receipt-drop input[type=file] { display: none; }
+.receipt-drop .drop-icon { font-size: 48px; margin-bottom: 10px; }
+.receipt-drop .drop-txt { font-size: 14px; font-weight: 700; color: var(--text2); }
+.receipt-drop .drop-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+.receipt-drop.has-img { border-style: solid; border-color: var(--success); background: var(--success-lt); }
+
+.img-preview {
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: 8px;
+  margin: 10px auto 0;
+  display: block;
+  box-shadow: 0 2px 12px rgba(0,0,0,.12);
+}
+
+.parsed-result {
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-top: 16px;
+  animation: fadeIn .3s ease;
+}
+.parsed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.parsed-row:last-child { border-bottom: none; }
+.parsed-label {
+  min-width: 130px;
+  font-weight: 700;
+  color: var(--text2);
+}
+.parsed-value {
+  flex: 1;
+  font-weight: 700;
+  color: var(--text);
+  font-size: 15px;
+}
+.parsed-input {
+  flex: 1;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  font-family: 'IBM Plex Sans Arabic', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  outline: none;
+  transition: .2s;
+  direction: ltr;
+}
+.parsed-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+}
+.sheet-select {
+  width: 100%;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-family: 'IBM Plex Sans Arabic', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  outline: none;
+  transition: .2s;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+.sheet-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+
+.rr-status {
+  text-align: center;
+  padding: 18px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 12px;
+  animation: fadeIn .3s ease;
+}
+.rr-status.ok { background: var(--success-lt); color: var(--success); border: 1px solid rgba(22,163,74,.2); }
+.rr-status.err { background: var(--danger-lt); color: var(--danger); border: 1px solid rgba(220,38,38,.2); }
+.rr-status.loading { background: var(--accent-lt); color: #0369a1; border: 1px solid rgba(14,165,233,.2); }
+
+.multi-upload-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 10px;
+}
+.multi-img-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  margin-bottom: 6px;
+  animation: fadeIn .2s ease;
+}
+.multi-img-thumb {
+  width: 48px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+.multi-img-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.multi-img-status {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+.multi-img-status.pending { background: var(--warn-lt); color: var(--warn); }
+.multi-img-status.processing { background: var(--accent-lt); color: #0369a1; }
+.multi-img-status.done { background: var(--success-lt); color: var(--success); }
+.multi-img-status.failed { background: var(--danger-lt); color: var(--danger); }
+.multi-img-del {
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  transition: .15s;
+}
+.multi-img-del:hover { color: var(--danger); background: var(--danger-lt); }
+
+.rates-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.rates-file-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface2);
+  border: 2px dashed var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 11px 16px;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.rates-file-btn:hover { background: var(--primary-lt); border-color: var(--primary); }
+.rates-file-btn.ok { border-style: solid; border-color: var(--success); background: var(--success-lt); }
+.rates-file-btn span { color: var(--text3); font-size: 13px; font-weight: 500; }
+.rates-file-btn.ok span { color: var(--success); font-weight: 700; }
+
+#tab-sabla * { box-sizing: border-box; }
+#tab-sabla {
+  font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+  background: #0f1720;
+  color: #e8edf2;
+  margin: 0;
+  padding: 24px 16px;
+  direction: rtl;
+}
+#tab-sabla .wrap { max-width: 100%; margin: 0 auto; }
+#tab-sabla h1 {
+  font-size: 20px;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+#tab-sabla .subtitle {
+  color: #8fa3b8;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+#tab-sabla .card {
+  background: #17222e;
+  border: 1px solid #24384a;
+  border-radius: 12px;
+  padding: 18px;
+  margin: 0 0 18px;
+  max-width: 100%;
+  width: 100%;
+}
+#tab-sabla .sheets-info {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+#tab-sabla .sheet-pill {
+  background: #1f2f3f;
+  border: 1px solid #2c4258;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: #9fd3ff;
+}
+#tab-sabla label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #cdd9e5;
+}
+#tab-sabla textarea {
+  width: 100%;
+  min-height: 120px;
+  background: #0f1720;
+  color: #e8edf2;
+  border: 1px solid #2c4258;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 15px;
+  font-family: inherit;
+  resize: vertical;
+  direction: rtl;
+}
+#tab-sabla textarea:focus { outline: none; border-color: #4a9eff; }
+#tab-sabla .hint {
+  font-size: 12px;
+  color: #6d8299;
+  margin-top: 6px;
+}
+#tab-sabla button {
+  margin-top: 14px;
+  background: #2f7fd6;
+  color: white;
+  border: none;
+  padding: 12px 26px;
+  border-radius: 8px;
+  font-size: 15px;
+  cursor: pointer;
+  font-weight: 600;
+}
+#tab-sabla button:hover { background: #4a9eff; }
+#tab-sabla button.secondary {
+  background: #26374a;
+  margin-right: 10px;
+}
+#tab-sabla button.secondary:hover { background: #33475e; }
+#tab-sabla table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 14px;
+}
+#tab-sabla th, #tab-sabla td {
+  padding: 10px;
+  text-align: center;
+  border-bottom: 1px solid #24384a;
+}
+#tab-sabla th {
+  background: #1c2b3a;
+  color: #9fd3ff;
+  font-weight: 600;
+}
+#tab-sabla tr.not-found td { color: #ff8080; font-weight: 600; }
+#tab-sabla tr.found-trailer td.type { color: #7fd8a0; }
+#tab-sabla tr.found-tractor td.type { color: #ffd27f; }
+#tab-sabla .group-header td {
+  background: #14202c;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+}
+#tab-sabla .summary {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #cdd9e5;
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+#tab-sabla .summary span.ok { color: #7fd8a0; }
+#tab-sabla .summary span.bad { color: #ff8080; }
+#tab-sabla .sabla-edit-row td { background: #0f1720; border-top: none; padding-top: 4px; padding-bottom: 8px; }
+#tab-sabla .sabla-edit-input {
+  width: 100%; background: #16212c; border: 1px solid #2a3a4a; color: #e6edf3;
+  border-radius: 6px; padding: 6px 8px; font-size: 13px;
+}
+#tab-sabla .sabla-edit-input:focus { outline: none; border-color: #4a9eff; }
+#tab-sabla .sabla-drop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; cursor: pointer; padding: 26px 14px;
+  border: 2px dashed #2a3a4a; border-radius: 10px; background: #16212c;
+  transition: border-color .15s, background .15s;
+}
+#tab-sabla .sabla-drop:hover, #tab-sabla .sabla-drop.drag-over {
+  border-color: #4a9eff; background: #1b2a3a;
+}
+#tab-sabla .sabla-drop input[type="file"] { display: none; }
+#tab-sabla .sabla-drop .drop-icon { font-size: 40px; margin-bottom: 8px; }
+#tab-sabla .sabla-drop .drop-txt { font-size: 14px; font-weight: 700; color: #e6edf3; }
+#tab-sabla .sabla-drop .drop-sub { font-size: 12px; color: #9fb3c8; margin-top: 4px; }
+#tab-sabla .empty-msg {
+  color: #6d8299;
+  font-size: 14px;
+  text-align: center;
+  padding: 20px 0;
+}
+#tab-sabla .sabla-picker-toggle {
+  width: 100%;
+  text-align: right;
+  background: #16212c;
+  border: 1px solid #2a3a4a;
+  color: #cdd9e5;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0;
+  font-weight: 600;
+  font-family: inherit;
+}
+#tab-sabla .sabla-picker-toggle:hover { border-color: #4a9eff; background: #1b2a3a; }
+#tab-sabla .sabla-picker-panel {
+  margin-top: 8px;
+  border: 1px solid #2a3a4a;
+  border-radius: 8px;
+  background: #0f1720;
+  padding: 10px;
+}
+#tab-sabla .sabla-picker-search {
+  width: 100%;
+  background: #16212c;
+  border: 1px solid #2a3a4a;
+  color: #e6edf3;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  margin-bottom: 8px;
+  direction: rtl;
+  font-family: inherit;
+}
+#tab-sabla .sabla-picker-search:focus { outline: none; border-color: #4a9eff; }
+#tab-sabla .sabla-picker-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+#tab-sabla .sabla-picker-actions button { margin-top: 0; padding: 6px 12px; font-size: 12px; }
+#tab-sabla .sabla-picker-list {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+#tab-sabla .sabla-picker-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 6px; font-size: 13px; color: #cdd9e5; cursor: pointer;
+}
+#tab-sabla .sabla-picker-item:hover { background: #1b2a3a; }
+#tab-sabla .sabla-picker-item input[type="checkbox"] { cursor: pointer; }
+#tab-sabla .sabla-picker-item .tag {
+  font-size: 11px; padding: 1px 6px; border-radius: 10px; margin-inline-start: auto;
+}
+#tab-sabla .sabla-picker-item .tag.trailer { background: #123321; color: #7fd8a0; }
+#tab-sabla .sabla-picker-item .tag.tractor { background: #3a2f10; color: #ffd27f; }
+#tab-sabla .sabla-picker-empty { color: #6d8299; font-size: 13px; text-align: center; padding: 14px 0; }
+#tab-sabla .sabla-typed-preview {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+#tab-sabla .sabla-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #16212c;
+  border: 1px solid #2a3a4a;
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #cdd9e5;
+}
+#tab-sabla .sabla-chip .num { font-weight: 700; color: #e6edf3; }
+#tab-sabla .sabla-chip .tag {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  border: none;
+}
+#tab-sabla .sabla-chip .tag.trailer { background: #123321; color: #7fd8a0; }
+#tab-sabla .sabla-chip .tag.tractor { background: #3a2f10; color: #ffd27f; }
+#tab-sabla .sabla-chip .tag.notfound { background: #3a1414; color: #ff9d9d; }
+#tab-sabla .sabla-chip .tag.toggle { cursor: pointer; font-family: inherit; }
+#tab-sabla .sabla-chip .tag.toggle.off { opacity: .35; text-decoration: line-through; }
+</style>
+
+</head>
+<body>
+<!-- HEADER (shared) -->
+<div class="header">
+  <div class="header-logo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 100" width="80" height="36" style="flex-shrink:0">
+      <defs>
+        <linearGradient id="truckBody" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#f8fafc"/>
+          <stop offset="50%" stop-color="#e2e8f0"/>
+          <stop offset="100%" stop-color="#cbd5e1"/>
+        </linearGradient>
+        <linearGradient id="cabTop" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#f1f5f9"/>
+          <stop offset="100%" stop-color="#e2e8f0"/>
+        </linearGradient>
+        <linearGradient id="bedFloor" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#cbd5e1"/>
+          <stop offset="100%" stop-color="#94a3b8"/>
+        </linearGradient>
+        <linearGradient id="pumpGrad2" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#e2e8f0"/>
+          <stop offset="100%" stop-color="#f8fafc"/>
+        </linearGradient>
+      </defs>
+      <rect x="0" y="80" width="220" height="20" fill="#334155"/>
+      <rect x="0" y="80" width="220" height="2" fill="#64748b"/>
+      <rect x="5"  y="85" width="20" height="2" rx="1" fill="#94a3b8" opacity=".4"/>
+      <rect x="35" y="85" width="20" height="2" rx="1" fill="#94a3b8" opacity=".4"/>
+      <rect x="65" y="85" width="20" height="2" rx="1" fill="#94a3b8" opacity=".4"/>
+      <rect x="162" y="36" width="4" height="44" fill="#94a3b8"/>
+      <rect x="184" y="36" width="4" height="44" fill="#94a3b8"/>
+      <rect x="150" y="22" width="46" height="16" rx="3" fill="#dc2626"/>
+      <rect x="150" y="22" width="46" height="5"  rx="3" fill="#b91c1c"/>
+      <text x="173" y="33" font-family="Arial Black,Arial" font-size="8" font-weight="900" fill="white" text-anchor="middle" letter-spacing="1.5">TOTAL</text>
+      <rect x="152" y="37" width="42" height="2" rx="1" fill="#fef9c3" opacity=".55"/>
+      <rect x="166" y="42" width="20" height="38" rx="3" fill="url(#pumpGrad2)"/>
+      <rect x="166" y="42" width="20" height="7"  rx="3" fill="#dc2626"/>
+      <rect x="169" y="52" width="14" height="10" rx="2" fill="#0f172a"/>
+      <rect x="170" y="53" width="12" height="8"  rx="1" fill="#1d4ed8"/>
+      <text x="176" y="59" font-family="Arial" font-size="4.5" fill="#bfdbfe" text-anchor="middle" font-weight="700">00.00</text>
+      <rect x="169" y="65" width="5" height="3" rx="1" fill="#dc2626"/>
+      <rect x="177" y="65" width="5" height="3" rx="1" fill="#16a34a"/>
+      <rect x="183" y="55" width="3" height="11" rx="1" fill="#64748b"/>
+      <path d="M186 59 L193 57 L194 61 L187 63 Z" fill="#374151"/>
+      <path d="M186 64 Q180 72 165 73 Q150 74 135 73" stroke="#374151" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+      <ellipse cx="76" cy="81" rx="65" ry="4" fill="#00000025"/>
+      <rect x="14" y="52" width="68" height="28" rx="2" fill="url(#bedFloor)"/>
+      <rect x="14" y="48" width="68" height="6"  rx="2" fill="#e2e8f0"/>
+      <rect x="78" y="48" width="5"  height="32" rx="1" fill="#cbd5e1"/>
+      <rect x="14" y="50" width="5"  height="28" rx="1" fill="#d1d5db"/>
+      <line x1="25" y1="52" x2="25" y2="80" stroke="#94a3b8" stroke-width=".7"/>
+      <line x1="36" y1="52" x2="36" y2="80" stroke="#94a3b8" stroke-width=".7"/>
+      <line x1="47" y1="52" x2="47" y2="80" stroke="#94a3b8" stroke-width=".7"/>
+      <line x1="58" y1="52" x2="58" y2="80" stroke="#94a3b8" stroke-width=".7"/>
+      <line x1="69" y1="52" x2="69" y2="80" stroke="#94a3b8" stroke-width=".7"/>
+      <rect x="14" y="52" width="5" height="7" rx="1" fill="#fca5a5"/>
+      <rect x="14" y="60" width="5" height="6" rx="1" fill="#dc2626"/>
+      <rect x="80" y="52" width="58" height="28" rx="3" fill="url(#truckBody)"/>
+      <path d="M86 52 Q90 32 102 30 L126 30 Q136 30 138 52 Z" fill="url(#cabTop)"/>
+      <path d="M92 52 Q95 36 104 34 L122 34 Q130 34 133 52 Z" fill="white" opacity=".4"/>
+      <rect x="80" y="63" width="58" height="5" fill="#2563eb" opacity=".65"/>
+      <path d="M128 52 Q132 36 126 32 L118 32 Q128 34 130 52 Z" fill="#bfdbfe" opacity=".9" stroke="#94a3b8" stroke-width=".5"/>
+      <path d="M88 52 Q88 34 96 32 L88 33 Q83 36 85 52 Z" fill="#bfdbfe" opacity=".8" stroke="#94a3b8" stroke-width=".5"/>
+      <rect x="92"  y="34" width="16" height="16" rx="2" fill="#bfdbfe" opacity=".88" stroke="#94a3b8" stroke-width=".5"/>
+      <rect x="110" y="34" width="16" height="16" rx="2" fill="#bfdbfe" opacity=".88" stroke="#94a3b8" stroke-width=".5"/>
+      <line x1="109" y1="52" x2="109" y2="80" stroke="#94a3b8" stroke-width=".9"/>
+      <rect x="116" y="64" width="9" height="2.5" rx="1.5" fill="#94a3b8"/>
+      <rect x="133" y="52" width="10" height="14" rx="2" fill="#e2e8f0"/>
+      <rect x="134" y="58" width="8"  height="8"  rx="1" fill="#cbd5e1"/>
+      <rect x="135" y="59" width="6"  height="1.5" rx=".5" fill="#94a3b8"/>
+      <rect x="135" y="62" width="6"  height="1.5" rx=".5" fill="#94a3b8"/>
+      <rect x="135" y="65" width="6"  height="1.5" rx=".5" fill="#94a3b8"/>
+      <rect x="133" y="52" width="9"  height="6"  rx="2" fill="#fef08a" stroke="#d97706" stroke-width=".6"/>
+      <rect x="134" y="53" width="7"  height="4"  rx="1" fill="#fde047"/>
+      <rect x="132" y="72" width="10" height="5"  rx="2" fill="#94a3b8"/>
+      <rect x="136" y="47" width="6"  height="4"  rx="1" fill="#e2e8f0" stroke="#94a3b8" stroke-width=".5"/>
+      <rect x="138" y="44" width="1.5" height="4" rx=".5" fill="#94a3b8"/>
+      <rect x="135" y="72" width="5" height="3" rx="1" fill="#f59e0b" stroke="#d97706" stroke-width=".7"/>
+      <circle cx="137.5" cy="73.5" r="1" fill="#d97706"/>
+      <circle cx="118" cy="80" r="11" fill="#1e293b"/>
+      <circle cx="118" cy="80" r="8"  fill="#334155"/>
+      <circle cx="118" cy="80" r="4.5" fill="#64748b"/>
+      <circle cx="118" cy="80" r="2"  fill="#94a3b8"/>
+      <circle cx="118" cy="73.5" r="1.2" fill="#94a3b8"/>
+      <circle cx="118" cy="86.5" r="1.2" fill="#94a3b8"/>
+      <circle cx="111.5" cy="80" r="1.2" fill="#94a3b8"/>
+      <circle cx="124.5" cy="80" r="1.2" fill="#94a3b8"/>
+      <circle cx="38"  cy="80" r="11" fill="#1e293b"/>
+      <circle cx="38"  cy="80" r="8"  fill="#334155"/>
+      <circle cx="38"  cy="80" r="4.5" fill="#64748b"/>
+      <circle cx="38"  cy="80" r="2"  fill="#94a3b8"/>
+      <circle cx="38"  cy="73.5" r="1.2" fill="#94a3b8"/>
+      <circle cx="38"  cy="86.5" r="1.2" fill="#94a3b8"/>
+      <circle cx="31.5" cy="80" r="1.2" fill="#94a3b8"/>
+      <circle cx="44.5" cy="80" r="1.2" fill="#94a3b8"/>
+      <circle cx="160" cy="72" r="1.8" fill="#fbbf24" opacity=".9"/>
+      <circle cx="154" cy="73" r="1.4" fill="#fbbf24" opacity=".75"/>
+      <circle cx="147" cy="73" r="1.1" fill="#fbbf24" opacity=".6"/>
+    </svg>
+    <span class="logo-text"><span class="logo-alaa">تطبيق علاء</span> <span class="logo-salah">صلاح</span></span>
+  </div>
+  <h1>مراجعة <span>توتال الدورية</span></h1>
+  <p class="sub">
+    <span class="vs-text">شيتنا <span class="vs-word">vs</span> شيت توتال</span>
+    &nbsp;|&nbsp;
+    <span class="badge-version">✅ v4.5</span>
+  </p>
+</div>
+
+<!-- TABS NAV -->
+<div class="app-tabs">
+  <button class="tab-btn active" id="tab-compare-btn" onclick="switchTab('compare')">
+    <span class="tab-icon">📊</span> مقارنة الملفات
+  </button>
+  <button class="tab-btn" id="tab-receipt-btn" onclick="switchTab('receipt')">
+    <span class="tab-icon">🧾</span> قراءة ريسيت توتال
+  </button>
+  <button class="tab-btn" id="tab-sabla-btn" onclick="switchTab('sabla')">
+    <span class="tab-icon">🚛</span> مقارنة سيارات السبلة
+  </button>
+</div>
+
+<!-- TAB 1: COMPARE -->
+<div class="tab-content active" id="tab-compare">
+<!-- UPLOAD CARD -->
+<div class="card">
+  <div class="card-title">رفع الملفات</div>
+
+  <div class="two-panels">
+
+    <!-- ── توتال ── -->
+    <div class="panel">
+      <div class="panel-head"><span>📄</span> ملفات توتال <span class="pcnt" id="cntTotal">0</span></div>
+      <label class="panel-drop" id="pdTotal">
+        <input type="file" id="fTotal" accept=".xlsx,.xls" multiple onchange="panelPick('total',this.files)">
+        <div class="pd-box">
+          <span class="pd-icon">⬆️</span>
+          <span class="pd-txt">اضغط لإضافة ملفات</span>
+          <span class="pd-sub">يمكن إضافة عدد غير محدود</span>
+        </div>
+      </label>
+      <div class="panel-list" id="lstTotal"></div>
+    </div>
+
+    <!-- ── السيارات ── -->
+    <div class="panel">
+      <div class="panel-head"><span>🚗</span> شيتات السيارات <span class="pcnt" id="cntOur">0</span></div>
+      <label class="panel-drop" id="pdOur">
+        <input type="file" id="fOur" accept=".xlsx,.xls" multiple onchange="panelPick('our',this.files)">
+        <div class="pd-box">
+          <span class="pd-icon">⬆️</span>
+          <span class="pd-txt">اضغط لإضافة ملفات</span>
+          <span class="pd-sub">يمكن إضافة عدد غير محدود</span>
+        </div>
+      </label>
+      <div class="panel-list" id="lstOur"></div>
+    </div>
+
+  </div>
+
+  <!-- hidden inputs to keep FILES.f1..fN intact (used by runCompare) -->
+  <div id="hiddenInputs" style="display:none"></div>
+
+  <div class="divider"></div>
+
+  <div class="card-title" style="margin-bottom:14px">تحديد الفترة الزمنية</div>
+  <div class="row" style="gap:16px">
+    <label class="lbl">📅 من:</label>
+    <input type="date" id="dFrom">
+    <label class="lbl" style="min-width:40px;text-align:center">إلى:</label>
+    <input type="date" id="dTo">
+  </div>
+
+  <button class="btn-main" id="cmpBtn" onclick="runCompare()" disabled>
+    <span>▶</span> قارن دلوقتي
+  </button>
+</div>
+
+<div id="errBox" class="err hidden"></div>
+<div id="infoBox" class="info hidden"></div>
+
+<!-- RESULTS -->
+<div id="resSection" class="hidden">
+  <div class="res-header">
+    <h2>📊 نتائج المقارنة</h2>
+    <button class="btn-export" onclick="exportAll()">💾 حفظ كإكسيل – كل العربيات</button>
+  </div>
+  <div class="sum-cards" id="sumCards"></div>
+  <div id="carRes"></div>
+</div>
+
+
+</div><!-- /tab-compare -->
+
+<!-- TAB 2: RECEIPT READER -->
+<div class="tab-content" id="tab-receipt">
+
+  <!-- API KEY CARD -->
+  <div class="receipt-card" id="apiKeyCard">
+    <div class="card-title">🔑 إعداد Gemini API Keys</div>
+
+    <!-- Add key row -->
+    <div class="api-key-row" id="apiAddRow">
+      <input type="password" id="apiKeyInput" class="api-key-input"
+        placeholder="AIzaSy... أضف مفتاح Gemini API"
+        onkeydown="if(event.key==='Enter') addApiKey()">
+      <button class="btn-main" style="margin:0;padding:10px 14px;font-size:13px" onclick="toggleNewKeyVisible()" title="إظهار/إخفاء">👁</button>
+      <button class="btn-main" style="margin:0;padding:10px 18px;font-size:13px;background:linear-gradient(135deg,#16a34a,#15803d)" onclick="addApiKey()">➕ أضف</button>
+    </div>
+
+    <!-- Keys list -->
+    <div id="apiKeysList" style="margin-bottom:12px"></div>
+
+    <!-- Active key indicator -->
+    <div id="apiActiveIndicator" style="display:none;font-size:12px;font-weight:700;color:var(--success);background:var(--success-lt);border:1px solid rgba(22,163,74,.2);border-radius:8px;padding:8px 14px;margin-bottom:10px"></div>
+
+    <!-- Hide button -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button id="hideApiSectionBtn" class="btn-main" style="margin:0;padding:8px 18px;font-size:12px;background:linear-gradient(135deg,#64748b,#475569)" onclick="hideApiSection()">🙈 إخفاء القسم</button>
+      <div style="font-size:12px;color:var(--text3);line-height:1.7;flex:1">
+        💡 المفاتيح بتتحفظ داخل التطبيق — هتلاقيها على
+        <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary)">Google AI Studio</a> مجاناً
+      </div>
+    </div>
+  </div>
+
+  <!-- Restore API section button (shown when hidden) -->
+  <div id="apiRestoreRow" style="display:none;max-width:780px;margin:0 auto 12px;text-align:left">
+    <button class="btn-main" style="margin:0;padding:8px 18px;font-size:12px;background:linear-gradient(135deg,#64748b,#475569)" onclick="showApiSection()">🔑 إظهار إعداد API</button>
+  </div>
+
+  <!-- RATES FILE CARD -->
+  <div class="receipt-card">
+    <div class="card-title">📂 ملف شيت المعدلات</div>
+    <div class="rates-file-row">
+      <label class="rates-file-btn" id="ratesFileBtn">
+        <input type="file" id="ratesFileInput" accept=".xlsx,.xls" onchange="loadRatesFile(this.files[0])">
+        <span id="ratesFileName">📁 اختار ملف شيت المعدلات (.xlsx)</span>
+      </label>
+    </div>
+    <div id="sheetSelectWrap" style="display:none">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px">اختار شيت السيارة:</div>
+      <select class="sheet-select" id="sheetSelect" onchange="onSheetSelect()">
+        <option value="">-- اختار شيت --</option>
+      </select>
+    </div>
+    <div id="ratesStatus"></div>
+  </div>
+
+  <!-- RECEIPT UPLOAD CARD -->
+  <div class="receipt-card">
+    <div class="card-title">🧾 رفع صور ريسيتات توتال</div>
+
+    <label class="receipt-drop" id="receiptDrop">
+      <input type="file" id="receiptInput" accept="image/*" multiple onchange="addReceiptImages(this.files)">
+      <div class="drop-icon">📸</div>
+      <div class="drop-txt">اضغط أو اسحب صور الريسيتات هنا</div>
+      <div class="drop-sub">يمكن رفع أكثر من صورة في وقت واحد — JPG / PNG / WebP</div>
+    </label>
+
+    <div class="multi-upload-list" id="receiptList"></div>
+
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+      <button class="btn-main" id="parseAllBtn" onclick="parseAllReceipts()"
+        style="flex:1;margin:0;padding:12px 20px;font-size:14px" disabled>
+        <span>🤖</span> قرّاية الكل بالذكاء الاصطناعي
+      </button>
+      <button class="btn-main" id="saveAllBtn" onclick="saveAllToSheet()"
+        style="flex:1;margin:0;padding:12px 20px;font-size:14px;background:linear-gradient(135deg,#16a34a,#15803d);box-shadow:0 4px 20px rgba(22,163,74,.35)" disabled>
+        <span>💾</span> حفظ الكل في الشيت
+      </button>
+    </div>
+  </div>
+
+  <!-- RESULTS AREA -->
+  <div id="receiptResults"></div>
+
+</div><!-- /tab-receipt -->
+
+<!-- TAB 3: SABLA COMPARE -->
+<div class="tab-content" id="tab-sabla">
+
+<div class="wrap">
+  <h1>مقارنة أرقام سيارات ومقطورات سبلة المتعهد بسيوني</h1>
+  <div class="subtitle">ارفع أي عدد من شيتات الإكسل، والأداة هتدور على الأرقام وتقارنها وتديك أكبر قيمة لكل رقم</div>
+
+  <div class="card">
+    <label>ارفع شيتات الإكسل (رقم مقطورة/جرار - عرض - طول) - تقدر ترفع عدد غير محدود:</label>
+    <label class="sabla-drop" id="sablaDrop">
+      <input type="file" id="sablaFilesInput" accept=".xlsx,.xls" multiple>
+      <div class="drop-icon">📁</div>
+      <div class="drop-txt">اضغط هنا أو اسحب شيتات الإكسل</div>
+      <div class="drop-sub">تقدر تختار أكتر من ملف .xlsx / .xls مرة واحدة</div>
+    </label>
+    <div class="hint">كل ما ترفع ملفات جديدة، هتتضاف على اللي قبلها. مفيش داتا محفوظة جوه الأداة - لازم ترفع الشيتات في كل مرة تفتحها.</div>
+    <div style="margin-top:10px;">
+      <button class="secondary" id="sablaClearFilesBtn">مسح كل الملفات</button>
+    </div>
+    <div class="sheets-info" id="sheetsInfo" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card">
+    <label>اكتب أرقام العربيات و/أو المقطورات (رقم في كل سطر، أو مفصولة بفاصلة أو مسافة):</label>
+    <textarea id="input" placeholder="مثال:
+3879
+2461
+9256
+7512"></textarea>
+    <div class="hint">تقدر تكتب أرقام مقطورات أو أرقام جرارات مع بعض، الأداة هتدور على كل رقم في كل الشيتات اللي رفعتها وتطلعلك أكبر عرض وأكبر طول ليه.</div>
+
+    <div id="sablaTypedPreview" class="sabla-typed-preview" style="display:none;"></div>
+
+    <div class="sabla-picker-wrap" id="sablaPickerWrap" style="margin-top:12px;">
+      <button type="button" class="sabla-picker-toggle" id="sablaPickerToggle">
+        <span id="sablaPickerToggleLabel">📋 اختر من الأرقام الموجودة في الشيتات (0 مختار)</span>
+        <span id="sablaPickerToggleArrow">▾</span>
+      </button>
+      <div class="sabla-picker-panel" id="sablaPickerPanel" style="display:none;">
+        <input type="text" class="sabla-picker-search" id="sablaPickerSearch" placeholder="دور برقم عربية أو مقطورة...">
+        <div class="sabla-picker-actions">
+          <button type="button" class="secondary" id="sablaPickerSelectAll">تحديد الكل الظاهر</button>
+          <button type="button" class="secondary" id="sablaPickerClearAll">إلغاء كل التحديد</button>
+        </div>
+        <div class="sabla-picker-list" id="sablaPickerList"></div>
+      </div>
+    </div>
+
+    <div>
+      <button id="compareBtn">قارن</button>
+      <button class="secondary" id="clearBtn">مسح</button>
+    </div>
+  </div>
+
+  <div class="card" id="resultsCard" style="display:none;">
+    <div id="summary" class="summary"></div>
+    <div style="overflow-x:auto;">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th>الرقم</th>
+            <th>أكبر عرض</th>
+            <th>أكبر طول</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>استخراج شيت مجمّع بكل العربيات من كل الشيتات، بالتعديلات اللي عملتها:</label>
+    <div class="hint">الزرار ده بيجمع كل أرقام المقطورات والجرارات من كل الشيتات اللي رفعتها في شيت واحد مرتب، وبيحط القيم اللي أنت عدلتها بدل القيم الأصلية لأي رقم عدلته.</div>
+    <div>
+      <button id="sablaExportBtn">تعديل واستخراج</button>
+    </div>
+  </div>
+
+  <div class="card" id="sablaReportCard" style="display:none;"></div>
+</div>
+
+</div><!-- /tab-sabla -->
+
+
+<div class="sbar" id="sbar">
+  <span>📂</span> اختار الملفات وابدأ المقارنة
+</div>
+
+<script>
+// ── SABLA: بيانات الشيتات المرفوعة (مفيش داتا ثابتة، كل حاجة بترفع وقت الاستخدام) ──
+let sablaSheets = {}; // { "اسم الملف - اسم الشيت": [ {trailer_width,trailer_length,trailer_no,tractor_width,tractor_length,tractor_no}, ... ] }
+let sablaEdits = {};  // { "الرقم": { width: قيمة أو null, length: قيمة أو null } }
+let sablaNewVehicles = {}; // { "الرقم": { type: 'مقطورة'|'جرار', width, length } } - عربيات مكانتش موجودة في أي شيت وتم إضافتها يدويًا
+let sablaFallback = {}; // { "اسم الملف - اسم الشيت": true/false } - true لو الأداة خمّنت ترتيب الأعمدة بدل ما تلاقيه من الهيدر
+
+const sheetsInfoEl = document.getElementById('sheetsInfo');
+
+function renderSheetsInfo(){
+  sheetsInfoEl.innerHTML = '';
+  const keys = Object.keys(sablaSheets);
+  if(keys.length === 0){
+    sheetsInfoEl.innerHTML = '<div class="hint">لسه مفيش شيتات مرفوعة.</div>';
+    renderSablaNumberPicker();
+    return;
+  }
+  keys.forEach(name => {
+    const pill = document.createElement('div');
+    pill.className = 'sheet-pill';
+    const warn = sablaFallback[name] ? ' ⚠️' : '';
+    pill.textContent = name + ' (' + sablaSheets[name].length + ' صف)' + warn;
+    if(sablaFallback[name]){
+      pill.title = 'الأداة مش متأكدة من ترتيب أعمدة الشيت ده (مفيش هيدر واضح "عرض"/"طول")، فخمّنت الترتيب الافتراضي. لو الأرقام طالعة غريبة، راجع أعمدة الشيت ده الأول.';
+      pill.style.border = '1px solid #f59e0b';
+    }
+    sheetsInfoEl.appendChild(pill);
+  });
+  renderSablaNumberPicker();
+}
+
+// ── قائمة اختيار متعدد لأرقام العربيات/المقطورات الموجودة فعليًا فى الشيتات المرفوعة ──
+// كل صف هنا بقى مربوط بالرقم + النوع مع بعض (مش الرقم لوحده) عشان لو رقم زي 9732 مسجل
+// مرة مقطورة ومرة جرار، يظهر كصفين منفصلين وتقدر تختار أي منهم عايزه بدل ما يتلخبطوا مع بعض
+let sablaSelectedNumbers = new Set(); // مجموعة مفاتيح بصيغة "الرقم|النوع"
+let sablaPickerSearchTerm = '';
+
+function getAllSablaNumberTypePairs(){
+  const map = new Map(); // "الرقم|النوع" -> {no, type}
+  Object.values(sablaSheets).forEach(rows => {
+    rows.forEach(row => {
+      const t = normalize(row.trailer_no);
+      const tr = normalize(row.tractor_no);
+      if(t !== '' && t !== '0'){
+        const k = t + '|مقطورة';
+        if(!map.has(k)) map.set(k, {no: t, type: 'مقطورة'});
+      }
+      if(tr !== '' && tr !== '0'){
+        const k = tr + '|جرار';
+        if(!map.has(k)) map.set(k, {no: tr, type: 'جرار'});
+      }
+    });
+  });
+  return [...map.values()].sort((a, b) => {
+    const an = parseFloat(a.no), bn = parseFloat(b.no);
+    if(!isNaN(an) && !isNaN(bn) && an !== bn) return an - bn;
+    if(a.no !== b.no) return a.no.localeCompare(b.no, 'ar');
+    return a.type.localeCompare(b.type, 'ar');
+  });
+}
+
+function updateSablaPickerToggleLabel(){
+  const lbl = document.getElementById('sablaPickerToggleLabel');
+  if(!lbl) return;
+  const n = sablaSelectedNumbers.size;
+  lbl.textContent = '📋 اختر من الأرقام الموجودة في الشيتات (' + n + ' مختار)';
+}
+
+function renderSablaNumberPicker(){
+  const list = document.getElementById('sablaPickerList');
+  if(!list) return;
+  const all = getAllSablaNumberTypePairs();
+  const term = sablaPickerSearchTerm.trim();
+  const filtered = term ? all.filter(item => item.no.includes(term)) : all;
+
+  list.innerHTML = '';
+  if(filtered.length === 0){
+    list.innerHTML = '<div class="sabla-picker-empty">' + (all.length === 0 ? 'ارفع شيتات الإكسل الأول عشان الأرقام تظهر هنا.' : 'مفيش أرقام مطابقة للبحث.') + '</div>';
+    updateSablaPickerToggleLabel();
+    return;
+  }
+
+  filtered.forEach(item => {
+    const key = item.no + '|' + item.type;
+    const row = document.createElement('label');
+    row.className = 'sabla-picker-item';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = sablaSelectedNumbers.has(key);
+    cb.addEventListener('change', () => {
+      if(cb.checked) sablaSelectedNumbers.add(key);
+      else sablaSelectedNumbers.delete(key);
+      updateSablaPickerToggleLabel();
+    });
+
+    const txt = document.createElement('span');
+    txt.textContent = item.no;
+
+    const tag = document.createElement('span');
+    tag.className = 'tag ' + (item.type === 'مقطورة' ? 'trailer' : 'tractor');
+    tag.textContent = item.type;
+
+    row.appendChild(cb);
+    row.appendChild(txt);
+    row.appendChild(tag);
+
+    list.appendChild(row);
+  });
+
+  updateSablaPickerToggleLabel();
+}
+
+(() => {
+  const toggleBtn = document.getElementById('sablaPickerToggle');
+  const panel = document.getElementById('sablaPickerPanel');
+  const arrow = document.getElementById('sablaPickerToggleArrow');
+  const searchInput = document.getElementById('sablaPickerSearch');
+  const selectAllBtn = document.getElementById('sablaPickerSelectAll');
+  const clearAllBtn = document.getElementById('sablaPickerClearAll');
+  if(!toggleBtn || !panel) return;
+
+  toggleBtn.addEventListener('click', () => {
+    const isOpen = panel.style.display !== 'none';
+    panel.style.display = isOpen ? 'none' : 'block';
+    if(arrow) arrow.textContent = isOpen ? '▾' : '▴';
+  });
+
+  searchInput.addEventListener('input', () => {
+    sablaPickerSearchTerm = searchInput.value;
+    renderSablaNumberPicker();
+  });
+
+  selectAllBtn.addEventListener('click', () => {
+    const term = sablaPickerSearchTerm.trim();
+    const all = getAllSablaNumberTypePairs();
+    const visible = term ? all.filter(item => item.no.includes(term)) : all;
+    visible.forEach(item => sablaSelectedNumbers.add(item.no + '|' + item.type));
+    renderSablaNumberPicker();
+  });
+
+  clearAllBtn.addEventListener('click', () => {
+    sablaSelectedNumbers.clear();
+    renderSablaNumberPicker();
+  });
+})();
+
+// ── معاينة حية لأرقام العربيات المكتوبة يدويًا فى خانة الكتابة ──
+// كل رقم بيتكتب بيتفحص فورًا: لو نوعه واحد بس (جرار أو مقطورة) بيتحدد تلقائي،
+// ولو مسجل مرتين (زي مشكلة 9732: مرة جرار ومرة مقطورة) بيظهر الاتنين كتاجات تقدر تفعّل/تلغي أي منهم،
+// وده اللي بيتحدد على أساسه نوع الرقم وقت المقارنة والتعديل، عشان تعديل واحد متأثرش على التاني تاني
+let sablaTypedSelection = {}; // "الرقم" -> Set{'مقطورة','جرار'} (بس للأرقام اللي ليها أكتر من نوع)
+
+function getTypesForNumber(no){
+  const numNorm = normalize(no);
+  const types = new Set();
+  if(numNorm === '' || numNorm === '0') return [];
+  Object.values(sablaSheets).forEach(rows => {
+    rows.forEach(row => {
+      if(normalize(row.trailer_no) === numNorm) types.add('مقطورة');
+      if(normalize(row.tractor_no) === numNorm) types.add('جرار');
+    });
+  });
+  return [...types];
+}
+
+function renderSablaTypedPreview(){
+  const box = document.getElementById('sablaTypedPreview');
+  const input = document.getElementById('input');
+  if(!box || !input) return;
+
+  const nos = [...new Set(parseInputNumbers(input.value).map(normalize).filter(n => n !== '' && n !== '0'))];
+
+  if(nos.length === 0){
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  box.style.display = 'flex';
+  box.innerHTML = '';
+
+  nos.forEach(no => {
+    const types = getTypesForNumber(no);
+    const chip = document.createElement('div');
+    chip.className = 'sabla-chip';
+
+    const numSpan = document.createElement('span');
+    numSpan.className = 'num';
+    numSpan.textContent = no;
+    chip.appendChild(numSpan);
+
+    if(types.length === 0){
+      const tag = document.createElement('span');
+      tag.className = 'tag notfound';
+      tag.textContent = 'غير موجودة';
+      chip.appendChild(tag);
+    } else if(types.length === 1){
+      const tag = document.createElement('span');
+      tag.className = 'tag ' + (types[0] === 'مقطورة' ? 'trailer' : 'tractor');
+      tag.textContent = types[0];
+      chip.appendChild(tag);
+    } else {
+      // رقم متكرر (جرار ومقطورة مع بعض) - تاجات قابلة للتفعيل/الإلغاء، افتراضيًا الاتنين مفعّلين
+      if(!sablaTypedSelection[no]) sablaTypedSelection[no] = new Set(types);
+      types.forEach(t => {
+        const tag = document.createElement('span');
+        const isOn = sablaTypedSelection[no].has(t);
+        tag.className = 'tag toggle ' + (t === 'مقطورة' ? 'trailer' : 'tractor') + (isOn ? '' : ' off');
+        tag.textContent = t;
+        tag.title = 'دوس عشان تفعّل/تلغي';
+        tag.addEventListener('click', () => {
+          if(sablaTypedSelection[no].has(t)) sablaTypedSelection[no].delete(t);
+          else sablaTypedSelection[no].add(t);
+          renderSablaTypedPreview();
+        });
+        chip.appendChild(tag);
+      });
+    }
+
+    box.appendChild(chip);
+  });
+}
+
+document.getElementById('input').addEventListener('input', renderSablaTypedPreview);
+
+renderSheetsInfo();
+
+// نفس دالة قراءة الإكسل المستخدمة في باقي الأداة (readXL) - لو مش موجودة (احتياطي) بنعرّفها هنا محليًا
+function sablaReadXL(file){
+  if(typeof readXL === 'function') return readXL(file);
+  return new Promise((res,rej)=>{
+    const r = new FileReader();
+    r.onload = e => {
+      try{ res(XLSX.read(e.target.result,{type:'array',cellDates:false})); }
+      catch(err){ rej(err); }
+    };
+    r.onerror = () => rej(new Error('فشلت قراءة الملف'));
+    r.readAsArrayBuffer(file);
+  });
+}
+
+// بيحاول يفهم شكل شيت السبلة (رقم مقطورة/جرار - عرض - طول) من الهيدر، ولو مش لاقي هيدر واضح
+// بيرجع لترتيب الأعمدة الافتراضي (نفس شكل الشيتات الأصلية: عرض مقطورة، طول مقطورة، رقم مقطورة، عرض جرار، طول جرار، رقم جرار)
+// بيرجع { rows, usedFallback } - usedFallback = true معناها الأداة معرفتش الهيدر بثقة وخمّنت ترتيب الأعمدة،
+// وده أكتر سبب شائع لظهور أرقام غريبة (عرض/طول/رقم متبدلين) لو ترتيب أعمدة الشيت مختلف عن الافتراضي
+function parseSablaSheet(ws){
+  const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:true});
+  if(!raw.length) return {rows: [], usedFallback: false};
+
+  let hRow = -1, hdrs = [];
+  for(let i=0; i<Math.min(6, raw.length); i++){
+    const rowTxt = raw[i].map(x => String(x)).join('|');
+    if(rowTxt.includes('عرض') && rowTxt.includes('طول')){
+      hRow = i;
+      hdrs = raw[i].map(x => String(x).trim());
+      break;
+    }
+  }
+
+  let map = {trailer_width:-1, trailer_length:-1, trailer_no:-1, tractor_width:-1, tractor_length:-1, tractor_no:-1};
+
+  if(hRow !== -1){
+    hdrs.forEach((h, idx) => {
+      const isTrailer = h.includes('مقطورة');
+      const isTractor = h.includes('جرار') && !h.includes('مقطورة');
+      const isWidth = h.includes('عرض');
+      const isLength = h.includes('طول');
+      const isNo = h.includes('رقم');
+      if(isWidth){ if(isTrailer) map.trailer_width = idx; else if(isTractor) map.tractor_width = idx; }
+      if(isLength){ if(isTrailer) map.trailer_length = idx; else if(isTractor) map.tractor_length = idx; }
+      if(isNo){ if(isTrailer) map.trailer_no = idx; else if(isTractor) map.tractor_no = idx; }
+    });
+  }
+
+  const matchedCount = Object.values(map).filter(v => v >= 0).length;
+  const usedFallback = matchedCount < 4;
+  if(usedFallback){
+    // فوت باك: نفس ترتيب أعمدة الشيتات الأصلية
+    map = {trailer_width:0, trailer_length:1, trailer_no:2, tractor_width:3, tractor_length:4, tractor_no:5};
+    if(hRow === -1) hRow = 0; // مفيش هيدر واضح، هنعتبر أول صف بيانات فعلية (هيتفلتر لو كان هيدر برضو لأنه مش هيتساوى مع أي رقم مطلوب)
+  }
+
+  const rows = [];
+  for(let i = hRow + 1; i < raw.length; i++){
+    const r = raw[i];
+    if(!r || r.every(x => x === '' || x === null || x === undefined)) continue;
+    rows.push({
+      trailer_width: map.trailer_width >= 0 ? r[map.trailer_width] : null,
+      trailer_length: map.trailer_length >= 0 ? r[map.trailer_length] : null,
+      trailer_no: map.trailer_no >= 0 ? r[map.trailer_no] : null,
+      tractor_width: map.tractor_width >= 0 ? r[map.tractor_width] : null,
+      tractor_length: map.tractor_length >= 0 ? r[map.tractor_length] : null,
+      tractor_no: map.tractor_no >= 0 ? r[map.tractor_no] : null
+    });
+  }
+  return {rows, usedFallback};
+}
+
+async function handleSablaFiles(fileList){
+  const files = Array.from(fileList || []);
+  for(const file of files){
+    try{
+      const wb = await sablaReadXL(file);
+      wb.SheetNames.forEach(sn => {
+        const {rows, usedFallback} = parseSablaSheet(wb.Sheets[sn]);
+        if(rows.length){
+          const key = file.name + ' - ' + sn;
+          sablaSheets[key] = rows;
+          sablaFallback[key] = usedFallback;
+        }
+      });
+    }catch(err){
+      alert('حصل خطأ في قراءة الملف: ' + file.name);
+    }
+  }
+  renderSheetsInfo();
+}
+
+document.getElementById('sablaFilesInput').addEventListener('change', (e) => {
+  handleSablaFiles(e.target.files).then(() => { e.target.value = ''; });
+});
+
+(() => {
+  const dropEl = document.getElementById('sablaDrop');
+  if (!dropEl) return;
+  dropEl.addEventListener('dragover', e => { e.preventDefault(); dropEl.classList.add('drag-over'); });
+  dropEl.addEventListener('dragleave', () => dropEl.classList.remove('drag-over'));
+  dropEl.addEventListener('drop', e => {
+    e.preventDefault();
+    dropEl.classList.remove('drag-over');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+      handleSablaFiles(e.dataTransfer.files);
+    }
+  });
+})();
+
+document.getElementById('sablaClearFilesBtn').addEventListener('click', () => {
+  sablaSheets = {};
+  sablaFallback = {};
+  renderSheetsInfo();
+  document.getElementById('resultsCard').style.display = 'none';
+});
+
+function normalize(v) {
+  if (v === null || v === undefined) return '';
+  return String(v).trim();
+}
+
+function parseInputNumbers(text) {
+  return text
+    .split(/[\n,\s]+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+}
+
+function searchNumber(num) {
+  const results = [];
+  const numNorm = normalize(num);
+  Object.keys(sablaSheets).forEach(sheetName => {
+    const rows = sablaSheets[sheetName];
+    rows.forEach(row => {
+      const trailerNo = normalize(row.trailer_no);
+      const tractorNo = normalize(row.tractor_no);
+      if (trailerNo !== '' && trailerNo === numNorm && trailerNo !== '0') {
+        results.push({
+          sheet: sheetName,
+          type: 'مقطورة',
+          width: row.trailer_width,
+          length: row.trailer_length
+        });
+      }
+      if (tractorNo !== '' && tractorNo === numNorm && tractorNo !== '0') {
+        results.push({
+          sheet: sheetName,
+          type: 'جرار',
+          width: row.tractor_width,
+          length: row.tractor_length
+        });
+      }
+    });
+  });
+  return results;
+}
+
+function toNum(v){
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n;
+}
+
+// طبقة "أكبر قيمة": بتاخد أكبر عرض وأكبر طول من كل النتائج الموجودة لنفس الرقم، كل واحدة لوحدها
+function aggregateMax(matches){
+  let maxWidth = null, maxLength = null;
+  matches.forEach(m => {
+    const w = toNum(m.width);
+    const l = toNum(m.length);
+    if(w !== null && (maxWidth === null || w > maxWidth)) maxWidth = w;
+    if(l !== null && (maxLength === null || l > maxLength)) maxLength = l;
+  });
+  return {maxWidth, maxLength};
+}
+
+function fmt(v) {
+  if (v === null || v === undefined || v === '') return '-';
+  return v;
+}
+
+document.getElementById('compareBtn').addEventListener('click', () => {
+  const text = document.getElementById('input').value;
+  const typedNos = [...new Set(parseInputNumbers(text).map(normalize).filter(n => n !== '' && n !== '0'))];
+
+  // لكل رقم مكتوب يدويًا: بنحدد نوعه تلقائي لو نوع واحد بس، أو الأنواع اللي المستخدم فعّلها فى المعاينة لو الرقم مسجل جرار ومقطورة مع بعض
+  const notFoundNos = [];
+  const typedEntries = []; // [{no, types:[...]}]
+  typedNos.forEach(no => {
+    const types = getTypesForNumber(no);
+    if (types.length === 0) { notFoundNos.push(no); return; }
+    let chosen;
+    if (types.length === 1) chosen = types;
+    else {
+      const sel = sablaTypedSelection[no];
+      chosen = sel ? types.filter(t => sel.has(t)) : types;
+    }
+    if (chosen.length > 0) typedEntries.push({no, types: chosen});
+  });
+
+  const seenKeys = new Set();
+  typedEntries.forEach(e => e.types.forEach(t => seenKeys.add(e.no + '|' + t)));
+
+  // الأرقام المختارة بالتيك من القائمة المنسدلة (بالفعل مربوطة برقم+نوع)، بنضيف بس اللي متكررش مع المكتوب يدويًا
+  const pickerOnly = [];
+  sablaSelectedNumbers.forEach(key => {
+    if (seenKeys.has(key)) return;
+    const idx = key.lastIndexOf('|');
+    pickerOnly.push({no: key.slice(0, idx), type: key.slice(idx + 1)});
+    seenKeys.add(key);
+  });
+
+  const resultsCard = document.getElementById('resultsCard');
+  const tbody = document.getElementById('resultsBody');
+  const summary = document.getElementById('summary');
+  tbody.innerHTML = '';
+
+  if (Object.keys(sablaSheets).length === 0) {
+    resultsCard.style.display = 'block';
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-msg">لازم ترفع شيت واحد على الأقل قبل البحث</td></tr>';
+    summary.innerHTML = '';
+    return;
+  }
+
+  const totalCount = notFoundNos.length + typedEntries.reduce((s, e) => s + e.types.length, 0) + pickerOnly.length;
+  if (totalCount === 0) {
+    resultsCard.style.display = 'block';
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-msg">اكتب رقم واحد على الأقل أو اختار من القائمة</td></tr>';
+    summary.innerHTML = '';
+    return;
+  }
+
+  let foundCount = 0;
+  let notFoundCount = 0;
+
+  function renderFoundRow(no, type){
+    foundCount++;
+    const matches = searchNumber(no).filter(m => m.type === type);
+    const {maxWidth, maxLength} = aggregateMax(matches);
+    const numNorm = normalize(no);
+    const editKey = numNorm + '|' + type;
+    const badgeBg = type === 'مقطورة' ? '#123321' : '#3a2f10';
+    const badgeColor = type === 'مقطورة' ? '#7fd8a0' : '#ffd27f';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${no} <span style="font-size:11px;padding:1px 8px;border-radius:10px;margin-inline-start:6px;background:${badgeBg};color:${badgeColor};">${type}</span></td>
+      <td>${fmt(maxWidth)}</td>
+      <td>${fmt(maxLength)}</td>
+    `;
+    tbody.appendChild(tr);
+
+    const editTr = document.createElement('tr');
+    editTr.className = 'sabla-edit-row';
+    editTr.innerHTML = `
+      <td style="font-size:12px;color:#9fb3c8;">تعديل ${no} (${type})</td>
+      <td><input type="number" step="any" class="sabla-edit-input" data-num="${numNorm}" data-type="${type}" data-field="width" placeholder="عرض جديد" value="${sablaEdits[editKey]?.width ?? ''}"></td>
+      <td><input type="number" step="any" class="sabla-edit-input" data-num="${numNorm}" data-type="${type}" data-field="length" placeholder="طول جديد" value="${sablaEdits[editKey]?.length ?? ''}"></td>
+    `;
+    tbody.appendChild(editTr);
+  }
+
+  function renderNotFoundRow(no){
+    notFoundCount++;
+    const numNorm = normalize(no);
+    const nv = sablaNewVehicles[numNorm] || {};
+    const tr = document.createElement('tr');
+    tr.className = 'not-found';
+    tr.innerHTML = `<td>${no}</td><td colspan="2">غير موجودة في أي من الشيتات المرفوعة</td>`;
+    tbody.appendChild(tr);
+
+    const otherOptions = notFoundNos
+      .filter(n => normalize(n) !== numNorm)
+      .map(n => {
+        const nn = normalize(n);
+        return `<option value="${nn}" ${nv.linkedNo === nn ? 'selected' : ''}>${n}</option>`;
+      }).join('');
+
+    const newTr = document.createElement('tr');
+    newTr.className = 'sabla-new-row';
+    newTr.innerHTML = `
+      <td style="font-size:12px;color:#9fb3c8;">
+        إضافة ${no} كعربية جديدة —
+        <select class="sabla-new-type" data-num="${numNorm}" style="margin-inline-start:6px;">
+          <option value="مقطورة" ${nv.type !== 'جرار' ? 'selected' : ''}>مقطورة</option>
+          <option value="جرار" ${nv.type === 'جرار' ? 'selected' : ''}>جرار</option>
+        </select>
+        <br>
+        <select class="sabla-new-link" data-num="${numNorm}" style="margin-top:4px;">
+          <option value="">بدون ربط</option>
+          ${otherOptions}
+        </select>
+      </td>
+      <td><input type="number" step="any" class="sabla-new-input" data-num="${numNorm}" data-field="width" placeholder="عرض" value="${nv.width ?? ''}"></td>
+      <td><input type="number" step="any" class="sabla-new-input" data-num="${numNorm}" data-field="length" placeholder="طول" value="${nv.length ?? ''}"></td>
+    `;
+    tbody.appendChild(newTr);
+  }
+
+  typedNos.forEach(no => {
+    const entry = typedEntries.find(e => e.no === no);
+    if (entry) entry.types.forEach(t => renderFoundRow(no, t));
+    else if (notFoundNos.includes(no)) renderNotFoundRow(no);
+  });
+  pickerOnly.forEach(({no, type}) => renderFoundRow(no, type));
+
+  tbody.querySelectorAll('.sabla-edit-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const n = inp.dataset.num;
+      const t = inp.dataset.type;
+      const key = n + '|' + t;
+      const field = inp.dataset.field;
+      if(!sablaEdits[key]) sablaEdits[key] = {width: null, length: null};
+      const v = inp.value.trim();
+      sablaEdits[key][field] = v === '' ? null : parseFloat(v);
+    });
+  });
+
+  tbody.querySelectorAll('.sabla-new-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const n = inp.dataset.num;
+      const field = inp.dataset.field;
+      if(!sablaNewVehicles[n]) sablaNewVehicles[n] = {type: 'مقطورة', width: null, length: null, linkedNo: null};
+      const v = inp.value.trim();
+      sablaNewVehicles[n][field] = v === '' ? null : parseFloat(v);
+    });
+  });
+  tbody.querySelectorAll('.sabla-new-type').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const n = sel.dataset.num;
+      if(!sablaNewVehicles[n]) sablaNewVehicles[n] = {type: 'مقطورة', width: null, length: null, linkedNo: null};
+      sablaNewVehicles[n].type = sel.value;
+    });
+  });
+  tbody.querySelectorAll('.sabla-new-link').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const n = sel.dataset.num;
+      if(!sablaNewVehicles[n]) sablaNewVehicles[n] = {type: 'مقطورة', width: null, length: null, linkedNo: null};
+      sablaNewVehicles[n].linkedNo = sel.value || null;
+    });
+  });
+
+  summary.innerHTML = `
+    <span>إجمالي الأرقام: ${totalCount}</span>
+    <span class="ok">موجودة: ${foundCount}</span>
+    <span class="bad">غير موجودة: ${notFoundCount}</span>
+  `;
+
+  resultsCard.style.display = 'block';
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  document.getElementById('input').value = '';
+  document.getElementById('resultsCard').style.display = 'none';
+});
+// ── تعديل واستخراج: بيجمع كل العربيات من كل الشيتات المرفوعة في شيت واحد، مرتب، وبالتعديلات ──
+document.getElementById('sablaExportBtn').addEventListener('click', () => {
+  if (Object.keys(sablaSheets).length === 0) {
+    alert('لازم ترفع شيت واحد على الأقل الأول');
+    return;
+  }
+
+  // تجميع بيانات كل مقطورة وكل جرار على حدة (أكبر عرض/طول لو الرقم اتكرر) + تسجيل
+  // مين قصاد مين فعليًا زي ما هو مسجل في الشيت الأصلي، وبنفس ترتيب ظهورهم الأصلي
+  const trailerData = {}; // رقم المقطورة -> {no, width, length, tractorNo}
+  const tractorData = {}; // رقم الجرار -> {no, width, length}
+  const trailerOrder = []; // بنفس ترتيب أول ظهور للمقطورة في الشيتات (مش مرتب بالرقم)
+  const tractorOrder = []; // نفس الفكرة للجرارات
+
+  // بيتعمل loop على الشيتات بترتيب الرفع؛ لو نفس المقطورة اتلاقت قصاد جرار مختلف
+  // في شيت اتاجيت رفعه بعد كده، آخر شيت هو اللي بياخد الأولوية (بيادرس فوق القديم تلقائيًا)
+  Object.values(sablaSheets).forEach(rows => {
+    rows.forEach(row => {
+      const trailerNo = normalize(row.trailer_no);
+      const tractorNo = normalize(row.tractor_no);
+      const hasTrailer = trailerNo !== '' && trailerNo !== '0';
+      const hasTractor = tractorNo !== '' && tractorNo !== '0';
+
+      if (hasTrailer) {
+        const w = toNum(row.trailer_width);
+        const l = toNum(row.trailer_length);
+        if (!trailerData[trailerNo]) { trailerData[trailerNo] = {no: trailerNo, width: w, length: l, tractorNo: null}; trailerOrder.push(trailerNo); }
+        else {
+          if (w !== null && (trailerData[trailerNo].width === null || w > trailerData[trailerNo].width)) trailerData[trailerNo].width = w;
+          if (l !== null && (trailerData[trailerNo].length === null || l > trailerData[trailerNo].length)) trailerData[trailerNo].length = l;
+        }
+      }
+      if (hasTractor) {
+        const w = toNum(row.tractor_width);
+        const l = toNum(row.tractor_length);
+        if (!tractorData[tractorNo]) { tractorData[tractorNo] = {no: tractorNo, width: w, length: l}; tractorOrder.push(tractorNo); }
+        else {
+          if (w !== null && (tractorData[tractorNo].width === null || w > tractorData[tractorNo].width)) tractorData[tractorNo].width = w;
+          if (l !== null && (tractorData[tractorNo].length === null || l > tractorData[tractorNo].length)) tractorData[tractorNo].length = l;
+        }
+      }
+      // الإقران الفعلي: المقطورة والجرار اللي ظاهرين مع بعض في نفس الصف
+      if (hasTrailer && hasTractor) {
+        trailerData[trailerNo].tractorNo = tractorNo;
+      }
+    });
+  });
+
+  // تطبيق التعديلات اللي المستخدم كتبها - كل تعديل مربوط بالرقم + النوع مع بعض (مش الرقم لوحده)
+  // عشان تعديل "مقطورة 9732" مثلاً يفضل منفصل تمامًا عن تعديل "جرار 9732" ومتأثرش عليه خالص
+  const modifiedDetails = [];
+  Object.keys(sablaEdits).forEach(key => {
+    const edit = sablaEdits[key];
+    if (!edit) return;
+    const hasW = edit.width !== null && edit.width !== undefined;
+    const hasL = edit.length !== null && edit.length !== undefined;
+    if (!hasW && !hasL) return;
+
+    const sep = key.lastIndexOf('|');
+    const num = sep >= 0 ? key.slice(0, sep) : key;
+    const type = sep >= 0 ? key.slice(sep + 1) : null;
+
+    if (type === 'مقطورة' && trailerData[num]) {
+      const before = {width: trailerData[num].width, length: trailerData[num].length};
+      if (hasW) trailerData[num].width = edit.width;
+      if (hasL) trailerData[num].length = edit.length;
+      modifiedDetails.push({type: 'مقطورة', no: num, beforeWidth: before.width, beforeLength: before.length, afterWidth: trailerData[num].width, afterLength: trailerData[num].length});
+    } else if (type === 'جرار' && tractorData[num]) {
+      const before = {width: tractorData[num].width, length: tractorData[num].length};
+      if (hasW) tractorData[num].width = edit.width;
+      if (hasL) tractorData[num].length = edit.length;
+      modifiedDetails.push({type: 'جرار', no: num, beforeWidth: before.width, beforeLength: before.length, afterWidth: tractorData[num].width, afterLength: tractorData[num].length});
+    } else if (!type) {
+      // احتياطي لتعديلات قديمة بصيغة الرقم لوحده من غير نوع (توافق مع أي بيانات سابقة)
+      if (trailerData[num]) {
+        const before = {width: trailerData[num].width, length: trailerData[num].length};
+        if (hasW) trailerData[num].width = edit.width;
+        if (hasL) trailerData[num].length = edit.length;
+        modifiedDetails.push({type: 'مقطورة', no: num, beforeWidth: before.width, beforeLength: before.length, afterWidth: trailerData[num].width, afterLength: trailerData[num].length});
+      }
+      if (tractorData[num]) {
+        const before = {width: tractorData[num].width, length: tractorData[num].length};
+        if (hasW) tractorData[num].width = edit.width;
+        if (hasL) tractorData[num].length = edit.length;
+        modifiedDetails.push({type: 'جرار', no: num, beforeWidth: before.width, beforeLength: before.length, afterWidth: tractorData[num].width, afterLength: tractorData[num].length});
+      }
+    }
+  });
+
+  // إضافة العربيات اللي كانت "غير موجودة" ودخل المستخدم لها عرض/طول ونوع يدويًا (بيتحطوا آخر الشيت)
+  const addedDetails = [];
+  Object.keys(sablaNewVehicles).forEach(num => {
+    const nv = sablaNewVehicles[num];
+    if (!nv) return;
+    const hasWidth = nv.width !== null && nv.width !== undefined && !isNaN(nv.width);
+    const hasLength = nv.length !== null && nv.length !== undefined && !isNaN(nv.length);
+    if (!hasWidth && !hasLength) return; // لسه ملوش قيم متدخلة
+    const type = nv.type === 'جرار' ? 'جرار' : 'مقطورة';
+    const store = type === 'جرار' ? tractorData : trailerData;
+    const order = type === 'جرار' ? tractorOrder : trailerOrder;
+    if (!store[num]) {
+      store[num] = type === 'جرار'
+        ? {no: num, width: hasWidth ? nv.width : null, length: hasLength ? nv.length : null}
+        : {no: num, width: hasWidth ? nv.width : null, length: hasLength ? nv.length : null, tractorNo: null};
+      order.push(num);
+      addedDetails.push({type, no: num, width: store[num].width, length: store[num].length});
+    } else {
+      // موجودة أصلاً بنفس النوع، اعتبرها تعديل بدل إضافة
+      const before = {width: store[num].width, length: store[num].length};
+      if (hasWidth) store[num].width = nv.width;
+      if (hasLength) store[num].length = nv.length;
+      modifiedDetails.push({type, no: num, beforeWidth: before.width, beforeLength: before.length, afterWidth: store[num].width, afterLength: store[num].length});
+    }
+  });
+
+  // تطبيق الربط الصريح اللي المستخدم اختاره لكل عربية مضافة يدويًا (اربط برقم كذا)
+  Object.keys(sablaNewVehicles).forEach(num => {
+    const nv = sablaNewVehicles[num];
+    if (!nv || !nv.linkedNo) return;
+    const linked = normalize(nv.linkedNo);
+    if (nv.type === 'جرار') {
+      // العربية دي جرار، والمربوط بيه المفروض يكون رقم مقطورة
+      if (trailerData[linked]) trailerData[linked].tractorNo = num;
+    } else {
+      // العربية دي مقطورة، والمربوط بيه المفروض يكون رقم جرار
+      if (trailerData[num]) trailerData[num].tractorNo = linked;
+    }
+  });
+
+  // بناء صفوف التصدير: كل مقطورة قصاد الجرار المرتبط بيها فعليًا (زي الشيت الأصلي بالظبط)
+  // وبنفس ترتيب ظهورهم الأصلي، وبعدين أي جرار مالوش مقطورة مرتبطة بيه بيتضاف كصف منفصل في الآخر
+  // العربية (جرار أو مقطورة أو أي نوع تاني زي جامبو/سوزوكي) اللي مش مرتبطة بحاجة، بتظهر بياناتها عادي
+  // وخانات الجانب التاني اللي مالهوش عربية مرتبطة بتتحط فيها أصفار (0) مش فاضية تمامًا
+  const usedTractors = new Set();
+  const exportRows = trailerOrder.map(no => {
+    const t = trailerData[no];
+    const k = t.tractorNo && tractorData[t.tractorNo] ? tractorData[t.tractorNo] : null;
+    if (k) usedTractors.add(k.no);
+    return {
+      trailerWidth: t.width ?? 0, trailerLength: t.length ?? 0, trailerNo: t.no,
+      tractorWidth: k ? (k.width ?? 0) : 0, tractorLength: k ? (k.length ?? 0) : 0, tractorNo: k ? k.no : 0
+    };
+  });
+  tractorOrder.filter(no => !usedTractors.has(no)).forEach(no => {
+    const k = tractorData[no];
+    exportRows.push({trailerWidth: 0, trailerLength: 0, trailerNo: 0, tractorWidth: k.width ?? 0, tractorLength: k.length ?? 0, tractorNo: k.no});
+  });
+
+  // بناء وتصدير ملف الإكسيل بنفس تنسيق شيت "بيان بمقاسات سيارات السبلة" الأصلي بالظبط
+  // (خط، حدود، تلوين الهيدر، دمج خلايا) - باستخدام ExcelJS لأن مكتبة XLSX العادية
+  // مش بتكتب تنسيق الخلايا (ألوان/حدود) وقت الحفظ
+  buildSablaStyledExcel(exportRows);
+  renderSablaReport(addedDetails, modifiedDetails);
+});
+
+// بيبني قسم "السيارات التي تم تعديلها" في نهاية الصفحة بعد الاستخراج
+function renderSablaReport(addedDetails, modifiedDetails){
+  const card = document.getElementById('sablaReportCard');
+  const added = addedDetails || [];
+  const modified = modifiedDetails || [];
+
+  let secondLine;
+  if (added.length && modified.length) {
+    secondLine = 'مرسل الشيت بعد اضافة سيارات تم تحميلها مؤخرا من المزارع وتعديل سيارات موجودة بالفعل بمقاسات مختلفة';
+  } else if (added.length) {
+    secondLine = 'مرسل الشيت بعد اضافة سيارات تم تحميلها مؤخرا من المزارع';
+  } else if (modified.length) {
+    secondLine = 'مرسل الشيت بعد تعديل سيارات موجودة بالفعل بمقاسات مختلفة';
+  } else {
+    secondLine = 'لم يتم اضافة أو تعديل أي سيارات، تم استخراج الشيت كما هو';
+  }
+
+  const dash = v => (v === null || v === undefined || v === '') ? '-' : v;
+  // ألوان صلبة (غير شفافة) صريحة بالـ hex عشان تبقى واضحة جوه التطبيق وتتنسخ بنفس الشكل فى Word بدون ما تختفى
+  const tblStyle = 'width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;direction:rtl;';
+  const thStyle = 'border:1px solid #1e293b;padding:6px 8px;background:#1e293b;color:#ffffff;font-weight:700;text-align:center;';
+  const tdStyle = 'border:1px solid #1e293b;padding:6px 8px;text-align:center;color:#0f172a;font-weight:700;background:#ffffff;';
+  const sectionLabelStyle = 'font-weight:700;color:#1e293b;margin-bottom:6px;background:#ffffff;';
+  const wrapDivStyle = 'margin-top:14px;background:#ffffff;';
+
+  let tablesHtml = '';
+  if (added.length) {
+    const rows = added.map(a => `
+      <tr>
+        <td style="${tdStyle}">${a.type}</td>
+        <td style="${tdStyle}">${a.no}</td>
+        <td style="${tdStyle}">${dash(a.width)}</td>
+        <td style="${tdStyle}">${dash(a.length)}</td>
+      </tr>`).join('');
+    tablesHtml += `
+      <div style="${wrapDivStyle}">
+        <div style="${sectionLabelStyle}">السيارات المضافة (${added.length}):</div>
+        <table style="${tblStyle}" dir="rtl">
+          <thead><tr>
+            <th style="${thStyle}">النوع</th><th style="${thStyle}">الرقم</th>
+            <th style="${thStyle}">العرض</th><th style="${thStyle}">الطول</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+  if (modified.length) {
+    const rows = modified.map(m => `
+      <tr>
+        <td style="${tdStyle}">${m.type}</td>
+        <td style="${tdStyle}">${m.no}</td>
+        <td style="${tdStyle}">${dash(m.beforeWidth)}</td>
+        <td style="${tdStyle}">${dash(m.beforeLength)}</td>
+        <td style="${tdStyle}">${dash(m.afterWidth)}</td>
+        <td style="${tdStyle}">${dash(m.afterLength)}</td>
+      </tr>`).join('');
+    tablesHtml += `
+      <div style="${wrapDivStyle}">
+        <div style="${sectionLabelStyle}">السيارات المعدّلة (${modified.length}):</div>
+        <table style="${tblStyle}" dir="rtl">
+          <thead><tr>
+            <th style="${thStyle}">النوع</th><th style="${thStyle}">الرقم</th>
+            <th style="${thStyle}">العرض قبل</th><th style="${thStyle}">الطول قبل</th>
+            <th style="${thStyle}">العرض بعد</th><th style="${thStyle}">الطول بعد</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  card.innerHTML = `
+    <div class="card-title">
+      <span style="flex:1;">السيارات التي تم تعديلها</span>
+      <button id="sablaCopyBtn" type="button" onclick="copySablaReport()" style="margin-inline-start:auto;background:#2563eb;color:#ffffff;border:none;border-radius:8px;padding:7px 16px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">📋 نسخ</button>
+    </div>
+    <div id="sablaReportContent" dir="rtl" style="direction:rtl;text-align:right;line-height:2;color:#1e293b;font-weight:700;background:#ffffff;">
+      <div style="background:#ffffff;color:#1e293b;">السادة الأفاضل، بعد التحية،</div>
+      <div style="background:#ffffff;color:#1e293b;">${secondLine}</div>
+      ${tablesHtml}
+    </div>
+  `;
+  card.style.display = 'block';
+}
+
+// بينسخ محتوى قسم "السيارات التي تم تعديلها" فقط (من غير الزرار نفسه) بنفس شكله فى التطبيق
+// (نفس الألوان الغامقة، خط عريض، واتجاه RTL من اليمين لليسار) عشان يتلصق فى Word بدون ما يتغير شكله أو اتجاهه
+// وبدون ما الجدول يتقص بعرض الصفحة، وبدون ما النص التمهيدى يختفى بسبب الوضع الداكن فى المتصفح
+function copySablaReport(){
+  const source = document.getElementById('sablaReportContent');
+  const btn = document.getElementById('sablaCopyBtn');
+  if (!source) return;
+
+  const showFeedback = (ok) => {
+    if (!btn) return;
+    const original = btn.textContent;
+    btn.textContent = ok ? '✅ تم النسخ' : '⚠️ تعذر النسخ';
+    setTimeout(() => { btn.textContent = original; }, 1800);
+  };
+
+  // بنعمل نسخة مستقلة خارج حدود الشاشة (مش هتأثر على شكل القسم داخل التطبيق نهائيًا)
+  // بعرض تلقائى (auto) بدل 100% عشان الجدول يتحجم على حسب محتواه ويدخل بالكامل فى صفحة الوورد
+  // وبخلفية بيضاء مفروضة صراحة على كل عنصر عشان تقاوم أى "وضع داكن" مفروض من المتصفح
+  const clone = source.cloneNode(true);
+  clone.removeAttribute('id');
+  clone.style.background = '#ffffff';
+  clone.style.display = 'inline-block';
+  clone.style.width = 'auto';
+
+  clone.querySelectorAll('table').forEach(t => {
+    t.style.width = 'auto';
+    t.style.tableLayout = 'auto';
+  });
+  clone.querySelectorAll('div').forEach(d => {
+    if (!d.style.backgroundColor) d.style.backgroundColor = '#ffffff';
+  });
+
+  const wrapper = document.createElement('div');
+  wrapper.style.position = 'fixed';
+  wrapper.style.top = '0';
+  wrapper.style.left = '-99999px';
+  wrapper.style.background = '#ffffff';
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(clone);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    const ok = document.execCommand('copy');
+    sel.removeAllRanges();
+    showFeedback(ok);
+  } catch (e) {
+    showFeedback(false);
+  } finally {
+    document.body.removeChild(wrapper);
+  }
+}
+
+async function buildSablaStyledExcel(exportRows){
+  const rowCount = exportRows.length;
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Sheet1', { views: [{ rightToLeft: false }] });
+
+  // نفس عرض الأعمدة في الشيت الأصلي (البيانات بتبدأ من عمود B زي الأصلي، وعمود A فاضي هامش)
+  sheet.columns = [
+    { width: 8.43 },   // A - هامش فاضي زي الأصلي
+    { width: 18.57 },  // B - عرض المقطورة
+    { width: 12 },     // C - طول المقطورة
+    { width: 16 },     // D - رقم المقطورة
+    { width: 12 },     // E - عرض الجرار
+    { width: 12 },     // F - طول الجرار
+    { width: 23.71 }   // G - رقم الجرار
+  ];
+
+  const thin = { style: 'thin', color: { argb: 'FF000000' } };
+  const fullBorder = { top: thin, bottom: thin, left: thin, right: thin };
+  const centerAlign = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+  // صف الهيدر (B3:G3) لون واحد موحّد ومختلف تمامًا عن ألوان باقي الأعمدة تحته
+  const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF203864' } };
+  // ألوان متناسقة لكل عمود على حدة (مقطورة بدرجات أزرق فاتحة، جرار بدرجات خضراء فاتحة)، بتتلوّن الأعمدة كلها مش الهيدر بس
+  const colFills = [
+    { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCE6F1' } }, // B عرض المقطورة
+    { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6D9F0' } }, // C طول المقطورة
+    { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFB4C6E7' } }, // D رقم المقطورة
+    { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } }, // E عرض الجرار
+    { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6E0B4' } }, // F طول الجرار
+    { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA9D18E' } }  // G رقم الجرار
+  ];
+
+  // صف العنوان B2:G2 - بخط جذاب واضح، فوق صف رؤوس الأعمدة مباشرة ومتوسط الأعمدة
+  sheet.getRow(2).height = 30;
+  sheet.mergeCells('B2:G2');
+  const titleCell = sheet.getCell('B2');
+  titleCell.value = 'بيان بمقاسات سيارات السبلة للمتعهد بسيوني';
+  titleCell.font = { name: 'Traditional Arabic', size: 24, bold: true, color: { argb: 'FF203864' } };
+  titleCell.alignment = centerAlign;
+
+  // صف الهيدر B3:G3
+  sheet.getRow(3).height = 52.5;
+  const headers = ['عرض', 'طول', 'رقم المقطورة', 'عرض', 'طول', 'رقم الجرار'];
+  headers.forEach((h, i) => {
+    const cell = sheet.getCell(3, 2 + i); // يبدأ من عمود B (index 2)
+    cell.value = h;
+    cell.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = centerAlign;
+    cell.fill = headerFill;
+    cell.border = fullBorder;
+  });
+
+  // صفوف البيانات، بداية من صف 4 - كل عمود بلونه المخصص طول الشيت
+  for (let i = 0; i < rowCount; i++) {
+    const r = exportRows[i];
+    const rowIdx = 4 + i;
+    sheet.getRow(rowIdx).height = 23.25;
+    const values = [
+      r.trailerWidth ?? '',
+      r.trailerLength ?? '',
+      r.trailerNo ?? '',
+      r.tractorWidth ?? '',
+      r.tractorLength ?? '',
+      r.tractorNo ?? ''
+    ];
+    values.forEach((v, c) => {
+      const cell = sheet.getCell(rowIdx, 2 + c); // B..G
+      cell.value = v;
+      cell.font = { name: 'Calibri', size: 18, bold: true, color: { argb: 'FF1F1F1F' } };
+      cell.alignment = centerAlign;
+      cell.border = fullBorder;
+      cell.fill = colFills[c];
+      // عمودي العرض والطول (B,C لكل من المقطورة والجرار: B,C,E,F) بتنسيق رقم عشري بخانتين زي الأصلي
+      if ((c === 0 || c === 1 || c === 3 || c === 4) && typeof v === 'number') {
+        cell.numFmt = '0.00';
+      }
+    });
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'شيت_مجمع_سيارات_السبلة_معدّل.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+</script>
+
+</div><!-- /tab-sabla -->
+
+
+<div class="sbar" id="sbar">
+  <span>📂</span> اختار الملفات وابدأ المقارنة
+</div>
+<script>
+// ════════════════════════════════════════════════════════
+//  GLOBALS
+// ════════════════════════════════════════════════════════
+const FILES = {f1:null,f2:null,f3:null,f4:null,f5:null};
+
+function pick(fid,bid,nid){
+  const inp=document.getElementById(fid);
+  if(!inp.files[0])return;
+  FILES[fid]=inp.files[0];
+  document.getElementById(nid).textContent='✅ '+inp.files[0].name;
+  document.getElementById(bid).classList.add('ok');
+  if(FILES.f1&&FILES.f5)document.getElementById('cmpBtn').disabled=false;
+}
+
+// ── PANEL PICK: واجهة الخانتين – بتعبي FILES بنفس المفاتيح القديمة ──
+// توتال → FILES.f1, f2, f3, f4, ...
+// سيارات → FILES.f5, f6, f7, ...
+const _panelSlots = { total: ['f1','f2','f3','f4'], our: ['f5'] };
+const _panelExtra = { total: 4, our: 5 }; // الـ index اللي بيبدأ منه الإضافة
+
+function panelPick(type, fileList){
+  const listEl  = document.getElementById(type==='total'?'lstTotal':'lstOur');
+  const cntEl   = document.getElementById(type==='total'?'cntTotal':'cntOur');
+
+  for(const f of fileList){
+    // إيجاد أول slot فاضي أو إنشاء slot جديد
+    let slot = null;
+    if(type==='total'){
+      // f1..f4 ثم f8,f9,... (بعيداً عن f5,f6,f7 المحجوزة للسيارات)
+      for(let i=1;;i++){
+        const k = i<=4 ? 'f'+i : 'ft'+i;
+        if(!FILES[k]){ slot=k; break; }
+        if(FILES[k] && FILES[k].name===f.name){ slot=null; break; } // مكرر
+      }
+    } else {
+      // f5 ثم fo6,fo7,...
+      for(let i=5;;i++){
+        const k = i===5 ? 'f5' : 'fo'+i;
+        if(!FILES[k]){ slot=k; break; }
+        if(FILES[k] && FILES[k].name===f.name){ slot=null; break; } // مكرر
+      }
+    }
+    if(!slot) continue;
+
+    FILES[slot] = f;
+
+    // عنصر في القائمة
+    const item = document.createElement('div');
+    item.className = 'pfile';
+    item.innerHTML = `<span>✅</span><span class="pfile-name">${f.name}</span>
+      <button class="pfile-del" onclick="panelRemove('${slot}',this.closest('.pfile'))">✕</button>`;
+    listEl.appendChild(item);
+  }
+
+  // تحديث العداد
+  const tCount = Object.keys(FILES).filter(k=>((k.startsWith('f')&&!isNaN(k[1])&&+k[1]>=1&&+k[1]<=4)||k.startsWith('ft'))&&FILES[k]).length;
+  const oCount = Object.keys(FILES).filter(k=>(k==='f5'||k.startsWith('fo'))&&FILES[k]).length;
+  document.getElementById('cntTotal').textContent = tCount;
+  document.getElementById('cntOur').textContent   = oCount;
+
+  // تفعيل زرار المقارنة لو فيه f1 وf5
+  if(FILES.f1&&FILES.f5) document.getElementById('cmpBtn').disabled=false;
+}
+
+function panelRemove(slot, el){
+  FILES[slot] = null;
+  el.remove();
+  // إعادة حساب العدادات
+  const tCount = Object.keys(FILES).filter(k=>((k.startsWith('f')&&!isNaN(k[1])&&parseInt(k[1])>=1&&parseInt(k[1])<=4)||k.startsWith('ft'))&&FILES[k]).length;
+  const oCount = Object.keys(FILES).filter(k=>(k==='f5'||k.startsWith('fo'))&&FILES[k]).length;
+  document.getElementById('cntTotal').textContent = tCount;
+  document.getElementById('cntOur').textContent   = oCount;
+  if(!FILES.f1||!FILES.f5) document.getElementById('cmpBtn').disabled=true;
+}
+
+// Drag & Drop على الخانتين
+document.addEventListener('DOMContentLoaded',()=>{
+  ['pdTotal','pdOur'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('drag-over');});
+    el.addEventListener('dragleave',()=>el.classList.remove('drag-over'));
+    el.addEventListener('drop',e=>{
+      e.preventDefault();el.classList.remove('drag-over');
+      panelPick(id==='pdTotal'?'total':'our', e.dataTransfer.files);
+    });
+  });
+});
+
+function applyExcelSwap(yr, mo, dy){
+  return`${yr}-${String(mo).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
+}
+
+function fixDate(val){
+  if(val===null||val===undefined||val==='')return null;
+  if(typeof val==='number'){
+    const d=new Date(Math.round((val-25569)*86400*1000));
+    if(isNaN(d.getTime()))return null;
+    return applyExcelSwap(d.getUTCFullYear(), d.getUTCMonth()+1, d.getUTCDate());
+  }
+  const s=String(val).trim();
+  if(!s)return null;
+  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})([T \-]|$)/);
+  if(m){
+    return applyExcelSwap(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
+  }
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m){
+    return`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  }
+  m=s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if(m){
+    return`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  }
+  const d=new Date(s);
+  if(!isNaN(d.getTime()))return d.toISOString().slice(0,10);
+  return null;
+}
+
+function fmtDate(s){
+  if(!s)return'–';
+  const[y,mo,d]=s.split('-');
+  return`${d}/${mo}/${y}`;
+}
+
+function normPlate(t){
+  if(!t)return'';
+  return String(t).replace(/[^A-Za-z0-9\u0600-\u06FF]/g,'').toUpperCase();
+}
+function numOnly(t){
+  if(!t)return'';
+  const m=String(t).replace(/\s/g,'').match(/\d{3,}/g);
+  return m?m[m.length-1]:'';
+}
+
+function readXL(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      try{res(XLSX.read(e.target.result,{type:'array',cellDates:false}));}
+      catch(e){rej(e);}
+    };
+    r.readAsArrayBuffer(file);
+  });
+}
+
+function detectFormat(ws){
+  const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+  if(!raw.length)return'unknown';
+  for(let i=0;i<Math.min(5,raw.length);i++){
+    const joined=raw[i].map(x=>String(x).toLowerCase()).join('|');
+    if(joined.includes('registration_num')&&joined.includes('transaction_date')&&joined.includes('quantity')){
+      return'new';
+    }
+    if(joined.includes('registration_num')&&joined.includes('brunch')){
+      return'old';
+    }
+  }
+  return'unknown';
+}
+
+function parseTotalNew(ws){
+  const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+  const out={};
+  let totalRows=0;
+  let hRow=-1, hdrs=[];
+  for(let i=0;i<Math.min(5,raw.length);i++){
+    const joined=raw[i].map(x=>String(x).toLowerCase()).join('|');
+    if(joined.includes('registration_num')&&joined.includes('transaction_date')){
+      hRow=i; hdrs=raw[i].map(x=>String(x).trim()); break;
+    }
+  }
+  if(hRow===-1)return{data:null,err:'مش لاقي هيدر في الشيت الجديد'};
+  const ci=name=>{
+    const n=s=>String(s).toLowerCase().replace(/[\s_\-\.]/g,'');
+    const t=n(name);
+    for(let i=0;i<hdrs.length;i++)if(n(hdrs[i])===t)return i;
+    for(let i=0;i<hdrs.length;i++)if(n(hdrs[i]).includes(t)||t.includes(n(hdrs[i])))return i;
+    return-1;
+  };
+  const cPlate  = ci('Registration_num');
+  const cDate   = ci('Transaction_date');
+  const cQty    = ci('Quantity');
+  const cAmt    = ci('Amount_incl_Tax');
+  const cKm     = ci('Mileage');
+  const cType   = ci('Type_of_row');
+  const cDocDate= ci('Document_date');
+  if(cPlate===-1||cQty===-1)return{data:null,err:'أعمدة ناقصة في الشيت الجديد'};
+
+  // ── تصحيح خطأ شائع في ملفات توتال: بعض تواريخ العمليات (Transaction_date)
+  // بتتحفظ في الملف بيوم وشهر معكوسين (خلل في نظام توتال نفسه، مش في شيتنا).
+  // نستخدم "تاريخ المستند" (Document_date) كمرجعية موثوقة لمعرفة الشهر الصح،
+  // ولو تاريخ عملية طلع في شهر مختلف وقلب يوم/شهره بيرجعه لنفس شهر المستند، نصححه.
+  let expectedYM=null;
+  if(cDocDate>=0){
+    for(const row of raw.slice(hRow+1)){
+      const dd=fixDate(row[cDocDate]);
+      if(dd){ expectedYM=dd.slice(0,7); break; }
+    }
+  }
+  function resolveTotalDate(rawVal){
+    const d=fixDate(rawVal);
+    if(!d||!expectedYM)return d;
+    if(d.slice(0,7)===expectedYM)return d;
+    const swapped=swapDayMonth(d);
+    if(swapped&&swapped.slice(0,7)===expectedYM)return swapped;
+    return d;
+  }
+
+  for(const row of raw.slice(hRow+1)){
+    const plateRaw=row[cPlate];
+    if(!plateRaw||String(plateRaw).trim()==='')continue;
+    const rowType=cType>=0?String(row[cType]||'').toUpperCase():'';
+    if(rowType==='GEST')continue;
+    const qty=parseFloat(row[cQty])||0;
+    const amt=cAmt>=0?(parseFloat(row[cAmt])||0):0;
+    if(qty<=0&&amt<=0)continue;
+    const dateStr=resolveTotalDate(row[cDate]);
+    const km=cKm>=0?(parseFloat(row[cKm])||0):0;
+    const pNorm=normPlate(plateRaw);
+    const pNum=numOnly(plateRaw);
+    for(const key of [...new Set([pNorm,pNum])].filter(k=>k.length>=2)){
+      if(!out[key])out[key]={entries:[]};
+      out[key].entries.push({date:dateStr,km,liters:qty,amount:amt});
+    }
+    totalRows++;
+  }
+  if(totalRows===0)return{data:null,err:'مش لاقي صفوف PSCONS في الشيت الجديد'};
+  return{data:out,err:null,rows:totalRows};
+}
+
+function parseTotalOld(ws){
+  const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+  const out={};
+  let totalRows=0;
+  let hRow=-1, hdrs=[];
+  for(let i=0;i<Math.min(25,raw.length);i++){
+    const joined=raw[i].map(x=>String(x)).join('|');
+    if(joined.includes('Registration_num')||joined.includes('Brunch')){
+      hRow=i; hdrs=raw[i].map(x=>String(x).trim()); break;
+    }
+  }
+  if(hRow===-1)return{data:null,err:'مش لاقي هيدر في الشيت القديم'};
+  const cNote=hdrs.indexOf('Note');
+  const cBrunch=hdrs.indexOf('Brunch');
+  const cRegIdx=hdrs.indexOf('Registration_num');
+  if(cRegIdx===-1){
+    return parseTotalOldPivot(raw, hdrs, hRow);
+  }
+  let currentNote='';
+  for(const row of raw.slice(hRow+1)){
+    if(row[cNote]&&String(row[cNote]).trim())currentNote=String(row[cNote]).trim();
+    if(currentNote.toLowerCase().includes('fee')||currentNote.includes('Fees'))continue;
+    const plateRaw=row[cRegIdx];
+    if(!plateRaw||String(plateRaw).trim()==='')continue;
+    if(String(plateRaw).includes('Total')||String(plateRaw).includes('Grand'))continue;
+    let totalAmt=0;
+    for(let c=cRegIdx+1;c<hdrs.length;c++){
+      const v=parseFloat(row[c]);
+      if(!isNaN(v)&&v>0)totalAmt+=v;
+    }
+    if(totalAmt<=0)continue;
+    const pNorm=normPlate(plateRaw);
+    const pNum=numOnly(plateRaw);
+    for(const key of [...new Set([pNorm,pNum])].filter(k=>k.length>=2)){
+      if(!out[key])out[key]={};
+      if(!out[key]['unknown'])out[key]['unknown']={liters:0,amount:0,km:0};
+      out[key]['unknown'].amount+=totalAmt;
+    }
+    totalRows++;
+  }
+  if(totalRows===0)return{data:null,err:'مش لاقي بيانات في الشكل القديم'};
+  return{data:out,err:null,rows:totalRows};
+}
+
+function parseTotalOldPivot(raw, hdrs, hRow){
+  const out={};
+  let totalRows=0;
+  for(const row of raw.slice(hRow+1)){
+    const plateRaw=row[0];
+    if(!plateRaw)continue;
+    if(String(plateRaw).includes('Total')||String(plateRaw).includes('Grand'))continue;
+    let totalAmt=0;
+    for(let c=2;c<hdrs.length;c++){
+      const v=parseFloat(row[c]);
+      if(!isNaN(v)&&v>0)totalAmt+=v;
+    }
+    if(totalAmt<=0)continue;
+    const pNorm=normPlate(plateRaw);
+    const pNum=numOnly(plateRaw);
+    for(const key of [...new Set([pNorm,pNum])].filter(k=>k.length>=2)){
+      if(!out[key])out[key]={};
+      if(!out[key]['unknown'])out[key]['unknown']={liters:0,amount:0,km:0};
+      out[key]['unknown'].amount+=totalAmt;
+    }
+    totalRows++;
+  }
+  return{data:out,err:totalRows===0?'مش لاقي بيانات في الشكل القديم الـ pivot':null,rows:totalRows};
+}
+
+function parseTotalWB(wb){
+  const out={};
+  let totalRows=0;
+  for(const sname of wb.SheetNames){
+    const ws=wb.Sheets[sname];
+    const fmt=detectFormat(ws);
+    let result;
+    if(fmt==='new') result=parseTotalNew(ws);
+    else if(fmt==='old') result=parseTotalOld(ws);
+    else continue;
+    if(result.err||!result.data)continue;
+    mergeInto(out, result.data);
+    totalRows+=result.rows;
+  }
+  if(totalRows===0)return{data:null,err:'مش لاقي بيانات في ملف توتال'};
+  return{data:out,err:null,rows:totalRows};
+}
+
+function parseOurWB(wb){
+  const SKIP=['مقارنة','توتال','تعليمات','S.P','Poultry','ملاحظات','ملخص','Sheet','sheet'];
+  const out={};
+  for(const sname of wb.SheetNames){
+    if(SKIP.some(s=>sname.includes(s)))continue;
+    const pNorm=normPlate(sname);
+    const pNum=numOnly(sname);
+    if(pNorm.length<2&&pNum.length<2)continue;
+    const ws=wb.Sheets[sname];
+    const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+    let hRow=-1, hdrs=[];
+    for(let i=0;i<Math.min(15,raw.length);i++){
+      const joined=raw[i].map(x=>String(x)).join('');
+      if(joined.includes('الكمية')||joined.includes('العداد')||joined.includes('تاريخ')){
+        hRow=i; hdrs=raw[i].map(x=>String(x).trim()); break;
+      }
+    }
+    let dSt=hRow>=0?hRow+1:0;
+    let cDate=-1,cLiters=-1,cKm=-1,cRate=-1,cAmt=-1;
+    if(hRow>=0){
+      for(let c=0;c<hdrs.length;c++){
+        const h=hdrs[c];
+        if(cDate===-1&&(h.includes('تاريخ')||h.toLowerCase().includes('date'))){cDate=c;continue;}
+        if(cLiters===-1&&h.includes('الكمية')){cLiters=c;continue;}
+        if(cKm===-1&&(h.includes('العداد')||h.includes('عداد'))){cKm=c;continue;}
+        if(cRate===-1&&(h.includes('المعدل')||h.includes('معدل'))){cRate=c;continue;}
+        if(cAmt===-1&&(h.includes('المبلغ')||h.includes('مبلغ'))){cAmt=c;continue;}
+      }
+    }
+    if(cDate===-1||cLiters===-1){
+      const dFull=raw.slice(dSt);
+      const nCols=dFull.length>0?Math.max(...dFull.slice(0,5).map(r=>r.length)):0;
+      for(let c=0;c<nCols;c++){
+        const vals=dFull.map(r=>r[c]).filter(x=>x!==''&&x!=null);
+        if(vals.length<3)continue;
+        if(cDate===-1){
+          const dc=vals.filter(v=>fixDate(v)!==null).length;
+          if(dc>vals.length*0.5){cDate=c;continue;}
+        }
+        const nv=vals.map(v=>parseFloat(v)).filter(v=>!isNaN(v)&&v>0);
+        if(nv.length<3)continue;
+        const avg=nv.reduce((a,b)=>a+b,0)/nv.length;
+        if(cKm===-1&&avg>50000){cKm=c;continue;}
+        if(cRate===-1&&avg>=5&&avg<=30){cRate=c;continue;}
+        if(cLiters===-1&&avg>20&&avg<=300){cLiters=c;continue;}
+      }
+    }
+    const rows=[];
+    for(let ri=0;ri<raw.slice(dSt).length;ri++){
+      const row=raw.slice(dSt)[ri];
+      const d=cDate>=0?fixDate(row[cDate]):null;
+      const l=cLiters>=0?(parseFloat(row[cLiters])||0):0;
+      const k=cKm>=0?(parseFloat(row[cKm])||0):0;
+      const r=cRate>=0?(parseFloat(row[cRate])||0):0;
+      const a=cAmt>=0?(parseFloat(row[cAmt])||0):0;
+      if((l>0||k>0)&&d)rows.push({date:d,liters:l,km:k,rate:r,amount:a,rowIdx:dSt+ri});
+    }
+    resolveAmbiguousDates(rows);
+    if(rows.length>0) out[pNorm]={sheet:sname,code:pNorm,numCode:pNum,rows};
+  }
+  return out;
+}
+
+// ── تصحيح تواريخ اليوم/الشهر المعكوسة (غلطة كتابة شائعة، مثلاً 6/5 بدل 5/6) ──
+// المنطق: الصفوف مكتوبة بالترتيب الزمني في الشيت، فلو التاريخ (بقراءته العادية)
+// بعيد جدًا عن الصف اللي قبله، ولو عكسنا اليوم مع الشهر بقى قريب ومنطقي أكتر،
+// يبقى الأرجح إن الكاتب عكس اليوم والشهر غلط.
+function swapDayMonth(dateStr){
+  if(!dateStr)return null;
+  const parts=dateStr.split('-');
+  if(parts.length!==3)return null;
+  const[y,mo,dy]=parts;
+  if(parseInt(dy,10)>12)return null;   // اليوم مينفعش يبقى شهر → مفيش لبس أصلاً
+  if(mo===dy)return null;              // نفس الرقم (زي 5/5) → مفيش فرق يتقلب
+  return`${y}-${dy}-${mo}`;
+}
+function daysBetweenISO(a,b){
+  const da=new Date(a+'T00:00:00Z'), db=new Date(b+'T00:00:00Z');
+  return Math.round((db-da)/86400000);
+}
+function resolveAmbiguousDates(rows){
+  let prev=null;
+  const pending=[];
+  for(const row of rows){
+    const orig=row.date;
+    const alt=swapDayMonth(orig);
+    if(!alt){ row._resolved=orig; prev=orig; continue; }
+    if(prev===null){ pending.push(row); continue; }
+    const gO=Math.abs(daysBetweenISO(prev,orig));
+    const gA=Math.abs(daysBetweenISO(prev,alt));
+    const choice=(gA<gO)?alt:orig;
+    row._resolved=choice;
+    if(choice!==orig){row.dateOriginalWritten=orig;row.dateWasSwapped=true;}
+    prev=choice;
+  }
+  if(pending.length){
+    const anchorRow=rows.find(r=>r._resolved);
+    let anchor=anchorRow?anchorRow._resolved:null;
+    for(let i=pending.length-1;i>=0;i--){
+      const row=pending[i];
+      const orig=row.date, alt=swapDayMonth(orig);
+      if(anchor===null){ row._resolved=orig; continue; }
+      const gO=Math.abs(daysBetweenISO(orig,anchor));
+      const gA=Math.abs(daysBetweenISO(alt,anchor));
+      const choice=(gA<gO)?alt:orig;
+      row._resolved=choice;
+      if(choice!==orig){row.dateOriginalWritten=orig;row.dateWasSwapped=true;}
+      anchor=choice;
+    }
+  }
+  for(const row of rows){ if(row._resolved){row.date=row._resolved;} delete row._resolved; }
+}
+
+// ── كشف تفويلات "تاريخها مكتوب غلط" (مش ناقصة فعلاً، بس واقعة في تاريخ تاني) ──
+// المنطق: العداد بيزيد مع الوقت وميرجعش للورا ومينطش قفزة كبيرة فجأة. فبناخد كل
+// صفوف العربية دي (من غير التقيد بالفترة المختارة)، نرتبها بالتاريخ، ولكل صف عنده
+// عداد، نجيب "عداد اللي قبله" و"عداد اللي بعده" في نفس الترتيب الزمني. لو قراءة
+// العداد الحالية مش واقعة منطقيًا بينهم (أقل من اللي قبلها أو أكبر من اللي بعدها
+// بهامش واضح) — يبقى مستحيل تكون فعلاً حصلت في مكانها ده بالتسلسل الزمني، يعني
+// الأرجح إن التاريخ المكتوب لها غلط (زي فويلة قديمة اتحطت بالغلط في تاريخ تاني).
+// زي ده لازم يتستبعد من مقارنة توتال بدل ما يتحط "مش موجود في توتال" غلط،
+// لأنه مش اختلاف حقيقي — المشكلة في شيتنا احنا مش في توتال ولا في أداة المقارنة.
+// ملحوظة: الفحص ده بيشتغل على كل صفوف العربية (مش بس اللي جوه الفترة المختارة)
+// عشان لو القراءة اللي قبل/بعد التفويلة المشبوهة برة الفترة، لسه نقدر نلاقيها ونقارن بيها.
+function flagSuspectDates(rows){
+  const KM_TOL = 30; // هامش أوسع شوية من هامش المطابقة العادي (5) عشان منمسكش فروق عادية بين تفويلتين متقاربتين
+  const withKm = rows
+    .map((r,i)=>({r,i}))
+    .filter(x=>x.r.km>0 && x.r.date)
+    .sort((a,b)=>a.r.date.localeCompare(b.r.date) || a.i-b.i);
+
+  for(let idx=1; idx<withKm.length-1; idx++){
+    const cur  = withKm[idx].r;
+    const prev = withKm[idx-1].r;
+    const next = withKm[idx+1].r;
+    const outOfOrder = (cur.km < prev.km - KM_TOL) || (cur.km > next.km + KM_TOL);
+    // شرط إضافي: نتأكد إن اللي قبل واللي بعد هما نفسهم متسقين مع بعض (يعني هما الطبيعيين،
+    // والمشكلة في الصف النص) عشان منستبعدش صف سليم بسبب قراءة غلط جنبه هو كمان
+    const neighborsConsistent = Math.abs(next.km - prev.km) < Math.abs(cur.km - prev.km);
+    if(outOfOrder && neighborsConsistent){
+      cur.dateSuspect = true;
+      cur.suspectReason = `العداد (${cur.km.toLocaleString('ar-EG')} كم) مش متسلسل منطقيًا بين التفويلة اللي قبلها بتاريخ ${fmtDate(prev.date)} (${prev.km.toLocaleString('ar-EG')} كم) واللي بعدها بتاريخ ${fmtDate(next.date)} (${next.km.toLocaleString('ar-EG')} كم) — يبقى الأرجح إن تاريخ التفويلة دي (${fmtDate(cur.date)}) اتكتب غلط في شيتنا وهي فعليًا من فترة تانية`;
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  ميزة جديدة (Add-only): ملاحظات قراءة العداد الشاذة
+//  ── هذا القسم لا يغيّر أي منطق مقارنة ولا نتيجة حالية إطلاقاً ──
+//  المصدر: شيت السيارة نفسه، لكن بدون تحليل تاريخها بالكامل —
+//  فقط آخر REFERENCE_ROWS قراءة (بدءاً من آخر صف في الشيت) تُسخدم
+//  كمرجع لفهم النمط الطبيعي للعداد، ولا تظهر أبداً هي نفسها كملاحظة.
+//  أما القراءات اللي بيتم فحصها فعلياً فهي بس اللي واقعة داخل فترة
+//  المقارنة (حسب نتيجة المقارنة الحالية)، ومفيش أي قراءة خارج الفترة
+//  بتتحط في الملاحظات حتى لو كانت شاذة.
+//  (بدون أي اعتماد على المطابقة مع توتال أو الكمية أو المبلغ)،
+//  والهدف فقط تنبيه المراجع لقراءة عداد تبدو غير منطقية، دون نقل
+//  العربية من قسم "مطابقة" لقسم "بها اختلاف".
+// ══════════════════════════════════════════════════════
+
+// ── عدد القراءات المرجعية المأخوذة من آخر الشيت لفهم النمط الطبيعي (مرجع فقط، لا تظهر في الملاحظات) ──
+const REFERENCE_ROWS = 10;
+
+// ── وسيط: المتوسط الوسيط (median) لمجموعة أرقام — مقياس مقاوم للقيم الشاذة ──
+function _mileageMedian(arr){
+  if(!arr.length) return null;
+  const s=[...arr].sort((a,b)=>a-b);
+  const mid=Math.floor(s.length/2);
+  return s.length%2 ? s[mid] : (s[mid-1]+s[mid])/2;
+}
+
+// ── خوارزمية اكتشاف قراءات عداد شاذة داخل فترة المقارنة فقط ──
+// بتاخد آخر REFERENCE_ROWS قراءة من شيت العربية بالكامل، بدءاً من آخر صف ──
+const _mMult = 6;
+function detectMileageNotes(carsData){
+  const notes = [];
+  if(!Array.isArray(carsData)) return notes;
+
+  for(const car of carsData){
+    if(!car || !Array.isArray(car.allRows) || !Array.isArray(car.compareRows)) continue;
+
+    const allReadings = car.allRows
+      .filter(r=>r && r.km>0 && r.date)
+      .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    if(!allReadings.length) continue;
+
+    // ── نفس سجلات نتيجة المقارنة فقط (بنفس مرجع الكائن)، وليس بإعادة فلترة بالتاريخ ──
+    // أي صف مش موجود فعليًا في compareRows (نتيجة المقارنة الحالية) مستحيل يدخل هنا،
+    // حتى لو تاريخه المكتوب في الشيت وقع "شكليًا" داخل الفترة.
+    const compareSet = new Set(car.compareRows.filter(r=>r && r.km>0 && r.date));
+    const inRange = allReadings.filter(r=>compareSet.has(r));
+    if(!inRange.length) continue;
+
+    // ── مرجع فقط: آخر REFERENCE_ROWS قراءة من شيت العربية بالكامل، بدءاً من آخر صف ──
+    const referenceRows = allReadings.slice(-REFERENCE_ROWS);
+    if(referenceRows.length<2) continue;
+
+    const refDeltas=[];
+    for(let i=1;i<referenceRows.length;i++){
+      refDeltas.push(Math.abs(referenceRows[i].km-referenceRows[i-1].km));
+    }
+    const typicalStep = _mileageMedian(refDeltas);
+    if(!typicalStep) continue; // مفيش نمط طبيعي واضح كفاية في المرجع — تحفّظ بعدم افتراض أي شذوذ
+
+    // مضاعف إحصائي محافظ على القفزة المعتادة المستنتجة من المرجع (مش رقم ثابت بالكم)
+    const threshold = typicalStep*6;
+    if(threshold<=0) continue;
+
+    // ── آخر قراءة معروفة قبل أول سجل داخل نتيجة المقارنة (لو موجودة) تُستخدم كنقطة انطلاق موثوقة،
+    // ولا تظهر كملاحظة — بيتحدد موقعها بترتيب القراءات الفعلي (index)، مش بمقارنة تاريخ dFrom ──
+    const firstIdx = allReadings.indexOf(inRange[0]);
+    let anchor = firstIdx>0 ? allReadings[firstIdx-1] : null;
+
+    for(const r of inRange){
+      if(!anchor){ anchor = r; continue; } // مفيش نقطة انطلاق سابقة إطلاقاً — أول قراءة بتتاخد كأساس تلقائيًا (تحفّظ)
+      const jump = Math.abs(r.km-anchor.km);
+      if(jump>threshold){
+        notes.push({
+          plate:car.plate,
+          date:fmtDate(r.date),
+          text:`قراءة العداد بتاريخ ${fmtDate(r.date)} (${r.km.toLocaleString('ar-EG')} كم) غير متماشية مع النمط الطبيعي المستنتج من آخر قراءات العربية. يُنصح بمراجعة قراءة العداد في المصدر.`
+        });
+        // الـ Anchor بيفضل زي ما هو (مش بيتحرك للقراءة الشاذة) عشان يقدر يكتشف أكتر من قراءة شاذة متتالية
+      } else {
+        anchor = r;
+      }
+    }
+  }
+  return notes;
+}
+
+// ── بناء الـ HTML لقسم "📝 الملاحظات" — بنفس Design System الحالي وألوان التنبيه (--warn/--warn-lt) ──
+// بيرجع نص فاضي '' لو مفيش ملاحظات، عشان القسم مايظهرش خالص لو مفيش شذوذ مكتشف.
+function renderMileageNotes(notes){
+  if(!notes || !notes.length) return '';
+  let html = `<div class="mileage-notes-section">
+    <div style="font-size:13px;font-weight:700;color:var(--warn);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+      <span style="background:var(--warn-lt);border:1px solid rgba(217,119,6,.25);border-radius:20px;padding:3px 14px">📝 الملاحظات (${notes.length})</span>
+    </div>
+    <div style="background:var(--warn-lt);border:1px solid rgba(217,119,6,.2);border-radius:10px;padding:14px 18px;line-height:1.9;font-size:13px;color:var(--text)">`;
+  notes.forEach((n,i)=>{
+    html += `<div style="${i<notes.length-1?'margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed rgba(217,119,6,.3)':''}">
+      <span style="font-weight:800;color:var(--text)">🚗 ${n.plate}</span> — ${n.text}
+    </div>`;
+  });
+  html += `</div></div>`;
+  return html;
+}
+
+function matchPlate(ourCode,ourNum,tData){
+  if(tData[ourCode])return tData[ourCode];
+  if(ourNum&&tData[ourNum])return tData[ourNum];
+  for(const tk of Object.keys(tData)){
+    const tn=numOnly(tk);
+    if(ourNum&&tn===ourNum)return tData[tk];
+    if(ourCode.length>=4&&(tk.includes(ourCode)||ourCode.includes(tk)))return tData[tk];
+  }
+  return null;
+}
+
+function mergeInto(base,extra){
+  if(!extra)return;
+  for(const plate of Object.keys(extra)){
+    const src=extra[plate];
+    const srcEntries=Array.isArray(src.entries)?src.entries:[];
+    if(!base[plate]){
+      base[plate]={entries:[...srcEntries]};
+    } else {
+      for(const e of srcEntries){
+        const dup=base[plate].entries.find(x=>x.km>0&&x.km===e.km);
+        if(!dup)base[plate].entries.push(e);
+      }
+    }
+  }
+}
+
+function n2(v){return v>0?v.toFixed(1):'–';}
+function nEGP(v){return v>0?v.toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2}):'–';}
+function diffClass(d,thr){return d===null?'':(Math.abs(d)<thr?'dz':d>0?'dp':'dn');}
+function diffTxt(d,dec){
+  if(d===null)return'<span class="nm">–</span>';
+  const s=dec?d.toFixed(1):Math.round(d).toLocaleString('ar-EG');
+  return(d>0?'+':'')+s;
+}
+function showErr(m){const b=document.getElementById('errBox');b.textContent='⚠️ '+m;b.classList.remove('hidden');}
+function showInfo(m){const b=document.getElementById('infoBox');b.innerHTML=m;b.classList.remove('hidden');}
+
+function exportAll(){
+  const ewb=XLSX.utils.book_new();
+  document.querySelectorAll('.car-sec').forEach(sec=>{
+    const t=sec.querySelector('table');
+    if(!t)return;
+    const title=sec.querySelector('strong')?.textContent.trim()||sec.id;
+    const ws=XLSX.utils.table_to_sheet(t);
+    XLSX.utils.book_append_sheet(ewb,ws,title.substring(0,30));
+  });
+  XLSX.writeFile(ewb,'تقرير_كل_العربيات.xlsx');
+}
+
+function exportCar(secId,name){
+  const sec=document.getElementById(secId);
+  const t=sec?.querySelector('table');
+  if(!t)return;
+  const ewb=XLSX.utils.book_new();
+  const ws=XLSX.utils.table_to_sheet(t);
+  XLSX.utils.book_append_sheet(ewb,ws,name.substring(0,30));
+  XLSX.writeFile(ewb,'تقرير_'+name+'.xlsx');
+}
+
+function printCar(secId){
+  document.querySelectorAll('.car-sec').forEach(s=>s.classList.remove('printing'));
+  document.getElementById(secId)?.classList.add('printing');
+  window.print();
+  setTimeout(()=>document.querySelectorAll('.car-sec').forEach(s=>s.classList.remove('printing')),1200);
+}
+
+// ── PDF EXPORT ──
+function buildPDFWrapper(){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;z-index:2147483647;overflow:auto;';
+  const wrap = document.createElement('div');
+  wrap.id = 'pdfCaptureRoot';
+  wrap.style.cssText = 'width:900px;max-width:900px;background:#fff;padding:20px;direction:rtl;font-family:"Tajawal","IBM Plex Sans Arabic",sans-serif;';
+  const fixStyle = document.createElement('style');
+  fixStyle.textContent = '#pdfCaptureRoot, #pdfCaptureRoot *{overflow-x:visible!important;flex-wrap:wrap!important;max-width:100%!important;}';
+  overlay.appendChild(fixStyle);
+  overlay.appendChild(wrap);
+  document.body.appendChild(overlay);
+  wrap._pdfOverlay = overlay;
+  return wrap;
+}
+
+function cleanCloneForPDF(el){
+  const clone = el.cloneNode(true);
+  clone.querySelectorAll('.summary-actions,.pbtn,.btn-export,.btn-pdf-all').forEach(n=>n.remove());
+  clone.querySelectorAll('.tw.collapsed').forEach(n=>n.classList.remove('collapsed'));
+  clone.querySelectorAll('.car-hdr.collapsed').forEach(n=>n.classList.remove('collapsed'));
+  clone.querySelectorAll('.car-hdr').forEach(n=>{ n.style.cursor='default'; n.removeAttribute('onclick'); });
+  return clone;
+}
+
+async function runPDFExport(nodes, filename, btn){
+  if(typeof html2pdf === 'undefined'){ alert('مكتبة PDF لم تُحمَّل بعد، تأكد من الاتصال بالإنترنت وجرب تاني'); return; }
+  const orig = btn ? btn.innerHTML : null;
+  if(btn){ btn.innerHTML = '<span class="spin"></span> جاري إنشاء PDF...'; btn.disabled = true; }
+  const wrap = buildPDFWrapper();
+  nodes.forEach(n=>wrap.appendChild(n));
+  try{
+    if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+    await new Promise(r=>setTimeout(r,150));
+
+    const worker = html2pdf().set({
+      margin:[8,8,10,8],
+      filename,
+      image:{ type:'jpeg', quality:0.98 },
+      html2canvas:{ scale:2, useCORS:true, backgroundColor:'#ffffff', scrollX:0, scrollY:0, foreignObjectRendering:true },
+      jsPDF:{ unit:'mm', format:'a4', orientation:'portrait' },
+      pagebreak:{ mode:['css','legacy'] }
+    }).from(wrap);
+
+    const blob = await worker.outputPdf('blob');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+
+    if(btn){ btn.innerHTML = '✅ تم الحفظ!'; }
+  }catch(e){
+    alert('تعذر إنشاء PDF: '+e.message);
+  }finally{
+    if(wrap._pdfOverlay && wrap._pdfOverlay.parentNode){ wrap._pdfOverlay.parentNode.removeChild(wrap._pdfOverlay); }
+    else if(wrap.parentNode){ wrap.parentNode.removeChild(wrap); }
+    if(btn){ setTimeout(()=>{ btn.innerHTML=orig; btn.disabled=false; }, 2000); }
+  }
+}
+
+async function exportSummaryPDF(btn){
+  const el = document.querySelector('.diff-summary');
+  if(!el){ alert('مفيش تقرير متاح للتصدير'); return; }
+  await runPDFExport([cleanCloneForPDF(el)], 'تقرير_مراجعة_السيارات.pdf', btn);
+}
+
+async function exportCarPDF(btn, secId, name){
+  const sec = document.getElementById(secId);
+  if(!sec){ alert('مفيش بيانات لهذه العربية'); return; }
+  await runPDFExport([cleanCloneForPDF(sec)], 'تقرير_'+name+'.pdf', btn);
+}
+
+async function exportAllCarsPDF(btn){
+  const carRes = document.getElementById('carRes');
+  if(!carRes || !carRes.children.length){ alert('مفيش نتائج مقارنة متاحة'); return; }
+  await runPDFExport([cleanCloneForPDF(carRes)], 'تقرير_مقارنة_كل_العربيات.pdf', btn);
+}
+
+async function exportReportAndAllCarsPDF(btn){
+  const summaryEl = document.querySelector('.diff-summary');
+  const carRes = document.getElementById('carRes');
+  const hasCars = carRes && carRes.children.length;
+  if(!summaryEl && !hasCars){ alert('مفيش بيانات متاحة للتصدير'); return; }
+
+  const nodes = [];
+  if(summaryEl) nodes.push(cleanCloneForPDF(summaryEl));
+  if(hasCars){
+    const carsClone = cleanCloneForPDF(carRes);
+    if(summaryEl){
+      carsClone.style.pageBreakBefore = 'always';
+      carsClone.style.marginTop = '16px';
+    }
+    nodes.push(carsClone);
+  }
+  await runPDFExport(nodes, 'تقرير_شامل_مراجعة_ومقارنة_السيارات.pdf', btn);
+}
+// ══════════════════════════════════════════════════════
+//  RUN COMPARE
+// ══════════════════════════════════════════════════════
+async function runCompare(){
+  const b=document.getElementById('cmpBtn');
+  b.disabled=true; b.innerHTML='<span class="spin"></span> جاري المراجعة...';
+  document.getElementById('errBox').classList.add('hidden');
+  document.getElementById('infoBox').classList.add('hidden');
+  document.getElementById('resSection').classList.add('hidden');
+  const sbar=document.getElementById('sbar');
+  sbar.innerHTML='⚙️ جاري قراءة وتحليل الشيتات...';
+
+  try{
+    const totalData={};
+    let totalFilesCount=0;
+    for(const k of Object.keys(FILES)){
+      const isTotal = ((k.startsWith('f')&&!isNaN(k[1])&&parseInt(k[1])>=1&&parseInt(k[1])<=4)||k.startsWith('ft'))&&FILES[k];
+      if(isTotal){
+        const wb=await readXL(FILES[k]);
+        const res=parseTotalWB(wb);
+        if(res.err)showErr(`تنبيه في ${FILES[k].name}: ${res.err}`);
+        if(res.data){ mergeInto(totalData,res.data); totalFilesCount++; }
+      }
+    }
+    if(totalFilesCount===0)throw new Error('لازم ترفع ملف توتال سليم واحد على الأقل.');
+
+    const ourData={};
+    let ourFilesCount=0;
+    for(const k of Object.keys(FILES)){
+      const isOur = (k==='f5'||k.startsWith('fo'))&&FILES[k];
+      if(isOur){
+        const wb=await readXL(FILES[k]);
+        const res=parseOurWB(wb);
+        Object.assign(ourData,res);
+        ourFilesCount++;
+      }
+    }
+    if(ourFilesCount===0)throw new Error('لازم ترفع شيت عربية سليم واحد على الأقل.');
+
+    sbar.innerHTML='🔍 جاري مقارنة ومطابقة التفويلات...';
+
+    // تحديد التواريخ
+    let minD=null, maxD=null;
+    for(const car of Object.values(ourData)){
+      for(const r of car.rows){
+        if(r.date){
+          if(!minD||r.date<minD)minD=r.date;
+          if(!maxD||r.date>maxD)maxD=r.date;
+        }
+      }
+    }
+    const dFromVal=document.getElementById('dFrom').value;
+    const dToVal=document.getElementById('dTo').value;
+    const fromDate=dFromVal||minD;
+    const toDate=dToVal||maxD;
+    document.getElementById('dFrom').value=fromDate;
+    document.getElementById('dTo').value=toDate;
+
+    const matchedCars=[];
+    const mismatchCars=[];
+    const noTotalDataCars=[];
+
+    for(const carKey of Object.keys(ourData)){
+      const car=ourData[carKey];
+      const tMatch=matchPlate(car.code,car.numCode,totalData);
+
+      // فلترة وتجهيز الصفوف
+      // ── فحص التواريخ الشاذة وتحديدها لتلوينها (الـ UI فقط) ──
+      // ده بيضمن إننا نكشف التواريخ المكتوبة غلط من شيتنا في الترتيب الزمني الكامل،
+      // قبل ما نفلتر على داتا الفترة المحددة، عشان لو كانت التفويلة دي المفروض
+      // في شهر تاني بعيد بس التاريخ اتكتب غلط، الفحص يعرف يمسكها.
+      flagSuspectDates(car.rows);
+
+      const inPeriod=car.rows.filter(r=>r.date&&r.date>=fromDate&&r.date<=toDate);
+      if(!inPeriod.length)continue;
+
+      if(!tMatch){
+        noTotalDataCars.push({
+          plate:car.sheet, code:car.code, rows:inPeriod, allRows:car.rows,
+          diffLiters:inPeriod.reduce((s,r)=>s+r.liters,0),
+          diffAmount:inPeriod.reduce((s,r)=>s+r.amount,0)
+        });
+        continue;
+      }
+
+      const rowsProcessed=[];
+      let matchedL=0, matchedA=0, diffL=0, diffA=0;
+
+      for(const r of inPeriod){
+        let tEntry=null;
+        if(Array.isArray(tMatch.entries)){
+          // ── استبعاد تفويلات العداد الشاذة (Suspect) من البحث في توتال ──
+          // لو التفويلة تاريخها مكتوب غلط في شيتنا، فمستحيل نلاقيها في توتال بنفس التاريخ.
+          // نمنع البحث عنها هنا عشان ما تظهرش "مش موجودة في توتال" وتعمل فرق مطابقة مزيف،
+          // ونحددها مباشرة في النتيجة كحالة خاصة (suspect).
+          if(r.dateSuspect){
+            r.isSuspect = true;
+          } else {
+            // مطابقة عادية
+            tEntry=tMatch.entries.find(e=>!e.matched && e.date===r.date && Math.abs((parseFloat(e.liters)||0)-r.liters)<=2.5);
+            if(tEntry){
+              tEntry.matched=true;
+              r.tLiters=tEntry.liters;
+              r.tAmount=tEntry.amount;
+              r.tKm=tEntry.km;
+              matchedL+=r.liters;
+              matchedA+=r.amount;
+            }
+          }
+        }
+        if(!tEntry){
+          if(r.isSuspect){
+            // مفيش مطابقة (وده سليم ومنطقي لأن التاريخ غلط)
+            rowsProcessed.push({
+              date:r.date, liters:r.liters, km:r.km, amount:r.amount,
+              tLiters:null, tAmount:null, tKm:null, diffL:r.liters, diffA:r.amount,
+              dateOriginalWritten:r.dateOriginalWritten, dateWasSwapped:r.dateWasSwapped,
+              isSuspect:true, suspectReason:r.suspectReason
+            });
+          } else {
+            diffL+=r.liters;
+            diffA+=r.amount;
+            rowsProcessed.push({
+              date:r.date, liters:r.liters, km:r.km, amount:r.amount,
+              tLiters:null, tAmount:null, tKm:null, diffL:r.liters, diffA:r.amount,
+              dateOriginalWritten:r.dateOriginalWritten, dateWasSwapped:r.dateWasSwapped
+            });
+          }
+        } else {
+          rowsProcessed.push({
+            date:r.date, liters:r.liters, km:r.km, amount:r.amount,
+            tLiters:r.tLiters, tAmount:r.tAmount, tKm:r.tKm, diffL:0, diffA:0,
+            dateOriginalWritten:r.dateOriginalWritten, dateWasSwapped:r.dateWasSwapped
+          });
+        }
+      }
+
+      // حساب المتبقي في توتال
+      let unMatchedL=0, unMatchedA=0;
+      if(Array.isArray(tMatch.entries)){
+        tMatch.entries.forEach(e=>{
+          if(!e.matched && e.date>=fromDate && e.date<=toDate){
+            unMatchedL+=e.liters;
+            unMatchedA+=e.amount;
+            rowsProcessed.push({
+              date:e.date, liters:null, km:null, amount:null,
+              tLiters:e.liters, tAmount:e.amount, tKm:e.km,
+              diffL:-e.liters, diffA:-e.amount
+            });
+          }
+        });
+      } else if(tMatch.unknown){
+        // الشكل القديم لملف توتال (مفيش تفاصيل عمليات تفصيلية)
+        // بنقرأ توتال التكلفة مباشرة من التوتال، ونحسب الفرق بالكامل
+        const totalCost=tMatch.unknown.amount;
+        diffA = matchedA - totalCost;
+        diffL = null;
+      }
+
+      rowsProcessed.sort((a,b)=>a.date.localeCompare(b.date));
+
+      const resObj={
+        plate:car.sheet, code:car.code, rows:rowsProcessed, allRows:car.rows, compareRows:inPeriod,
+        matchedL, matchedA, diffL:tMatch.unknown?null:diffL-unMatchedL, diffAmount:diffA
+      };
+
+      const hasDiff = (resObj.diffL!==null && Math.abs(resObj.diffL)>1) || Math.abs(resObj.diffAmount)>15;
+      if(hasDiff) mismatchCars.push(resObj);
+      else matchedCars.push(resObj);
+    }
+
+    // ── كشف ملاحظات قراءة العداد الشاذة داخل فترة المقارنة فقط ──
+    const allProcessedForMileage = [...matchedCars, ...mismatchCars];
+    const mileageNotes = detectMileageNotes(allProcessedForMileage);
+
+    renderDashboard(matchedCars,mismatchCars,noTotalDataCars,fromDate,toDate, mileageNotes);
+
+  }catch(err){
+    showErr(err.message);
+    console.error(err);
+  }finally{
+    b.disabled=false; b.innerHTML='<span>▶</span> قارن دلوقتي';
+    sbar.innerHTML='✅ تمت المراجعة بنجاح';
+  }
+}
+
+function renderDashboard(matched,mismatch,noTotal,fromDate,toDate, mileageNotes){
+  const resSec=document.getElementById('resSection');
+  resSec.classList.remove('hidden');
+
+  const totCars=matched.length+mismatch.length+noTotal.length;
+  const cardsBox=document.getElementById('sumCards');
+  cardsBox.innerHTML=`
+    <div class="sc tot"><div class="n">${totCars}</div><div class="l">إجمالي السيارات</div></div>
+    <div class="sc ok"><div class="n">${matched.length}</div><div class="l">سيارات مطابقة</div></div>
+    <div class="sc bad"><div class="n">${mismatch.length}</div><div class="l">بها اختلافات</div></div>
+    <div class="sc warn"><div class="n">${noTotal.length}</div><div class="l">بلا بيانات في توتال</div></div>
+  `;
+
+  // بناء التقرير المكتوب
+  let diffCount=0;
+  let reportHtml=`
+    <div class="diff-summary" dir="rtl">
+      <div class="summary-actions">
+        <button class="sbtn sbtn-word" onclick="exportSummaryPDF(this)">📄 حفظ التقرير فقط (PDF)</button>
+        <button class="sbtn sbtn-pdf-full" onclick="exportReportAndAllCarsPDF(this)">✨ تصدير التقرير والشيتات بالكامل (PDF)</button>
+        <button class="sbtn sbtn-copy" onclick="copyWrittenReport()">📋 نسخ التقرير للواتساب</button>
+      </div>
+      <div id="writtenReportText" style="line-height:2.1;font-size:13.5px;color:var(--text);font-weight:700">
+        <div style="font-size:15px;font-weight:900;color:var(--primary);margin-bottom:12px;font-family:'Tajawal',sans-serif">📝 تقرير مراجعة تفويلات السولار المجمّع</div>
+        <div>السادة الأفاضل، بعد التحية،</div>
+        <div>نرسل لكم تقرير مقارنة تفويلات السولار (شيتات السيارات vs شيت شركة توتال)</div>
+        <div>عن الفترة من: <span style="color:var(--primary)">${fmtDate(fromDate)}</span> إلى: <span style="color:var(--primary)">${fmtDate(toDate)}</span></div>
+        <div style="margin-top:10px">نتائج مراجعة السيارات وتطابقها كالتالي:</div>
+  `;
+
+  if(mismatch.length>0){
+    reportHtml+=`<div style="margin-top:10px;color:var(--danger);font-size:14px;font-weight:900">⚠️ أولاً: سيارات يوجد بها اختلافات:</div>`;
+    mismatch.forEach(car=>{
+      diffCount++;
+      const absL=car.diffL!==null?Math.abs(car.diffL):null;
+      const absA=Math.abs(car.diffAmount);
+      let lTxt='';
+      if(car.diffL!==null){
+        lTxt=car.diffL>0?`بزيادة في شيتنا قدرها (${absL.toFixed(1)} لتر)`:`بعجز في شيتنا قدرها (${absL.toFixed(1)} لتر)`;
+      }
+      const aTxt=car.diffAmount>0?`وزيادة تكلفة في شيتنا قدرها (${absA.toLocaleString('ar-EG')} ج.م)`:`وعجز تكلفة في شيتنا قدرها (${absA.toLocaleString('ar-EG')} ج.م)`;
+      reportHtml+=`
+        <div style="margin-inline-start:12px;margin-top:4px">
+          • <span class="diff-car-name">${car.plate}</span>:
+          ${lTxt} ${aTxt}
+        </div>
+      `;
+    });
+  } else {
+    reportHtml+=`<div style="margin-top:10px;color:var(--success)">✅ أولاً: جميع سيارات الفترة مطابقة بالكامل لشيت توتال ومفيش أي اختلافات.</div>`;
+  }
+
+  if(noTotal.length>0){
+    reportHtml+=`<div style="margin-top:12px;color:var(--warn);font-size:14px;font-weight:900">⚠️ ثانياً: سيارات لا توجد لها تفويلات مسجلة في شيت توتال عن هذه الفترة:</div>`;
+    noTotal.forEach(car=>{
+      reportHtml+=`
+        <div style="margin-inline-start:12px;margin-top:4px">
+          • <span class="diff-car-name">${car.plate}</span>: مسجل في شيتنا تفويلات بإجمالي <span class="dp">${car.diffL.toFixed(1)} لتر</span> بتكلفة <span class="dp">${car.diffAmount.toLocaleString('ar-EG')} ج.م</span>
+        </div>
+      `;
+    });
+  }
+
+  if(matched.length>0 && mismatch.length>0){
+    reportHtml+=`
+      <div style="margin-top:12px;color:var(--success);font-size:14px;font-weight:900">✅ ثالثاً: سيارات مطابقة بالكامل لشيت توتال ومفيش اختلافات:</div>
+      <div style="margin-inline-start:12px">
+        ${matched.map(c=>`• ${c.plate}`).join(' &nbsp;•&nbsp; ')}
+      </div>
+    `;
+  }
+
+  // ── تضمين قسم الملاحظات (قراءة العداد الشاذة) داخل الـ HTML المكتوب للتقرير مباشرة ──
+  // بيظهر ورا الفئات التلاتة كفقرة رابعة مستقلة لو فيه ملاحظات، ويتنسخ مع التقرير
+  const notesHtml = renderMileageNotes(mileageNotes);
+  if(notesHtml){
+    reportHtml += `<div style="margin-top:16px">${notesHtml}</div>`;
+  }
+
+  reportHtml+=`
+        <div style="margin-top:14px;font-style:italic;color:var(--text3)">تمنياتنا لكم بالتوفيق،</div>
+      </div>
+    </div>
+  `;
+
+  // رندر الأكورديون للسيارات
+  let carsHtml='';
+  const buildSection=(title, list, badgeCls, statusText)=>{
+    if(!list.length)return;
+    list.forEach(car=>{
+      const secId=`sec_${car.plate.replace(/\s+/g,'_')}`;
+      const diffLVal=car.diffL;
+      const diffAVal=car.diffAmount;
+
+      let subHdr='';
+      if(diffLVal!==null){
+        subHdr=`<span>الفرق: <span class="${diffClass(diffLVal,1.5)}">${diffTxt(diffLVal,true)} لتر</span></span> &nbsp;|&nbsp; `;
+      }
+      subHdr+=`<span>الفرق المالي: <span class="${diffClass(diffAVal,15)}">${diffTxt(diffAVal,false)} ج.م</span></span>`;
+
+      carsHtml+=`
+        <div class="car-sec" id="${secId}">
+          <div class="car-hdr" onclick="toggleCollapse('${secId}_tbl', this)">
+            <span>🚗</span>
+            <strong style="font-family:'Tajawal',sans-serif;font-weight:800">${car.plate}</strong>
+            <span class="badge ${badgeCls}">${statusText}</span>
+            <span style="font-size:11px;opacity:.85;margin-inline-start:12px" class="hide-print">${subHdr}</span>
+            <span class="toggle-arrow">▼</span>
+          </div>
+          <div class="tw" id="${secId}_tbl">
+            <div style="padding:10px 14px;display:flex;gap:6px" class="hide-print">
+              <button class="pbtn" onclick="exportCar('${secId}','${car.plate}')">💾 Excel</button>
+              <button class="pbtn" onclick="exportCarPDF(this,'${secId}','${car.plate}')">📄 PDF</button>
+              <button class="pbtn" onclick="printCar('${secId}')">🖨️ طباعة</button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>تاريخ العملية</th>
+                  <th>لتر (شيتنا)</th>
+                  <th>عداد (شيتنا)</th>
+                  <th>معدل (شيتنا)</th>
+                  <th>تكلفة (شيتنا)</th>
+                  <th>لتر (توتال)</th>
+                  <th>عداد (توتال)</th>
+                  <th>تكلفة (توتال)</th>
+                  <th>فرق اللتر</th>
+                  <th>فرق التكلفة</th>
+                </tr>
+              </thead>
+              <tbody>
+      `;
+
+      car.rows.forEach(r=>{
+        const isSwapped = r.dateWasSwapped;
+        const oDate = r.dateOriginalWritten;
+        const dateWarnAttr = isSwapped ? `style="background:var(--warn-lt);color:var(--warn);border:1px solid rgba(217,119,6,.2);border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700" title="تم تصحيح اتجاه اليوم والشهر المكتوبين غلط في شيتنا: من ${fmtDate(oDate)} إلى ${fmtDate(r.date)}"` : '';
+        const dateHtml = isSwapped ? `<span ${dateWarnAttr}>🔄 ${fmtDate(r.date)}</span>` : fmtDate(r.date);
+
+        // ── تلوين قراءة العداد وتفاصيل التفويلة بلون التنبيه (سليت/رمادي داكن) لو كانت العداد شاذة (suspect) ──
+        const isSuspect = r.isSuspect;
+        const rowClass = isSuspect ? 'susp' : (r.liters&&r.tLiters?'ok':r.liters?'warn':'bad');
+
+        let kmColHtml = r.km?r.km.toLocaleString('ar-EG'):'–';
+        if(isSuspect){
+          kmColHtml = `<span style="background:rgba(100,116,139,.12);color:#334155;border-radius:4px;padding:2px 8px;font-weight:700" title="${r.suspectReason}">⚠️ ${r.km.toLocaleString('ar-EG')}</span>`;
+        }
+
+        carsHtml+=`
+          <tr class="${rowClass}">
+            <td>${dateHtml}</td>
+            <td>${r.liters?r.liters.toFixed(1):'–'}</td>
+            <td>${kmColHtml}</td>
+            <td>${r.rate?r.rate.toFixed(1):'–'}</td>
+            <td>${r.amount?r.amount.toLocaleString('ar-EG'):'–'}</td>
+            <td>${r.tLiters?r.tLiters.toFixed(1):'–'}</td>
+            <td>${r.tKm?r.tKm.toLocaleString('ar-EG'):'–'}</td>
+            <td>${r.tAmount?r.tAmount.toLocaleString('ar-EG'):'–'}</td>
+            <td class="${diffClass(r.diffL,1.5)}">${diffTxt(r.diffL,true)}</td>
+            <td class="${diffClass(r.diffA,15)}">${diffTxt(r.diffA,false)}</td>
+          </tr>
+        `;
+      });
+
+      carsHtml+=`
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    });
+  };
+
+  buildSection('سيارات بها اختلافات', mismatch, 'bad', 'بها اختلافات');
+  buildSection('سيارات بلا بيانات في توتال', noTotal, 'warn', 'بلا بيانات في توتال');
+  buildSection('سيارات مطابقة', matched, 'ok', 'مطابقة بالكامل');
+
+  const resCar=document.getElementById('carRes');
+  resCar.innerHTML=reportHtml+carsHtml;
+}
+
+function toggleCollapse(id, hdr){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const isCol=el.classList.toggle('collapsed');
+  hdr.classList.toggle('collapsed',isCol);
+}
+
+function toggleCollapseDirect(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.classList.toggle('collapsed');
+}
+
+function copyWrittenReport(){
+  const r=document.getElementById('writtenReportText');
+  if(!r)return;
+
+  // نسخ كتاريخ ومنسق RTL للواتس عشان يتبعت سليم
+  const sel=window.getSelection();
+  sel.removeAllRanges();
+  const range=document.createRange();
+  range.selectNodeContents(r);
+  sel.addRange(range);
+  try{
+    const ok=document.execCommand('copy');
+    alert(ok?'📋 تم نسخ التقرير المكتوب! تقدر تلزقه في الواتساب دلوقتي بنفس التنسيق.':'⚠️ تعذر النسخ التلقائي، حدد النص يدويًا وانسخه');
+  }catch(e){
+    alert('⚠️ عفوًا، متصفحك لا يدعم النسخ التلقائي');
+  }
+  sel.removeAllRanges();
+}
+</script>
+<script>
+// ══════════════════════════════════════════════════════
+//  TAB 2: RECEIPT READER GEMINI API & LOGIC
+// ══════════════════════════════════════════════════════
+let RECEIPT_IMAGES = []; // { id, file, base64, status, result, cardEl }
+let RATES_WORKBOOK = null;
+let SELECTED_VEHICLE_SHEET = "";
+let RATES_DATA = []; // { date, rate, km } parsed from active sheet
+let API_KEYS = []; // array of keys
+let ACTIVE_KEY_INDEX = 0;
+
+// Load API Keys from LocalStorage
+try {
+  const savedKeys = localStorage.getItem('TOTAL_GEMINI_API_KEYS');
+  if (savedKeys) {
+    API_KEYS = JSON.parse(savedKeys);
+  }
+} catch (e) {
+  console.error("Failed to load API keys", e);
+}
+
+// Ensure at least one key slot if none exists (can be empty)
+if (!Array.isArray(API_KEYS) || API_KEYS.length === 0) {
+  API_KEYS = [];
+}
+
+// Load Hidden State
+let API_SECTION_HIDDEN = false;
+try {
+  API_SECTION_HIDDEN = localStorage.getItem('TOTAL_API_SECTION_HIDDEN') === 'true';
+} catch(e){}
+
+function updateApiKeysUI() {
+  const list = document.getElementById('apiKeysList');
+  const activeInd = document.getElementById('apiActiveIndicator');
+  const card = document.getElementById('apiKeyCard');
+  const restoreRow = document.getElementById('apiRestoreRow');
+
+  if (API_SECTION_HIDDEN) {
+    card.style.display = 'none';
+    restoreRow.style.display = 'block';
+    return;
+  } else {
+    card.style.display = 'block';
+    restoreRow.style.display = 'none';
+  }
+
+  list.innerHTML = '';
+  if (API_KEYS.length === 0) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:10px 0;">مفيش أي مفاتيح مسجلة حالياً. ضيف مفتاح فوق للبدء.</div>';
+    activeInd.style.display = 'none';
+    return;
+  }
+
+  API_KEYS.forEach((key, idx) => {
+    const item = document.createElement('div');
+    item.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;margin-bottom:6px;font-size:12px;';
+
+    const starredKey = key.slice(0, 6) + '...' + key.slice(-4);
+    const keyTxt = document.createElement('span');
+    keyTxt.style.cssText = 'font-family:monospace;font-weight:700;color:var(--text2);direction:ltr;';
+    keyTxt.textContent = `Key ${idx + 1}: ${starredKey}`;
+
+    const btns = document.createElement('div');
+    btns.style.display = 'flex';
+    btns.style.gap = '6px';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'pfile-del';
+    deleteBtn.style.cssText = 'padding:2px 8px;font-size:11px;font-weight:700;';
+    deleteBtn.textContent = 'مسح';
+    deleteBtn.onclick = () => removeApiKey(idx);
+
+    btns.appendChild(deleteBtn);
+    item.appendChild(keyTxt);
+    item.appendChild(btns);
+    list.appendChild(item);
+  });
+
+  // Show active key index
+  if (API_KEYS.length > 0) {
+    activeInd.style.display = 'block';
+    activeInd.textContent = `🟢 سيتم استخدام المفتاح النشط لعمليات القراءة تلقائياً.`;
+  } else {
+    activeInd.style.display = 'none';
+  }
+}
+
+function toggleNewKeyVisible() {
+  const inp = document.getElementById('apiKeyInput');
+  if (inp.type === 'password') inp.type = 'text';
+  else inp.type = 'password';
+}
+
+function addApiKey() {
+  const inp = document.getElementById('apiKeyInput');
+  const val = inp.value.trim();
+  if (!val) return;
+
+  if (API_KEYS.includes(val)) {
+    alert("المفتاح ده مضاف بالفعل!");
+    return;
+  }
+
+  API_KEYS.push(val);
+  localStorage.setItem('TOTAL_GEMINI_API_KEYS', JSON.stringify(API_KEYS));
+  inp.value = '';
+  updateApiKeysUI();
+}
+
+function removeApiKey(idx) {
+  API_KEYS.splice(idx, 1);
+  localStorage.setItem('TOTAL_GEMINI_API_KEYS', JSON.stringify(API_KEYS));
+  updateApiKeysUI();
+}
+
+function hideApiSection() {
+  API_SECTION_HIDDEN = true;
+  localStorage.setItem('TOTAL_API_SECTION_HIDDEN', 'true');
+  updateApiKeysUI();
+}
+
+function showApiSection() {
+  API_SECTION_HIDDEN = false;
+  localStorage.setItem('TOTAL_API_SECTION_HIDDEN', 'false');
+  updateApiKeysUI();
+}
+
+// Rates File Processing
+async function loadRatesFile(file) {
+  if (!file) return;
+  const btn = document.getElementById('ratesFileBtn');
+  const nameLabel = document.getElementById('ratesFileName');
+  const wrap = document.getElementById('sheetSelectWrap');
+  const select = document.getElementById('sheetSelect');
+  const status = document.getElementById('ratesStatus');
+
+  status.innerHTML = '<div class="rr-status loading"><span class="spin"></span> جاري قراءة شيت المعدلات...</div>';
+
+  try {
+    const wb = await readXL(file);
+    RATES_WORKBOOK = wb;
+    nameLabel.textContent = `✅ ${file.name}`;
+    btn.classList.add('ok');
+
+    select.innerHTML = '<option value="">-- اختار شيت السيارة --</option>';
+
+    const filteredSheets = wb.SheetNames.filter(name => {
+      const pNorm = normPlate(name);
+      const pNum = numOnly(name);
+      return pNorm.length >= 2 || pNum.length >= 2;
+    });
+
+    filteredSheets.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      select.appendChild(opt);
+    });
+
+    wrap.style.display = 'block';
+    status.innerHTML = '<div class="rr-status ok">تم تحميل شيت المعدلات بنجاح! اختار شيت السيارة من القائمة.</div>';
+  } catch (e) {
+    status.innerHTML = `<div class="rr-status err">فشل تحميل شيت المعدلات: ${e.message}</div>`;
+  }
+}
+
+function onSheetSelect() {
+  const select = document.getElementById('sheetSelect');
+  SELECTED_VEHICLE_SHEET = select.value;
+  if (!SELECTED_VEHICLE_SHEET || !RATES_WORKBOOK) {
+    RATES_DATA = [];
+    return;
+  }
+
+  try {
+    const ws = RATES_WORKBOOK.Sheets[SELECTED_VEHICLE_SHEET];
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+
+    let hRow = -1, hdrs = [];
+    for (let i = 0; i < Math.min(15, raw.length); i++) {
+      const joined = raw[i].map(x => String(x)).join('');
+      if (joined.includes('تاريخ') || joined.includes('الكمية') || joined.includes('المعدل')) {
+        hRow = i;
+        hdrs = raw[i].map(x => String(x).trim());
+        break;
+      }
+    }
+
+    let dSt = hRow >= 0 ? hRow + 1 : 0;
+    let cDate = -1, cKm = -1, cRate = -1;
+
+    if (hRow >= 0) {
+      for (let c = 0; c < hdrs.length; c++) {
+        const h = hdrs[c];
+        if (cDate === -1 && (h.includes('تاريخ') || h.toLowerCase().includes('date'))) { cDate = c; }
+        if (cKm === -1 && (h.includes('العداد') || h.includes('عداد'))) { cKm = c; }
+        if (cRate === -1 && (h.includes('المعدل') || h.includes('معدل'))) { cRate = c; }
+      }
+    }
+
+    const rows = [];
+    for (let ri = 0; ri < raw.slice(dSt).length; ri++) {
+      const row = raw.slice(dSt)[ri];
+      const d = cDate >= 0 ? fixDate(row[cDate]) : null;
+      const k = cKm >= 0 ? (parseFloat(row[cKm]) || 0) : 0;
+      const r = cRate >= 0 ? (parseFloat(row[cRate]) || 0) : 0;
+      if (d) rows.push({ date: d, rate: r, km: k, rawRowIdx: dSt + ri });
+    }
+
+    RATES_DATA = rows;
+    const status = document.getElementById('ratesStatus');
+    status.innerHTML = `<div class="rr-status ok">تم ربط شيت السيارة: ${SELECTED_VEHICLE_SHEET} (${RATES_DATA.length} تفويلة مسجلة)</div>`;
+  } catch (e) {
+    alert("فشل قراءة شيت السيارة المحدد: " + e.message);
+  }
+}
+
+// Compress and convert image to Base64 to prevent token limit/large request body issues
+function compressAndConvertToBase64(file, callback) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const MAX_WIDTH = 1200;
+      const MAX_HEIGHT = 1200;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Export as high-quality JPEG (quality 0.85 is perfect for reading text and extremely lightweight)
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      const base64 = dataUrl.split(',')[1];
+      callback(base64);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Receipt File Drop / Picking
+function addReceiptImages(fileList) {
+  const drop = document.getElementById('receiptDrop');
+  drop.classList.add('has-img');
+
+  for (const f of fileList) {
+    const id = 'rcp_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    const item = {
+      id,
+      file: f,
+      base64: null,
+      status: 'pending',
+      result: null,
+      cardEl: null
+    };
+
+    RECEIPT_IMAGES.push(item);
+    renderReceiptItem(item);
+
+    // Compress & Convert to Base64 (saves bandwidth and prevents model token limits)
+    compressAndConvertToBase64(f, (base64) => {
+      item.base64 = base64;
+    });
+  }
+
+  document.getElementById('parseAllBtn').disabled = false;
+}
+
+function renderReceiptItem(item) {
+  const list = document.getElementById('receiptList');
+  const div = document.createElement('div');
+  div.className = 'multi-img-item';
+  div.id = item.id;
+
+  const img = document.createElement('img');
+  img.className = 'multi-img-thumb';
+  img.src = URL.createObjectURL(item.file);
+
+  const name = document.createElement('span');
+  name.className = 'multi-img-name';
+  name.textContent = item.file.name;
+
+  const status = document.createElement('span');
+  status.className = 'multi-img-status pending';
+  status.textContent = 'قيد الانتظار';
+
+  const del = document.createElement('button');
+  del.className = 'multi-img-del';
+  del.textContent = '✕';
+  del.onclick = () => removeReceiptImage(item.id);
+
+  div.appendChild(img);
+  div.appendChild(name);
+  div.appendChild(status);
+  div.appendChild(del);
+  list.appendChild(div);
+
+  item.cardEl = div;
+}
+
+function removeReceiptImage(id) {
+  RECEIPT_IMAGES = RECEIPT_IMAGES.filter(x => x.id !== id);
+  const el = document.getElementById(id);
+  if (el) el.remove();
+
+  if (RECEIPT_IMAGES.length === 0) {
+    document.getElementById('receiptDrop').classList.remove('has-img');
+    document.getElementById('parseAllBtn').disabled = true;
+    document.getElementById('saveAllBtn').disabled = true;
+  }
+}
+
+// Active Key Cycling Logic
+function getActiveApiKey() {
+  if (API_KEYS.length === 0) return null;
+  // cycle index
+  const key = API_KEYS[ACTIVE_KEY_INDEX];
+  ACTIVE_KEY_INDEX = (ACTIVE_KEY_INDEX + 1) % API_KEYS.length;
+  return key;
+}
+
+// Parsing Core using Gemini API
+async function parseAllReceipts() {
+  if (API_KEYS.length === 0) {
+    alert("لازم تضيف مفتاح Gemini API واحد على الأقل الأول عشان الأداة تشتغل.");
+    return;
+  }
+
+  const btn = document.getElementById('parseAllBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> جاري قراءة ريسيتات توتال بالذكاء الاصطناعي...';
+
+  const itemsToProcess = RECEIPT_IMAGES.filter(x => x.status === 'pending' || x.status === 'failed');
+
+  for (const item of itemsToProcess) {
+    item.status = 'processing';
+    updateReceiptItemUI(item);
+
+    try {
+      // Get next key in cycle
+      const activeKey = getActiveApiKey();
+      if (!activeKey) throw new Error("مفيش مفتاح نشط متوفر");
+
+      const result = await callGeminiVisionAPI(item.base64, activeKey);
+      item.result = result;
+      item.status = 'done';
+      updateReceiptItemUI(item);
+      renderParsedResultCard(item);
+    } catch (e) {
+      console.error(e);
+      item.status = 'failed';
+      item.result = { error: e.message };
+      updateReceiptItemUI(item);
+    }
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<span>🤖</span> قرّاية الكل بالذكاء الاصطناعي';
+
+  // Enable save button if we have at least one successfully parsed receipt
+  const hasDone = RECEIPT_IMAGES.some(x => x.status === 'done');
+  document.getElementById('saveAllBtn').disabled = !hasDone;
+}
+
+function updateReceiptItemUI(item) {
+  if (!item.cardEl) return;
+  const statusEl = item.cardEl.querySelector('.multi-img-status');
+  if (!statusEl) return;
+
+  statusEl.className = 'multi-img-status ' + item.status;
+  if (item.status === 'pending') {
+    statusEl.textContent = 'قيد الانتظار';
+  } else if (item.status === 'processing') {
+    statusEl.textContent = 'جاري القراءة...';
+  } else if (item.status === 'done') {
+    statusEl.textContent = 'تمت القراءة ✅';
+  } else if (item.status === 'failed') {
+    statusEl.textContent = 'فشلت القراءة ❌';
+  }
+}
+
+async function callGeminiVisionAPI(base64Image, apiKey) {
+  // We prompt Gemini to extract fields:
+  // - Date (YYYY-MM-DD)
+  // - Quantity / Volume (liters)
+  // - Mileage / Odometer (km)
+  // - Cost / Total Amount (EGP)
+  // - Vehicle number / Plate (numeric or text)
+  const prompt = `أنت مساعد خبير في استخراج البيانات من فواتير وريسيتات محطات الوقود التابعة لشركة توتال (TotalEnergies).
+اقرأ صورة الريسيت المرفقة واستخرج البيانات التالية بدقة شديدة باللغة العربية، وأرجع النتيجة ككائن JSON يحتوي على هذه المفاتيح بالضبط:
+{
+  "date": "التاريخ بصيغة YYYY-MM-DD فقط، وإذا لم تجده أكتب null",
+  "liters": "كمية الوقود أو السولار باللتر كرقم عشري، وإذا لم تجدها أكتب null",
+  "km": "قراءة العداد أو mileage بالكيلومتر كرقم صحيح، وإذا لم تجدها أكتب null",
+  "cost": "المبلغ الإجمالي المدفوع بالجنيه المصري شامل الضريبة كرقم عشري، وإذا لم تجده أكتب null",
+  "plate": "رقم السيارة أو لوحة الأرقام المكتوبة في الفاتورة كـ string، وإذا لم تجدها أكتب null"
+}
+
+تحذير: لا تخمن أو تخترع بيانات غير موجودة، إذا لم تكن متأكداً من حقل معين، ضع قيمته null.`;
+
+  const bodyData = {
+    contents: [{
+      parts: [
+        { text: prompt },
+        {
+          inlineData: {
+            mimeType: "image/jpeg",
+            data: base64Image
+          }
+        }
+      ]
+    }],
+    generationConfig: {
+      responseMimeType: "application/json"
+    }
+  };
+
+  const primaryUrl = `https://generativetoolkit.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+  let response;
+  let usedUrl = primaryUrl;
+
+  try {
+    response = await fetch(primaryUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bodyData)
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status}`);
+    }
+  } catch (err) {
+    console.warn("Primary API endpoint failed, trying fallback...", err);
+    usedUrl = fallbackUrl;
+    response = await fetch(fallbackUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bodyData)
+    });
+  }
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`خطأ من Gemini API: ${response.status} - ${errText}`);
+  }
+
+  const resJson = await response.json();
+  const text = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("لم يتم إرجاع أي نص من الذكاء الاصطناعي");
+
+  try {
+    return JSON.parse(text.trim());
+  } catch (e) {
+    console.error("Raw text returned:", text);
+    let cleanText = text.trim();
+    if (cleanText.startsWith('```')) {
+      cleanText = cleanText.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+    }
+    try {
+      return JSON.parse(cleanText);
+    } catch (e2) {
+      throw new Error("فشل تحليل استجابة الذكاء الاصطناعي كـ JSON سليم");
+    }
+  }
+}
+
+function calculateReceiptRates(item) {
+  const res = item.result;
+  if (!res || res.error) return;
+
+  const liters = parseFloat(res.liters) || 0;
+  const km = parseFloat(res.km) || 0;
+  const dateStr = res.date;
+
+  if (!liters || !km || !dateStr) {
+    res.computedRate = null;
+    res.computedDiff = null;
+    res.prevKm = null;
+    return;
+  }
+
+  // Find rate in RATES_DATA
+  if (!Array.isArray(RATES_DATA) || RATES_DATA.length === 0) {
+    res.computedRate = null;
+    res.computedDiff = null;
+    res.prevKm = null;
+    return;
+  }
+
+  // Sort RATES_DATA by date to locate previous km safely
+  const sorted = [...RATES_DATA].sort((a,b)=>a.date.localeCompare(b.date));
+  const currentIdx = sorted.findIndex(x => x.date === dateStr);
+
+  let prevRow = null;
+  if (currentIdx > 0) {
+    prevRow = sorted[currentIdx - 1];
+  } else {
+    // try to find first row that has km and date before current date
+    prevRow = sorted.reverse().find(x => x.date < dateStr && x.km > 0);
+  }
+
+  if (!prevRow || !prevRow.km) {
+    res.computedRate = null;
+    res.computedDiff = null;
+    res.prevKm = null;
+    return;
+  }
+
+  const prevKm = prevRow.km;
+  const distance = km - prevKm;
+  if (distance <= 0) {
+    res.computedRate = null;
+    res.computedDiff = null;
+    res.prevKm = prevKm;
+    return;
+  }
+
+  const computedRate = (distance / liters) * 100; // liters per 100km
+  // wait, wait, the original app calculated rate as (distance / liters) or (liters / distance * 100)?
+  // Let's check how rate is usually calculated:
+  // In the original, the rate 'rate' column is computed or from sheet.
+  // Let's match the standard rate calculation used in the original template.
+  // The original template used: Rate = distance / liters.
+  const rateValue = distance / liters;
+
+  // Let's check what was the rate in sheet (e.g. 10.5 km/liter or similar)
+  // Yes! The standard in Egypt is "km per liter" (km / liters).
+  // Let's make it distance / liters
+  res.computedRate = rateValue;
+  res.prevKm = prevKm;
+
+  // Get active sheet rate for the current date to show difference
+  // Find closest rate in the sheet
+  const activeRow = RATES_DATA.find(x => x.date === dateStr);
+  const sheetRate = activeRow ? activeRow.rate : (RATES_DATA[0] ? RATES_DATA[0].rate : null);
+
+  if (sheetRate) {
+    res.computedDiff = rateValue - sheetRate;
+  } else {
+    res.computedDiff = null;
+  }
+}
+
+function renderParsedResultCard(item) {
+  const container = document.getElementById('receiptResults');
+  const res = item.result;
+  if (!res) return;
+
+  calculateReceiptRates(item);
+
+  const card = document.createElement('div');
+  card.className = 'parsed-result';
+  card.id = 'res_card_' + item.id;
+
+  const titleRow = document.createElement('div');
+  titleRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:12px;';
+
+  const title = document.createElement('div');
+  title.style.cssText = 'font-weight:900;font-size:14px;color:var(--primary);display:flex;align-items:center;gap:6px;';
+  title.innerHTML = `<span>📋 قراءة الريسيت:</span> <span style="color:var(--text2);font-weight:500;">${item.file.name}</span>`;
+
+  const actions = document.createElement('div');
+  actions.style.display = 'flex';
+  actions.style.gap = '8px';
+
+  titleRow.appendChild(title);
+  card.appendChild(titleRow);
+
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:14px;';
+
+  const colLeft = document.createElement('div');
+  const colRight = document.createElement('div');
+
+  const fields = [
+    { label: '📅 تاريخ الفاتورة:', key: 'date', type: 'date' },
+    { label: '⛽ الكمية باللتر:', key: 'liters', type: 'number' },
+    { label: '📊 قراءة العداد الحالي:', key: 'km', type: 'number' },
+    { label: '💰 المبلغ الإجمالي (ج.م):', key: 'cost', type: 'number' },
+    { label: '🚗 رقم لوحة السيارة:', key: 'plate', type: 'text' }
+  ];
+
+  fields.forEach(f => {
+    const row = document.createElement('div');
+    row.className = 'parsed-row';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'parsed-label';
+    lbl.textContent = f.label;
+
+    const valInput = document.createElement('input');
+    valInput.className = 'parsed-input';
+    valInput.type = f.type === 'date' ? 'date' : 'text';
+    valInput.value = res[f.key] !== null ? res[f.key] : '';
+    valInput.onchange = () => {
+      res[f.key] = f.type === 'number' ? (parseFloat(valInput.value) || null) : (valInput.value || null);
+      calculateReceiptRates(item);
+      updateRatesOutput(item, card);
+    };
+
+    row.appendChild(lbl);
+    row.appendChild(valInput);
+    colLeft.appendChild(row);
+  });
+
+  // Rates Output Fields
+  const rateBox = document.createElement('div');
+  rateBox.className = 'rates-box';
+  rateBox.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;height:100%;';
+  colRight.appendChild(rateBox);
+
+  grid.appendChild(colLeft);
+  grid.appendChild(colRight);
+  card.appendChild(grid);
+  container.appendChild(card);
+
+  updateRatesOutput(item, card);
+}
+
+function updateRatesOutput(item, cardEl) {
+  const res = item.result;
+  const box = cardEl.querySelector('.rates-box');
+  if (!box || !res) return;
+
+  const liters = parseFloat(res.liters) || 0;
+  const km = parseFloat(res.km) || 0;
+  const dateStr = res.date;
+
+  let contentHtml = '<div style="font-size:13px;font-weight:900;color:var(--text);margin-bottom:8px;border-bottom:1.5px solid var(--border);padding-bottom:6px;">📈 حسابات وتعديلات شيت المعدلات</div>';
+
+  if (!SELECTED_VEHICLE_SHEET) {
+    contentHtml += '<div style="font-size:12px;color:var(--warn);text-align:center;padding:12px 0;">⚠️ اختار شيت السيارة من شيت المعدلات فوق عشان نحسب الفروق.</div>';
+    box.innerHTML = contentHtml;
+    return;
+  }
+
+  if (!liters || !km || !dateStr) {
+    contentHtml += '<div style="font-size:12px;color:var(--text3);text-align:center;padding:12px 0;">أدخل التاريخ، اللتر، وقراءة العداد كاملة لحساب المعدلات تلقائياً.</div>';
+    box.innerHTML = contentHtml;
+    return;
+  }
+
+  const prevKm = res.prevKm;
+  if (!prevKm) {
+    contentHtml += `<div style="font-size:12px;color:var(--warn);padding:8px 0;">⚠️ لم نجد قراءة عداد سابقة للسيارة قبل تاريخ ${fmtDate(dateStr)} لتحديد المسافة.</div>`;
+    box.innerHTML = contentHtml;
+    return;
+  }
+
+  const dist = km - prevKm;
+  const rate = res.computedRate;
+  const diff = res.computedDiff;
+
+  contentHtml += `
+    <div class="parsed-row" style="font-size:12px;"><div class="parsed-label">🔄 قراءة العداد السابقة:</div><div class="parsed-value">${prevKm.toLocaleString('ar-EG')} كم</div></div>
+    <div class="parsed-row" style="font-size:12px;"><div class="parsed-label">🛣️ المسافة المقطوعة:</div><div class="parsed-value">${dist.toLocaleString('ar-EG')} كم</div></div>
+    <div class="parsed-row"><div class="parsed-label">⚡ المعدل الفعلي:</div><div class="parsed-value" style="color:var(--primary);">${rate ? rate.toFixed(2) : '–'} كم/لتر</div></div>
+  `;
+
+  if (diff !== null) {
+    const diffCls = diff < 0 ? 'dp' : 'dn';
+    const diffSym = diff > 0 ? '+' : '';
+    const diffTxtVal = `${diffSym}${diff.toFixed(2)}`;
+    contentHtml += `
+      <div class="parsed-row"><div class="parsed-label">📊 الفرق عن الشيت الحالي:</div><div class="parsed-value ${diffCls}">${diffTxtVal} كم/لتر</div></div>
+    `;
+  } else {
+    contentHtml += `
+      <div class="parsed-row" style="font-size:12px;"><div class="parsed-label">📊 الفرق عن الشيت الحالي:</div><div class="parsed-value text-muted">لم يجد صف لهذا التاريخ</div></div>
+    `;
+  }
+
+  box.innerHTML = contentHtml;
+}
+
+// Save All to Exceljs (the uploaded rates workbook)
+async function saveAllToSheet() {
+  if (!RATES_WORKBOOK || !SELECTED_VEHICLE_SHEET) {
+    alert("لازم تختار وتكون محمل شيت المعدلات وشيت السيارة أولاً.");
+    return;
+  }
+
+  const doneReceipts = RECEIPT_IMAGES.filter(x => x.status === 'done' && x.result);
+  if (doneReceipts.length === 0) {
+    alert("مفيش أي ريسيتات مقروءة بنجاح لحفظها.");
+    return;
+  }
+
+  const btn = document.getElementById('saveAllBtn');
+  const origText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> جاري الحفظ والتعديل في الشيت...';
+
+  try {
+    const ws = RATES_WORKBOOK.Sheets[SELECTED_VEHICLE_SHEET];
+    // We will parse sheet using exceljs because we want to write back and preserve styles/formats.
+    // Wait, the easiest and most robust way is to edit the RATES_WORKBOOK (XLSX workbook) in memory and write it out.
+    // Let's modify the ws cells directly using XLSX library!
+    // Let's see: XLSX.utils.sheet_to_json(ws) has the parsed rows.
+    // Let's find rows matching the receipt date, and update them!
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+
+    let hRow = -1, hdrs = [];
+    for (let i = 0; i < Math.min(15, raw.length); i++) {
+      const joined = raw[i].map(x => String(x)).join('');
+      if (joined.includes('تاريخ') || joined.includes('الكمية') || joined.includes('المعدل')) {
+        hRow = i;
+        hdrs = raw[i].map(x => String(x).trim());
+        break;
+      }
+    }
+
+    if (hRow === -1) throw new Error("لم نجد رأس جدول واضح في شيت السيارة لتحديد مكان الأعمدة.");
+
+    let cDate = -1, cLiters = -1, cKm = -1, cRate = -1, cAmt = -1;
+    for (let c = 0; c < hdrs.length; c++) {
+      const h = hdrs[c];
+      if (cDate === -1 && (h.includes('تاريخ') || h.toLowerCase().includes('date'))) { cDate = c; }
+      if (cLiters === -1 && h.includes('الكمية')) { cLiters = c; }
+      if (cKm === -1 && (h.includes('العداد') || h.includes('عداد'))) { cKm = c; }
+      if (cRate === -1 && (h.includes('المعدل') || h.includes('معدل'))) { cRate = c; }
+      if (cAmt === -1 && (h.includes('المبلغ') || h.includes('مبلغ'))) { cAmt = c; }
+    }
+
+    if (cDate === -1 || cLiters === -1) throw new Error("أعمدة التاريخ أو الكمية مفقودة في شيت السيارة.");
+
+    let updatedCount = 0;
+    let addedRowsCount = 0;
+
+    for (const item of doneReceipts) {
+      const res = item.result;
+      const dateStr = res.date;
+      const liters = parseFloat(res.liters) || null;
+      const km = parseFloat(res.km) || null;
+      const cost = parseFloat(res.cost) || null;
+
+      if (!dateStr) continue;
+
+      // Find if a row with this date already exists
+      let matchedRowIdx = -1;
+      for (let ri = hRow + 1; ri < raw.length; ri++) {
+        const rowDate = fixDate(raw[ri][cDate]);
+        if (rowDate === dateStr) {
+          matchedRowIdx = ri;
+          break;
+        }
+      }
+
+      if (matchedRowIdx !== -1) {
+        // Update existing row
+        if (cLiters >= 0 && liters !== null) {
+          XLSX.utils.sheet_add_aoa(ws, [[liters]], { origin: XLSX.utils.encode_cell({ r: matchedRowIdx, c: cLiters }) });
+        }
+        if (cKm >= 0 && km !== null) {
+          XLSX.utils.sheet_add_aoa(ws, [[km]], { origin: XLSX.utils.encode_cell({ r: matchedRowIdx, c: cKm }) });
+        }
+        if (cAmt >= 0 && cost !== null) {
+          XLSX.utils.sheet_add_aoa(ws, [[cost]], { origin: XLSX.utils.encode_cell({ r: matchedRowIdx, c: cAmt }) });
+        }
+        // computed rate (distance / liters)
+        if (cRate >= 0 && item.result.computedRate !== null) {
+          XLSX.utils.sheet_add_aoa(ws, [[item.result.computedRate]], { origin: XLSX.utils.encode_cell({ r: matchedRowIdx, c: cRate }) });
+        }
+        updatedCount++;
+      } else {
+        // Append new row at the end of the sheet
+        const newRowIdx = raw.length;
+        const newRowData = new Array(hdrs.length).fill('');
+        if (cDate >= 0) newRowData[cDate] = dateStr;
+        if (cLiters >= 0 && liters !== null) newRowData[cLiters] = liters;
+        if (cKm >= 0 && km !== null) newRowData[cKm] = km;
+        if (cAmt >= 0 && cost !== null) newRowData[cAmt] = cost;
+        if (cRate >= 0 && item.result.computedRate !== null) newRowData[cRate] = item.result.computedRate;
+
+        XLSX.utils.sheet_add_aoa(ws, [newRowData], { origin: XLSX.utils.encode_cell({ r: newRowIdx, c: 0 }) });
+        raw.push(newRowData); // push to raw to track correct index
+        addedRowsCount++;
+      }
+    }
+
+    // Write file back and trigger download
+    const wbBuffer = XLSX.write(RATES_WORKBOOK, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `معدلات_السيارات_معدل_${SELECTED_VEHICLE_SHEET}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    alert(`🎉 تم تحديث الشيت بنجاح!\n- تحديث صفوف حالية: ${updatedCount}\n- إضافة صفوف جديدة: ${addedRowsCount}`);
+
+    // Refresh rates list UI
+    onSheetSelect();
+  } catch (e) {
+    alert("فشل تحديث الشيت: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origText;
+  }
+}
+
+// ── Tab Switching Router ──
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+
+  const content = document.getElementById('tab-' + tabId);
+  const btn = document.getElementById('tab-' + tabId + '-btn');
+
+  if (content) content.classList.add('active');
+  if (btn) btn.classList.add('active');
+
+  // Change sbar status text
+  const sbar = document.getElementById('sbar');
+  if (tabId === 'compare') {
+    sbar.innerHTML = '<span>📂</span> اختار الملفات وابدأ المقارنة';
+  } else if (tabId === 'receipt') {
+    sbar.innerHTML = '<span>🧾</span> ارفع صور ريسيتات توتال لقراءتها آلياً';
+  } else if (tabId === 'sabla') {
+    sbar.innerHTML = '<span>🚛</span> ارفع شيتات السبلة وقارن أرقام العربيات';
+  }
+}
+
+// Initialize on Load
+document.addEventListener('DOMContentLoaded', () => {
+  updateApiKeysUI();
+});
+</script>
+</body>
+</html>

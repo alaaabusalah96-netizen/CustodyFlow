@@ -202,3 +202,18 @@ export interface TenantSettings {
   workflow_settings: WorkflowSettings;
   updated_at?: string;      // ISO-8601 timestamp
 }
+
+/**
+ * 3.7 Business Group Schema
+ * هيكلية مجموعات الشركات / الأعمال
+ */
+export interface BusinessGroup {
+  id: string;
+  code: string;
+  nameAr: string;
+  nameEn: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: string;       // ISO 8601 string (e.g. "2026-07-09T01:47:50-07:00")
+  updatedAt?: string;      // ISO 8601 string
+}
+

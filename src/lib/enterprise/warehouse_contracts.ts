@@ -134,7 +134,7 @@ export interface Warehouse {
  */
 export interface EnterpriseUser {
   id: string;                 // Unique user ID
-  organizationId: string;     // Reference to parent Organization
+  assignedOrganizationIds: string[]; // Replaces singular organizationId per ADR-0006 — supports cross-company access within a Business Group
   email: string;              // Standard user email address
   fullNameEn: string;         // Full name in English
   fullNameAr: string;         // Full name in Arabic

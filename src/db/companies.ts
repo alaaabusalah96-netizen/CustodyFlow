@@ -117,4 +117,54 @@ export class CompaniesModule {
       });
     }
   }
+
+  static setCompanyGroup(companyId: string, groupId: string | undefined): void {
+    const companies = CompaniesModule.getCompanies();
+    const idx = companies.findIndex(c => c.id === companyId);
+    if (idx !== -1) {
+      companies[idx] = { ...companies[idx], group_id: groupId };
+      CompaniesModule.saveCompanies(companies);
+      
+      const user = UsersModule.getActiveUser();
+      LogsModule.addLog(
+        user?.id || 'system', 
+        user?.full_name || 'System', 
+        'Set Company Group', 
+        `Associated company ${companies[idx].name} with business group ID: ${groupId || 'None'}`
+      );
+      LogsModule.logAudit('COMPANY_GROUP_ASSOCIATION', `Associated company ${companies[idx].name} with business group ID ${groupId || 'None'}`, {
+        company_id: companyId,
+        group_id: groupId
+      });
+    }
+  }
+
+  static markCompanyAsMerged(sourceCompanyId: string, targetCompanyId: string): void {
+    const companies = CompaniesModule.getCompanies();
+    const idx = companies.findIndex(c => c.id === sourceCompanyId);
+    if (idx !== -1) {
+      companies[idx] = { 
+        ...companies[idx], 
+        status_merge: 'MERGED', 
+        merged_into_company_id: targetCompanyId 
+      };
+      CompaniesModule.saveCompanies(companies);
+      
+      const user = UsersModule.getActiveUser();
+      LogsModule.addLog(
+        user?.id || 'system', 
+        user?.full_name || 'System', 
+        'Merge Company', 
+        `Marked company ${companies[idx].name} as MERGED into target company ID: ${targetCompanyId}`
+      );
+      LogsModule.logAudit('COMPANY_MERGED', `Marked company ${companies[idx].name} as merged into company ID ${targetCompanyId}`, {
+        source_company_id: sourceCompanyId,
+        target_company_id: targetCompanyId
+      });
+      
+      // TODO: Future search and report screens must track merged_into_company_id for data consolidation
+      // and redirect query visibility from sourceCompanyId to targetCompanyId per business requirements.
+    }
+  }
 }
+

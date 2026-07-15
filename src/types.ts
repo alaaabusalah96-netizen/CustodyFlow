@@ -11,6 +11,9 @@ export interface Company {
   tenantId?: string;
   organizationId?: string;
   modules?: Record<string, any>;
+  group_id?: string;
+  status_merge?: 'ACTIVE' | 'MERGED';
+  merged_into_company_id?: string;
 }
 
 export interface UserPermissions {

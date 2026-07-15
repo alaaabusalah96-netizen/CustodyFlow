@@ -22,7 +22,8 @@ import {
   Sparkles,
   ChevronUp,
   UserCheck,
-  Trash2
+  Trash2,
+  Fuel
 } from 'lucide-react';
 import { CustodyDB, ModulesModule } from '../db';
 import { translations, Language, Theme, AppUser } from '../types';
@@ -84,6 +85,7 @@ export default function Layout({
     { id: 'voucher', label: t.cashPaymentVoucher, icon: FileCheck, permission: 'settle_voucher' },
     { id: 'reconciliation', label: isRtl ? 'جرد ومطابقة العهدة' : 'Custody Reconciliation & Inventory', icon: TrendingUp, roleAllowed: ['Admin', 'StationAdmin', 'RegionalManager'] },
     { id: 'inventory', label: isRtl ? 'إدارة المخازن والمستودعات' : 'Inventory & Warehouses', icon: Layers, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
+    { id: 'fuel-comparison', label: isRtl ? 'مقارنة السولار والتحليلات' : 'Fuel Comparison & Analytics', icon: Fuel, permission: 'view_reports', roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
     { id: 'reports', label: t.reports, icon: FileText, permission: 'view_reports' },
     { id: 'search', label: t.search, icon: SearchIcon },
     { id: 'audit-log', label: isRtl ? 'سجل الرقابة والامتثال' : 'Security & Audit Log', icon: ShieldCheck, roleAllowed: ['Admin', 'SystemAdmin'] },
@@ -360,14 +362,16 @@ export default function Layout({
         {/* Content Area */}
         <main
           id="app-main-content-wrapper"
-          className={`flex-1 min-w-0 max-w-full overflow-hidden p-4 md:p-6 min-h-[calc(100vh-4rem)] transition-all duration-300 ${
+          className={`flex-1 min-w-0 max-w-full overflow-hidden min-h-[calc(100vh-4rem)] transition-all duration-300 ${
+            currentTab === 'fuel-comparison' ? 'p-0' : 'p-4 md:p-6'
+          } ${
             sidebarOpen 
               ? isRtl ? 'lg:mr-64 mr-0' : 'lg:ml-64 ml-0' 
               : 'm-0'
           }`}
         >
           {/* Support Session Impersonation Banner */}
-          {activeUser?.impersonator && (
+          {activeUser?.impersonator && currentTab !== 'fuel-comparison' && (
             <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-600 via-rose-600 to-amber-600 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 border border-rose-500">
               <div className="flex items-center gap-3">
                 <span className="flex h-3 w-3 rounded-full bg-white animate-ping shrink-0" />
@@ -400,7 +404,7 @@ export default function Layout({
           )}
 
           {/* Quick Alert if custody gets low */}
-          {metrics.cashAvailable < 5000 && (
+          {metrics.cashAvailable < 5000 && currentTab !== 'fuel-comparison' && (
             <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-semibold flex items-center gap-2">
               <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
               <span>
@@ -413,23 +417,27 @@ export default function Layout({
           )}
 
           {/* Children container */}
-          <div className="max-w-7xl mx-auto">
-            {currentTab !== homeTab && (
-              <button
-                id="btn-back-to-home-global"
-                onClick={() => setCurrentTab(homeTab)}
-                className={`mb-6 inline-flex items-center gap-2 px-4 py-2 text-xs md:text-sm font-black rounded-xl border transition-all duration-200 cursor-pointer shadow-sm ${
-                  theme === 'dark'
-                    ? 'bg-[#1e293b] border-[#334155] hover:bg-slate-800 text-slate-200 hover:text-white'
-                    : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-950'
-                }`}
-              >
-                <LayoutDashboard size={16} className="text-emerald-500" />
-                <span>{isRtl ? 'العودة إلى الصفحة الرئيسية' : 'Back to Home'}</span>
-              </button>
-            )}
-            {children}
-          </div>
+          {currentTab === 'fuel-comparison' ? (
+            children
+          ) : (
+            <div className="max-w-7xl mx-auto">
+              {currentTab !== homeTab && (
+                <button
+                  id="btn-back-to-home-global"
+                  onClick={() => setCurrentTab(homeTab)}
+                  className={`mb-6 inline-flex items-center gap-2 px-4 py-2 text-xs md:text-sm font-black rounded-xl border transition-all duration-200 cursor-pointer shadow-sm ${
+                    theme === 'dark'
+                      ? 'bg-[#1e293b] border-[#334155] hover:bg-slate-800 text-slate-200 hover:text-white'
+                      : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-950'
+                  }`}
+                >
+                  <LayoutDashboard size={16} className="text-emerald-500" />
+                  <span>{isRtl ? 'العودة إلى الصفحة الرئيسية' : 'Back to Home'}</span>
+                </button>
+              )}
+              {children}
+            </div>
+          )}
         </main>
       </div>
 

@@ -12,7 +12,7 @@ service cloud.firestore {
         request.auth.token.email == 'alaaabusalah96@gmail.com' ||
         request.auth.token.email == 'alaabusalah96@gmail.com' ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SystemAdmin')
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'SystemAdmin')
       );
     }
 
@@ -25,11 +25,11 @@ service cloud.firestore {
     }
 
     function getCompanyId() {
-      return userDocExists() ? getUserData().company_id : "";
+      return userDocExists() ? getUserData().get('company_id', '') : "";
     }
 
     function getUserRole() {
-      return userDocExists() ? getUserData().role : "";
+      return userDocExists() ? getUserData().get('role', '') : "";
     }
 
     function isSameCompanyRead(resourceData) {
@@ -37,7 +37,7 @@ service cloud.firestore {
         isLoggedIn() && 
         getCompanyId() != "" && 
         resourceData != null && 
-        resourceData.company_id == getCompanyId()
+        resourceData.get('company_id', '') == getCompanyId()
       );
     }
 
@@ -46,8 +46,8 @@ service cloud.firestore {
         isLoggedIn() &&
         getCompanyId() != "" &&
         requestData != null &&
-        requestData.company_id == getCompanyId() &&
-        (resourceData == null || resourceData.company_id == getCompanyId())
+        requestData.get('company_id', '') == getCompanyId() &&
+        (resourceData == null || resourceData.get('company_id', '') == getCompanyId())
       );
     }
 
@@ -228,30 +228,30 @@ service cloud.firestore {
     // --- Audit Logs, Activity Logs & Logs (Immutable protection) ---
     match /activity_logs/{id} {
       allow read: if isSameCompanyRead(resource.data);
-      allow create: if isSameCompanyWrite(request.resource.data, null);
+      allow create: if true; // Append-only activity logs allowed for everyone (including guest/system events)
       allow update, delete: if false; // Strict modification protection
     }
 
     match /AuditLogs/{id} {
       allow read: if isLoggedIn() && (isSystemAdmin() || (getCompanyId() != "" && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin')));
-      allow create: if isSameCompanyWrite(request.resource.data, null);
+      allow create: if true; // Append-only audit logs allowed for everyone (including guest/system events)
       allow update, delete: if false; // Strict modification protection
     }
 
     match /logs/{id} {
       allow read: if isSameCompanyRead(resource.data);
-      allow create: if isSameCompanyWrite(request.resource.data, null);
+      allow create: if true; // Append-only logs allowed for everyone (including guest/system events)
       allow update, delete: if false; // Strict modification protection
     }
 
     // --- Categories & System Meta ---
     match /categories/{id} {
-      allow read: if isLoggedIn();
+      allow read: if true;
       allow write: if isSystemAdmin();
     }
 
     match /system_meta/{id} {
-      allow read: if isLoggedIn();
+      allow read: if true;
       allow write: if isSystemAdmin();
     }
 
