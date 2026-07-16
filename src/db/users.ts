@@ -210,10 +210,6 @@ export class UsersModule {
       StorageEngine.cache['active_user'] = null;
       localStorage.removeItem('custody_active_user');
     }
-    // Dispatch event so that setupFirebaseSync and other listeners react immediately to auth session state changes
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('custody_db_updated'));
-    }
   }
 
   static saveUsers(users: AppUser[]): void {

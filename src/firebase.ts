@@ -18,14 +18,21 @@ import {
 } from 'firebase/firestore';
 import { AppUser, ExpenseCategory, Transaction, ActivityLog, CustodyConfig, Region, Station, Company, Expense, CashVoucher, TransactionHistory, Notification, AuditLog, SystemPermission, SystemRole, DeletedTransaction, SignupRequest } from './types';
 
-import firebaseConfig from '../firebase-applet-config.json';
+const firebaseConfig = {
+  apiKey: "AIzaSyA2I_2GIEfQhawBL2KhXyxD6CwTLJR-jFw",
+  authDomain: "custodyflow.firebaseapp.com",
+  projectId: "custodyflow",
+  storageBucket: "custodyflow.firebasestorage.app",
+  messagingSenderId: "88602135716",
+  appId: "1:88602135716:web:f73fc0a3c44fc1ec3d6a31",
+  measurementId: "G-JNEFCLF157"
+};
 
 const app = initializeApp(firebaseConfig);
-export const db = initializeFirestore(
-  app, 
-  { experimentalForceLongPolling: true }, 
-  firebaseConfig.firestoreDatabaseId
-);
+const isSandboxProject = firebaseConfig.projectId === "refined-garage-5nzsc";
+export const db = isSandboxProject
+  ? initializeFirestore(app, { experimentalForceLongPolling: true }, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe")
+  : initializeFirestore(app, { experimentalForceLongPolling: true });
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
@@ -175,13 +182,8 @@ export async function seedDatabaseIfEmpty(defaults: {
         }
       });
       console.log('[DEBUG_LOG] 2. After reading system_meta. Doc count:', snap.size, 'alreadySeededV7:', alreadySeededV7, 'docs:', snap.docs.map(d => ({id: d.id, data: d.data()})));
-    } catch (e: any) {
+    } catch (e) {
       console.warn('Error checking seed_status_v7:', e);
-      // If we got a permission-denied error, we do not have privileges to clear/seed anyway.
-      // Gracefully treat as already seeded to prevent throwing further permission errors when clearing.
-      if (e?.code === 'permission-denied' || e?.message?.includes('permission')) {
-        alreadySeededV7 = true;
-      }
     }
 
     if (!alreadySeededV7) {
@@ -309,12 +311,6 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
   console.log('[DEBUG_LOG] 5. Before running rebuildListeners(). ActiveUser ID:', activeUser?.id, 'Company ID:', companyId);
   clearActiveUnsubscribes();
 
-  // If no active user, do not load any Firestore listeners to prevent permission errors
-  if (!activeUser) {
-    console.log('No active user. Skipping building listeners.');
-    return;
-  }
-
   console.log(`Rebuilding Firestore listeners. Active user: ${activeUser?.email || 'Guest'}, Selected company: ${companyId}`);
 
   // 1. Sync Companies (SaaS Multi-tenant / Scoped)
@@ -354,6 +350,11 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
     handleFirestoreError(error, OperationType.GET, 'categories');
   });
   activeUnsubscribes.push(unsubCategories);
+
+  // If no active user, do not load transactional collections to protect performance
+  if (!activeUser) {
+    return;
+  }
 
   // 4. Sync Regions (Scoped to current company)
   const qRegions = query(collection(db, 'regions'), where('company_id', '==', companyId));
