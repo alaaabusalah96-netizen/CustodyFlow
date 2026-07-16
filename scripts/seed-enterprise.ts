@@ -1,19 +1,23 @@
-import { initializeApp } from 'firebase/app';
-import { initializeFirestore, doc, collection, setDoc, getDocs, limit, query } from 'firebase/firestore';
+import admin from 'firebase-admin';
 import fs from 'fs';
 
 // Read config from local file
 const firebaseConfig = JSON.parse(fs.readFileSync('./firebase-applet-config.json', 'utf8'));
 
-// Initialize Firebase App & Firestore targeting the specific database
-const app = initializeApp(firebaseConfig);
-const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true
-}, firebaseConfig.firestoreDatabaseId || '(default)');
+// Initialize Firebase Admin SDK using Application Default Credentials (ADC) or credentials if in fallback
+admin.initializeApp({
+  projectId: firebaseConfig.projectId
+});
 
-console.log(`Starting Cloud Firestore database initialization for CustodyFlow...`);
+// Configure custom Database ID using Firestore constructor
+const db = new admin.firestore.Firestore({
+  projectId: firebaseConfig.projectId,
+  databaseId: firebaseConfig.firestoreDatabaseId || '(default)'
+});
+
+console.log(`Starting Cloud Firestore database initialization (using firebase-admin) for CustodyFlow...`);
 console.log(`Project ID: ${firebaseConfig.projectId}`);
-console.log(`Database ID: ${firebaseConfig.firestoreDatabaseId}`);
+console.log(`Database ID: ${firebaseConfig.firestoreDatabaseId || '(default)'}`);
 
 // Helper to generate ISO strings for timestamps
 const now = () => new Date().toISOString();
@@ -458,8 +462,8 @@ async function seed() {
   for (const [colName, docs] of Object.entries(seedData)) {
     try {
       console.log(`Checking collection [${colName}]...`);
-      const qCol = query(collection(db, colName), limit(1));
-      const snap = await getDocs(qCol);
+      const qCol = db.collection(colName).limit(1);
+      const snap = await qCol.get();
       
       if (!snap.empty) {
         console.log(`Collection [${colName}] already exists and contains data. Skipping.`);
@@ -468,8 +472,8 @@ async function seed() {
         console.log(`Seeding collection [${colName}]...`);
         let seededCount = 0;
         for (const [docId, docData] of Object.entries(docs)) {
-          const docRef = doc(db, colName, docId);
-          await setDoc(docRef, docData);
+          const docRef = db.collection(colName).doc(docId);
+          await docRef.set(docData);
           seededCount++;
         }
         console.log(`Successfully seeded ${seededCount} documents into [${colName}].`);

@@ -11,7 +11,7 @@ export type InventoryDocType =
   | 'Adjustment'       // تسوية جرد
   | 'Damage';          // إذن إتلاف / خردة
 
-export type InventoryDocStatus = 'Draft' | 'Pending' | 'Approved' | 'Posted' | 'Rejected' | 'Cancelled';
+export type InventoryDocStatus = 'Draft' | 'Pending' | 'Approved' | 'Posted' | 'Rejected' | 'Cancelled' | 'Dispatched';
 
 export interface Warehouse {
   id: string;
@@ -21,6 +21,9 @@ export interface Warehouse {
   company_id: string;
   location?: string;
   receiving_approval_workflow: boolean; // whether it requires approval before stock updates
+  max_capacity_qty?: number;            // Maximum total item units allowed (optional)
+  max_capacity_volume?: number;         // Maximum volume allowed in m³ (optional)
+  is_capacity_enforced?: boolean;       // Enable physical limit validation on postings
 }
 
 export interface Product {
@@ -36,6 +39,12 @@ export interface Product {
   description?: string;
 }
 
+export interface BinAllocation {
+  bin_id: string;
+  bin_code: string;
+  qty: number;
+}
+
 export interface InventoryDocItem {
   product_id: string;
   product_code: string;
@@ -44,6 +53,10 @@ export interface InventoryDocItem {
   qty: number;
   notes?: string;
   last_purchase_price?: number;
+  qty_received?: number;
+  qty_variance?: number;
+  variance_reason?: string;
+  bin_allocations?: BinAllocation[]; // Multi-bin distribution for this item
 }
 
 export interface InventoryDocument extends BaseMetadata {
@@ -61,6 +74,9 @@ export interface InventoryDocument extends BaseMetadata {
   items: InventoryDocItem[];
   status: InventoryDocStatus;
   scrap_action?: 'IN' | 'OUT';
+  received_date?: string;
+  received_by?: string;
+  received_notes?: string;
 }
 
 export interface StockMovement {
@@ -77,6 +93,8 @@ export interface StockMovement {
   company_id: string;
   created_at: string;
   created_by: string;
+  bin_id?: string;    // Specific bin targeted by this movement
+  bin_code?: string;  // Specific bin code targeted
 }
 
 export interface InventoryReportFilter {
@@ -86,3 +104,37 @@ export interface InventoryReportFilter {
   productId?: string;
   docType?: InventoryDocType;
 }
+
+export interface InventoryLedgerEntry {
+  id: string;
+  company_id: string;
+  warehouse_id: string;
+  product_id: string;
+  transaction_type: string; // e.g. Receipt, Issue, Transfer, etc.
+  reference_document_id: string; // doc_id
+  reference_document_no: string; // doc_no
+  qty_in: number;
+  qty_out: number;
+  balance_before: number;
+  balance_after: number;
+  unit_cost: number;
+  running_cost: number; // accumulated running cost (unit_cost * balance_after)
+  timestamp: string; // ISO timestamp
+  user_id: string;
+  user_name?: string;
+  audit_ref: string; // audit trace code
+  bin_id?: string;    // Bin location of this ledger transaction
+  bin_code?: string;  // Bin location code
+}
+
+export interface WarehouseBin {
+  id: string;
+  warehouse_id: string;
+  code: string;       // e.g., BIN-A1-S3
+  name: string;       // e.g., Row A, Shelf 3
+  max_capacity_qty: number; // Maximum units allowed in this bin
+  is_active: boolean;
+  zone?: string;      // e.g., Ambient, Cold Storage, Hazardous, etc.
+}
+
+

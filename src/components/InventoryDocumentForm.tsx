@@ -14,7 +14,8 @@ import {
   HelpCircle,
   Hash,
   Activity,
-  DollarSign
+  DollarSign,
+  Layers
 } from 'lucide-react';
 import { 
   InventoryDocument, 
@@ -22,7 +23,8 @@ import {
   InventoryDocStatus, 
   InventoryDocItem,
   Warehouse,
-  Product
+  Product,
+  WarehouseBin
 } from '../types/inventory';
 import { InventoryModule } from '../db/inventory';
 import { CustodyDB } from '../db';
@@ -79,6 +81,30 @@ export default function InventoryDocumentForm({
   const [statement, setStatement] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [items, setItems] = useState<Omit<InventoryDocItem, 'product_code' | 'product_name' | 'unit'>[]>([]);
+
+  // Phase 3 Multi-bin States
+  const [activeBins, setActiveBins] = useState<WarehouseBin[]>([]);
+  const [openBinIdx, setOpenBinIdx] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (sourceWarehouseId) {
+      setActiveBins(InventoryModule.getWarehouseBins(sourceWarehouseId));
+    } else {
+      setActiveBins([]);
+    }
+  }, [sourceWarehouseId]);
+
+  const handleUpdateBinAllocations = (itemIdx: number, allocations: { bin_id: string; bin_code: string; qty: number }[]) => {
+    setItems(prev => prev.map((it, idx) => {
+      if (idx === itemIdx) {
+        return {
+          ...it,
+          bin_allocations: allocations
+        };
+      }
+      return it;
+    }));
+  };
 
   // Filter warehouses for Scrap / Obsolete documents
   const filteredWarehouses = useMemo(() => {
@@ -139,7 +165,8 @@ export default function InventoryDocumentForm({
           product_id: i.product_id,
           qty: i.qty,
           notes: i.notes || '',
-          last_purchase_price: i.last_purchase_price
+          last_purchase_price: i.last_purchase_price,
+          bin_allocations: i.bin_allocations || []
         })));
       }
     } else {
@@ -158,7 +185,7 @@ export default function InventoryDocumentForm({
         setSourceWarehouseId(warehouses[0].id);
       }
       // Initialize with one empty item row
-      setItems([{ product_id: '', qty: 1, notes: '', last_purchase_price: 0 }]);
+      setItems([{ product_id: '', qty: 1, notes: '', last_purchase_price: 0, bin_allocations: [] }]);
     }
   }, [docId, warehouses, docType]);
 
@@ -278,7 +305,8 @@ export default function InventoryDocumentForm({
         unit: prod?.unit || '',
         qty: item.qty,
         notes: item.notes,
-        last_purchase_price: item.last_purchase_price || prod?.last_purchase_price || 0
+        last_purchase_price: item.last_purchase_price || prod?.last_purchase_price || 0,
+        bin_allocations: item.bin_allocations || []
       };
     });
 
@@ -708,117 +736,202 @@ export default function InventoryDocumentForm({
                     : 0;
 
                   return (
-                    <tr 
-                      key={idx} 
-                      className={`text-xs hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all ${
-                        errors[`item_product_${idx}`] || errors[`item_qty_${idx}`] ? 'bg-rose-500/5' : ''
-                      }`}
-                    >
-                      {/* Row Index */}
-                      <td className="p-3 text-center font-mono text-slate-400 font-bold">{idx + 1}</td>
+                    <React.Fragment key={idx}>
+                      <tr 
+                        className={`text-xs hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all ${
+                          errors[`item_product_${idx}`] || errors[`item_qty_${idx}`] ? 'bg-rose-500/5' : ''
+                        }`}
+                      >
+                        {/* Row Index */}
+                        <td className="p-3 text-center font-mono text-slate-400 font-bold">{idx + 1}</td>
 
-                      {/* Product Smart Searchable Dropdown */}
-                      <td className="p-2 relative">
-                        <SearchableDropdown
-                          label=""
-                          placeholder={isRtl ? '-- اختر الصنف --' : '-- Select Product --'}
-                          value={item.product_id}
-                          list={products.map(p => ({
-                            id: p.id,
-                            name: p.name,
-                            code: p.code,
-                            subText: (p.barcode ? `Barcode: ${p.barcode}` : '') + ` | Min: ${p.min_stock}`
-                          }))}
-                          onSelect={(id) => handleUpdateItemValue(idx, 'product_id', id)}
-                          error={errors[`item_product_${idx}`]}
-                          typeKey={idx}
-                          theme={theme}
-                          isRtl={isRtl}
-                          activeDropdown={activeDropdown}
-                          setActiveDropdown={setActiveDropdown}
-                        />
-                      </td>
+                        {/* Product Smart Searchable Dropdown */}
+                        <td className="p-2 relative">
+                          <SearchableDropdown
+                            label=""
+                            placeholder={isRtl ? '-- اختر الصنف --' : '-- Select Product --'}
+                            value={item.product_id}
+                            list={products.map(p => ({
+                              id: p.id,
+                              name: p.name,
+                              code: p.code,
+                              subText: (p.barcode ? `Barcode: ${p.barcode}` : '') + ` | Min: ${p.min_stock}`
+                            }))}
+                            onSelect={(id) => handleUpdateItemValue(idx, 'product_id', id)}
+                            error={errors[`item_product_${idx}`]}
+                            typeKey={idx}
+                            theme={theme}
+                            isRtl={isRtl}
+                            activeDropdown={activeDropdown}
+                            setActiveDropdown={setActiveDropdown}
+                          />
+                        </td>
 
-                      {/* Unit (Automatic) */}
-                      <td className="p-3 font-medium text-slate-500 dark:text-slate-400">
-                        {selectedProd ? selectedProd.unit : <span className="italic text-slate-400">---</span>}
-                      </td>
+                        {/* Unit (Automatic) */}
+                        <td className="p-3 font-medium text-slate-500 dark:text-slate-400">
+                          {selectedProd ? selectedProd.unit : <span className="italic text-slate-400">---</span>}
+                        </td>
 
-                      {/* Available Balance (Calculated) */}
-                      <td className="p-3 text-center font-mono font-bold text-slate-600 dark:text-slate-400">
-                        {item.product_id ? (
-                          <span className={`px-2 py-0.5 rounded ${
-                            currentStock < (selectedProd?.min_stock || 0)
-                              ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                              : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                          }`}>
-                            {currentStock}
-                          </span>
-                        ) : (
-                          <span className="italic text-slate-400">---</span>
-                        )}
-                      </td>
+                        {/* Available Balance (Calculated) */}
+                        <td className="p-3 text-center font-mono font-bold text-slate-600 dark:text-slate-400">
+                          {item.product_id ? (
+                            <span className={`px-2 py-0.5 rounded ${
+                              currentStock < (selectedProd?.min_stock || 0)
+                                ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                            }`}>
+                              {currentStock}
+                            </span>
+                          ) : (
+                            <span className="italic text-slate-400">---</span>
+                          )}
+                        </td>
 
-                      {/* Quantity */}
-                      <td className="p-2">
-                        <input
-                          type="number"
-                          value={item.qty}
-                          onChange={(e) => handleUpdateItemValue(idx, 'qty', parseFloat(e.target.value) || 0)}
-                          className={`w-full px-2.5 py-1.5 rounded-lg border text-xs text-center font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
-                            theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
-                          } ${errors[`item_qty_${idx}`] ? 'border-rose-500 ring-2 ring-rose-500/10' : ''}`}
-                        />
-                        {errors[`item_qty_${idx}`] && <p className="text-[9px] text-rose-500 font-bold mt-1 text-center">{errors[`item_qty_${idx}`]}</p>}
-                      </td>
-
-                      {/* Last Purchase Price (only for Receipt) */}
-                      {docType === 'Receipt' && (
+                        {/* Quantity */}
                         <td className="p-2">
                           <input
                             type="number"
-                            value={item.last_purchase_price || 0}
-                            onChange={(e) => handleUpdateItemValue(idx, 'last_purchase_price', parseFloat(e.target.value) || 0)}
+                            value={item.qty}
+                            onChange={(e) => handleUpdateItemValue(idx, 'qty', parseFloat(e.target.value) || 0)}
                             className={`w-full px-2.5 py-1.5 rounded-lg border text-xs text-center font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
+                              theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+                            } ${errors[`item_qty_${idx}`] ? 'border-rose-500 ring-2 ring-rose-500/10' : ''}`}
+                          />
+                          {errors[`item_qty_${idx}`] && <p className="text-[9px] text-rose-500 font-bold mt-1 text-center">{errors[`item_qty_${idx}`]}</p>}
+                        </td>
+
+                        {/* Last Purchase Price (only for Receipt) */}
+                        {docType === 'Receipt' && (
+                          <td className="p-2">
+                            <input
+                              type="number"
+                              value={item.last_purchase_price || 0}
+                              onChange={(e) => handleUpdateItemValue(idx, 'last_purchase_price', parseFloat(e.target.value) || 0)}
+                              className={`w-full px-2.5 py-1.5 rounded-lg border text-xs text-center font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
+                                theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+                              }`}
+                            />
+                          </td>
+                        )}
+
+                        {/* Notes */}
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            value={item.notes || ''}
+                            onChange={(e) => handleUpdateItemValue(idx, 'notes', e.target.value)}
+                            placeholder={isRtl ? 'مواصفات إضافية...' : 'Item specifications...'}
+                            className={`w-full px-2.5 py-1.5 rounded-lg border text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
                               theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
                             }`}
                           />
                         </td>
+
+                        {/* Actions */}
+                        <td className="p-2 text-center flex items-center justify-center gap-1">
+                          {activeBins.length > 0 && item.product_id && (
+                            <button
+                              type="button"
+                              onClick={() => setOpenBinIdx(openBinIdx === idx ? null : idx)}
+                              className={`p-1.5 rounded transition-all cursor-pointer ${
+                                openBinIdx === idx 
+                                  ? 'bg-emerald-600 text-white shadow-sm' 
+                                  : 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white'
+                              }`}
+                              title={isRtl ? 'توزيع الحاويات' : 'Configure Bins'}
+                            >
+                              <Layers size={12} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDuplicateItemRow(idx)}
+                            className="p-1.5 rounded bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white transition-all cursor-pointer"
+                            title={isRtl ? 'تكرار الصف' : 'Duplicate Row'}
+                          >
+                            <Copy size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteItemRow(idx)}
+                            className="p-1.5 rounded bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
+                            title={isRtl ? 'حذف الصف' : 'Delete Row'}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* Bin Allocation Sub-Row */}
+                      {openBinIdx === idx && activeBins.length > 0 && item.product_id && (
+                        <tr className="bg-slate-500/5 dark:bg-slate-800/10">
+                          <td colSpan={docType === 'Receipt' ? 8 : 7} className="p-4 border-t border-slate-100 dark:border-slate-800">
+                            <div className="max-w-2xl mx-auto space-y-4">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                  {isRtl ? `توزيع صنف (${selectedProd?.name}) على حاويات المستودع` : `Distribute item (${selectedProd?.name}) across bins`}
+                                </span>
+                                <span className="text-xs font-medium font-mono text-slate-500">
+                                  {isRtl 
+                                    ? `الكمية الإجمالية: ${item.qty} | المخصصة: ${item.bin_allocations?.reduce((sum, a) => sum + a.qty, 0) || 0}` 
+                                    : `Total Qty: ${item.qty} | Allocated: ${item.bin_allocations?.reduce((sum, a) => sum + a.qty, 0) || 0}`}
+                                </span>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {activeBins.map((bin) => {
+                                  const currentAlloc = item.bin_allocations?.find(a => a.bin_id === bin.id)?.qty || 0;
+                                  const currentBinStock = InventoryModule.getBinTotalStock(bin.id);
+                                  const productBinStock = item.product_id ? InventoryModule.getBinProductStock(item.product_id, bin.id) : 0;
+                                  return (
+                                    <div key={bin.id} className={`p-3 rounded-xl border text-xs flex flex-col justify-between gap-2 transition-all ${
+                                      currentAlloc > 0 
+                                        ? 'border-emerald-500/50 bg-emerald-500/5' 
+                                        : (theme === 'dark' ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-white')
+                                    }`}>
+                                      <div className="flex justify-between items-start">
+                                        <div>
+                                          <p className="font-bold text-slate-700 dark:text-slate-300">{bin.name} ({bin.code})</p>
+                                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                            {isRtl 
+                                              ? `الرصيد الكلي: ${currentBinStock} / ${bin.max_capacity_qty || '∞'} | رصيد الصنف: ${productBinStock}` 
+                                              : `Total Stock: ${currentBinStock} / ${bin.max_capacity_qty || '∞'} | Product Stock: ${productBinStock}`}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <span className="text-[10px] text-slate-400 font-bold">{isRtl ? 'الكمية:' : 'Qty:'}</span>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={currentAlloc || ''}
+                                          placeholder="0"
+                                          onChange={(e) => {
+                                            const val = parseFloat(e.target.value) || 0;
+                                            let otherAllocations = (item.bin_allocations || []).filter(a => a.bin_id !== bin.id);
+                                            if (val > 0) {
+                                              otherAllocations.push({
+                                                bin_id: bin.id,
+                                                bin_code: bin.code,
+                                                qty: val
+                                              });
+                                            }
+                                            handleUpdateBinAllocations(idx, otherAllocations);
+                                          }}
+                                          className={`w-24 px-2 py-1 border rounded-lg font-mono text-center focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                                            theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+                                          }`}
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-
-                      {/* Notes */}
-                      <td className="p-2">
-                        <input
-                          type="text"
-                          value={item.notes || ''}
-                          onChange={(e) => handleUpdateItemValue(idx, 'notes', e.target.value)}
-                          placeholder={isRtl ? 'مواصفات إضافية...' : 'Item specifications...'}
-                          className={`w-full px-2.5 py-1.5 rounded-lg border text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
-                            theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
-                          }`}
-                        />
-                      </td>
-
-                      {/* Actions */}
-                      <td className="p-2 text-center flex items-center justify-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleDuplicateItemRow(idx)}
-                          className="p-1.5 rounded bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white transition-all cursor-pointer"
-                          title={isRtl ? 'تكرار الصف' : 'Duplicate Row'}
-                        >
-                          <Copy size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteItemRow(idx)}
-                          className="p-1.5 rounded bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
-                          title={isRtl ? 'حذف الصف' : 'Delete Row'}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </td>
-                    </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>

@@ -25,6 +25,8 @@ import SuperAdmin from './pages/SuperAdmin';
 import CompanyAdminDashboard from './pages/CompanyAdminDashboard';
 import RegionAdminDashboard from './pages/RegionAdminDashboard';
 import Inventory from './pages/Inventory';
+import Purchasing from './pages/Purchasing';
+import Accounting from './pages/Accounting';
 
 export default function App() {
   // Try to load any existing active session, or default to null
@@ -397,6 +399,20 @@ export default function App() {
       case 'inventory':
         return (
           <Inventory
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'purchasing':
+        return (
+          <Purchasing
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'accounting':
+        return (
+          <Accounting
             language={language}
             theme={theme}
           />

@@ -1,4 +1,4 @@
-import { Warehouse, Product, InventoryDocument, StockMovement, InventoryDocType, InventoryDocStatus } from '../types/inventory';
+import { Warehouse, Product, InventoryDocument, StockMovement, InventoryDocType, InventoryDocStatus, InventoryLedgerEntry, WarehouseBin } from '../types/inventory';
 import { StorageEngine } from './storage';
 import { dbSetDoc, dbDeleteDoc, db } from '../firebase';
 import { UsersModule } from './users';
@@ -269,6 +269,234 @@ export class InventoryModule {
     return newW;
   }
 
+  // Warehouse Bins (Phase 3)
+  static getWarehouseBins(warehouseId?: string): WarehouseBin[] {
+    const list = StorageEngine.getStored<WarehouseBin[]>('warehouse_bins', []);
+    if (warehouseId) {
+      return list.filter(b => b.warehouse_id === warehouseId);
+    }
+    return list;
+  }
+
+  static saveWarehouseBins(bins: WarehouseBin[]): void {
+    StorageEngine.setStored('warehouse_bins', bins);
+    bins.forEach(b => dbSetDoc('warehouse_bins', b.id, b));
+  }
+
+  static addWarehouseBin(bin: Omit<WarehouseBin, 'id'>): WarehouseBin {
+    const list = StorageEngine.getStored<WarehouseBin[]>('warehouse_bins', []);
+    const newBin: WarehouseBin = {
+      ...bin,
+      id: `bin-${Date.now()}`
+    };
+    list.push(newBin);
+    InventoryModule.saveWarehouseBins(list);
+    return newBin;
+  }
+
+  static updateWarehouseBin(binId: string, updates: Partial<WarehouseBin>): void {
+    const list = StorageEngine.getStored<WarehouseBin[]>('warehouse_bins', []);
+    const idx = list.findIndex(b => b.id === binId);
+    if (idx !== -1) {
+      list[idx] = {
+        ...list[idx],
+        ...updates
+      };
+      InventoryModule.saveWarehouseBins(list);
+    }
+  }
+
+  static deleteWarehouseBin(binId: string): void {
+    const list = StorageEngine.getStored<WarehouseBin[]>('warehouse_bins', []);
+    const filtered = list.filter(b => b.id !== binId);
+    InventoryModule.saveWarehouseBins(filtered);
+    dbDeleteDoc('warehouse_bins', binId);
+  }
+
+  // Stock tracking at Bin Level
+  static getBinProductStock(productId: string, binId: string): number {
+    const movements = InventoryModule.getStockMovements();
+    return movements
+      .filter(m => m.product_id === productId && m.bin_id === binId)
+      .reduce((sum, m) => sum + m.qty_change, 0);
+  }
+
+  static getBinTotalStock(binId: string): number {
+    const movements = InventoryModule.getStockMovements();
+    return movements
+      .filter(m => m.bin_id === binId)
+      .reduce((sum, m) => sum + m.qty_change, 0);
+  }
+
+  static getWarehouseTotalStock(warehouseId: string): number {
+    const movements = InventoryModule.getStockMovements();
+    return movements
+      .filter(m => m.warehouse_id === warehouseId)
+      .reduce((sum, m) => sum + m.qty_change, 0);
+  }
+
+  // Relocation: Move stock internally between bins in the same warehouse
+  static relocateBinStock(
+    companyId: string,
+    warehouseId: string,
+    productId: string,
+    fromBinId: string,
+    toBinId: string,
+    qty: number
+  ): { success: boolean; messageAr: string; messageEn: string } {
+    if (qty <= 0) {
+      return {
+        success: false,
+        messageAr: 'يجب أن تكون الكمية أكبر من الصفر',
+        messageEn: 'Quantity must be greater than zero'
+      };
+    }
+
+    // Verify source bin stock
+    const sourceStock = InventoryModule.getBinProductStock(productId, fromBinId);
+    if (sourceStock < qty) {
+      return {
+        success: false,
+        messageAr: 'عذراً، رصيد الحاوية المصدر غير كافٍ لإتمام عملية النقل',
+        messageEn: 'Sorry, the source bin does not have enough stock to complete the transfer'
+      };
+    }
+
+    const bins = InventoryModule.getWarehouseBins(warehouseId);
+    const sourceBin = bins.find(b => b.id === fromBinId);
+    const destBin = bins.find(b => b.id === toBinId);
+
+    if (!sourceBin || !destBin) {
+      return {
+        success: false,
+        messageAr: 'الحاوية المحددة غير موجودة في هذا المستودع',
+        messageEn: 'The specified bin was not found in this warehouse'
+      };
+    }
+
+    // Validate capacity on destination bin
+    const destCurrentStock = InventoryModule.getBinTotalStock(toBinId);
+    if (destBin.max_capacity_qty && (destCurrentStock + qty) > destBin.max_capacity_qty) {
+      return {
+        success: false,
+        messageAr: `عذراً، عملية النقل تتجاوز السعة القصوى للحاوية المستهدفة (${destBin.name}). السعة المتاحة: ${destBin.max_capacity_qty - destCurrentStock} وحدة.`,
+        messageEn: `Sorry, this relocation exceeds the maximum capacity of target bin (${destBin.name}). Available capacity: ${destBin.max_capacity_qty - destCurrentStock} units.`
+      };
+    }
+
+    const user = UsersModule.getActiveUser();
+    const operatorId = user?.id || 'system';
+    const userName = user?.full_name || 'System';
+
+    const movements = InventoryModule.getStockMovements();
+    const ledgerEntries = InventoryModule.getInventoryLedger();
+
+    // 1. Negative movement from source bin
+    const movFromId = `mov-${Date.now()}-${productId}-reloc-out-${Math.floor(Math.random() * 1000)}`;
+    const movFrom: StockMovement = {
+      id: movFromId,
+      doc_id: `reloc-${Date.now()}`,
+      doc_no: `RELOC-${Date.now()}`,
+      doc_type: 'Adjustment', // adjustment-type stock record
+      product_id: productId,
+      warehouse_id: warehouseId,
+      qty_change: -qty,
+      type: 'OUT',
+      current_balance_after: InventoryModule.getProductStock(productId, warehouseId) - qty,
+      date: new Date().toISOString().split('T')[0],
+      company_id: companyId,
+      created_at: new Date().toISOString(),
+      created_by: operatorId,
+      bin_id: fromBinId,
+      bin_code: sourceBin.code
+    };
+
+    // 2. Positive movement to destination bin
+    const movToId = `mov-${Date.now()}-${productId}-reloc-in-${Math.floor(Math.random() * 1000)}`;
+    const movTo: StockMovement = {
+      id: movToId,
+      doc_id: movFrom.doc_id,
+      doc_no: movFrom.doc_no,
+      doc_type: 'Adjustment',
+      product_id: productId,
+      warehouse_id: warehouseId,
+      qty_change: qty,
+      type: 'IN',
+      current_balance_after: InventoryModule.getProductStock(productId, warehouseId),
+      date: movFrom.date,
+      company_id: companyId,
+      created_at: new Date().toISOString(),
+      created_by: operatorId,
+      bin_id: toBinId,
+      bin_code: destBin.code
+    };
+
+    movements.push(movFrom, movTo);
+
+    // Ledger records
+    const ledFrom: InventoryLedgerEntry = {
+      id: `led-${Date.now()}-${productId}-reloc-out-${Math.floor(Math.random() * 1000)}`,
+      company_id: companyId,
+      warehouse_id: warehouseId,
+      product_id: productId,
+      transaction_type: 'Bin Relocation (Out)',
+      reference_document_id: movFrom.doc_id,
+      reference_document_no: movFrom.doc_no,
+      qty_in: 0,
+      qty_out: qty,
+      balance_before: InventoryModule.getProductStock(productId, warehouseId),
+      balance_after: InventoryModule.getProductStock(productId, warehouseId) - qty,
+      unit_cost: 0,
+      running_cost: 0,
+      timestamp: new Date().toISOString(),
+      user_id: operatorId,
+      user_name: userName,
+      audit_ref: `${movFrom.doc_no}-LEDGER`,
+      bin_id: fromBinId,
+      bin_code: sourceBin.code
+    };
+
+    const ledTo: InventoryLedgerEntry = {
+      id: `led-${Date.now()}-${productId}-reloc-in-${Math.floor(Math.random() * 1000)}`,
+      company_id: companyId,
+      warehouse_id: warehouseId,
+      product_id: productId,
+      transaction_type: 'Bin Relocation (In)',
+      reference_document_id: movTo.doc_id,
+      reference_document_no: movTo.doc_no,
+      qty_in: qty,
+      qty_out: 0,
+      balance_before: InventoryModule.getProductStock(productId, warehouseId) - qty,
+      balance_after: InventoryModule.getProductStock(productId, warehouseId),
+      unit_cost: 0,
+      running_cost: 0,
+      timestamp: new Date().toISOString(),
+      user_id: operatorId,
+      user_name: userName,
+      audit_ref: `${movTo.doc_no}-LEDGER`,
+      bin_id: toBinId,
+      bin_code: destBin.code
+    };
+
+    ledgerEntries.push(ledFrom, ledTo);
+
+    InventoryModule.saveStockMovements(movements);
+    InventoryModule.saveInventoryLedger(ledgerEntries);
+
+    LogsModule.addLog(
+      operatorId,
+      userName,
+      'Internal Bin Relocation',
+      `Moved ${qty} units of item ${productId} from Bin ${sourceBin.code} to Bin ${destBin.code} inside warehouse ${warehouseId}.`
+    );
+
+    return {
+      success: true,
+      messageAr: 'تم نقل المخزون داخلياً بين الحاويات بنجاح',
+      messageEn: 'Internal bin stock relocation completed successfully'
+    };
+  }
+
   // Products
   static getProducts(): Product[] {
     const companyId = CompaniesModule.getSelectedCompanyId();
@@ -328,6 +556,181 @@ export class InventoryModule {
     const combined = [...filteredOut, ...list];
     StorageEngine.setStored('stock_movements', combined);
     list.forEach(m => dbSetDoc('stock_movements', m.id, m));
+  }
+
+  // Ledger Entries
+  static getInventoryLedger(): InventoryLedgerEntry[] {
+    const companyId = CompaniesModule.getSelectedCompanyId();
+    const defaultLedger: InventoryLedgerEntry[] = [
+      {
+        id: 'led-init-1',
+        company_id: 'comp-1',
+        warehouse_id: 'wh-1',
+        product_id: 'prod-1',
+        transaction_type: 'Receipt',
+        reference_document_id: 'init',
+        reference_document_no: 'INITIAL-STOCK-01',
+        qty_in: 100,
+        qty_out: 0,
+        balance_before: 0,
+        balance_after: 100,
+        unit_cost: 1200,
+        running_cost: 120000,
+        timestamp: '2026-06-01T08:00:00Z',
+        user_id: 'system',
+        user_name: 'System',
+        audit_ref: 'INITIAL-STOCK-01'
+      },
+      {
+        id: 'led-init-2',
+        company_id: 'comp-1',
+        warehouse_id: 'wh-1',
+        product_id: 'prod-2',
+        transaction_type: 'Receipt',
+        reference_document_id: 'init',
+        reference_document_no: 'INITIAL-STOCK-01',
+        qty_in: 25,
+        qty_out: 0,
+        balance_before: 0,
+        balance_after: 25,
+        unit_cost: 3500,
+        running_cost: 87500,
+        timestamp: '2026-06-01T08:00:00Z',
+        user_id: 'system',
+        user_name: 'System',
+        audit_ref: 'INITIAL-STOCK-01'
+      },
+      {
+        id: 'led-init-3',
+        company_id: 'comp-1',
+        warehouse_id: 'wh-1',
+        product_id: 'prod-3',
+        transaction_type: 'Receipt',
+        reference_document_id: 'init',
+        reference_document_no: 'INITIAL-STOCK-01',
+        qty_in: 40,
+        qty_out: 0,
+        balance_before: 0,
+        balance_after: 40,
+        unit_cost: 4800,
+        running_cost: 192000,
+        timestamp: '2026-06-01T08:00:00Z',
+        user_id: 'system',
+        user_name: 'System',
+        audit_ref: 'INITIAL-STOCK-01'
+      },
+      {
+        id: 'led-init-4',
+        company_id: 'comp-1',
+        warehouse_id: 'wh-2',
+        product_id: 'prod-1',
+        transaction_type: 'Receipt',
+        reference_document_id: 'init',
+        reference_document_no: 'INITIAL-STOCK-02',
+        qty_in: 50,
+        qty_out: 0,
+        balance_before: 0,
+        balance_after: 50,
+        unit_cost: 1200,
+        running_cost: 60000,
+        timestamp: '2026-06-01T08:00:00Z',
+        user_id: 'system',
+        user_name: 'System',
+        audit_ref: 'INITIAL-STOCK-02'
+      }
+    ];
+    const list = StorageEngine.getStored<InventoryLedgerEntry[]>('inventory_ledger', defaultLedger);
+    return list.filter(entry => entry.company_id === companyId);
+  }
+
+  static saveInventoryLedger(list: InventoryLedgerEntry[]): void {
+    const companyId = CompaniesModule.getSelectedCompanyId();
+    const all = StorageEngine.getStored<InventoryLedgerEntry[]>('inventory_ledger', []);
+    
+    // In case storage was completely empty, seed the defaults
+    const initialList = all.length === 0 ? [
+      {
+        id: 'led-init-1',
+        company_id: 'comp-1',
+        warehouse_id: 'wh-1',
+        product_id: 'prod-1',
+        transaction_type: 'Receipt',
+        reference_document_id: 'init',
+        reference_document_no: 'INITIAL-STOCK-01',
+        qty_in: 100,
+        qty_out: 0,
+        balance_before: 0,
+        balance_after: 100,
+        unit_cost: 1200,
+        running_cost: 120000,
+        timestamp: '2026-06-01T08:00:00Z',
+        user_id: 'system',
+        user_name: 'System',
+        audit_ref: 'INITIAL-STOCK-01'
+      },
+      {
+        id: 'led-init-2',
+        company_id: 'comp-1',
+        warehouse_id: 'wh-1',
+        product_id: 'prod-2',
+        transaction_type: 'Receipt',
+        reference_document_id: 'init',
+        reference_document_no: 'INITIAL-STOCK-01',
+        qty_in: 25,
+        qty_out: 0,
+        balance_before: 0,
+        balance_after: 25,
+        unit_cost: 3500,
+        running_cost: 87500,
+        timestamp: '2026-06-01T08:00:00Z',
+        user_id: 'system',
+        user_name: 'System',
+        audit_ref: 'INITIAL-STOCK-01'
+      },
+      {
+        id: 'led-init-3',
+        company_id: 'comp-1',
+        warehouse_id: 'wh-1',
+        product_id: 'prod-3',
+        transaction_type: 'Receipt',
+        reference_document_id: 'init',
+        reference_document_no: 'INITIAL-STOCK-01',
+        qty_in: 40,
+        qty_out: 0,
+        balance_before: 0,
+        balance_after: 40,
+        unit_cost: 4800,
+        running_cost: 192000,
+        timestamp: '2026-06-01T08:00:00Z',
+        user_id: 'system',
+        user_name: 'System',
+        audit_ref: 'INITIAL-STOCK-01'
+      },
+      {
+        id: 'led-init-4',
+        company_id: 'comp-1',
+        warehouse_id: 'wh-2',
+        product_id: 'prod-1',
+        transaction_type: 'Receipt',
+        reference_document_id: 'init',
+        reference_document_no: 'INITIAL-STOCK-02',
+        qty_in: 50,
+        qty_out: 0,
+        balance_before: 0,
+        balance_after: 50,
+        unit_cost: 1200,
+        running_cost: 60000,
+        timestamp: '2026-06-01T08:00:00Z',
+        user_id: 'system',
+        user_name: 'System',
+        audit_ref: 'INITIAL-STOCK-02'
+      }
+    ] : all;
+
+    const filteredOut = initialList.filter(entry => entry.company_id !== companyId);
+    const combined = [...filteredOut, ...list];
+    StorageEngine.setStored('inventory_ledger', combined);
+    list.forEach(entry => dbSetDoc('inventory_ledger', entry.id, entry));
   }
 
   /**
@@ -460,7 +863,7 @@ export class InventoryModule {
    */
   static async triggerLifecycleTransition(
     docId: string,
-    event: 'Submit' | 'Approve' | 'Reject' | 'Cancel'
+    event: 'Submit' | 'Approve' | 'Reject' | 'Cancel' | 'Receive'
   ): Promise<{ success: boolean; messageAr: string; messageEn: string }> {
     const documents = InventoryModule.getInventoryDocuments();
     const docIndex = documents.findIndex(d => d.id === docId);
@@ -475,14 +878,15 @@ export class InventoryModule {
     }
 
     // FSM Setup
-    const fsmConfig: FsmConfig<InventoryDocStatus, 'Submit' | 'Approve' | 'Reject' | 'Cancel', InventoryDocument> = {
+    const fsmConfig: FsmConfig<InventoryDocStatus, 'Submit' | 'Approve' | 'Reject' | 'Cancel' | 'Receive', InventoryDocument> = {
       documentType: 'InventoryDocument',
       initialState: 'Draft',
       states: {
         Draft: { name: 'Draft', labelAr: 'مسودة', labelEn: 'Draft', isInitial: true },
         Pending: { name: 'Pending', labelAr: 'قيد المراجعة', labelEn: 'Pending' },
+        Dispatched: { name: 'Dispatched', labelAr: 'مشحون قيد النقل', labelEn: 'Dispatched / In-Transit' },
         Approved: { name: 'Approved', labelAr: 'معتمد', labelEn: 'Approved', isTerminal: true },
-        Posted: { name: 'Posted', labelAr: 'مرحل', labelEn: 'Posted', isTerminal: true },
+        Posted: { name: 'Posted', labelAr: 'مرحل / مستلم', labelEn: 'Posted', isTerminal: true },
         Rejected: { name: 'Rejected', labelAr: 'مرفوض', labelEn: 'Rejected', isTerminal: true },
         Cancelled: { name: 'Cancelled', labelAr: 'ملغي', labelEn: 'Cancelled', isTerminal: true }
       },
@@ -498,10 +902,18 @@ export class InventoryModule {
         {
           event: 'Approve',
           from: 'Pending',
-          to: 'Posted', // We'll resolve to Approved or Posted dynamically
+          to: 'Posted', // We'll resolve dynamically below
           labelAr: 'اعتماد نهائي',
           labelEn: 'Final Approval',
           authorizedRoles: ['Admin', 'RegionalManager', 'SystemAdmin']
+        },
+        {
+          event: 'Receive',
+          from: 'Dispatched',
+          to: 'Posted',
+          labelAr: 'تأكيد الاستلام والترخيص',
+          labelEn: 'Confirm Receipt & Authorize',
+          authorizedRoles: ['Admin', 'RegionalManager', 'SystemAdmin', 'Storekeeper', 'StationAdmin']
         },
         {
           event: 'Reject',
@@ -545,13 +957,23 @@ export class InventoryModule {
       const warehouses = InventoryModule.getWarehouses();
       const warehouse = warehouses.find(w => w.id === document.source_warehouse_id);
       
-      // If no receiving approval workflow is required, submit triggers IMMEDIATE Approved/Posted!
+      // If no receiving approval workflow is required, submit triggers IMMEDIATE Approved/Posted (or Dispatched for Transfers)!
       if (warehouse && !warehouse.receiving_approval_workflow) {
-        nextStatus = 'Posted';
+        if (document.doc_type === 'Transfer' || document.doc_type === 'BranchTransfer' || document.doc_type === 'StationTransfer') {
+          nextStatus = 'Dispatched';
+        } else {
+          nextStatus = 'Posted';
+        }
       } else {
         nextStatus = 'Pending';
       }
     } else if (event === 'Approve') {
+      if (document.doc_type === 'Transfer' || document.doc_type === 'BranchTransfer' || document.doc_type === 'StationTransfer') {
+        nextStatus = 'Dispatched';
+      } else {
+        nextStatus = 'Posted';
+      }
+    } else if (event === 'Receive') {
       nextStatus = 'Posted';
     } else if (event === 'Reject') {
       nextStatus = 'Rejected';
@@ -567,10 +989,31 @@ export class InventoryModule {
       ...updatedMetadata
     };
 
-    // If nextState is 'Posted', we MUST generate stock movements and update stock!
+    // Validate capacities and simple overdrafts before executing transitions that generate stock records
+    if (nextStatus === 'Dispatched' || nextStatus === 'Posted') {
+      const valResult = InventoryModule.validateCapacityAndOverdraft(updatedDoc, nextStatus);
+      if (!valResult.success) {
+        return valResult;
+      }
+    }
+
+    // If nextState is 'Dispatched', we generate dispatch stock movements (source warehouse deduction)
+    if (nextStatus === 'Dispatched') {
+      try {
+        InventoryModule.generateStockMovementsForDoc(updatedDoc, user.id, 'Dispatched');
+      } catch (err: any) {
+        return {
+          success: false,
+          messageAr: `فشل ترحيل شحنة التحويل: ${err.message}`,
+          messageEn: `Transfer dispatch posting failed: ${err.message}`
+        };
+      }
+    }
+
+    // If nextState is 'Posted', we generate stock movements and update stock!
     if (nextStatus === 'Posted') {
       try {
-        InventoryModule.generateStockMovementsForDoc(updatedDoc, user.id);
+        InventoryModule.generateStockMovementsForDoc(updatedDoc, user.id, 'Posted');
       } catch (err: any) {
         return {
           success: false,
@@ -609,10 +1052,17 @@ export class InventoryModule {
   /**
    * Generates StockMovement records based on the approved document's details.
    */
-  private static generateStockMovementsForDoc(doc: InventoryDocument, operatorId: string): void {
+  private static generateStockMovementsForDoc(
+    doc: InventoryDocument, 
+    operatorId: string, 
+    stage: 'Dispatched' | 'Posted' = 'Posted'
+  ): void {
     const movements = InventoryModule.getStockMovements();
+    const ledgerEntries = InventoryModule.getInventoryLedger();
     const products = InventoryModule.getProducts();
     const updatedProductsList = [...products];
+    const activeUser = UsersModule.getActiveUser();
+    const userName = activeUser?.full_name || 'System';
 
     doc.items.forEach(item => {
       // Find and update product's last_purchase_price if doc is Receipt
@@ -633,37 +1083,52 @@ export class InventoryModule {
       let sourceQtyChange = 0;
       let targetQtyChange = 0;
 
-      switch (doc.doc_type) {
-        case 'Receipt': // الإضافة
-        case 'BranchReturn': // مرتجع من فرع
-          sourceQtyChange = item.qty;
-          break;
+      const isTransferType = doc.doc_type === 'Transfer' || doc.doc_type === 'BranchTransfer' || doc.doc_type === 'StationTransfer';
 
-        case 'Issue': // الصرف
-        case 'BranchTransfer': // تحويل لفرع
-        case 'StationTransfer': // تحويل لمحطة
-        case 'SupplierReturn': // مرتجع لمورد
+      if (isTransferType) {
+        // If we are at 'Posted' stage, check if we already did the source deduction during 'Dispatched' stage
+        const existingMovements = movements.filter(m => m.doc_id === doc.id);
+        const isTwoStepFlow = existingMovements.some(m => m.qty_change < 0);
+
+        if (stage === 'Dispatched') {
+          // STEP 1: Dispatched (Out from Source)
           sourceQtyChange = -item.qty;
-          break;
-
-        case 'Damage': // خردة/كهنة
-          if (doc.scrap_action === 'IN') {
-            sourceQtyChange = item.qty; // إضافة للمخزن عند التكهين
-          } else {
-            sourceQtyChange = -item.qty; // صرف من المخزن عند بيع الخردة
+        } else if (stage === 'Posted') {
+          // STEP 2: Posted (In to Destination)
+          const qtyReceived = item.qty_received !== undefined ? item.qty_received : item.qty;
+          targetQtyChange = qtyReceived;
+          if (!isTwoStepFlow) {
+            // Backward-compatible: If it wasn't dispatched first, do source deduction now too!
+            sourceQtyChange = -item.qty;
           }
-          break;
+        }
+      } else {
+        // Simple/other documents processed entirely at 'Posted' stage
+        if (stage === 'Posted') {
+          switch (doc.doc_type) {
+            case 'Receipt': // الإضافة
+            case 'BranchReturn': // مرتجع من فرع
+              sourceQtyChange = item.qty;
+              break;
 
-        case 'Transfer': // تحويل بين المخازن
-          sourceQtyChange = -item.qty;
-          targetQtyChange = item.qty;
-          break;
+            case 'Issue': // الصرف
+            case 'SupplierReturn': // مرتجع لمورد
+              sourceQtyChange = -item.qty;
+              break;
 
-        case 'Adjustment': // تسوية جردية
-          // In adjustment, row qty is the actual physical count.
-          // Therefore, the qty_change needed to reach it is: actual_qty - current_stock
-          sourceQtyChange = item.qty - currentStock;
-          break;
+            case 'Damage': // خردة/كهنة
+              if (doc.scrap_action === 'IN') {
+                sourceQtyChange = item.qty; // إضافة للمخزن عند التكهين
+              } else {
+                sourceQtyChange = -item.qty; // صرف من المخزن عند بيع الخردة
+              }
+              break;
+
+            case 'Adjustment': // تسوية جردية
+              sourceQtyChange = item.qty - currentStock;
+              break;
+          }
+        }
       }
 
       // Validate overdraft if negative movement
@@ -674,51 +1139,381 @@ export class InventoryModule {
         }
       }
 
+      const prod = products.find(p => p.id === item.product_id);
+      const unit_cost = item.last_purchase_price || prod?.last_purchase_price || 0;
+
       // 1. Create movement for source warehouse
       if (sourceQtyChange !== 0) {
-        const newBalanceAfter = currentStock + sourceQtyChange;
-        const movSource: StockMovement = {
-          id: `mov-${Date.now()}-${item.product_id}-source-${Math.floor(Math.random() * 1000)}`,
-          doc_id: doc.id,
-          doc_no: doc.doc_no,
-          doc_type: doc.doc_type,
-          product_id: item.product_id,
-          warehouse_id: doc.source_warehouse_id,
-          qty_change: sourceQtyChange,
-          type: sourceQtyChange > 0 ? 'IN' : 'OUT',
-          current_balance_after: newBalanceAfter,
-          date: doc.date,
-          company_id: doc.tenantId,
-          created_at: new Date().toISOString(),
-          created_by: operatorId
-        };
-        movements.push(movSource);
+        const allocations = item.bin_allocations || [];
+        if (allocations.length > 0) {
+          // SPLIT BY BINS
+          let runningStock = currentStock;
+          allocations.forEach((alloc, allocIdx) => {
+            const signedAllocQty = sourceQtyChange > 0 ? alloc.qty : -alloc.qty;
+            const newBalanceAfter = runningStock + signedAllocQty;
+            
+            const movSource: StockMovement = {
+              id: `mov-${Date.now()}-${item.product_id}-source-bin-${alloc.bin_id}-${Math.floor(Math.random() * 1000)}`,
+              doc_id: doc.id,
+              doc_no: doc.doc_no,
+              doc_type: doc.doc_type,
+              product_id: item.product_id,
+              warehouse_id: doc.source_warehouse_id,
+              qty_change: signedAllocQty,
+              type: signedAllocQty > 0 ? 'IN' : 'OUT',
+              current_balance_after: newBalanceAfter,
+              date: doc.date,
+              company_id: doc.tenantId,
+              created_at: new Date().toISOString(),
+              created_by: operatorId,
+              bin_id: alloc.bin_id,
+              bin_code: alloc.bin_code
+            };
+            movements.push(movSource);
+
+            const ledgerSource: InventoryLedgerEntry = {
+              id: `led-${Date.now()}-${item.product_id}-source-bin-${alloc.bin_id}-${Math.floor(Math.random() * 1000)}`,
+              company_id: doc.tenantId,
+              warehouse_id: doc.source_warehouse_id,
+              product_id: item.product_id,
+              transaction_type: isTransferType ? `${doc.doc_type} - Dispatched (Bin)` : `${doc.doc_type} (Bin)`,
+              reference_document_id: doc.id,
+              reference_document_no: doc.doc_no,
+              qty_in: signedAllocQty > 0 ? signedAllocQty : 0,
+              qty_out: signedAllocQty < 0 ? Math.abs(signedAllocQty) : 0,
+              balance_before: runningStock,
+              balance_after: newBalanceAfter,
+              unit_cost,
+              running_cost: newBalanceAfter * unit_cost,
+              timestamp: new Date().toISOString(),
+              user_id: operatorId,
+              user_name: userName,
+              audit_ref: `${doc.doc_no}-LEDGER`,
+              bin_id: alloc.bin_id,
+              bin_code: alloc.bin_code
+            };
+            ledgerEntries.push(ledgerSource);
+            runningStock = newBalanceAfter;
+          });
+        } else {
+          // Standard warehouse overall transaction
+          const newBalanceAfter = currentStock + sourceQtyChange;
+          const movSource: StockMovement = {
+            id: `mov-${Date.now()}-${item.product_id}-source-${Math.floor(Math.random() * 1000)}`,
+            doc_id: doc.id,
+            doc_no: doc.doc_no,
+            doc_type: doc.doc_type,
+            product_id: item.product_id,
+            warehouse_id: doc.source_warehouse_id,
+            qty_change: sourceQtyChange,
+            type: sourceQtyChange > 0 ? 'IN' : 'OUT',
+            current_balance_after: newBalanceAfter,
+            date: doc.date,
+            company_id: doc.tenantId,
+            created_at: new Date().toISOString(),
+            created_by: operatorId
+          };
+          movements.push(movSource);
+
+          // CREATE SOURCE LEDGER ENTRY
+          const ledgerSource: InventoryLedgerEntry = {
+            id: `led-${Date.now()}-${item.product_id}-source-${Math.floor(Math.random() * 1000)}`,
+            company_id: doc.tenantId,
+            warehouse_id: doc.source_warehouse_id,
+            product_id: item.product_id,
+            transaction_type: isTransferType ? `${doc.doc_type} - Dispatched` : doc.doc_type,
+            reference_document_id: doc.id,
+            reference_document_no: doc.doc_no,
+            qty_in: sourceQtyChange > 0 ? sourceQtyChange : 0,
+            qty_out: sourceQtyChange < 0 ? Math.abs(sourceQtyChange) : 0,
+            balance_before: currentStock,
+            balance_after: newBalanceAfter,
+            unit_cost,
+            running_cost: newBalanceAfter * unit_cost,
+            timestamp: new Date().toISOString(),
+            user_id: operatorId,
+            user_name: userName,
+            audit_ref: `${doc.doc_no}-LEDGER`
+          };
+          ledgerEntries.push(ledgerSource);
+        }
       }
 
-      // 2. Create movement for target warehouse if Transfer
-      if (doc.doc_type === 'Transfer' && targetQtyChange > 0 && doc.dest_entity_type === 'warehouse') {
+      // 2. Create movement for target warehouse if Transfer & Target Entity is a Warehouse
+      const isDestAWarehouse = InventoryModule.getWarehouses().some(w => w.id === doc.dest_entity_id);
+
+      if (isTransferType && targetQtyChange > 0 && isDestAWarehouse) {
         const targetCurrentStock = InventoryModule.getProductStock(item.product_id, doc.dest_entity_id);
-        const movTarget: StockMovement = {
-          id: `mov-${Date.now()}-${item.product_id}-target-${Math.floor(Math.random() * 1000)}`,
-          doc_id: doc.id,
-          doc_no: doc.doc_no,
-          doc_type: doc.doc_type,
-          product_id: item.product_id,
-          warehouse_id: doc.dest_entity_id,
-          qty_change: targetQtyChange,
-          type: 'IN',
-          current_balance_after: targetCurrentStock + targetQtyChange,
-          date: doc.date,
-          company_id: doc.tenantId,
-          created_at: new Date().toISOString(),
-          created_by: operatorId
-        };
-        movements.push(movTarget);
+        const allocations = item.bin_allocations || [];
+
+        if (allocations.length > 0) {
+          // SPLIT BY DESTINATION BINS
+          let runningStock = targetCurrentStock;
+          allocations.forEach((alloc, allocIdx) => {
+            const newBalanceAfter = runningStock + alloc.qty;
+            const movTarget: StockMovement = {
+              id: `mov-${Date.now()}-${item.product_id}-target-bin-${alloc.bin_id}-${Math.floor(Math.random() * 1000)}`,
+              doc_id: doc.id,
+              doc_no: doc.doc_no,
+              doc_type: doc.doc_type,
+              product_id: item.product_id,
+              warehouse_id: doc.dest_entity_id,
+              qty_change: alloc.qty,
+              type: 'IN',
+              current_balance_after: newBalanceAfter,
+              date: doc.date,
+              company_id: doc.tenantId,
+              created_at: new Date().toISOString(),
+              created_by: operatorId,
+              bin_id: alloc.bin_id,
+              bin_code: alloc.bin_code
+            };
+            movements.push(movTarget);
+
+            // CREATE TARGET LEDGER ENTRY
+            const ledgerTarget: InventoryLedgerEntry = {
+              id: `led-${Date.now()}-${item.product_id}-target-bin-${alloc.bin_id}-${Math.floor(Math.random() * 1000)}`,
+              company_id: doc.tenantId,
+              warehouse_id: doc.dest_entity_id,
+              product_id: item.product_id,
+              transaction_type: `${doc.doc_type} - Received (Bin)`,
+              reference_document_id: doc.id,
+              reference_document_no: doc.doc_no,
+              qty_in: alloc.qty,
+              qty_out: 0,
+              balance_before: runningStock,
+              balance_after: newBalanceAfter,
+              unit_cost,
+              running_cost: newBalanceAfter * unit_cost,
+              timestamp: new Date().toISOString(),
+              user_id: operatorId,
+              user_name: userName,
+              audit_ref: `${doc.doc_no}-LEDGER`,
+              bin_id: alloc.bin_id,
+              bin_code: alloc.bin_code
+            };
+            ledgerEntries.push(ledgerTarget);
+            runningStock = newBalanceAfter;
+          });
+        } else {
+          const movTarget: StockMovement = {
+            id: `mov-${Date.now()}-${item.product_id}-target-${Math.floor(Math.random() * 1000)}`,
+            doc_id: doc.id,
+            doc_no: doc.doc_no,
+            doc_type: doc.doc_type,
+            product_id: item.product_id,
+            warehouse_id: doc.dest_entity_id,
+            qty_change: targetQtyChange,
+            type: 'IN',
+            current_balance_after: targetCurrentStock + targetQtyChange,
+            date: doc.date,
+            company_id: doc.tenantId,
+            created_at: new Date().toISOString(),
+            created_by: operatorId
+          };
+          movements.push(movTarget);
+
+          // CREATE TARGET LEDGER ENTRY
+          const ledgerTarget: InventoryLedgerEntry = {
+            id: `led-${Date.now()}-${item.product_id}-target-${Math.floor(Math.random() * 1000)}`,
+            company_id: doc.tenantId,
+            warehouse_id: doc.dest_entity_id,
+            product_id: item.product_id,
+            transaction_type: `${doc.doc_type} - Received`,
+            reference_document_id: doc.id,
+            reference_document_no: doc.doc_no,
+            qty_in: targetQtyChange,
+            qty_out: 0,
+            balance_before: targetCurrentStock,
+            balance_after: targetCurrentStock + targetQtyChange,
+            unit_cost,
+            running_cost: (targetCurrentStock + targetQtyChange) * unit_cost,
+            timestamp: new Date().toISOString(),
+            user_id: operatorId,
+            user_name: userName,
+            audit_ref: `${doc.doc_no}-LEDGER`
+          };
+          ledgerEntries.push(ledgerTarget);
+        }
       }
     });
 
     // Save everything in transaction-like batch
     InventoryModule.saveStockMovements(movements);
+    InventoryModule.saveInventoryLedger(ledgerEntries);
     InventoryModule.saveProducts(updatedProductsList);
+  }
+
+  /**
+   * Validates capacity constraints and simple overdrafts before a document reaches its next stage.
+   */
+  static validateCapacityAndOverdraft(
+    doc: InventoryDocument,
+    nextStatus: InventoryDocStatus
+  ): { success: boolean; messageAr: string; messageEn: string } {
+    const warehouses = InventoryModule.getWarehouses();
+    const stage = nextStatus === 'Dispatched' ? 'Dispatched' : 'Posted';
+
+    for (const item of doc.items) {
+      const currentStock = InventoryModule.getProductStock(item.product_id, doc.source_warehouse_id);
+      
+      let sourceQtyChange = 0;
+      let targetQtyChange = 0;
+      const isTransferType = doc.doc_type === 'Transfer' || doc.doc_type === 'BranchTransfer' || doc.doc_type === 'StationTransfer';
+
+      if (isTransferType) {
+        if (stage === 'Dispatched') {
+          sourceQtyChange = -item.qty;
+        } else if (stage === 'Posted') {
+          const qtyReceived = item.qty_received !== undefined ? item.qty_received : item.qty;
+          targetQtyChange = qtyReceived;
+        }
+      } else {
+        if (stage === 'Posted') {
+          switch (doc.doc_type) {
+            case 'Receipt':
+            case 'BranchReturn':
+              sourceQtyChange = item.qty;
+              break;
+            case 'Issue':
+            case 'SupplierReturn':
+              sourceQtyChange = -item.qty;
+              break;
+            case 'Damage':
+              sourceQtyChange = doc.scrap_action === 'IN' ? item.qty : -item.qty;
+              break;
+            case 'Adjustment':
+              sourceQtyChange = item.qty - currentStock;
+              break;
+          }
+        }
+      }
+
+      // 1. Validate simple overdraft
+      if (sourceQtyChange < 0 && (currentStock + sourceQtyChange) < 0) {
+        if (doc.doc_type !== 'Adjustment') {
+          return {
+            success: false,
+            messageAr: `عذراً، الرصيد غير كافٍ للصنف ${item.product_name} في المخزن المحدد (الرصيد الحالي: ${currentStock})`,
+            messageEn: `Sorry, insufficient stock for item ${item.product_name} in selected warehouse (Current stock: ${currentStock})`
+          };
+        }
+      }
+
+      // 2. Validate warehouse capacity limits if adding stock
+      if (sourceQtyChange > 0) {
+        const wh = warehouses.find(w => w.id === doc.source_warehouse_id);
+        if (wh && wh.is_capacity_enforced && wh.max_capacity_qty) {
+          const currentTotal = InventoryModule.getWarehouseTotalStock(doc.source_warehouse_id);
+          if ((currentTotal + sourceQtyChange) > wh.max_capacity_qty) {
+            return {
+              success: false,
+              messageAr: `عذراً، لا يمكن إتمام العملية لأنها ستتجاوز السعة القصوى للمستودع (${wh.name}). السعة المتاحة: ${wh.max_capacity_qty - currentTotal} وحدة.`,
+              messageEn: `Sorry, this operation exceeds the maximum capacity of warehouse (${wh.name}). Available capacity: ${wh.max_capacity_qty - currentTotal} units.`
+            };
+          }
+        }
+      }
+
+      if (targetQtyChange > 0) {
+        const wh = warehouses.find(w => w.id === doc.dest_entity_id);
+        if (wh && wh.is_capacity_enforced && wh.max_capacity_qty) {
+          const currentTotal = InventoryModule.getWarehouseTotalStock(doc.dest_entity_id);
+          if ((currentTotal + targetQtyChange) > wh.max_capacity_qty) {
+            return {
+              success: false,
+              messageAr: `عذراً، لا يمكن إتمام العملية لأنها ستتجاوز السعة القصوى للمستودع المستلم (${wh.name}). السعة المتاحة: ${wh.max_capacity_qty - currentTotal} وحدة.`,
+              messageEn: `Sorry, this operation exceeds the maximum capacity of target warehouse (${wh.name}). Available capacity: ${wh.max_capacity_qty - currentTotal} units.`
+            };
+          }
+        }
+      }
+
+      // 3. Validate bin capacity limits if bin allocations are specified
+      const allocations = item.bin_allocations || [];
+      if (allocations.length > 0) {
+        const activeWhId = sourceQtyChange !== 0 ? doc.source_warehouse_id : doc.dest_entity_id;
+        const bins = InventoryModule.getWarehouseBins(activeWhId);
+
+        for (const alloc of allocations) {
+          const bin = bins.find(b => b.id === alloc.bin_id);
+          if (bin && bin.is_active && bin.max_capacity_qty) {
+            const currentBinStock = InventoryModule.getBinTotalStock(alloc.bin_id);
+            const change = sourceQtyChange !== 0 
+              ? (sourceQtyChange > 0 ? alloc.qty : -alloc.qty)
+              : alloc.qty;
+
+            if (change > 0 && (currentBinStock + change) > bin.max_capacity_qty) {
+              return {
+                success: false,
+                messageAr: `عذراً، عملية التخصيص تتجاوز السعة القصوى للحاوية (${bin.name}). السعة المتاحة: ${bin.max_capacity_qty - currentBinStock} وحدة.`,
+                messageEn: `Sorry, allocation exceeds the maximum capacity of bin (${bin.name}). Available capacity: ${bin.max_capacity_qty - currentBinStock} units.`
+              };
+            }
+          }
+        }
+      }
+    }
+
+    return { success: true, messageAr: '', messageEn: '' };
+  }
+
+  /**
+   * Completes a Multi-Echelon transfer by receiving the dispatched stock,
+   * recording actual received quantities and variances, and updating stock.
+   */
+  static async receiveTransferDocument(
+    docId: string,
+    receivedItems: { product_id: string; qty_received: number; variance_reason?: string }[],
+    receivedNotes?: string
+  ): Promise<{ success: boolean; messageAr: string; messageEn: string }> {
+    const documents = InventoryModule.getInventoryDocuments();
+    const docIndex = documents.findIndex(d => d.id === docId);
+    if (docIndex === -1) {
+      return { success: false, messageAr: 'المستند غير موجود', messageEn: 'Document not found' };
+    }
+
+    const document = documents[docIndex];
+    if (document.status !== 'Dispatched') {
+      return {
+        success: false,
+        messageAr: 'عذراً، يمكن فقط استلام المستندات التي تم شحنها وقيد النقل بالفعل',
+        messageEn: 'Only dispatched or in-transit documents can be received'
+      };
+    }
+
+    const user = UsersModule.getActiveUser();
+    if (!user) {
+      return { success: false, messageAr: 'يجب تسجيل الدخول أولاً', messageEn: 'User must be authenticated' };
+    }
+
+    // Map received items onto document
+    const updatedItems = document.items.map(item => {
+      const rec = receivedItems.find(r => r.product_id === item.product_id);
+      const qtyReceived = rec !== undefined ? rec.qty_received : item.qty;
+      const variance = item.qty - qtyReceived;
+      return {
+        ...item,
+        qty_received: qtyReceived,
+        qty_variance: variance,
+        variance_reason: rec?.variance_reason || ''
+      };
+    });
+
+    // Save the document with received fields first so triggerLifecycleTransition loads it
+    const updatedMetadata = updateBaseMetadata(document, user.id);
+    document.items = updatedItems;
+    document.received_date = new Date().toISOString();
+    document.received_by = user.id;
+    document.received_notes = receivedNotes || '';
+    
+    documents[docIndex] = {
+      ...document,
+      ...updatedMetadata
+    };
+    InventoryModule.saveInventoryDocuments(documents);
+
+    // Now trigger the transition to 'Posted'
+    return await InventoryModule.triggerLifecycleTransition(docId, 'Receive');
   }
 }

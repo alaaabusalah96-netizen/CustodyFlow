@@ -132,6 +132,12 @@ service cloud.firestore {
       allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
     }
 
+    match /inventory_ledger/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Storekeeper');
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
     // --- Receipts, Issues, Returns & Transfers ---
     match /receipts/{id} {
       allow read: if isSameCompanyRead(resource.data);

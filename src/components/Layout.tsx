@@ -22,7 +22,9 @@ import {
   Sparkles,
   ChevronUp,
   UserCheck,
-  Trash2
+  Trash2,
+  ShoppingCart,
+  BookOpen
 } from 'lucide-react';
 import { CustodyDB, ModulesModule } from '../db';
 import { translations, Language, Theme, AppUser } from '../types';
@@ -84,6 +86,8 @@ export default function Layout({
     { id: 'voucher', label: t.cashPaymentVoucher, icon: FileCheck, permission: 'settle_voucher' },
     { id: 'reconciliation', label: isRtl ? 'جرد ومطابقة العهدة' : 'Custody Reconciliation & Inventory', icon: TrendingUp, roleAllowed: ['Admin', 'StationAdmin', 'RegionalManager'] },
     { id: 'inventory', label: isRtl ? 'إدارة المخازن والمستودعات' : 'Inventory & Warehouses', icon: Layers, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
+    { id: 'purchasing', label: isRtl ? 'إدارة المشتريات والتموين' : 'Procurement & Supply Chain', icon: ShoppingCart, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager'] },
+    { id: 'accounting', label: isRtl ? 'الاستحقاق والقيود المزدوجة' : 'Double-Entry Accounting', icon: BookOpen, roleAllowed: ['SystemAdmin', 'Admin'] },
     { id: 'reports', label: t.reports, icon: FileText, permission: 'view_reports' },
     { id: 'search', label: t.search, icon: SearchIcon },
     { id: 'audit-log', label: isRtl ? 'سجل الرقابة والامتثال' : 'Security & Audit Log', icon: ShieldCheck, roleAllowed: ['Admin', 'SystemAdmin'] },

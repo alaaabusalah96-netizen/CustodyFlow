@@ -10,6 +10,7 @@ import { TransactionsHistoryModule } from './transactions.history';
 import { CustodyService } from './custodyService';
 import { ValidationEngine } from './validation';
 import { DEFAULT_TRANSACTIONS } from './defaults';
+import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 
 export class TransactionsUpdateModule {
   static updateTransaction(id: string, updates: Partial<Transaction>): void {
@@ -37,6 +38,30 @@ export class TransactionsUpdateModule {
         const compId = updated.company_id || user?.company_id || CompaniesModule.getSelectedCompanyId();
         if (stationId) {
           CustodyService.applySettlement(stationId, compId, amount);
+        }
+
+        // Auto-post double-entry accounting record
+        try {
+          const cats = CustodyDB.getCategories();
+          const cat = cats.find(c => c.id === updated.category_id);
+          const catName = cat ? (cat.name_en || cat.name || '') : '';
+          const expenseCode = catName.toLowerCase().includes('fuel') || catName.includes('وقود') ? '510201' : '510101';
+          const statementAr = `قيد تلقائي: تسوية مصروف ${cat ? (cat.name_ar || cat.name_en || '') : ''} - سند رقم ${updated.voucher_no || ''}`;
+          const statementEn = `Auto-post: Settlement of ${catName} expense - Voucher #${updated.voucher_no || ''}`;
+          
+          AccountingBusinessEngine.postOperationalDoubleEntry(
+            compId,
+            user?.id || 'system',
+            `Voucher #${updated.voucher_no || 'N/A'}`,
+            statementAr,
+            statementEn,
+            [
+              { accountCode: expenseCode, debit: amount, credit: 0, notes: `Debit: Operational Expense (${updated.transaction_no})` },
+              { accountCode: '110101', debit: 0, credit: amount, notes: `Credit: Cash in Hand` }
+            ]
+          ).catch(err => console.error('Automated double-entry posting failed:', err));
+        } catch (err) {
+          console.error('Automated double-entry posting preparation failed:', err);
         }
       }
 

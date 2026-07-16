@@ -53,6 +53,22 @@ export const ERP_MODULES_REGISTRY: ERPModule[] = [
     description_en: 'Full multi-tenant activity logging, security monitoring, and transaction tracking.',
     description_ar: 'سجل تدقيق كامل للأنشطة والعمليات الإدارية، مراقبة أمنية، ومراجعة تفصيلية للقيود.',
     screens: ['audit-log']
+  },
+  {
+    id: 'purchasing',
+    name_en: 'Procurement & Supply Chain',
+    name_ar: 'إدارة المشتريات والتموين',
+    description_en: 'Supplier register, purchase requests with lifecycle workflows, and binding purchase orders.',
+    description_ar: 'دليل الموردين، طلبات الشراء الداخلية، وأوامر الشراء المباشرة الصادرة.',
+    screens: ['purchasing']
+  },
+  {
+    id: 'accounting',
+    name_en: 'Double-Entry General Ledger',
+    name_ar: 'الاستحقاق والقيود المزدوجة',
+    description_en: 'Chart of accounts, real-time double-entry posting rules, journal entries, and Trial Balance.',
+    description_ar: 'شجرة الحسابات، قيود اليومية المزدوجة التلقائية واليدوية، ميزان المراجعة وقائمة الأرباح والخسائر.',
+    screens: ['accounting']
   }
 ];
 
