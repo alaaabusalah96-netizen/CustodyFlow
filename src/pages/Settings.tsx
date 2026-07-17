@@ -92,6 +92,8 @@ export default function Settings({ language, theme }: SettingsProps) {
   // General Settings State
   const [companyName, setCompanyName] = useState(() => CustodyDB.getConfig().company_name);
   const [custodyValue, setCustodyValue] = useState(() => String(CustodyDB.getConfig().custody_value));
+  const [useCustomTemplate, setUseCustomTemplate] = useState(() => CustodyDB.getConfig().use_custom_template || false);
+  const [customTemplateImage, setCustomTemplateImage] = useState(() => CustodyDB.getConfig().custom_template_image || '');
 
   // Infrastructure Lists
   const [regions, setRegions] = useState<Region[]>(() => CustodyDB.getScopedRegions());
@@ -293,7 +295,9 @@ export default function Settings({ language, theme }: SettingsProps) {
 
     CustodyDB.saveConfig({
       company_name: companyName.trim(),
-      custody_value: 0
+      custody_value: 0,
+      use_custom_template: useCustomTemplate,
+      custom_template_image: customTemplateImage
     });
 
     triggerToast(isRtl ? 'تم حفظ التعديلات العامة وتعميمها بنجاح' : 'General parameters saved and synchronized.');
@@ -674,9 +678,68 @@ export default function Settings({ language, theme }: SettingsProps) {
                 />
               </div>
 
+              {/* Custom Print Template Upload */}
+              <div className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-4 space-y-3">
+                <h4 className="font-bold text-slate-700 dark:text-slate-300 text-[11px] uppercase tracking-wider">
+                  {isRtl ? 'إعدادات قوالب الطباعة والهوية' : 'Print Layout & Branding Templates'}
+                </h4>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="useCustomTemplate"
+                    checked={useCustomTemplate}
+                    onChange={(e) => setUseCustomTemplate(e.target.checked)}
+                    className="rounded border-slate-300 dark:border-slate-700 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <label htmlFor="useCustomTemplate" className="text-slate-600 dark:text-slate-400 font-medium">
+                    {isRtl ? 'استخدام قالب تصميم خاص بالشركة (خلفية مخصصة)' : 'Use custom company backdrop template'}
+                  </label>
+                </div>
+
+                {useCustomTemplate && (
+                  <div className="p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 space-y-2">
+                    <label className="block text-slate-500 font-semibold mb-1">
+                      {isRtl ? 'تحميل نموذج التصميم (PDF أو صورة عالية الجودة)' : 'Upload backdrop template (PDF or High-quality image)'}
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setCustomTemplateImage(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-500/10 file:text-emerald-600 hover:file:bg-emerald-500/20"
+                    />
+                    {customTemplateImage && (
+                      <div className="mt-2 space-y-1">
+                        <span className="text-[10px] text-slate-400 block">
+                          {isRtl ? '✓ تم تحميل الملف ومعالجته تلقائياً' : '✓ Template uploaded and processed successfully'}
+                        </span>
+                        <div className="h-16 w-24 border rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+                          <img src={customTemplateImage} alt="Template Preview" className="h-full object-contain" />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setCustomTemplateImage('')}
+                          className="text-[10px] text-rose-500 hover:underline"
+                        >
+                          {isRtl ? 'حذف القالب' : 'Remove template'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black transition-all text-xs"
+                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black transition-all text-xs animate-pulse"
               >
                 {t.saveChanges}
               </button>

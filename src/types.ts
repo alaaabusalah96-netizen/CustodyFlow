@@ -14,6 +14,8 @@ export interface Company {
   group_id?: string;
   status_merge?: 'ACTIVE' | 'MERGED';
   merged_into_company_id?: string;
+  use_custom_template?: boolean;
+  custom_template_image?: string;
 }
 
 export interface UserPermissions {
@@ -141,6 +143,8 @@ export interface ActivityLog {
 export interface CustodyConfig {
   company_name: string;
   custody_value: number;
+  use_custom_template?: boolean;
+  custom_template_image?: string;
 }
 
 export type Language = 'en' | 'ar';

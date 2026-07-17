@@ -1511,24 +1511,38 @@ export default function CashPaymentVoucher({
                 id="voucher-sheet-printable"
                 className="w-[210mm] min-h-[297mm] mx-auto p-9 border-[3px] border-black bg-white text-black text-xs font-bold leading-relaxed shadow-xl relative print:shadow-none print:border-black print:rounded-none print:w-full print:min-h-0 print:p-2"
                 dir="rtl"
+                style={{
+                  backgroundImage: (CustodyDB.getConfig().use_custom_template && CustodyDB.getConfig().custom_template_image) ? `url(${CustodyDB.getConfig().custom_template_image})` : undefined,
+                  backgroundSize: '100% 100%',
+                  backgroundRepeat: 'no-repeat',
+                }}
               >
                 {/* 1. Header Information Row (Corporate branding, logo, metadata) */}
                 <div className="flex justify-between items-center border-b-2 border-black pb-4 mb-4 gap-4">
                   
                   {/* Right Side: Logo & Location meta */}
-                  <div className="flex items-center gap-3">
-                    <div className="border-[2.5px] border-black rounded-[50%/50%] px-3 py-1.5 flex flex-col items-center justify-center leading-none bg-white shrink-0 shadow-sm h-[52px] w-[90px]">
-                      <span className="text-[20px] font-black leading-none text-black">كوكي</span>
-                      <span className="text-[9px] font-bold font-mono tracking-wider mt-0.5 leading-none text-black">Koki</span>
-                    </div>
+                  {!CustodyDB.getConfig().use_custom_template ? (
+                    <div className="flex items-center gap-3">
+                      <div className="border-[2.5px] border-black rounded-[50%/50%] px-3 py-1.5 flex flex-col items-center justify-center leading-none bg-white shrink-0 shadow-sm h-[52px] w-[90px]">
+                        <span className="text-[20px] font-black leading-none text-black">كوكي</span>
+                        <span className="text-[9px] font-bold font-mono tracking-wider mt-0.5 leading-none text-black">Koki</span>
+                      </div>
 
+                      <div className="text-right space-y-0.5">
+                        <h1 className="text-[13px] font-black text-black">شركة / القاهرة الجديدة للدواجن</h1>
+                        <p className="text-[11px] text-neutral-800 font-bold">
+                          {l.stationLabel2}: <span className="font-black text-black">{(stations.find(s => s.id === previewVoucher.station_id))?.station_name || previewVoucher.station_id || 'موقع عام'}</span>
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
                     <div className="text-right space-y-0.5">
-                      <h1 className="text-[13px] font-black text-black">شركة / القاهرة الجديدة للدواجن</h1>
+                      <h1 className="text-[13px] font-black text-emerald-600">{CustodyDB.getConfig().company_name}</h1>
                       <p className="text-[11px] text-neutral-800 font-bold">
                         {l.stationLabel2}: <span className="font-black text-black">{(stations.find(s => s.id === previewVoucher.station_id))?.station_name || previewVoucher.station_id || 'موقع عام'}</span>
                       </p>
                     </div>
-                  </div>
+                  )}
 
                   {/* Center: Main voucher heading */}
                   <div className="text-center">

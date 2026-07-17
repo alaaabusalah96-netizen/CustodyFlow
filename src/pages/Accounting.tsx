@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, Coins, TrendingUp, Layers, Search, ArrowUpRight, ArrowDownLeft,
-  Plus, Calendar, Calculator, CheckCircle2, ChevronRight, Hash, ShieldAlert, FileText, X
+  Plus, Calendar, Calculator, CheckCircle2, ChevronRight, Hash, ShieldAlert, FileText, X, Printer
 } from 'lucide-react';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
+import { CustodyDB } from '../db';
 import { GLAccount, JournalEntry, LedgerLine } from '../types/accounting';
 import { createEventEnvelope } from '../lib/enterprise/metadata';
 
@@ -40,6 +41,7 @@ export default function Accounting({ language, theme }: AccountingProps) {
 
   // Selected Journal Entry for detailed preview drawer/panel
   const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -361,6 +363,15 @@ export default function Accounting({ language, theme }: AccountingProps) {
                   <span className="text-slate-500">{isRtl ? 'إجمالي الحركة (متزنة)' : 'Total Balanced Amount'}</span>
                   <span className="text-emerald-600 text-sm font-black">{selectedEntry.totalDebit.toLocaleString()} EGP</span>
                 </div>
+
+                {/* Print Button */}
+                <button
+                  onClick={() => setShowPrintModal(true)}
+                  className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <Printer size={15} />
+                  <span>{isRtl ? 'طباعة سند القيد (A4)' : 'Print Voucher Sheet (A4)'}</span>
+                </button>
               </div>
             ) : (
               <p className="text-xs text-slate-400 italic text-center py-8">{isRtl ? 'يرجى اختيار قيد لمعاينة التفاصيل' : 'Select a journal entry to view breakdowns'}</p>
@@ -671,6 +682,150 @@ export default function Accounting({ language, theme }: AccountingProps) {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* 4. A4 PRINT DIALOG MODAL */}
+      {showPrintModal && selectedEntry && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:backdrop-blur-none animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-4 print:p-0 print:shadow-none print:rounded-none">
+            {/* Modal actions */}
+            <div className="flex justify-between items-center print:hidden border-b pb-3 dark:border-slate-800">
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
+                {isRtl ? 'معاينة مستند القيد للطباعة' : 'Print Voucher Preview'}
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Printer size={14} />
+                  <span>{isRtl ? 'طباعة المستند' : 'Print Voucher'}</span>
+                </button>
+                <button
+                  onClick={() => setShowPrintModal(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* A4 Printable Layout Sheet */}
+            <div
+              id="voucher-sheet-printable"
+              className="w-[210mm] min-h-[297mm] mx-auto p-12 border border-slate-300 bg-white text-black text-xs font-bold leading-relaxed shadow-xl relative print:shadow-none print:border-none print:w-full print:min-h-0 print:p-2"
+              dir={isRtl ? 'rtl' : 'ltr'}
+              style={{
+                backgroundImage: (CustodyDB.getConfig().use_custom_template && CustodyDB.getConfig().custom_template_image) ? `url(${CustodyDB.getConfig().custom_template_image})` : undefined,
+                backgroundSize: '100% 100%',
+                backgroundRepeat: 'no-repeat',
+              }}
+            >
+              {/* Header Letterhead */}
+              <div className="flex justify-between items-center border-b-2 border-black pb-5 mb-6 gap-4">
+                {!CustodyDB.getConfig().use_custom_template ? (
+                  <div className="flex items-center gap-3">
+                    <div className="border-[2.5px] border-black rounded-[50%/50%] px-3 py-1.5 flex flex-col items-center justify-center leading-none bg-white shrink-0 shadow-sm h-[52px] w-[90px]">
+                      <span className="text-[20px] font-black leading-none text-black">كوكي</span>
+                      <span className="text-[9px] font-bold font-mono tracking-wider mt-0.5 leading-none text-black">Koki</span>
+                    </div>
+                    <div className="text-right space-y-0.5">
+                      <h1 className="text-[13px] font-black text-black">شركة / القاهرة الجديدة للدواجن</h1>
+                      <p className="text-[10px] text-neutral-800 font-bold">{isRtl ? 'الإدارة المالية - حسابات عمومية' : 'Finance Dept - General Ledger'}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-right space-y-0.5">
+                    <h1 className="text-[13px] font-black text-emerald-600">{CustodyDB.getConfig().company_name}</h1>
+                    <p className="text-[10px] text-neutral-800 font-bold">{isRtl ? 'الإدارة المالية - حسابات عمومية' : 'Finance Dept - General Ledger'}</p>
+                  </div>
+                )}
+                
+                <div className="text-center">
+                  <h2 className="text-[14px] font-black border-[2.5px] border-black px-4 py-2 bg-neutral-100 text-black shadow-sm uppercase">
+                    {isRtl ? 'سند قيد يومية عامة' : 'Journal Entry Voucher'}
+                  </h2>
+                </div>
+
+                <div className="text-right space-y-1">
+                  <div className="text-xs font-mono font-bold text-black border border-black px-2.5 py-1 bg-neutral-50 rounded">
+                    {isRtl ? 'قيد رقم: ' : 'Entry #: '} <span className="font-black font-mono">{selectedEntry.entryNumber}</span>
+                  </div>
+                  <div className="text-[10px] font-mono text-slate-600">
+                    {isRtl ? 'التاريخ: ' : 'Date: '} {selectedEntry.date}
+                  </div>
+                </div>
+              </div>
+
+              {/* Basic Voucher Info */}
+              <div className="grid grid-cols-2 gap-4 border border-black p-3 rounded mb-6 bg-neutral-50/50">
+                <div>
+                  <span className="text-slate-500 font-semibold">{isRtl ? 'نوع المعاملة:' : 'Source Type:'}</span>
+                  <p className="font-bold text-black">{selectedEntry.sourceType === 'OPERATIONAL' ? (isRtl ? 'ترحيل تشغيلي آلي' : 'Operational Automated') : (isRtl ? 'تسوية يدوية' : 'Manual Adjustment')}</p>
+                </div>
+                {selectedEntry.sourceReference && (
+                  <div>
+                    <span className="text-slate-500 font-semibold">{isRtl ? 'المصدر المرجعي:' : 'Source Reference:'}</span>
+                    <p className="font-bold text-black">{selectedEntry.sourceReference}</p>
+                  </div>
+                )}
+                <div className="col-span-2">
+                  <span className="text-slate-500 font-semibold">{isRtl ? 'البيان العام والشرح للقيد:' : 'Voucher Statement & Explanation:'}</span>
+                  <p className="font-bold text-black">{isRtl ? selectedEntry.statementAr : selectedEntry.statementEn}</p>
+                </div>
+              </div>
+
+              {/* Lines Breakdown Grid */}
+              <table className="w-full text-right border-collapse text-xs border border-black mb-8">
+                <thead>
+                  <tr className="bg-neutral-100 border-b border-black text-black font-black">
+                    <th className="p-2 border-r border-black w-24 text-center">{isRtl ? 'كود الحساب' : 'Account Code'}</th>
+                    <th className="p-2 border-r border-black">{isRtl ? 'اسم الحساب الجاري' : 'GL Account Name'}</th>
+                    <th className="p-2 border-r border-black">{isRtl ? 'شرح السطر' : 'Line Narration'}</th>
+                    <th className="p-2 border-r border-black w-28 text-center">{isRtl ? 'مدين (ج.م)' : 'Debit (Dr)'}</th>
+                    <th className="p-2 w-28 text-center">{isRtl ? 'دائن (ج.م)' : 'Credit (Cr)'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black text-black">
+                  {selectedEntry.lines.map((ln, index) => (
+                    <tr key={index} className="border-b border-black">
+                      <td className="p-2 border-r border-black text-center font-mono font-bold">{ln.accountCode}</td>
+                      <td className="p-2 border-r border-black font-extrabold">{isRtl ? ln.accountNameAr : ln.accountNameEn}</td>
+                      <td className="p-2 border-r border-black font-medium text-slate-700">{ln.notes || '---'}</td>
+                      <td className="p-2 border-r border-black text-center font-mono font-black text-emerald-700">{ln.debit > 0 ? ln.debit.toLocaleString() + ' EGP' : ''}</td>
+                      <td className="p-2 text-center font-mono font-black text-rose-700">{ln.credit > 0 ? ln.credit.toLocaleString() + ' EGP' : ''}</td>
+                    </tr>
+                  ))}
+                  {/* Totals Row */}
+                  <tr className="bg-neutral-100 font-black border-t-2 border-black">
+                    <td colSpan={3} className="p-2 border-r border-black text-left">{isRtl ? 'إجمالي السند القيد المتزن:' : 'Total Balanced Voucher Amount:'}</td>
+                    <td className="p-2 border-r border-black text-center font-mono text-emerald-800 text-xs font-black">{selectedEntry.totalDebit.toLocaleString()} EGP</td>
+                    <td className="p-2 text-center font-mono text-rose-800 text-xs font-black">{selectedEntry.totalDebit.toLocaleString()} EGP</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Signature Blocks */}
+              <div className="grid grid-cols-3 gap-6 text-center mt-12 pt-6 border-t border-slate-300">
+                <div className="space-y-6">
+                  <p className="text-[10px] text-slate-500 font-bold uppercase">{isRtl ? 'إعداد المحاسب المسؤول' : 'Prepared by Accountant'}</p>
+                  <div className="h-10 border-b border-black w-40 mx-auto border-dashed"></div>
+                  <p className="text-[10px] text-black font-mono">---</p>
+                </div>
+                <div className="space-y-6">
+                  <p className="text-[10px] text-slate-500 font-bold uppercase">{isRtl ? 'مراجعة المراجع المالي' : 'Reviewed by Controller'}</p>
+                  <div className="h-10 border-b border-black w-40 mx-auto border-dashed"></div>
+                  <p className="text-[10px] text-black font-mono">---</p>
+                </div>
+                <div className="space-y-6">
+                  <p className="text-[10px] text-slate-500 font-bold uppercase">{isRtl ? 'اعتماد المدير المالي للمجموعة' : 'Approved by CFO / GM'}</p>
+                  <div className="h-10 border-b border-black w-40 mx-auto border-dashed"></div>
+                  <p className="text-[10px] text-black font-mono">✓ APPROVED_POSTED</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

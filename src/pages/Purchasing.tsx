@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, Plus, FileText, Check, X, ClipboardList, ShoppingCart, 
   Store, Phone, Mail, MapPin, Hash, ShieldAlert, ArrowLeftRight, Clock,
-  Calendar, CheckCircle2, ChevronRight, CornerDownLeft
+  Calendar, CheckCircle2, ChevronRight, CornerDownLeft, Printer
 } from 'lucide-react';
 import { PurchasingBusinessEngine } from '../lib/enterprise/purchasing_engine';
 import { InventoryModule } from '../db/inventory';
 import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
+import { CustodyDB } from '../db';
 import { PurchaseRequest, PurchaseOrder, Vendor, PRItem, POItem } from '../types/purchasing';
 import { Product, Warehouse } from '../types/inventory';
 import { createEventEnvelope } from '../lib/enterprise/metadata';
@@ -52,6 +53,10 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
 
   // Selected Warehouse for PO receiving
   const [receiveWarehouseId, setReceiveWarehouseId] = useState('');
+
+  // Printing State
+  const [printPR, setPrintPR] = useState<PurchaseRequest | null>(null);
+  const [printPO, setPrintPO] = useState<PurchaseOrder | null>(null);
 
   // Status message
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -434,35 +439,45 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
                     </p>
                   )}
 
-                  {/* Quick Admin Actions */}
-                  {pr.status === 'PENDING_APPROVAL' && (
-                    <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-3">
-                      <button
-                        onClick={() => handleRejectPR(pr.id)}
-                        className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all"
-                      >
-                        <X className="h-3 w-3" /> {isRtl ? 'رفض' : 'Reject'}
-                      </button>
-                      <button
-                        onClick={() => handleApprovePR(pr.id)}
-                        className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all"
-                      >
-                        <Check className="h-3 w-3" /> {isRtl ? 'اعتماد' : 'Approve'}
-                      </button>
-                    </div>
-                  )}
+                  {/* Quick Actions & Print */}
+                  <div className="flex justify-between items-center border-t border-slate-100 dark:border-slate-800 pt-3 gap-2">
+                    <button
+                      onClick={() => setPrintPR(pr)}
+                      className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Printer className="h-3 w-3" />
+                      <span>{isRtl ? 'طباعة الطلب' : 'Print PR'}</span>
+                    </button>
 
-                  {pr.status === 'APPROVED' && (
-                    <div className="flex justify-end border-t border-slate-100 dark:border-slate-800 pt-3">
-                      <button
-                        onClick={() => handleConvertPRToPO(pr)}
-                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 transition-all shadow-sm"
-                      >
-                        <ShoppingCart className="h-3 w-3" />
-                        {isRtl ? 'توليد أمر توريد PO' : 'Convert to PO'}
-                      </button>
+                    <div className="flex gap-2">
+                      {pr.status === 'PENDING_APPROVAL' && (
+                        <>
+                          <button
+                            onClick={() => handleRejectPR(pr.id)}
+                            className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+                          >
+                            <X className="h-3 w-3" /> {isRtl ? 'رفض' : 'Reject'}
+                          </button>
+                          <button
+                            onClick={() => handleApprovePR(pr.id)}
+                            className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+                          >
+                            <Check className="h-3 w-3" /> {isRtl ? 'اعتماد' : 'Approve'}
+                          </button>
+                        </>
+                      )}
+
+                      {pr.status === 'APPROVED' && (
+                        <button
+                          onClick={() => handleConvertPRToPO(pr)}
+                          className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                        >
+                          <ShoppingCart className="h-3 w-3" />
+                          {isRtl ? 'توليد أمر توريد PO' : 'Convert to PO'}
+                        </button>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               ))
             )}
@@ -519,17 +534,26 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
                     ))}
                   </div>
 
-                  {po.status === 'ISSUED' && (
-                    <div className="flex justify-end border-t border-slate-100 dark:border-slate-800 pt-3">
+                  {/* Print & Actions */}
+                  <div className="flex justify-between items-center border-t border-slate-100 dark:border-slate-800 pt-3 gap-2">
+                    <button
+                      onClick={() => setPrintPO(po)}
+                      className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Printer className="h-3 w-3" />
+                      <span>{isRtl ? 'طباعة الأمر' : 'Print PO'}</span>
+                    </button>
+
+                    {po.status === 'ISSUED' && (
                       <button
                         onClick={() => setShowReceivePO(po.id)}
-                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 transition-all shadow-sm"
+                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
                       >
                         <Check className="h-3.5 w-3.5" />
                         {isRtl ? 'إثبات الاستلام في المخازن' : 'Log Warehouse Receipt'}
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               ))
             )}
@@ -846,6 +870,279 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* PR PRINT MODAL */}
+      {printPR && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:backdrop-blur-none animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-4 print:p-0 print:shadow-none print:rounded-none">
+            <div className="flex justify-between items-center print:hidden border-b pb-3 dark:border-slate-800">
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
+                {isRtl ? 'معاينة طلب الشراء للطباعة' : 'Purchase Request Print Preview'}
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Printer size={14} />
+                  <span>{isRtl ? 'طباعة المستند' : 'Print Voucher'}</span>
+                </button>
+                <button
+                  onClick={() => setPrintPR(null)}
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div
+              id="voucher-sheet-printable"
+              className="w-[210mm] min-h-[297mm] mx-auto p-12 border border-slate-300 bg-white text-black text-xs font-bold leading-relaxed shadow-xl relative print:shadow-none print:border-none print:w-full print:min-h-0 print:p-2"
+              dir={isRtl ? 'rtl' : 'ltr'}
+              style={{
+                backgroundImage: (CustodyDB.getConfig().use_custom_template && CustodyDB.getConfig().custom_template_image) ? `url(${CustodyDB.getConfig().custom_template_image})` : undefined,
+                backgroundSize: '100% 100%',
+                backgroundRepeat: 'no-repeat',
+              }}
+            >
+              <div className="flex justify-between items-center border-b-2 border-black pb-5 mb-6 gap-4">
+                {!CustodyDB.getConfig().use_custom_template ? (
+                  <div className="flex items-center gap-3">
+                    <div className="border-[2.5px] border-black rounded-[50%/50%] px-3 py-1.5 flex flex-col items-center justify-center leading-none bg-white shrink-0 shadow-sm h-[52px] w-[90px]">
+                      <span className="text-[20px] font-black leading-none text-black">كوكي</span>
+                      <span className="text-[9px] font-bold font-mono tracking-wider mt-0.5 leading-none text-black">Koki</span>
+                    </div>
+                    <div className="text-right space-y-0.5">
+                      <h1 className="text-[13px] font-black text-black">شركة / القاهرة الجديدة للدواجن</h1>
+                      <p className="text-[10px] text-neutral-800 font-bold">{isRtl ? 'إدارة المشتريات والتموين' : 'Procurement & Logistics Dept'}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-right space-y-0.5">
+                    <h1 className="text-[13px] font-black text-emerald-600">{CustodyDB.getConfig().company_name}</h1>
+                    <p className="text-[10px] text-neutral-800 font-bold">{isRtl ? 'إدارة المشتريات والتموين' : 'Procurement & Logistics Dept'}</p>
+                  </div>
+                )}
+                
+                <div className="text-center">
+                  <h2 className="text-[14px] font-black border-[2.5px] border-black px-4 py-2 bg-neutral-100 text-black shadow-sm uppercase">
+                    {isRtl ? 'طلب شراء بضائع رسمي' : 'Purchase Request (PR)'}
+                  </h2>
+                </div>
+
+                <div className="text-right space-y-1">
+                  <div className="text-xs font-mono font-bold text-black border border-black px-2.5 py-1 bg-neutral-50 rounded">
+                    {isRtl ? 'طلب رقم: ' : 'PR #: '} <span className="font-black font-mono">{printPR.prNumber}</span>
+                  </div>
+                  <div className="text-[10px] font-mono text-slate-600">
+                    {isRtl ? 'التاريخ: ' : 'Date: '} {printPR.date}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 border border-black p-3 rounded mb-6 bg-neutral-50/50">
+                <div>
+                  <span className="text-slate-500 font-semibold">{isRtl ? 'مقدم الطلب:' : 'Requester Name:'}</span>
+                  <p className="font-bold text-black">{printPR.requesterName}</p>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-semibold">{isRtl ? 'القسم / الإدارة:' : 'Department:'}</span>
+                  <p className="font-bold text-black">{printPR.department || (isRtl ? 'التشغيل والإنتاج' : 'Operations')}</p>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-slate-500 font-semibold">{isRtl ? 'البيان وملاحظات الطلب:' : 'PR Statement & Notes:'}</span>
+                  <p className="font-bold text-black">{printPR.notes || '---'}</p>
+                </div>
+              </div>
+
+              <table className="w-full text-right border-collapse text-xs border border-black mb-8">
+                <thead>
+                  <tr className="bg-neutral-100 border-b border-black text-black font-black">
+                    <th className="p-2 border-r border-black w-10 text-center">#</th>
+                    <th className="p-2 border-r border-black">{isRtl ? 'اسم الصنف والمواصفات' : 'Product & Description'}</th>
+                    <th className="p-2 border-r border-black w-24 text-center">{isRtl ? 'الكمية المطلوبة' : 'Requested Qty'}</th>
+                    <th className="p-2 border-r border-black w-24 text-center">{isRtl ? 'الوحدة' : 'Unit'}</th>
+                    <th className="p-2 border-r border-black w-28 text-center">{isRtl ? 'السعر التقديري (ج.م)' : 'Estimated Price'}</th>
+                    <th className="p-2 w-32 text-center">{isRtl ? 'الإجمالي التقديري' : 'Estimated Total'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black text-black">
+                  {printPR.items.map((item, index) => (
+                    <tr key={index} className="border-b border-black">
+                      <td className="p-2 border-r border-black text-center font-mono font-bold">{index + 1}</td>
+                      <td className="p-2 border-r border-black font-extrabold">{item.productName}</td>
+                      <td className="p-2 border-r border-black text-center font-mono font-black">{item.qty}</td>
+                      <td className="p-2 border-r border-black text-center font-medium">{item.unit || (isRtl ? 'وحدة' : 'Unit')}</td>
+                      <td className="p-2 border-r border-black text-center font-mono">{item.estimatedPrice.toLocaleString()} EGP</td>
+                      <td className="p-2 text-center font-mono font-black">{(item.qty * item.estimatedPrice).toLocaleString()} EGP</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-neutral-100 font-black border-t-2 border-black">
+                    <td colSpan={5} className="p-2 border-r border-black text-left">{isRtl ? 'إجمالي تقديري لمستند الطلب:' : 'Total Estimated Request Value:'}</td>
+                    <td className="p-2 text-center font-mono text-indigo-900 text-xs font-black">{printPR.totalAmount.toLocaleString()} EGP</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div className="grid grid-cols-3 gap-6 text-center mt-12 pt-6 border-t border-slate-300">
+                <div className="space-y-6">
+                  <p className="text-[10px] text-slate-500 font-bold uppercase">{isRtl ? 'مقدم الطلب' : 'Requested by'}</p>
+                  <div className="h-10 border-b border-black w-40 mx-auto border-dashed"></div>
+                  <p className="text-[10px] text-black font-semibold">{printPR.requesterName}</p>
+                </div>
+                <div className="space-y-6">
+                  <p className="text-[10px] text-slate-500 font-bold uppercase">{isRtl ? 'مدير القسم التابع' : 'Department Manager'}</p>
+                  <div className="h-10 border-b border-black w-40 mx-auto border-dashed"></div>
+                  <p className="text-[10px] text-black font-mono">---</p>
+                </div>
+                <div className="space-y-6">
+                  <p className="text-[10px] text-slate-500 font-bold uppercase">{isRtl ? 'اعتماد إدارة المشتريات' : 'Procurements Director'}</p>
+                  <div className="h-10 border-b border-black w-40 mx-auto border-dashed"></div>
+                  <p className="text-[10px] text-black font-mono">{printPR.status === 'APPROVED' ? '✓ APPROVED_PR' : '---'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PO PRINT MODAL */}
+      {printPO && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:backdrop-blur-none animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-4 print:p-0 print:shadow-none print:rounded-none">
+            <div className="flex justify-between items-center print:hidden border-b pb-3 dark:border-slate-800">
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
+                {isRtl ? 'معاينة أمر التوريد والشراء للطباعة' : 'Purchase Order Print Preview'}
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Printer size={14} />
+                  <span>{isRtl ? 'طباعة المستند' : 'Print Voucher'}</span>
+                </button>
+                <button
+                  onClick={() => setPrintPO(null)}
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div
+              id="voucher-sheet-printable"
+              className="w-[210mm] min-h-[297mm] mx-auto p-12 border border-slate-300 bg-white text-black text-xs font-bold leading-relaxed shadow-xl relative print:shadow-none print:border-none print:w-full print:min-h-0 print:p-2"
+              dir={isRtl ? 'rtl' : 'ltr'}
+              style={{
+                backgroundImage: (CustodyDB.getConfig().use_custom_template && CustodyDB.getConfig().custom_template_image) ? `url(${CustodyDB.getConfig().custom_template_image})` : undefined,
+                backgroundSize: '100% 100%',
+                backgroundRepeat: 'no-repeat',
+              }}
+            >
+              <div className="flex justify-between items-center border-b-2 border-black pb-5 mb-6 gap-4">
+                {!CustodyDB.getConfig().use_custom_template ? (
+                  <div className="flex items-center gap-3">
+                    <div className="border-[2.5px] border-black rounded-[50%/50%] px-3 py-1.5 flex flex-col items-center justify-center leading-none bg-white shrink-0 shadow-sm h-[52px] w-[90px]">
+                      <span className="text-[20px] font-black leading-none text-black">كوكي</span>
+                      <span className="text-[9px] font-bold font-mono tracking-wider mt-0.5 leading-none text-black">Koki</span>
+                    </div>
+                    <div className="text-right space-y-0.5">
+                      <h1 className="text-[13px] font-black text-black">شركة / القاهرة الجديدة للدواجن</h1>
+                      <p className="text-[10px] text-neutral-800 font-bold">{isRtl ? 'إدارة المشتريات والتموين' : 'Procurement & Logistics Dept'}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-right space-y-0.5">
+                    <h1 className="text-[13px] font-black text-emerald-600">{CustodyDB.getConfig().company_name}</h1>
+                    <p className="text-[10px] text-neutral-800 font-bold">{isRtl ? 'إدارة المشتريات والتموين' : 'Procurement & Logistics Dept'}</p>
+                  </div>
+                )}
+                
+                <div className="text-center">
+                  <h2 className="text-[14px] font-black border-[2.5px] border-black px-4 py-2 bg-neutral-100 text-black shadow-sm uppercase">
+                    {isRtl ? 'أمر شراء وتوريد رسمي' : 'Purchase Order (PO)'}
+                  </h2>
+                </div>
+
+                <div className="text-right space-y-1">
+                  <div className="text-xs font-mono font-bold text-black border border-black px-2.5 py-1 bg-neutral-50 rounded">
+                    {isRtl ? 'أمر توريد رقم: ' : 'PO #: '} <span className="font-black font-mono">{printPO.poNumber}</span>
+                  </div>
+                  <div className="text-[10px] font-mono text-slate-600">
+                    {isRtl ? 'التاريخ: ' : 'Date: '} {printPO.date}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 border border-black p-3 rounded mb-6 bg-neutral-50/50">
+                <div>
+                  <span className="text-slate-500 font-semibold">{isRtl ? 'السيد المورد المسئول:' : 'Vendor / Supplier:'}</span>
+                  <p className="font-bold text-black">{printPO.vendorName}</p>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-semibold">{isRtl ? 'حالة التوريد والاعتماد:' : 'Compliance Status:'}</span>
+                  <p className="font-bold text-black">{printPO.status === 'RECEIVED' ? (isRtl ? 'تم الاستلام والترحيل للمخزن' : 'Items Received & Stocked') : (isRtl ? 'صادر وبانتظار التوريد' : 'Issued for Delivery')}</p>
+                </div>
+              </div>
+
+              <table className="w-full text-right border-collapse text-xs border border-black mb-8">
+                <thead>
+                  <tr className="bg-neutral-100 border-b border-black text-black font-black">
+                    <th className="p-2 border-r border-black w-10 text-center">#</th>
+                    <th className="p-2 border-r border-black">{isRtl ? 'اسم الصنف والمواصفات المعتمدة' : 'Product & Description'}</th>
+                    <th className="p-2 border-r border-black w-24 text-center">{isRtl ? 'الكمية المطلوبة' : 'PO Quantity'}</th>
+                    <th className="p-2 border-r border-black w-24 text-center">{isRtl ? 'الوحدة' : 'Unit'}</th>
+                    <th className="p-2 border-r border-black w-28 text-center">{isRtl ? 'سعر الوحدة الشراء' : 'Unit Purchase Price'}</th>
+                    <th className="p-2 w-32 text-center">{isRtl ? 'القيمة الإجمالية السطر' : 'Line Total'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black text-black">
+                  {printPO.items.map((item, index) => (
+                    <tr key={index} className="border-b border-black">
+                      <td className="p-2 border-r border-black text-center font-mono font-bold">{index + 1}</td>
+                      <td className="p-2 border-r border-black font-extrabold">{item.productName}</td>
+                      <td className="p-2 border-r border-black text-center font-mono font-black">{item.qty}</td>
+                      <td className="p-2 border-r border-black text-center font-medium">{item.unit || (isRtl ? 'وحدة' : 'Unit')}</td>
+                      <td className="p-2 border-r border-black text-center font-mono">{item.unitPrice.toLocaleString()} EGP</td>
+                      <td className="p-2 text-center font-mono font-black">{item.totalPrice.toLocaleString()} EGP</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-neutral-100 font-black border-t-2 border-black">
+                    <td colSpan={5} className="p-2 border-r border-black text-left">{isRtl ? 'القيمة الإجمالية الصافية للأمر الشراء:' : 'Total net PO Amount:'}</td>
+                    <td className="p-2 text-center font-mono text-emerald-900 text-xs font-black">{printPO.totalAmount.toLocaleString()} EGP</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div className="grid grid-cols-4 gap-4 text-center mt-12 pt-6 border-t border-slate-300">
+                <div className="space-y-6">
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">{isRtl ? 'مسؤول المشتريات' : 'Buyer'}</p>
+                  <div className="h-10 border-b border-black w-32 mx-auto border-dashed"></div>
+                  <p className="text-[9px] text-black font-semibold">---</p>
+                </div>
+                <div className="space-y-6">
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">{isRtl ? 'مراجعة الحسابات' : 'Financial Accountant'}</p>
+                  <div className="h-10 border-b border-black w-32 mx-auto border-dashed"></div>
+                  <p className="text-[9px] text-black font-mono">---</p>
+                </div>
+                <div className="space-y-6">
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">{isRtl ? 'مدير المشتريات والتموين' : 'Purchasing Manager'}</p>
+                  <div className="h-10 border-b border-black w-32 mx-auto border-dashed"></div>
+                  <p className="text-[9px] text-black font-mono">✓ COMPLIANT_PO</p>
+                </div>
+                <div className="space-y-6">
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">{isRtl ? 'اعتماد الإدارة العليا' : 'General Manager / CFO'}</p>
+                  <div className="h-10 border-b border-black w-32 mx-auto border-dashed"></div>
+                  <p className="text-[9px] text-black font-mono">✓ APPROVED_RELEASED</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

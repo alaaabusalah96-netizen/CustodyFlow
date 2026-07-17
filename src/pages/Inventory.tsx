@@ -7,6 +7,7 @@ import {
   Eye, 
   CheckCircle2, 
   XCircle, 
+  X,
   AlertTriangle, 
   FileSpreadsheet, 
   TrendingUp, 
@@ -82,6 +83,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [printInventoryDoc, setPrintInventoryDoc] = useState<InventoryDocument | null>(null);
 
   // Multi-Echelon Stock Transfer Receipt UI State
   const [activeDocSubTab, setActiveDocSubTab] = useState<'all' | 'transit'>('all');
@@ -395,13 +397,23 @@ export default function Inventory({ language, theme }: InventoryProps) {
       {/* RENDER DETAILED VIEW WITH LIFE CYCLE CONTROLS */}
       {!isFormOpen && selectedDocId && activeDoc && (
         <div className="space-y-6">
-          <button
-            onClick={() => setSelectedDocId(null)}
-            className={`inline-flex items-center gap-1 text-xs font-bold ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'}`}
-          >
-            {isRtl ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-            <span>{isRtl ? 'العودة لجدول المستندات' : 'Back to Documents'}</span>
-          </button>
+          <div className="flex justify-between items-center gap-4">
+            <button
+              onClick={() => setSelectedDocId(null)}
+              className={`inline-flex items-center gap-1 text-xs font-bold ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              {isRtl ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+              <span>{isRtl ? 'العودة لجدول المستندات' : 'Back to Documents'}</span>
+            </button>
+
+            <button
+              onClick={() => setPrintInventoryDoc(activeDoc)}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-black flex items-center gap-2 rounded-xl transition-all cursor-pointer border border-slate-700 shadow-sm"
+            >
+              <Printer size={15} />
+              <span>{isRtl ? 'طباعة مستند الحركة المخزنية (A4)' : 'Print Stock Voucher (A4)'}</span>
+            </button>
+          </div>
 
           {/* Stepper Visualizer (المسار الزمني لاعتماد السند) */}
           <div className={`p-4 md:p-6 rounded-3xl border ${theme === 'dark' ? 'bg-[#111827] border-[#1e293b]' : 'bg-white border-slate-100'}`}>
@@ -2140,6 +2152,169 @@ export default function Inventory({ language, theme }: InventoryProps) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* INVENTORY DOC PRINT MODAL */}
+      {printInventoryDoc && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:backdrop-blur-none animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-4 print:p-0 print:shadow-none print:rounded-none">
+            <div className="flex justify-between items-center print:hidden border-b pb-3 dark:border-slate-800">
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
+                {isRtl ? 'معاينة السند المخزني للطباعة' : 'Inventory Document Print Preview'}
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Printer size={14} />
+                  <span>{isRtl ? 'طباعة المستند' : 'Print Voucher'}</span>
+                </button>
+                <button
+                  onClick={() => setPrintInventoryDoc(null)}
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div
+              id="voucher-sheet-printable"
+              className="w-[210mm] min-h-[297mm] mx-auto p-12 border border-slate-300 bg-white text-black text-xs font-bold leading-relaxed shadow-xl relative print:shadow-none print:border-none print:w-full print:min-h-0 print:p-2"
+              dir={isRtl ? 'rtl' : 'ltr'}
+              style={{
+                backgroundImage: (CustodyDB.getConfig().use_custom_template && CustodyDB.getConfig().custom_template_image) ? `url(${CustodyDB.getConfig().custom_template_image})` : undefined,
+                backgroundSize: '100% 100%',
+                backgroundRepeat: 'no-repeat',
+              }}
+            >
+              <div className="flex justify-between items-center border-b-2 border-black pb-5 mb-6 gap-4">
+                {!CustodyDB.getConfig().use_custom_template ? (
+                  <div className="flex items-center gap-3">
+                    <div className="border-[2.5px] border-black rounded-[50%/50%] px-3 py-1.5 flex flex-col items-center justify-center leading-none bg-white shrink-0 shadow-sm h-[52px] w-[90px]">
+                      <span className="text-[20px] font-black leading-none text-black">كوكي</span>
+                      <span className="text-[9px] font-bold font-mono tracking-wider mt-0.5 leading-none text-black">Koki</span>
+                    </div>
+                    <div className="text-right space-y-0.5">
+                      <h1 className="text-[13px] font-black text-black">شركة / القاهرة الجديدة للدواجن</h1>
+                      <p className="text-[10px] text-neutral-800 font-bold">{isRtl ? 'إدارة المستودعات وسلاسل الإمداد' : 'Warehouse & Inventory Control'}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-right space-y-0.5">
+                    <h1 className="text-[13px] font-black text-emerald-600">{CustodyDB.getConfig().company_name}</h1>
+                    <p className="text-[10px] text-neutral-800 font-bold">{isRtl ? 'إدارة المستودعات وسلاسل الإمداد' : 'Warehouse & Inventory Control'}</p>
+                  </div>
+                )}
+                
+                <div className="text-center">
+                  <h2 className="text-[14px] font-black border-[2.5px] border-black px-4 py-2 bg-neutral-100 text-black shadow-sm uppercase">
+                    {getDocTypeLabel(printInventoryDoc.doc_type, printInventoryDoc.scrap_action)}
+                  </h2>
+                </div>
+
+                <div className="text-right space-y-1">
+                  <div className="text-xs font-mono font-bold text-black border border-black px-2.5 py-1 bg-neutral-50 rounded">
+                    {isRtl ? 'سند رقم: ' : 'Voucher #: '} <span className="font-black font-mono">{printInventoryDoc.doc_no}</span>
+                  </div>
+                  <div className="text-[10px] font-mono text-slate-600">
+                    {isRtl ? 'التاريخ: ' : 'Date: '} {printInventoryDoc.date}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 border border-black p-3 rounded mb-6 bg-neutral-50/50">
+                <div>
+                  <span className="text-slate-500 font-semibold">{isRtl ? 'موقع المخزن المسؤول:' : 'Primary Warehouse:'}</span>
+                  <p className="font-bold text-black">{warehouses.find(w => w.id === printInventoryDoc.source_warehouse_id)?.name || printInventoryDoc.source_warehouse_id}</p>
+                </div>
+                {printInventoryDoc.dest_entity_id && (
+                  <div>
+                    <span className="text-slate-500 font-semibold">{isRtl ? 'الجهة المستلمة / المخزن البديل:' : 'Destination Entity / Wh:'}</span>
+                    <p className="font-bold text-black">{printInventoryDoc.dest_entity_id} ({printInventoryDoc.dest_entity_type})</p>
+                  </div>
+                )}
+                <div>
+                  <span className="text-slate-500 font-semibold">{isRtl ? 'سبب المعاملة:' : 'Reason / Reference:'}</span>
+                  <p className="font-bold text-black">{printInventoryDoc.reason || '---'}</p>
+                </div>
+                {printInventoryDoc.recipient && (
+                  <div>
+                    <span className="text-slate-500 font-semibold">{isRtl ? 'أمين المخزن / السائق المستلم:' : 'Recipient Personnel:'}</span>
+                    <p className="font-bold text-black">{printInventoryDoc.recipient}</p>
+                  </div>
+                )}
+                <div className="col-span-2">
+                  <span className="text-slate-500 font-semibold">{isRtl ? 'البيان العام للحركة:' : 'Voucher Statement:'}</span>
+                  <p className="font-bold text-black">{printInventoryDoc.statement || '---'}</p>
+                </div>
+              </div>
+
+              <table className="w-full text-right border-collapse text-xs border border-black mb-8">
+                <thead>
+                  <tr className="bg-neutral-100 border-b border-black text-black font-black">
+                    <th className="p-2 border-r border-black w-10 text-center">#</th>
+                    <th className="p-2 border-r border-black w-28 text-center">{isRtl ? 'كود الصنف' : 'Item Code'}</th>
+                    <th className="p-2 border-r border-black">{isRtl ? 'اسم ووصف الصنف المخزني' : 'Item Name & Description'}</th>
+                    <th className="p-2 border-r border-black w-24 text-center">{isRtl ? 'الكمية' : 'Qty'}</th>
+                    <th className="p-2 border-r border-black w-24 text-center">{isRtl ? 'الوحدة' : 'Unit'}</th>
+                    <th className="p-2 w-48">{isRtl ? 'ملاحظات الصنف' : 'Line Notes'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black text-black">
+                  {printInventoryDoc.items.map((item, index) => (
+                    <tr key={index} className="border-b border-black">
+                      <td className="p-2 border-r border-black text-center font-mono font-bold">{index + 1}</td>
+                      <td className="p-2 border-r border-black text-center font-mono font-bold">{item.product_code}</td>
+                      <td className="p-2 border-r border-black font-extrabold">{item.product_name}</td>
+                      <td className="p-2 border-r border-black text-center font-mono font-black">{item.qty}</td>
+                      <td className="p-2 border-r border-black text-center font-medium">{item.unit || (isRtl ? 'وحدة' : 'Unit')}</td>
+                      <td className="p-2 text-slate-700">{item.notes || '---'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {printInventoryDoc.received_by && (
+                <div className="mb-6 p-3 border border-emerald-500 rounded bg-emerald-500/5 text-black">
+                  <p className="font-black text-emerald-800 mb-1">{isRtl ? 'تأكيد تتبع الشحنة اللوجستي (Multi-Echelon Audit Trail):' : 'Multi-Echelon Logistic Audit Verification:'}</p>
+                  <p className="text-[11px] font-bold">
+                    {isRtl ? 'المستلم المصادق:' : 'Received by:'} <span className="font-black text-slate-800">{printInventoryDoc.received_by}</span> • {isRtl ? 'تاريخ الاستلام المخزني الفعلي:' : 'Date:'} <span className="font-black text-slate-800">{new Date(printInventoryDoc.received_date!).toLocaleString(isRtl ? 'ar-EG' : 'en-US')}</span>
+                  </p>
+                  {printInventoryDoc.received_notes && (
+                    <p className="text-[11px] font-medium mt-1">
+                      {isRtl ? 'ملاحظات المستلم الفعلي:' : 'Recipient Comments:'} <span className="italic text-slate-700">{printInventoryDoc.received_notes}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-4 gap-4 text-center mt-12 pt-6 border-t border-slate-300">
+                <div className="space-y-6">
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">{isRtl ? 'أمين مخزن الصرف / الإضافة' : 'Storekeeper Signature'}</p>
+                  <div className="h-10 border-b border-black w-32 mx-auto border-dashed"></div>
+                  <p className="text-[9px] text-black font-semibold">{printInventoryDoc.created_by}</p>
+                </div>
+                <div className="space-y-6">
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">{isRtl ? 'السائق / المستلم الفعلي' : 'Recipient / Transporter'}</p>
+                  <div className="h-10 border-b border-black w-32 mx-auto border-dashed"></div>
+                  <p className="text-[9px] text-black font-mono">{printInventoryDoc.recipient || '---'}</p>
+                </div>
+                <div className="space-y-6">
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">{isRtl ? 'البوابة / تصريح الأمن' : 'Security Clearance Gate'}</p>
+                  <div className="h-10 border-b border-black w-32 mx-auto border-dashed"></div>
+                  <p className="text-[9px] text-black font-mono">---</p>
+                </div>
+                <div className="space-y-6">
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">{isRtl ? 'مدير إدارة المستودعات' : 'Logistics Manager'}</p>
+                  <div className="h-10 border-b border-black w-32 mx-auto border-dashed"></div>
+                  <p className="text-[9px] text-black font-mono">{printInventoryDoc.status === 'Posted' ? '✓ SYSTEM_POSTED' : '---'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
