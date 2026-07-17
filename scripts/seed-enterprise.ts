@@ -1,19 +1,17 @@
 import admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import fs from 'fs';
 
 // Read config from local file
 const firebaseConfig = JSON.parse(fs.readFileSync('./firebase-applet-config.json', 'utf8'));
 
 // Initialize Firebase Admin SDK using Application Default Credentials (ADC) or credentials if in fallback
-admin.initializeApp({
+const app = admin.initializeApp({
   projectId: firebaseConfig.projectId
 });
 
-// Configure custom Database ID using Firestore constructor
-const db = new admin.firestore.Firestore({
-  projectId: firebaseConfig.projectId,
-  databaseId: firebaseConfig.firestoreDatabaseId || '(default)'
-});
+// Configure custom Database ID using getFirestore
+const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
 
 console.log(`Starting Cloud Firestore database initialization (using firebase-admin) for CustodyFlow...`);
 console.log(`Project ID: ${firebaseConfig.projectId}`);

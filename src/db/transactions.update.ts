@@ -11,6 +11,7 @@ import { CustodyService } from './custodyService';
 import { ValidationEngine } from './validation';
 import { DEFAULT_TRANSACTIONS } from './defaults';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
+import { CustodyDB } from '../db';
 
 export class TransactionsUpdateModule {
   static updateTransaction(id: string, updates: Partial<Transaction>): void {
@@ -44,7 +45,7 @@ export class TransactionsUpdateModule {
         try {
           const cats = CustodyDB.getCategories();
           const cat = cats.find(c => c.id === updated.category_id);
-          const catName = cat ? (cat.name_en || cat.name || '') : '';
+          const catName = cat ? (cat.name_en || '') : '';
           const expenseCode = catName.toLowerCase().includes('fuel') || catName.includes('وقود') ? '510201' : '510101';
           const statementAr = `قيد تلقائي: تسوية مصروف ${cat ? (cat.name_ar || cat.name_en || '') : ''} - سند رقم ${updated.voucher_no || ''}`;
           const statementEn = `Auto-post: Settlement of ${catName} expense - Voucher #${updated.voucher_no || ''}`;

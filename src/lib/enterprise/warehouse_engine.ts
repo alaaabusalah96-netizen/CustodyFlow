@@ -68,7 +68,7 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
 
           // Apply stock increase
           items.forEach((item: any) => {
-            InventoryModule.adjustStock(warehouseId, item.product_id, item.qty, 'RECEIPT', event.user_id, item.bin_id);
+            InventoryModule.adjustStock(warehouseId, item.product_id, item.qty, 'Receipt', event.user_id, item.bin_id);
           });
 
           return {
@@ -103,7 +103,7 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
 
           // Apply stock decrease
           items.forEach((item: any) => {
-            InventoryModule.adjustStock(warehouseId, item.product_id, -item.qty, 'ISSUE', event.user_id, item.bin_id);
+            InventoryModule.adjustStock(warehouseId, item.product_id, -item.qty, 'Issue', event.user_id, item.bin_id);
           });
 
           return {
@@ -162,9 +162,9 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
           // Process the transfer
           items.forEach((item: any) => {
             // Deduct from source
-            InventoryModule.adjustStock(srcWarehouseId, item.product_id, -item.qty, 'TRANSFER_OUT', event.user_id, item.src_bin_id);
+            InventoryModule.adjustStock(srcWarehouseId, item.product_id, -item.qty, 'Transfer', event.user_id, item.src_bin_id);
             // Add to destination
-            InventoryModule.adjustStock(destWarehouseId, item.product_id, item.qty, 'TRANSFER_IN', event.user_id, item.dest_bin_id);
+            InventoryModule.adjustStock(destWarehouseId, item.product_id, item.qty, 'Transfer', event.user_id, item.dest_bin_id);
           });
 
           return {
@@ -194,7 +194,7 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
             };
           }
 
-          InventoryModule.adjustStock(warehouseId, productId, diff, 'ADJUSTMENT', event.user_id, binId);
+          InventoryModule.adjustStock(warehouseId, productId, diff, 'Adjustment', event.user_id, binId);
 
           return {
             success: true,

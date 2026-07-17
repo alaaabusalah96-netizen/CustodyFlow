@@ -743,6 +743,49 @@ export class InventoryModule {
       .reduce((sum, m) => sum + m.qty_change, 0);
   }
 
+  static getWarehouseStock(warehouseId: string): number {
+    return InventoryModule.getWarehouseTotalStock(warehouseId);
+  }
+
+  static getProductStockInWarehouse(warehouseId: string, productId: string, binId?: string): number {
+    if (binId) {
+      return InventoryModule.getBinProductStock(productId, binId);
+    }
+    return InventoryModule.getProductStock(productId, warehouseId);
+  }
+
+  static adjustStock(
+    warehouseId: string,
+    productId: string,
+    qtyChange: number,
+    docType: InventoryDocType,
+    userId: string,
+    binId?: string
+  ): void {
+    const companyId = CompaniesModule.getSelectedCompanyId() || 'comp-1';
+    const currentStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
+    const current_balance_after = currentStock + qtyChange;
+    const movement: StockMovement = {
+      id: `m-adj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      doc_id: 'direct-adjust',
+      doc_no: `ADJ-${Date.now()}`,
+      doc_type: docType,
+      product_id: productId,
+      warehouse_id: warehouseId,
+      bin_id: binId,
+      qty_change: qtyChange,
+      type: qtyChange >= 0 ? 'IN' : 'OUT',
+      current_balance_after,
+      date: new Date().toISOString().split('T')[0],
+      company_id: companyId,
+      created_at: new Date().toISOString(),
+      created_by: userId
+    };
+    const allMovements = InventoryModule.getStockMovements();
+    allMovements.push(movement);
+    InventoryModule.saveStockMovements(allMovements);
+  }
+
   /**
    * Adds an Inventory Document
    */

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, Coins, TrendingUp, Layers, Search, ArrowUpRight, ArrowDownLeft,
-  Plus, Calendar, Calculator, CheckCircle2, ChevronRight, Hash, ShieldAlert, FileText
+  Plus, Calendar, Calculator, CheckCircle2, ChevronRight, Hash, ShieldAlert, FileText, X
 } from 'lucide-react';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 import { UsersModule } from '../db/users';
@@ -109,14 +109,13 @@ export default function Accounting({ language, theme }: AccountingProps) {
     }
 
     const engine = new AccountingBusinessEngine();
-    const event = createEventEnvelope(
-      'JOURNAL_ENTRY_POSTED',
-      companyId,
-      companyId,
-      activeUser?.id || 'system',
-      activeUser?.full_name || 'System',
-      activeUser?.role || 'System',
-      {
+    const event = createEventEnvelope({
+      eventType: 'JOURNAL_ENTRY_POSTED',
+      tenantId: companyId,
+      userId: activeUser?.id || 'system',
+      userName: activeUser?.full_name || 'System',
+      userRole: activeUser?.role as any || 'System',
+      payload: {
         statementAr: jeStatementAr,
         statementEn: jeStatementEn,
         sourceRef: 'Manual Entry / تسوية يدوية',
@@ -127,7 +126,7 @@ export default function Accounting({ language, theme }: AccountingProps) {
           notes: l.notes || undefined
         }))
       }
-    );
+    });
 
     const result = await engine.processEvent(event);
     if (result.success) {

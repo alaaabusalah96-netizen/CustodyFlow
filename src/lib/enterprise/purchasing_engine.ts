@@ -262,6 +262,8 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           const idx = allPOs.findIndex(po => po.id === poId);
           if (idx === -1) throw new Error('Purchase Order not found');
 
+          const companyId = allPOs[idx].metadata.tenantId;
+
           if (allPOs[idx].status !== 'ISSUED') {
             throw new Error(`PO is not in ISSUED state. Current: ${allPOs[idx].status}`);
           }
@@ -283,7 +285,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
               warehouseId,
               item.productId,
               item.qty,
-              'RECEIPT',
+              'Receipt',
               event.user_id,
               undefined // Automatically place to default bin or general space
             );

@@ -146,21 +146,20 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
     }
 
     const engine = new PurchasingBusinessEngine();
-    const event = createEventEnvelope(
-      'PR_SUBMITTED',
-      companyId,
-      companyId,
-      activeUser?.id || 'system',
-      activeUser?.full_name || 'System',
-      activeUser?.role || 'System',
-      {
+    const event = createEventEnvelope({
+      eventType: 'PR_SUBMITTED',
+      tenantId: companyId,
+      userId: activeUser?.id || 'system',
+      userName: activeUser?.full_name || 'System',
+      userRole: activeUser?.role as any || 'System',
+      payload: {
         requesterId: activeUser?.id || 'system',
         requesterName: activeUser?.full_name || 'System',
         department: prDepartment,
         items: prItems,
         notes: prNotes
       }
-    );
+    });
 
     const result = await engine.processEvent(event);
     if (result.success) {
@@ -178,15 +177,14 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
   // 4. Approve / Reject PR
   const handleApprovePR = async (prId: string) => {
     const engine = new PurchasingBusinessEngine();
-    const event = createEventEnvelope(
-      'PR_APPROVED',
-      companyId,
-      companyId,
-      activeUser?.id || 'system',
-      activeUser?.full_name || 'System',
-      activeUser?.role || 'System',
-      { prId }
-    );
+    const event = createEventEnvelope({
+      eventType: 'PR_APPROVED',
+      tenantId: companyId,
+      userId: activeUser?.id || 'system',
+      userName: activeUser?.full_name || 'System',
+      userRole: activeUser?.role as any || 'System',
+      payload: { prId }
+    });
 
     const result = await engine.processEvent(event);
     if (result.success) {
@@ -199,15 +197,14 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
 
   const handleRejectPR = async (prId: string) => {
     const engine = new PurchasingBusinessEngine();
-    const event = createEventEnvelope(
-      'PR_REJECTED',
-      companyId,
-      companyId,
-      activeUser?.id || 'system',
-      activeUser?.full_name || 'System',
-      activeUser?.role || 'System',
-      { prId }
-    );
+    const event = createEventEnvelope({
+      eventType: 'PR_REJECTED',
+      tenantId: companyId,
+      userId: activeUser?.id || 'system',
+      userName: activeUser?.full_name || 'System',
+      userRole: activeUser?.role as any || 'System',
+      payload: { prId }
+    });
 
     const result = await engine.processEvent(event);
     if (result.success) {
@@ -227,14 +224,13 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
 
     const defaultVendor = vendors[0];
     const engine = new PurchasingBusinessEngine();
-    const event = createEventEnvelope(
-      'PO_ISSUED',
-      companyId,
-      companyId,
-      activeUser?.id || 'system',
-      activeUser?.full_name || 'System',
-      activeUser?.role || 'System',
-      {
+    const event = createEventEnvelope({
+      eventType: 'PO_ISSUED',
+      tenantId: companyId,
+      userId: activeUser?.id || 'system',
+      userName: activeUser?.full_name || 'System',
+      userRole: activeUser?.role as any || 'System',
+      payload: {
         prId: pr.id,
         vendorId: defaultVendor.id,
         items: pr.items.map(it => ({
@@ -248,7 +244,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
         notes: `Issued automatically from PR ${pr.prNumber}.`,
         deliveryWarehouseId: warehouses[0]?.id
       }
-    );
+    });
 
     const result = await engine.processEvent(event);
     if (result.success) {
@@ -268,18 +264,17 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
     }
 
     const engine = new PurchasingBusinessEngine();
-    const event = createEventEnvelope(
-      'PO_RECEIVED',
-      companyId,
-      companyId,
-      activeUser?.id || 'system',
-      activeUser?.full_name || 'System',
-      activeUser?.role || 'System',
-      {
+    const event = createEventEnvelope({
+      eventType: 'PO_RECEIVED',
+      tenantId: companyId,
+      userId: activeUser?.id || 'system',
+      userName: activeUser?.full_name || 'System',
+      userRole: activeUser?.role as any || 'System',
+      payload: {
         poId,
         warehouseId: receiveWarehouseId
       }
-    );
+    });
 
     const result = await engine.processEvent(event);
     if (result.success) {
