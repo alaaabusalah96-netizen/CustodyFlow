@@ -195,7 +195,7 @@ export default function AuditLogView({ language, theme }: AuditLogProps) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `CustodyFlow_Audit_Logs_2026.csv`);
+    link.setAttribute('download', `KEMIT_ERP_Audit_Logs_2026.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

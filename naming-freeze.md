@@ -1,7 +1,7 @@
 # Project Freeze: Naming Freeze Specification (v1.0)
 # وثيقة تثبيت الأسماء والمصطلحات (إصدار 1.0)
 
-This document serves as the absolute frozen reference for existing names and collections in **CustodyFlow**. 
+This document serves as the absolute frozen reference for existing names and collections in **KEMIT ERP**. 
 All subsequent development modules (including Warehouses / Inventory, Purchasing, and Accounting) **MUST** adhere to this naming standard. 
 No modifications to the existing names below are allowed.
 
@@ -67,7 +67,7 @@ These roles and permissions are active for the cash custody system and must not 
 
 ## 3. Frozen Domain Events & Logging Strings / سجل الأحداث والمصطلحات المجمّدة
 
-Events in CustodyFlow are stored in two distinct structures depending on the level of reporting:
+Events in KEMIT ERP are stored in two distinct structures depending on the level of reporting:
 
 ### A. General Activity Logs (`ActivityLog.action` field)
 These strings are used for general activity reports:

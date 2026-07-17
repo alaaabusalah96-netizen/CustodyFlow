@@ -24,10 +24,16 @@ import {
   UserCheck,
   Trash2,
   ShoppingCart,
-  BookOpen
+  BookOpen,
+  Briefcase,
+  Users as UsersIcon,
+  Laptop as AssetIcon,
+  Receipt as PosIcon,
+  DollarSign as SalesIcon
 } from 'lucide-react';
 import { CustodyDB, ModulesModule } from '../db';
 import { translations, Language, Theme, AppUser } from '../types';
+import kemitLogo from '../assets/images/kemit_logo_1784280480891.jpg';
 
 interface LayoutProps {
   currentTab: string;
@@ -88,6 +94,11 @@ export default function Layout({
     { id: 'inventory', label: isRtl ? 'إدارة المخازن والمستودعات' : 'Inventory & Warehouses', icon: Layers, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
     { id: 'purchasing', label: isRtl ? 'إدارة المشتريات والتموين' : 'Procurement & Supply Chain', icon: ShoppingCart, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager'] },
     { id: 'accounting', label: isRtl ? 'الاستحقاق والقيود المزدوجة' : 'Double-Entry Accounting', icon: BookOpen, roleAllowed: ['SystemAdmin', 'Admin'] },
+    { id: 'sales_ar', label: isRtl ? 'المبيعات وحسابات العملاء' : 'Sales & Accounts Receivable', icon: SalesIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
+    { id: 'pos', label: isRtl ? 'نقاط البيع السريع (POS)' : 'Point of Sale (POS)', icon: PosIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
+    { id: 'crm', label: isRtl ? 'علاقات العملاء CRM' : 'Customer Relations (CRM)', icon: UsersIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
+    { id: 'fixed_assets', label: isRtl ? 'الأصول الثابتة والاستهلاكات' : 'Fixed Assets & Depreciation', icon: AssetIcon, roleAllowed: ['SystemAdmin', 'Admin'] },
+    { id: 'hr_payroll', label: isRtl ? 'الموارد البشرية والرواتب' : 'HR & Payroll Ledger', icon: Briefcase, roleAllowed: ['SystemAdmin', 'Admin'] },
     { id: 'reports', label: t.reports, icon: FileText, permission: 'view_reports' },
     { id: 'search', label: t.search, icon: SearchIcon },
     { id: 'audit-log', label: isRtl ? 'سجل الرقابة والامتثال' : 'Security & Audit Log', icon: ShieldCheck, roleAllowed: ['Admin', 'SystemAdmin'] },
@@ -160,8 +171,8 @@ export default function Layout({
           </button>
           
           <div className="flex items-center gap-2">
-            <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20">
-              <Coins className="h-5 w-5" />
+            <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl overflow-hidden bg-white shadow-md border border-slate-100 dark:border-slate-800">
+              <img src={kemitLogo} alt="KEMIT ERP Logo" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
             </div>
             <div>
               {activeUser?.role === 'SystemAdmin' ? (
@@ -353,7 +364,7 @@ export default function Layout({
               {t.title}
             </div>
             <div>
-              ERP Custody v2.6
+              KEMIT ERP v2.6
             </div>
             <div className="mt-1">
               &copy; 2026 {t.allRightsReserved}

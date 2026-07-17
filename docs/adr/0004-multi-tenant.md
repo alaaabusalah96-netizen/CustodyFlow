@@ -7,7 +7,7 @@ Accepted (Frozen) / مقبول ومثبت
 ---
 
 ## Context / السياق
-CustodyFlow is designed as an enterprise software platform. Converting a single-tenant platform into a secure multi-tenant SaaS later in the product life cycle requires complex, expensive refactoring of all databases, queries, and security rules.
+KEMIT ERP is designed as an enterprise software platform. Converting a single-tenant platform into a secure multi-tenant SaaS later in the product life cycle requires complex, expensive refactoring of all databases, queries, and security rules.
 
 ---
 

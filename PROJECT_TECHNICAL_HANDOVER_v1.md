@@ -1,11 +1,11 @@
 # Project Technical Handover Report
-**Project Name:** CustodyFlow
+**Project Name:** KEMIT ERP
 **Date:** July 11, 2026
 
 ---
 
 ## 1. Architecture Overview (البنية البرمجية)
-CustodyFlow is designed as an **Offline-First, Multi-Tenant SaaS, Single-Page Application (SPA)** that synchronizes in real-time with a remote **Google Cloud Firestore** database, utilizing local cache mirroring as the primary operational state.
+KEMIT ERP is designed as an **Offline-First, Multi-Tenant SaaS, Single-Page Application (SPA)** that synchronizes in real-time with a remote **Google Cloud Firestore** database, utilizing local cache mirroring as the primary operational state.
 
 ### 1.1 Layers of the System
 1. **Presentation Layer (React & Tailwind CSS):** Formed of reactive, modular pages (e.g., `SuperAdmin`, `Dashboard`, `Login`, `CashReconciliation`) and components (e.g., `AdminCredentialsForm`, `SMTPConfigModal`). Styling is strictly utility-driven (Tailwind CSS) paired with dynamic layout transitions managed by `motion/react` (Framer Motion).

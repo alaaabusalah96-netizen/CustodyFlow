@@ -44,7 +44,7 @@ We introduce a voluntary, higher-level architectural wrapper called "Business Gr
 ## Impact / التأثير والتبعات
 *English:*
 - **Zero Regression**: No existing customer databases, rules, or features are affected. The feature is 100% opt-in via a nullable `group_id` field.
-- **Enhanced Enterprise Capabilities**: Prepares CustodyFlow ERP for multi-company holding structures, cross-company searches, and consolidated reporting while keeping codebase simplicity.
+- **Enhanced Enterprise Capabilities**: Prepares KEMIT ERP ERP for multi-company holding structures, cross-company searches, and consolidated reporting while keeping codebase simplicity.
 
 *العربية:*
 - **عدم التأثير على النظام القائم**: لن تتأثر أي قاعدة بيانات أو قواعد حماية أو مميزات حالية. الميزة اختيارية بالكامل عن طريق حقل قابل للمسح أو القيمة الفارغة (`group_id`).

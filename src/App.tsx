@@ -27,6 +27,11 @@ import RegionAdminDashboard from './pages/RegionAdminDashboard';
 import Inventory from './pages/Inventory';
 import Purchasing from './pages/Purchasing';
 import Accounting from './pages/Accounting';
+import SalesAR from './pages/SalesAR';
+import POS from './pages/POS';
+import CRM from './pages/CRM';
+import FixedAssets from './pages/FixedAssets';
+import HRPayroll from './pages/HRPayroll';
 
 export default function App() {
   // Try to load any existing active session, or default to null
@@ -417,6 +422,41 @@ export default function App() {
             theme={theme}
           />
         );
+      case 'sales_ar':
+        return (
+          <SalesAR
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'pos':
+        return (
+          <POS
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'crm':
+        return (
+          <CRM
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'fixed_assets':
+        return (
+          <FixedAssets
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'hr_payroll':
+        return (
+          <HRPayroll
+            language={language}
+            theme={theme}
+          />
+        );
       case 'super-admin':
         return (
           <SuperAdmin
@@ -483,7 +523,7 @@ export default function App() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <h4 className="text-xs font-black text-slate-100 uppercase tracking-wider">
-              {isRtl ? 'تثبيت تطبيق CustodyFlow' : 'Install CustodyFlow App'}
+              {isRtl ? 'تثبيت تطبيق KEMIT ERP' : 'Install KEMIT ERP App'}
             </h4>
             <Sparkles size={12} className="text-amber-400" />
           </div>

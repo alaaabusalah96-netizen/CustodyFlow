@@ -1,7 +1,7 @@
 # Data Dictionary (v1.0)
 # قاموس مصطلحات وبيانات النظام الموحد
 
-This dictionary serves as the single source of truth for technical field mappings and business definitions inside **CustodyFlow**.
+This dictionary serves as the single source of truth for technical field mappings and business definitions inside **KEMIT ERP**.
 
 ---
 

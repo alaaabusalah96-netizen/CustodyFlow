@@ -28,6 +28,7 @@ import {
 } from '../types/inventory';
 import { InventoryModule } from '../db/inventory';
 import { CustodyDB } from '../db';
+import kemitLogo from '../assets/images/kemit_logo_1784280480891.jpg';
 
 interface InventoryDocumentFormProps {
   docId?: string; // If editing
@@ -400,12 +401,12 @@ export default function InventoryDocumentForm({
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             {/* Right: Company Logo Block */}
             <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xl shadow-md shrink-0">
-                CF
+              <div className="h-12 w-12 rounded-xl overflow-hidden bg-white flex items-center justify-center shadow-md shrink-0 border border-slate-150">
+                <img src={kemitLogo} alt="KEMIT ERP Logo" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
               </div>
               <div>
-                <h3 className="text-sm font-bold tracking-tight">Cairo Poultry Co.</h3>
-                <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400">CustodyFlow ERP</p>
+                <h3 className="text-sm font-bold tracking-tight">KEMIT ERP</h3>
+                <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Integrated ERP Solution</p>
               </div>
             </div>
 

@@ -1,13 +1,13 @@
 # Staging & Development Environment Specification (v1.0)
 # وثيقة توثيق وإعداد بيئة التطوير والاختبار (Staging)
 
-This document is part of **Phase 0: Baseline Freeze** for **CustodyFlow**. It outlines the setup of development, staging, and preview environments, assuring complete visual, layout, and database parity before deploying any foundational changes.
+This document is part of **Phase 0: Baseline Freeze** for **KEMIT ERP**. It outlines the setup of development, staging, and preview environments, assuring complete visual, layout, and database parity before deploying any foundational changes.
 
 ---
 
 ## 1. Environment Topology / هيكلية وتوزيع بيئات العمل
 
-CustodyFlow operates on a two-tier sandboxed cloud container architecture:
+KEMIT ERP operates on a two-tier sandboxed cloud container architecture:
 
 1. **Development Environment (Development App)**:
    - **Internal URL**: [https://ais-dev-7x5pikth4oictjequidq24-925777775579.europe-west2.run.app](https://ais-dev-7x5pikth4oictjequidq24-925777775579.europe-west2.run.app)

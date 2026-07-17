@@ -8,10 +8,10 @@ Accepted / مقبول
 
 ## Context / السياق
 *English:*
-To complete the enterprise resource planning (ERP) scope of CustodyFlow, we need to introduce a secure, robust Purchasing & Procurement module. This module enables companies to manage reliable supplier relations (Vendors), initiate formal requests for items or materials (Purchase Requests), and issue official binding orders to suppliers (Purchase Orders). These purchasing documents must have structured lifecycles (FSM states) and integrate with the centralized Permission, Audit, and Sequence engines defined under the Enterprise Foundation.
+To complete the enterprise resource planning (ERP) scope of KEMIT ERP, we need to introduce a secure, robust Purchasing & Procurement module. This module enables companies to manage reliable supplier relations (Vendors), initiate formal requests for items or materials (Purchase Requests), and issue official binding orders to suppliers (Purchase Orders). These purchasing documents must have structured lifecycles (FSM states) and integrate with the centralized Permission, Audit, and Sequence engines defined under the Enterprise Foundation.
 
 *العربية:*
-لاستكمال نطاق تخطيط موارد المؤسسات (ERP) في CustodyFlow، يجب إدخال موديول المشتريات والتموين لتمكين الشركات من إدارة العلاقات مع الموردين المعتمدين (Vendors)، وتوليد طلبات شراء داخلية صريحة (Purchase Requests)، وإصدار أوامر شراء رسمية ملزمة للموردين (Purchase Orders). يجب أن تتبع مستندات الشراء هذه دورات حياة محددة عبر آلة الحالات (FSM) وتتكامل مع محركات الصلاحيات والترقيم المتسلسل والتدقيق المشتركة تحت الأساس المعرفي للمؤسسات.
+لاستكمال نطاق تخطيط موارد المؤسسات (ERP) في KEMIT ERP، يجب إدخال موديول المشتريات والتموين لتمكين الشركات من إدارة العلاقات مع الموردين المعتمدين (Vendors)، وتوليد طلبات شراء داخلية صريحة (Purchase Requests)، وإصدار أوامر شراء رسمية ملزمة للموردين (Purchase Orders). يجب أن تتبع مستندات الشراء هذه دورات حياة محددة عبر آلة الحالات (FSM) وتتكامل مع محركات الصلاحيات والترقيم المتسلسل والتدقيق المشتركة تحت الأساس المعرفي للمؤسسات.
 
 ---
 

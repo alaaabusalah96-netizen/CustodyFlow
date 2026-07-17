@@ -68,7 +68,7 @@ export default function ReconciliationDashboard({
           <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 font-sans leading-relaxed">
             {isRtl 
               ? 'القيمة المالية الأصلية المخصصة للمحطة لإدارة المصروفات التشغيلية.' 
-              : 'Original operational fund allocation registered in CustodyFlow.'}
+              : 'Original operational fund allocation registered in KEMIT ERP.'}
           </p>
         </div>
       </div>

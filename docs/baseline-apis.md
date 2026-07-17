@@ -1,13 +1,13 @@
 # Baseline Server API & Triggers Documentation (v1.0)
 # وثيقة توثيق الخادم والواجهات البرمجية الحالية
 
-This document is part of **Phase 0: Baseline Freeze** for **CustodyFlow**. It details the back-end API architecture, security parameters, server-side OTP routes, and explains how server triggers are deployed.
+This document is part of **Phase 0: Baseline Freeze** for **KEMIT ERP**. It details the back-end API architecture, security parameters, server-side OTP routes, and explains how server triggers are deployed.
 
 ---
 
 ## 1. Cloud Run Backend Architecture Overview / هيكلية الخادم والخدمات السحابية
 
-Rather than utilizing individual, disconnected Firebase Cloud Functions, CustodyFlow runs a robust, unified full-stack **custom Node/Express server (`server.ts`)** inside the **Cloud Run** container.
+Rather than utilizing individual, disconnected Firebase Cloud Functions, KEMIT ERP runs a robust, unified full-stack **custom Node/Express server (`server.ts`)** inside the **Cloud Run** container.
 
 This provides:
 - **Centralized Security Enforcement**: Critical password resets, administration logins, SMTP verification, and token checks are evaluated strictly on the secure server side, hiding any API credentials and connection configurations from client browsers.

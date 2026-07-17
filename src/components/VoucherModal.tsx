@@ -109,6 +109,7 @@ function SVGQRCode({ value }: { value: string }) {
 import { X, Printer, History, User, Calendar } from 'lucide-react';
 import { CustodyDB } from '../db';
 import { Transaction, Theme } from '../types';
+import kemitLogo from '../assets/images/kemit_logo_1784280480891.jpg';
 
 interface VoucherModalProps {
   transaction: Transaction | null;
@@ -326,15 +327,14 @@ export default function VoucherModal({ transaction, isOpen, onClose, theme }: Vo
               {/* Right Side: Company Info & Logo */}
               <div className="flex items-center gap-3">
                 {/* Logo */}
-                <div className="border-[2.5px] border-black rounded-[50%/50%] px-3 py-1.5 flex flex-col items-center justify-center leading-none bg-white shrink-0 shadow-sm h-[52px] w-[90px]">
-                  <span className="text-[20px] font-black leading-none text-black">كوكي</span>
-                  <span className="text-[9px] font-bold font-mono tracking-wider mt-0.5 leading-none text-black">Koki</span>
+                <div className="border-[2.5px] border-black rounded-xl overflow-hidden bg-white shrink-0 shadow-sm h-[52px] w-[52px]">
+                  <img src={kemitLogo} alt="KEMIT ERP Logo" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                 </div>
                 
                 {/* Text Details next to Logo */}
                 <div className="text-right space-y-0.5">
-                  <h1 className="text-[13px] font-black text-black">شركة / القاهرة الجديدة للدواجن</h1>
-                  <p className="text-[12px] text-neutral-800 font-bold">مزرعة / {station.station_name}</p>
+                  <h1 className="text-[13px] font-black text-black">نظام KEMIT ERP المتكامل</h1>
+                  <p className="text-[12px] text-neutral-800 font-bold">الموقع / {station.station_name}</p>
                 </div>
               </div>
 

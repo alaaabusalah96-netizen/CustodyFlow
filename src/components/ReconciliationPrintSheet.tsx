@@ -118,11 +118,11 @@ export default function ReconciliationPrintSheet({
               {stationName && <div>📍 {isRtl ? `المحطة/الفرع: ${stationName}` : `Station/Branch: ${stationName}`} {stationCode ? `(${stationCode})` : ''}</div>}
             </div>
             <p className="text-[8px] text-slate-400 mt-2">
-              {isRtl ? 'نظام إدارة العهد CustodyFlow' : 'CustodyFlow Custody Management Engine'}
+              {isRtl ? 'نظام KEMIT ERP المالي وإدارة العهد' : 'KEMIT ERP Enterprise Financial Engine'}
             </p>
           </div>
           <div className="text-left font-mono text-[9px] text-slate-600 space-y-1">
-            <div className="font-bold text-slate-900">{isRtl ? 'كود السند: CF-RC-LEDGER' : 'Doc Ref: CF-RC-LEDGER'}</div>
+            <div className="font-bold text-slate-900">{isRtl ? 'كود السند: KM-RC-LEDGER' : 'Doc Ref: KM-RC-LEDGER'}</div>
             <div>
               {isRtl ? 'تاريخ الطباعة:' : 'Print Date:'} {new Date().toLocaleDateString(language)}
             </div>

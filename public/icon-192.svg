@@ -24,7 +24,7 @@
   <!-- Outer flowing circle -->
   <circle cx="96" cy="96" r="64" fill="none" stroke="url(#glowGradient)" stroke-width="2" stroke-dasharray="10 5" opacity="0.6"/>
 
-  <!-- Inner glowing circle representing cash safe and secure custody -->
+  <!-- Inner glowing circle representing cash safe and secure KEMIT ERP -->
   <g filter="url(#shadow)">
     <!-- Dial / Safe Circle -->
     <circle cx="96" cy="96" r="48" fill="#1e293b" stroke="url(#accentGradient)" stroke-width="4"/>

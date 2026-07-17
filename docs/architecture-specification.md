@@ -1,7 +1,7 @@
 # Architecture Specification (v1.0)
 # المواصفات الفنية والبنية المعمارية للنظام
 
-This document details the multi-layered enterprise architecture of **CustodyFlow**, describing how module layers interact and detailing the future shared enterprise engine structure.
+This document details the multi-layered enterprise architecture of **KEMIT ERP**, describing how module layers interact and detailing the future shared enterprise engine structure.
 
 ---
 

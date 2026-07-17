@@ -1,8 +1,8 @@
 {
   "id": "/?source=pwa",
-  "name": "CustodyFlow ERP",
-  "short_name": "CustodyFlow",
-  "description": "Secure cash custody, settlement, and reconciliation system for modern enterprise stations.",
+  "name": "KEMIT ERP",
+  "short_name": "KEMIT ERP",
+  "description": "Secure financial, cash custody, and enterprise resource planning system.",
   "categories": [
     "business",
     "finance",
@@ -26,8 +26,8 @@
   "related_applications": [
     {
       "platform": "play",
-      "url": "https://play.google.com/store/apps/details?id=com.alfuttaim.custodyflow",
-      "id": "com.alfuttaim.custodyflow"
+      "url": "https://play.google.com/store/apps/details?id=com.alfuttaim.kemiterp",
+      "id": "com.alfuttaim.kemiterp"
     }
   ],
   "icons": [
@@ -62,14 +62,14 @@
       "sizes": "1920x1080",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "CustodyFlow Desktop Dashboard"
+      "label": "KEMIT ERP Desktop Dashboard"
     },
     {
       "src": "/screenshot-mobile.png",
       "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "CustodyFlow Mobile Dashboard"
+      "label": "KEMIT ERP Mobile Dashboard"
     }
   ],
   "shortcuts": [
@@ -113,7 +113,7 @@
     "new_tab_button": {
       "url": "/?source=pwa&new-tab=true"
     }
-  },
+  ],
   "file_handlers": [
     {
       "action": "/?file-open=true",
@@ -148,15 +148,15 @@
       "text": "text",
       "url": "url"
     }
-  },
+  ],
   "widgets": [
     {
-      "name": "CustodyFlow Summary Widget",
-      "short_name": "CustodyFlow",
+      "name": "KEMIT ERP Summary Widget",
+      "short_name": "KEMIT ERP",
       "description": "Quick view of station status and custody limits.",
       "tag": "custody-widget",
       "template": "custody-template",
-      "ms_id": "com.alfuttaim.custodyflow.widget",
+      "ms_id": "com.alfuttaim.kemiterp.widget",
       "icons": [
         {
           "src": "/icon-192.png",
@@ -175,7 +175,7 @@
   ],
   "protocol_handlers": [
     {
-      "protocol": "web+custodyflow",
+      "protocol": "web+kemiterp",
       "url": "/?protocol=%s"
     }
   ]

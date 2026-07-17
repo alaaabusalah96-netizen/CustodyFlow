@@ -43,7 +43,7 @@ async function getSmtpConfig() {
       port: parseInt(envPort || "587"),
       user: envUser,
       pass: envPass,
-      from: envFrom || `"CustodyFlow Security" <${envUser}>`
+      from: envFrom || `"KEMIT ERP Security" <${envUser}>`
     };
   }
 
@@ -59,7 +59,7 @@ async function getSmtpConfig() {
           port: parseInt(data.port || "587"),
           user: data.user,
           pass: data.pass.trim().replace(/\s+/g, ''),
-          from: data.from || `"CustodyFlow Security" <${data.user}>`
+          from: data.from || `"KEMIT ERP Security" <${data.user}>`
         };
       }
     }
@@ -88,8 +88,8 @@ async function sendOtpEmail(email: string, otp: string, isLogin: boolean = false
   });
 
   const subject = isLogin 
-    ? "رمز تأكيد تسجيل الدخول - CustodyFlow" 
-    : "رمز إعادة تعيين كلمة المرور - CustodyFlow";
+    ? "رمز تأكيد تسجيل الدخول - KEMIT ERP" 
+    : "رمز إعادة تعيين كلمة المرور - KEMIT ERP";
   
   const text = isLogin
     ? `أهلاً بك، رمز تأكيد تسجيل الدخول الخاص بك هو: ${otp}. هذا الرمز صالح لمدة 15 دقيقة.`
@@ -97,7 +97,7 @@ async function sendOtpEmail(email: string, otp: string, isLogin: boolean = false
 
   const html = `
     <div style="direction: rtl; text-align: right; font-family: sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-      <h2 style="color: #059669;">منصة CustodyFlow</h2>
+      <h2 style="color: #059669;">منصة KEMIT ERP</h2>
       <p style="font-size: 14px; color: #334155;">أهلاً بك،</p>
       <p style="font-size: 14px; color: #334155;">
         ${isLogin 
@@ -527,7 +527,7 @@ async function startServer() {
       const isPlatformAdmin = targetEmail === 'alaaabusalah96@gmail.com' || targetEmail === 'alaabusalah96@gmail.com';
 
       if (!isPlatformAdmin) {
-        return res.status(403).json({ success: false, message: "هذا الإجراء متاح فقط لأدمن منصة CustodyFlow." });
+        return res.status(403).json({ success: false, message: "هذا الإجراء متاح فقط لأدمن منصة KEMIT ERP." });
       }
 
       // Verify credentials with Firestore users collection
@@ -559,7 +559,7 @@ async function startServer() {
         port: parseInt(smtpPort),
         user: smtpUser.trim(),
         pass: cleanPass,
-        from: `"CustodyFlow Security" <${smtpUser.trim()}>`,
+        from: `"KEMIT ERP Security" <${smtpUser.trim()}>`,
         updatedAt: Date.now()
       });
 
@@ -602,9 +602,9 @@ async function startServer() {
 
       // Send actual test mail to the user
       await transporter.sendMail({
-        from: `"CustodyFlow Security Test" <${smtpUser.trim()}>`,
+        from: `"KEMIT ERP Security Test" <${smtpUser.trim()}>`,
         to: smtpUser.trim(),
-        subject: "رسالة تجريبية - CustodyFlow SMTP Test",
+        subject: "رسالة تجريبية - KEMIT ERP SMTP Test",
         text: "إذا كنت تقرأ هذه الرسالة، فهذا يعني أن إعدادات خادم البريد (SMTP) الخاصة بك تعمل بشكل صحيح تماماً! تهانينا 🎉",
         html: `
           <div style="direction: rtl; text-align: right; font-family: sans-serif; padding: 20px; border: 1px solid #059669; border-radius: 8px;">

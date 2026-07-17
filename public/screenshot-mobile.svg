@@ -22,11 +22,11 @@
   <rect x="0" y="0" width="1080" height="120" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
   <circle cx="80" cy="60" r="24" fill="url(#primary-grad-mob)" />
   <path d="M 72 68 L 80 52 L 88 68 Z" fill="#ffffff" />
-  <text x="130" y="70" font-family="'Inter', sans-serif" font-size="28" font-weight="800" fill="#ffffff" letter-spacing="1">CustodyFlow</text>
+  <text x="130" y="70" font-family="'Inter', sans-serif" font-size="28" font-weight="800" fill="#ffffff" letter-spacing="1">KEMIT ERP</text>
   <text x="900" y="70" font-family="'Inter', sans-serif" font-size="24" font-weight="600" fill="#10b981">ERP</text>
 
   <!-- Mobile Title -->
-  <text x="50" y="210" font-family="'Inter', sans-serif" font-size="38" font-weight="800" fill="#ffffff">Custody Dashboard</text>
+  <text x="50" y="210" font-family="'Inter', sans-serif" font-size="38" font-weight="800" fill="#ffffff">KEMIT ERP Dashboard</text>
   <text x="50" y="260" font-family="'Inter', sans-serif" font-size="20" font-weight="400" fill="#64748b">Al-Futtaim Trading Co. Station 12</text>
 
   <!-- Card 1: Reconciliation Status -->
@@ -37,7 +37,7 @@
 
   <!-- Card 2: Vault Cash -->
   <rect x="50" y="550" width="980" height="240" rx="24" fill="url(#card-grad-mob)" stroke="#1e293b" stroke-width="1" />
-  <text x="100" y="610" font-family="'Inter', sans-serif" font-size="20" font-weight="600" fill="#64748b" text-transform="uppercase">Active Vault Custody</text>
+  <text x="100" y="610" font-family="'Inter', sans-serif" font-size="20" font-weight="600" fill="#64748b" text-transform="uppercase">Active Vault Balance</text>
   <text x="100" y="700" font-family="'Inter', sans-serif" font-size="54" font-weight="800" fill="#ffffff">AED 2,450,000</text>
   <!-- Progress Bar -->
   <rect x="100" y="730" width="780" height="12" rx="6" fill="#1e293b" />

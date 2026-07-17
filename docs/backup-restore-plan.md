@@ -1,7 +1,7 @@
 # Backup, Restore, & Verification Plan (v1.0)
 # خطة النسخ الاحتياطي والاستعادة والتحقق التجريبي
 
-This document is part of **Phase 0: Baseline Freeze** for **CustodyFlow**. It outlines the precise steps for exporting the active Firestore database, setting up automated backups, and conducting a trial restoration to ensure data integrity before proceeding with any code refactoring or feature additions.
+This document is part of **Phase 0: Baseline Freeze** for **KEMIT ERP**. It outlines the precise steps for exporting the active Firestore database, setting up automated backups, and conducting a trial restoration to ensure data integrity before proceeding with any code refactoring or feature additions.
 
 ---
 

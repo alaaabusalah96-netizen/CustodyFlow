@@ -5,6 +5,7 @@ import { auth, dbDeleteDoc } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { Coins, ShieldAlert, User, Lock, ArrowRight, Languages, UserPlus, LogIn, CheckCircle2, Building, Mail, KeyRound, RefreshCw, ExternalLink, Inbox } from 'lucide-react';
 import SMTPConfigModal from '../components/SMTPConfigModal';
+import kemitLogo from '../assets/images/kemit_logo_1784280480891.jpg';
 
 interface LoginProps {
   language: Language;
@@ -593,8 +594,8 @@ export default function Login({
       <div className="w-full max-w-md my-auto">
         {/* Brand logo header */}
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 mb-3 animate-pulse">
-            <Coins className="h-6 w-6" />
+          <div className="flex h-20 w-20 items-center justify-center rounded-2xl overflow-hidden bg-white shadow-md border border-slate-100 dark:border-slate-800 mb-4">
+            <img src={kemitLogo} alt="KEMIT ERP Logo" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
           </div>
           <h2 className="text-xl font-extrabold tracking-tight md:text-2xl">
             {t.title}

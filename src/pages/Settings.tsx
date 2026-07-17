@@ -319,7 +319,7 @@ export default function Settings({ language, theme }: SettingsProps) {
       const dataStr = JSON.stringify(backupObj, null, 2);
       const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
 
-      const exportFileDefaultName = `custodyflow-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      const exportFileDefaultName = `kemiterp-backup-${new Date().toISOString().slice(0, 10)}.json`;
 
       const linkElement = document.createElement('a');
       linkElement.setAttribute('href', dataUri);
@@ -983,7 +983,7 @@ export default function Settings({ language, theme }: SettingsProps) {
                     <Inbox size={12} />
                     <span>{isRtl ? 'علبة الوارد الافتراضية لأدمن المنصة' : 'Virtual Mail Inbox (alaaabusalah96@gmail.com)'}</span>
                   </div>
-                  <p className="text-slate-200 font-bold">{isRtl ? '🔐 رمز الأمان السري لإعادة تعيين كلمة مرور CustodyFlow' : '🔐 CustodyFlow Security OTP'}</p>
+                  <p className="text-slate-200 font-bold">{isRtl ? '🔐 رمز الأمان السري لإعادة تعيين كلمة مرور KEMIT ERP' : '🔐 KEMIT ERP Security OTP'}</p>
                   <p className="mt-1 text-slate-400">{isRtl ? 'الرمز المؤقت لتحديث حسابك بالكامل هو:' : 'Your master account OTP token is:'}</p>
                   <div className="my-2 p-2 rounded bg-indigo-950/40 text-center font-mono text-base font-extrabold tracking-widest text-indigo-400">
                     {adminGeneratedCode}

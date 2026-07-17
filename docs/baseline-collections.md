@@ -1,7 +1,7 @@
 # Baseline Firestore Collections Documentation (v1.0)
 # وثيقة تجميد وتوثيق مجموعات قاعدة البيانات الحالية
 
-This document is part of **Phase 0: Baseline Freeze** for **CustodyFlow**. It details all currently existing Firestore collections, document structures, exact field names, and TypeScript data types. No schema changes are introduced in this phase.
+This document is part of **Phase 0: Baseline Freeze** for **KEMIT ERP**. It details all currently existing Firestore collections, document structures, exact field names, and TypeScript data types. No schema changes are introduced in this phase.
 
 ---
 

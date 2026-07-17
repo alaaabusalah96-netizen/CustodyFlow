@@ -13,7 +13,7 @@ const app = admin.initializeApp({
 // Configure custom Database ID using getFirestore
 const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
 
-console.log(`Starting Cloud Firestore database initialization (using firebase-admin) for CustodyFlow...`);
+console.log(`Starting Cloud Firestore database initialization (using firebase-admin) for KEMIT ERP...`);
 console.log(`Project ID: ${firebaseConfig.projectId}`);
 console.log(`Database ID: ${firebaseConfig.firestoreDatabaseId || '(default)'}`);
 

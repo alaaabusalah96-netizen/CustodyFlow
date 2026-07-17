@@ -69,6 +69,46 @@ export const ERP_MODULES_REGISTRY: ERPModule[] = [
     description_en: 'Chart of accounts, real-time double-entry posting rules, journal entries, and Trial Balance.',
     description_ar: 'شجرة الحسابات، قيود اليومية المزدوجة التلقائية واليدوية، ميزان المراجعة وقائمة الأرباح والخسائر.',
     screens: ['accounting']
+  },
+  {
+    id: 'sales_ar',
+    name_en: 'Sales & Accounts Receivable',
+    name_ar: 'إدارة المبيعات وحسابات العملاء',
+    description_en: 'Customer directory, sales invoices with automatic tax (VAT), and accounts receivable balances tracking.',
+    description_ar: 'إدارة سجل العملاء، فواتير المبيعات، حساب ضريبة القيمة المضافة، ومتابعة أرصدة المدينين والتحصيل.',
+    screens: ['sales_ar']
+  },
+  {
+    id: 'pos',
+    name_en: 'Point of Sale (POS) Terminal',
+    name_ar: 'نظام نقاط البيع السريع',
+    description_en: 'Touch-optimized cashier interface, quick invoice processing, thermal receipt generator, and inventory link.',
+    description_ar: 'واجهة كاشير تفاعلية، إصدار فواتير بيع سريعة، طباعة إيصالات حرارية، وتحديث فوري للمخزون.',
+    screens: ['pos']
+  },
+  {
+    id: 'crm',
+    name_en: 'Customer Relationship (CRM)',
+    name_ar: 'إدارة علاقات العملاء CRM',
+    description_en: 'Leads pipeline, prospect status, interaction logs (meetings/calls), and communication scheduler.',
+    description_ar: 'متابعة الفرص البيعية والعملاء المحتملين، سجل التفاعلات والاتصالات، وجدولة المتابعات.',
+    screens: ['crm']
+  },
+  {
+    id: 'fixed_assets',
+    name_en: 'Fixed Assets & Depreciation',
+    name_ar: 'إدارة الأصول الثابتة والاستهلاكات',
+    description_en: 'Fixed assets registry, cost models, and straight-line depreciation posting to general ledger.',
+    description_ar: 'سجل الأصول الثابتة، تصنيفات الأصول، واحتساب الاستهلاك والترحيل التلقائي لدفتر الأستاذ.',
+    screens: ['fixed_assets']
+  },
+  {
+    id: 'hr_payroll',
+    name_en: 'Human Resources & Payroll',
+    name_ar: 'الموارد البشرية ومسيرات الرواتب',
+    description_en: 'Employee files, department assignments, salary models, allowances, deductions, and monthly payroll processing.',
+    description_ar: 'ملفات الموظفين، شؤون العاملين، احتساب البدلات والاستقطاعات، وإصدار مسيرات الرواتب الشهرية.',
+    screens: ['hr_payroll']
   }
 ];
 

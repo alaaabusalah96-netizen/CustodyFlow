@@ -153,7 +153,7 @@ export type Theme = 'light' | 'dark';
 // Translation dictionaries
 export const translations = {
   en: {
-    title: 'Cash Custody Management',
+    title: 'KEMIT ERP',
     dashboard: 'Dashboard',
     newExpense: 'New Expense',
     pendingTransactions: 'Pending Transactions',
@@ -243,7 +243,7 @@ export const translations = {
     email: 'Email',
     password: 'Password',
     loginTitle: 'Secure Portal Login',
-    loginSubtitle: 'Cash Custody ERP Module',
+    loginSubtitle: 'KEMIT ERP Module',
     adminLabel: 'Admin Account',
     regularLabel: 'Regular User Account',
     mockAuthTip: 'Select a pre-configured account below to log in immediately:',
@@ -287,7 +287,7 @@ export const translations = {
     inactive: 'Inactive'
   },
   ar: {
-    title: 'نظام إدارة عهدة النقدية',
+    title: 'نظام KEMIT ERP',
     dashboard: 'لوحة التحكم',
     newExpense: 'تسجيل مصروف جديد',
     pendingTransactions: 'المعاملات المعلقة',
@@ -377,7 +377,7 @@ export const translations = {
     email: 'البريد الإلكتروني',
     password: 'كلمة المرور',
     loginTitle: 'بوابة تسجيل الدخول الآمن',
-    loginSubtitle: 'وحدة نظام إدارة عهدة النقدية ERP',
+    loginSubtitle: 'وحدة نظام KEMIT ERP',
     adminLabel: 'حساب مدير النظام (كامل الصلاحيات)',
     regularLabel: 'حساب مستخدم عادي (محدود)',
     mockAuthTip: 'اختر أحد الحسابات المهيأة مسبقاً للولوج فوراً إلى النظام:',

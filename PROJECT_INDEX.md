@@ -1,6 +1,6 @@
 # Project File Index (فهرس ملفات المشروع)
 
-This index documents the critical files, paths, structural dependencies, and architecture classifications of the CustodyFlow project.
+This index documents the critical files, paths, structural dependencies, and architecture classifications of the KEMIT ERP project.
 
 ---
 

@@ -140,7 +140,7 @@ function SVGQRCode({ value }: { value: string }) {
       >
         <g>{pixels}</g>
       </svg>
-      <span className="text-[7px] font-mono font-bold mt-0.5 text-black">CUSTODYFLOW VERIFIED</span>
+      <span className="text-[7px] font-mono font-bold mt-0.5 text-black">KEMIT ERP VERIFIED</span>
     </div>
   );
 }

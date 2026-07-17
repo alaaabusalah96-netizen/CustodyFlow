@@ -1,12 +1,12 @@
-# CustodyFlow Enterprise Coding Standards v1.0
+# KEMIT ERP Enterprise Coding Standards v1.0
 
 ## 1. Purpose
-This document establishes the official architectural constraints, coding standards, and engineering practices for CustodyFlow. It is a binding reference for all developers and AI coding assistants contributing to the codebase. The standards outlined herein are designed to ensure enterprise-grade stability, long-term maintainability, full backward compatibility, and strict compliance with the **Enterprise Foundation v1.0** specifications.
+This document establishes the official architectural constraints, coding standards, and engineering practices for KEMIT ERP. It is a binding reference for all developers and AI coding assistants contributing to the codebase. The standards outlined herein are designed to ensure enterprise-grade stability, long-term maintainability, full backward compatibility, and strict compliance with the **Enterprise Foundation v1.0** specifications.
 
 ---
 
 ## 2. General Principles
-All development in CustodyFlow must align with the following foundational design principles:
+All development in KEMIT ERP must align with the following foundational design principles:
 * **Strangler Fig Pattern:** Implement enhancements or new features as additive, parallel layers rather than rewriting or modifying stable, underlying legacy systems.
 * **Backward Compatibility:** Maintain absolute compatibility with existing database collections, contracts, user sessions, and APIs. Breaking changes are strictly forbidden.
 * **KISS (Keep It Simple, Stupid):** Prioritize the simplest, most understandable solution over highly clever, theoretical, or complex engineering designs.
@@ -16,7 +16,7 @@ All development in CustodyFlow must align with the following foundational design
 ---
 
 ## 3. Project Architecture Rules
-CustodyFlow is structured as a modular, decoupled full-stack architecture with a React frontend, an Express-Vite backend, and a Firestore database layer. 
+KEMIT ERP is structured as a modular, decoupled full-stack architecture with a React frontend, an Express-Vite backend, and a Firestore database layer. 
 * **Layer Isolation:** UI rendering, business logic computation, validation, persistence, and state tracking must remain strictly decoupled.
 * **Unidirectional Dependency:** Dependencies must flow from UI -> Facade (CustodyDB) -> Core Services / Engines -> Data Storage. Inner core engines (e.g., Sequence, Validation, Lifecycle) must never depend on the UI or presentation layers.
 * **Shared Engines First:** All common infrastructure tasks (e.g., generating reference numbers, changing status lifecycles, auditing actions) must utilize the existing shared engines. Re-implementing common services inside feature modules is prohibited.

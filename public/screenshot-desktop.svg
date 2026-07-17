@@ -24,7 +24,7 @@
   <!-- Logo/Brand -->
   <circle cx="70" cy="40" r="22" fill="url(#primary-grad)" />
   <path d="M 62 48 L 70 32 L 78 48 Z" fill="#ffffff" />
-  <text x="110" y="48" font-family="'Inter', sans-serif" font-size="24" font-weight="700" fill="#ffffff" letter-spacing="1">CustodyFlow</text>
+  <text x="110" y="48" font-family="'Inter', sans-serif" font-size="24" font-weight="700" fill="#ffffff" letter-spacing="1">KEMIT ERP</text>
   <text x="270" y="47" font-family="'Inter', sans-serif" font-size="14" font-weight="500" fill="#475569">|</text>
   <text x="290" y="47" font-family="'Inter', sans-serif" font-size="14" font-weight="500" fill="#10b981">Al-Futtaim Trading Co. ERP</text>
 

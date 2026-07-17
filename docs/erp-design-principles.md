@@ -1,7 +1,7 @@
 # ERP Design Principles (v1.0)
 # المبادئ الحاكمة لتصميم نظام موارد المؤسسات
 
-This document outlines the ten core principles governing the design, modular structure, and architectural progression of **CustodyFlow Enterprise Foundation**.
+This document outlines the ten core principles governing the design, modular structure, and architectural progression of **KEMIT ERP Enterprise Foundation**.
 
 ---
 

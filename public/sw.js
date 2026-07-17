@@ -1,4 +1,4 @@
-const CACHE_NAME = 'custodyflow-v1';
+const CACHE_NAME = 'kemiterp-v1';
 const ASSETS = [
   '/',
   '/?source=pwa',
@@ -91,30 +91,30 @@ self.addEventListener('fetch', (event) => {
 
 // Background Sync Event
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'sync-custody-data') {
+  if (event.tag === 'sync-kemit-data') {
     event.waitUntil(
-      Promise.resolve(console.log('Background Sync triggered: Syncing custody data in background'))
+      Promise.resolve(console.log('Background Sync triggered: Syncing KEMIT ERP data in background'))
     );
   }
 });
 
 // Periodic Background Sync Event
 self.addEventListener('periodicsync', (event) => {
-  if (event.tag === 'periodic-custody-check') {
+  if (event.tag === 'periodic-kemit-check') {
     event.waitUntil(
-      Promise.resolve(console.log('Periodic Background Sync triggered: Checking custody status'))
+      Promise.resolve(console.log('Periodic Background Sync triggered: Checking KEMIT ERP status'))
     );
   }
 });
 
 // Push Notification Event
 self.addEventListener('push', (event) => {
-  let data = { title: 'CustodyFlow Update', body: 'New custody reconciliation request.' };
+  let data = { title: 'KEMIT ERP Update', body: 'New enterprise reconciliation request.' };
   if (event.data) {
     try {
       data = event.data.json();
     } catch (e) {
-      data = { title: 'CustodyFlow Update', body: event.data.text() };
+      data = { title: 'KEMIT ERP Update', body: event.data.text() };
     }
   }
 
