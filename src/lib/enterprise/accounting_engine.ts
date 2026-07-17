@@ -29,10 +29,16 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     // Assets (1)
     { code: '110101', nameAr: 'صندوق الخزينة الرئيسي (Cash in Hand)', nameEn: 'Cash in Hand (Main Box)', type: 'ASSET', balance: 50000, status: 'ACTIVE' },
     { code: '110201', nameAr: 'حساب بنك الشركة الجاري (Corporate Bank Account)', nameEn: 'Corporate Checking Account', type: 'ASSET', balance: 250000, status: 'ACTIVE' },
+    { code: '110301', nameAr: 'حسابات العملاء والمدينين (Accounts Receivable)', nameEn: 'Accounts Receivable (Customers)', type: 'ASSET', balance: 0, status: 'ACTIVE' },
     { code: '120101', nameAr: 'مخزون مستودع قطع الغيار والوقود (Inventory)', nameEn: 'Warehouse Parts & Fuel Inventory', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '130101', nameAr: 'الأصول الثابتة (Fixed Assets)', nameEn: 'Fixed Assets', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '130201', nameAr: 'مجمع إهلاك الأصول الثابتة (Accumulated Depreciation)', nameEn: 'Accumulated Depreciation', type: 'ASSET', balance: 0, status: 'ACTIVE' },
     // Liabilities (2)
     { code: '210101', nameAr: 'حسابات الموردين والدائنين (Accounts Payable)', nameEn: 'Accounts Payable (Vendors)', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
     { code: '210201', nameAr: 'مستحقات ضريبة القيمة المضافة (VAT Payable)', nameEn: 'VAT Payable (State Tax)', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210301', nameAr: 'ضريبة الخصم والتحصيل تحت حساب الضريبة (Withholding Tax Payable)', nameEn: 'Withholding Tax Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210401', nameAr: 'مستحقات الهيئة القومية للتأمين الاجتماعي (Social Insurance Payable)', nameEn: 'Social Insurance Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210501', nameAr: 'ضريبة كسب العمل المستحقة (Payroll Tax Payable)', nameEn: 'Payroll Taxes Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
     // Equity (3)
     { code: '310101', nameAr: 'رأس مال الشركة المدفوع (Share Capital)', nameEn: 'Corporate Paid-in Capital', type: 'EQUITY', balance: 300000, status: 'ACTIVE' },
     // Revenue (4)
@@ -41,7 +47,10 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     { code: '510101', nameAr: 'مصروفات المحطات والمواقع التشغيلية (Site Expenses)', nameEn: 'Site Operational Expenses', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
     { code: '510201', nameAr: 'مصروفات وقود الديزل والبنزين (Fuel Expenses)', nameEn: 'Diesel & Fuel Expenses', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
     { code: '510301', nameAr: 'مصروفات الصيانة الفنية وقطع الغيار (Maintenance)', nameEn: 'Maintenance & Repairs Expenses', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
-    { code: '510401', nameAr: 'مصروفات عمومية وإدارية (G&A Expenses)', nameEn: 'General & Administrative Expenses', type: 'EXPENSE', balance: 0, status: 'ACTIVE' }
+    { code: '510401', nameAr: 'مصروفات عمومية وإدارية (G&A Expenses)', nameEn: 'General & Administrative Expenses', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510501', nameAr: 'مصروف إهلاك الأصول الثابتة (Depreciation Expense)', nameEn: 'Depreciation Expense', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510601', nameAr: 'مصروف رواتب وأجور الموظفين (Salaries & Wages Expense)', nameEn: 'Salaries & Wages Expense', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510701', nameAr: 'مصروف حصة الشركة في التأمينات (Employer Social Insurance Expense)', nameEn: 'Employer Social Insurance Expense', type: 'EXPENSE', balance: 0, status: 'ACTIVE' }
   ];
 
   static getAccounts(companyId: string): GLAccount[] {

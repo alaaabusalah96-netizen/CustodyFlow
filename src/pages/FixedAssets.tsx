@@ -9,6 +9,7 @@ import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
 import { LogsModule } from '../db/logs';
 import { dbSetDoc } from '../firebase';
+import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 
 interface FixedAssetsProps {
   language: 'ar' | 'en';
@@ -207,6 +208,29 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
 
     // Audit and logs
     const totalExp = runLogs.reduce((sum, rl) => sum + rl.expense, 0);
+
+    // Post Accounting Double-Entry (General Ledger Integration)
+    try {
+      const statementAr = `قيد استهلاك الأصول الثابتة الشهري للفترة المنتهية في ${depreciationDate}`;
+      const statementEn = `Monthly fixed assets depreciation run for period ending ${depreciationDate}`;
+
+      AccountingBusinessEngine.postOperationalDoubleEntry(
+        companyId,
+        activeUser?.id || 'system',
+        `DEP-${Date.now()}`,
+        statementAr,
+        statementEn,
+        [
+          // Debit Depreciation Expense (510501)
+          { accountCode: '510501', debit: totalExp, credit: 0, notes: isRtl ? `مصروف إهلاك أصول الشركة` : `Company assets depreciation expense` },
+          // Credit Accumulated Depreciation (130201)
+          { accountCode: '130201', debit: 0, credit: totalExp, notes: isRtl ? `إلى حساب مجمع إهلاك الأصول الثابتة` : `Accumulated depreciation reserve` }
+        ]
+      ).catch(e => console.error('Depreciation GL posting failed', e));
+    } catch (glError) {
+      console.error('GL post for asset depreciation failed', glError);
+    }
+
     LogsModule.addLog(
       activeUser?.id || 'system',
       activeUser?.full_name || 'System',

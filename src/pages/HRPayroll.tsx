@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Briefcase, Plus, Calculator, Check, X, FileText, 
-  Search, Users, Landmark, Coins, Heart, AlertCircle, Calendar, Edit2
+  Search, Users, Landmark, Coins, Heart, AlertCircle, Calendar, Edit2, ShieldAlert
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
 import { LogsModule } from '../db/logs';
 import { dbSetDoc } from '../firebase';
+import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 
 interface HRPayrollProps {
   language: 'ar' | 'en';
@@ -33,7 +34,10 @@ export interface PayrollItem {
   employeeCode: string;
   baseSalary: number;
   allowances: number;
-  deductions: number;
+  deductions: number; // Includes general manual deductions
+  socialInsuranceEmployee: number; // 11% deduction
+  socialInsuranceEmployer: number; // 18.75% paid by employer
+  payrollTax: number; // Progressive tax
   netSalary: number;
 }
 
@@ -179,17 +183,53 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
     loadEmployees();
   };
 
+  // Helper to calculate official Egyptian social insurance and tax deductions
+  const calculateEgyptianDeductions = (base: number) => {
+    // Insurable limit is capped at 12,600 EGP in Egypt for standard monthly base
+    const insurableBase = Math.min(base, 12600);
+    const socialInsuranceEmployee = Math.round(insurableBase * 0.11);
+    const socialInsuranceEmployer = Math.round(insurableBase * 0.1875);
+    
+    // Taxable monthly base: base - employee insurance portion - standard personal exemption (monthly personal exemption ~3500 EGP)
+    const taxableBase = Math.max(0, base - socialInsuranceEmployee - 3500);
+    
+    // Egyptian Payroll Tax Bracket Simulation (Monthly representation of standard brackets)
+    let payrollTax = 0;
+    if (taxableBase <= 4000) {
+      payrollTax = 0;
+    } else if (taxableBase <= 7000) {
+      payrollTax = Math.round((taxableBase - 4000) * 0.025);
+    } else if (taxableBase <= 10000) {
+      payrollTax = Math.round(75 + (taxableBase - 7000) * 0.10);
+    } else {
+      payrollTax = Math.round(375 + (taxableBase - 10000) * 0.15);
+    }
+    
+    return {
+      socialInsuranceEmployee,
+      socialInsuranceEmployer,
+      payrollTax
+    };
+  };
+
   // Generate Payroll Sheet
   const handleGeneratePayrollSheet = () => {
-    const list = employees.filter(e => e.status === 'ACTIVE').map(e => ({
-      employeeId: e.id,
-      employeeName: e.name,
-      employeeCode: e.code,
-      baseSalary: e.baseSalary,
-      allowances: 0,
-      deductions: 0,
-      netSalary: e.baseSalary
-    }));
+    const list = employees.filter(e => e.status === 'ACTIVE').map(e => {
+      const { socialInsuranceEmployee, socialInsuranceEmployer, payrollTax } = calculateEgyptianDeductions(e.baseSalary);
+      const netSalary = e.baseSalary - socialInsuranceEmployee - payrollTax;
+      return {
+        employeeId: e.id,
+        employeeName: e.name,
+        employeeCode: e.code,
+        baseSalary: e.baseSalary,
+        allowances: 0,
+        deductions: 0,
+        socialInsuranceEmployee,
+        socialInsuranceEmployer,
+        payrollTax,
+        netSalary
+      };
+    });
     setPayrollSheet(list);
     setIsPayrollGenerated(true);
   };
@@ -200,7 +240,7 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
       if (item.employeeId === empId) {
         const allow = field === 'allowances' ? value : item.allowances;
         const deduct = field === 'deductions' ? value : item.deductions;
-        const net = item.baseSalary + allow - deduct;
+        const net = item.baseSalary + allow - deduct - item.socialInsuranceEmployee - item.payrollTax;
         return {
           ...item,
           [field]: value,
@@ -215,13 +255,23 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
   const handlePostPayroll = () => {
     if (payrollSheet.length === 0) return;
 
+    const totalGross = payrollSheet.reduce((sum, item) => sum + item.baseSalary + item.allowances, 0);
+    const totalEmployeeIns = payrollSheet.reduce((sum, item) => sum + item.socialInsuranceEmployee, 0);
+    const totalEmployerIns = payrollSheet.reduce((sum, item) => sum + item.socialInsuranceEmployer, 0);
+    const totalTax = payrollSheet.reduce((sum, item) => sum + item.payrollTax, 0);
+    const totalNet = payrollSheet.reduce((sum, item) => sum + item.netSalary, 0);
+
     const allPayrollRuns = StorageEngine.getStored<any[]>('payroll_processed_runs', []);
     const payrollRecord = {
       id: `payrun-${Date.now()}`,
       company_id: companyId,
       period: payrollPeriod,
       items: payrollSheet,
-      totalPayout: payrollSheet.reduce((sum, item) => sum + item.netSalary, 0),
+      totalPayout: totalNet,
+      totalGross,
+      totalEmployeeIns,
+      totalEmployerIns,
+      totalTax,
       processedBy: activeUser?.full_name || 'HR Manager',
       timestamp: new Date().toISOString()
     };
@@ -229,15 +279,43 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
     StorageEngine.setStored('payroll_processed_runs', [...allPayrollRuns, payrollRecord]);
     dbSetDoc('payroll_processed_runs', payrollRecord.id, payrollRecord);
 
+    // Post Accounting Double-Entry (General Ledger Integration!)
+    try {
+      const statementAr = `قيد استحقاق رواتب الموظفين لشهر ${payrollPeriod} - متضمن التأمينات والضرائب`;
+      const statementEn = `Payroll accrual for period ${payrollPeriod} - including social security and taxes`;
+
+      AccountingBusinessEngine.postOperationalDoubleEntry(
+        companyId,
+        activeUser?.id || 'system',
+        `PAY-${payrollPeriod}`,
+        statementAr,
+        statementEn,
+        [
+          // Debit: Salaries Expense (510601) - Gross amount
+          { accountCode: '510601', debit: totalGross, credit: 0, notes: isRtl ? `رواتب أساسية وبدلات` : `Base Salaries & Allowances` },
+          // Debit: Employer Insurance Expense (510701)
+          { accountCode: '510701', debit: totalEmployerIns, credit: 0, notes: isRtl ? `حصة الشركة في التأمينات` : `Employer Social Security Share` },
+          // Credit: Social Insurance Payable (210401) - both employee & employer share
+          { accountCode: '210401', debit: 0, credit: totalEmployeeIns + totalEmployerIns, notes: isRtl ? `مستحقات هيئة التأمينات الاجتماعية` : `Social Insurance Authority Payable` },
+          // Credit: Payroll Taxes Payable (210501) - Income tax deducted
+          { accountCode: '210501', debit: 0, credit: totalTax, notes: isRtl ? `مستحقات مصلحة الضرائب (ضريبة كسب العمل)` : `Payroll Income Tax Payable` },
+          // Credit: Bank account (110201) - Net salary payout
+          { accountCode: '110201', debit: 0, credit: totalNet, notes: isRtl ? `صافي الرواتب المنصرفة للبنوك` : `Net Salaries Disbursed via Bank` }
+        ]
+      ).catch(e => console.error('Payroll General Ledger posting failed', e));
+    } catch (glError) {
+      console.error('GL post for payroll failed', glError);
+    }
+
     // Audit Log and log double-entry transaction
     LogsModule.addLog(
       activeUser?.id || 'system',
       activeUser?.full_name || 'System',
       isRtl ? 'ترحيل مسير رواتب الموظفين' : 'Post HR Monthly Payroll',
-      `Processed payroll run for period ${payrollPeriod}. Total Payout: ${payrollRecord.totalPayout.toLocaleString()} EGP`
+      `Processed payroll run for period ${payrollPeriod}. Total Payout: ${totalNet.toLocaleString()} EGP`
     );
 
-    showToast('success', isRtl ? 'تم ترحيل وصرف مسير الرواتب الشهري للموظفين بنجاح' : 'Monthly payroll processed and posted successfully');
+    showToast('success', isRtl ? 'تم ترحيل وصرف مسير الرواتب الشهري للموظفين بنجاح وتوليد قيد اليومية الآلي' : 'Monthly payroll processed and posted successfully with automated GL ledger entries');
     setIsPayrollGenerated(false);
     setPayrollSheet([]);
     setShowProcessPayroll(false);
@@ -579,7 +657,15 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
                           <tr key={idx} className="text-slate-700 dark:text-slate-300 font-sans">
                             <td className="p-2">
                               <p className="font-bold">{item.employeeName}</p>
-                              <span className="text-[10px] text-slate-400 font-mono">{item.employeeCode}</span>
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[9px] text-slate-400">
+                                <span className="font-mono">{item.employeeCode}</span>
+                                <span>•</span>
+                                <span>{isRtl ? `تأمينات (11%):` : `Ins (11%):`} <strong className="font-mono text-rose-500">-{item.socialInsuranceEmployee} EGP</strong></span>
+                                <span>•</span>
+                                <span>{isRtl ? `كسب عمل:` : `Tax:`} <strong className="font-mono text-rose-500">-{item.payrollTax} EGP</strong></span>
+                                <span>•</span>
+                                <span className="text-indigo-500">{isRtl ? `حصة الشركة (18.75%):` : `Employer Ins (18.75%):`} <strong className="font-mono">+{item.socialInsuranceEmployer} EGP</strong></span>
+                              </div>
                             </td>
                             <td className="p-2 text-right font-mono font-bold">{item.baseSalary.toLocaleString()}</td>
                             <td className="p-2 text-center">
