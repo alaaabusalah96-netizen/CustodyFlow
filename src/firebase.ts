@@ -567,6 +567,13 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
   }
 }
 
+// Track last synced state to prevent infinite listener recreation loop
+let lastActiveUserId: string | null = null;
+let lastActiveUserRole: string | null = null;
+let lastStationId: string | null = null;
+let lastCompanyId: string | null = null;
+let isFirstSync = true;
+
 // Set up snapshot listeners to sync Firestore data dynamically
 export function setupFirebaseSync() {
   const handleUserOrCompanyChange = () => {
@@ -575,6 +582,27 @@ export function setupFirebaseSync() {
       const activeUser = activeUserStr ? JSON.parse(activeUserStr) : null;
       
       const selectedCompanyId = localStorage.getItem('custody_selected_company_id') || (activeUser ? activeUser.company_id : 'comp-1') || 'comp-1';
+      
+      const currentUserId = activeUser ? activeUser.id : null;
+      const currentUserRole = activeUser ? activeUser.role : null;
+      const currentStationId = activeUser ? activeUser.station_id : null;
+      
+      if (
+        !isFirstSync &&
+        currentUserId === lastActiveUserId &&
+        currentUserRole === lastActiveUserRole &&
+        currentStationId === lastStationId &&
+        selectedCompanyId === lastCompanyId
+      ) {
+        // Session context unchanged, do not rebuild listeners
+        return;
+      }
+      
+      lastActiveUserId = currentUserId;
+      lastActiveUserRole = currentUserRole;
+      lastStationId = currentStationId;
+      lastCompanyId = selectedCompanyId;
+      isFirstSync = false;
       
       rebuildListeners(activeUser, selectedCompanyId);
     } catch (err) {
