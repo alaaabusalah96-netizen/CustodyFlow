@@ -92,7 +92,7 @@ export class ValidationEngine {
           }
         } else {
           // Create validation
-          if (isStationAdmin && !perms?.create_expense) {
+          if (!perms?.create_expense) {
             errors.push('ليس لديك صلاحية إنشاء معاملة / You do not have permission to create transactions.');
           }
         }

@@ -173,6 +173,7 @@ export async function seedDatabaseIfEmpty(defaults: {
   try {
     // Check if seeded with v7 already
     let alreadySeededV7 = false;
+    let checkSuccess = false;
     try {
       console.log('[DEBUG_LOG] 1. Before reading system_meta collection');
       const snap = await getDocs(query(collection(db, 'system_meta'), limit(10)));
@@ -181,9 +182,15 @@ export async function seedDatabaseIfEmpty(defaults: {
           alreadySeededV7 = true;
         }
       });
+      checkSuccess = true;
       console.log('[DEBUG_LOG] 2. After reading system_meta. Doc count:', snap.size, 'alreadySeededV7:', alreadySeededV7, 'docs:', snap.docs.map(d => ({id: d.id, data: d.data()})));
     } catch (e) {
       console.warn('Error checking seed_status_v7:', e);
+    }
+
+    if (!checkSuccess) {
+      console.log('Skipping seeding: Unable to verify seed status (likely guest user, offline, or lacking permissions).');
+      return;
     }
 
     if (!alreadySeededV7) {

@@ -80,7 +80,8 @@ service cloud.firestore {
     // --- Company Sequences ---
     match /company_sequences/{id} {
       allow read: if isSameCompanyRead(resource.data);
-      allow write: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow delete: if isLoggedIn() && (isSystemAdmin() || (getUserRole() == 'Admin' && resource != null && resource.data.company_id == getCompanyId()));
     }
 
     // --- CashVouchers (CamelCase) ---
@@ -179,7 +180,7 @@ service cloud.firestore {
       allow read: if isLoggedIn() && (id == request.auth.uid || isSystemAdmin() || (resource != null && resource.data.company_id == getCompanyId()));
       allow create: if isLoggedIn() && (id == request.auth.uid || isSystemAdmin() || (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') && request.resource.data.company_id == getCompanyId()));
       allow update: if isLoggedIn() && (id == request.auth.uid || isSystemAdmin() || (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') && resource.data.company_id == getCompanyId() && request.resource.data.company_id == getCompanyId()));
-      allow delete: if isLoggedIn() && (isSystemAdmin() || (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') && resource.data.company_id == getCompanyId()));
+      allow delete: if isLoggedIn() && (isSystemAdmin() || (resource != null && resource.data.email.lower() == request.auth.token.email.lower()) || (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') && resource.data.company_id == getCompanyId()));
     }
 
     // --- Roles & Permissions ---
@@ -374,7 +375,7 @@ service cloud.firestore {
     }
 
     match /system_meta/{id} {
-      allow read: if isLoggedIn();
+      allow read: if true;
       allow write: if isSystemAdmin();
     }
 

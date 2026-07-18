@@ -49,17 +49,19 @@ export default function App() {
       const stored = localStorage.getItem('custody_active_user');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.role === 'SystemAdmin') {
-          return 'super-admin';
-        }
-        if (parsed.role === 'Admin') {
-          return 'company-admin';
-        }
-        if (parsed.role === 'RegionalManager') {
-          return 'region-admin';
-        }
-        if (parsed.role !== 'Admin' && parsed.role !== 'SystemAdmin') {
-          return 'reconciliation';
+        if (parsed) {
+          if (parsed.role === 'SystemAdmin') {
+            return 'super-admin';
+          }
+          if (parsed.role === 'Admin') {
+            return 'company-admin';
+          }
+          if (parsed.role === 'RegionalManager') {
+            return 'region-admin';
+          }
+          if (parsed.role !== 'Admin' && parsed.role !== 'SystemAdmin') {
+            return 'reconciliation';
+          }
         }
       }
     } catch {
@@ -150,12 +152,14 @@ export default function App() {
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          setActiveUser(prev => {
-            if (!prev || prev.id !== parsed.id || prev.role !== parsed.role || JSON.stringify(prev.permissions) !== JSON.stringify(parsed.permissions) || JSON.stringify(prev.impersonator) !== JSON.stringify(parsed.impersonator)) {
-              return parsed;
-            }
-            return prev;
-          });
+          if (parsed) {
+            setActiveUser(prev => {
+              if (!prev || prev.id !== parsed.id || prev.role !== parsed.role || JSON.stringify(prev.permissions) !== JSON.stringify(parsed.permissions) || JSON.stringify(prev.impersonator) !== JSON.stringify(parsed.impersonator)) {
+                return parsed;
+              }
+              return prev;
+            });
+          }
         } catch {
           // Ignore
         }

@@ -75,6 +75,8 @@ export class CustodyDB {
       roles: DEFAULT_ROLES
     }).then(() => {
       setupFirebaseSync();
+    }).catch(err => {
+      console.warn('Failed to seed or synchronize with Firebase, running in fallback mode:', err);
     });
   }
 

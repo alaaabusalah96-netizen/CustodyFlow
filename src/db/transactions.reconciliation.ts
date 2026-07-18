@@ -59,7 +59,7 @@ export class TransactionsReconciliationModule {
       .filter(t => t.status === 'Settled')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const cashAvailable = custodyValue - pendingTotal - underSettlementTotal;
+    const cashAvailable = custodyValue - settledTotal - underSettlementTotal;
 
     const pendingCount = filteredTxs.filter(t => t.status === 'Pending').length;
     const underSettlementCount = filteredTxs.filter(t => t.status === 'Under Settlement').length;
