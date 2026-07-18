@@ -115,6 +115,7 @@ export interface Transaction {
   status: TransactionStatus;
   voucher_no?: string;
   voucher_date?: string;
+  invoice_no?: string;
   created_by: string;
   created_at: string;
   updated_at: string;

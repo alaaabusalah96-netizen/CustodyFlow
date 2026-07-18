@@ -82,7 +82,7 @@ export class TransactionsModule {
   }
 
   static getScopedTransactions(): Transaction[] {
-    const txs = TransactionsModule.getTransactions();
+    const txs = TransactionsModule.getTransactions().filter(t => t.status !== 'Deleted' && (t.status as string) !== 'deleted');
     const user = UsersModule.getActiveUser();
     if (!user) return txs;
     

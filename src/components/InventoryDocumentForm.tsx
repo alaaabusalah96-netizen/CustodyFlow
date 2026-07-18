@@ -274,8 +274,8 @@ export default function InventoryDocumentForm({
       }
 
       // Overdraft check if it decreases stock
-      if (item.product_id && sourceWarehouseId && docType !== 'Receipt' && docType !== 'BranchReturn' && docType !== 'Adjustment') {
-        const isAddition = docType === 'Receipt' || docType === 'BranchReturn' || (docType === 'Damage' && scrapAction === 'IN');
+      if (item.product_id && sourceWarehouseId && (docType as string) !== 'Receipt' && (docType as string) !== 'BranchReturn' && (docType as string) !== 'Adjustment') {
+        const isAddition = (docType as string) === 'Receipt' || (docType as string) === 'BranchReturn' || (docType === 'Damage' && scrapAction === 'IN');
         if (!isAddition) {
           const currentStock = InventoryModule.getProductStock(item.product_id, sourceWarehouseId);
           if (currentStock < item.qty) {

@@ -57,6 +57,123 @@ service cloud.firestore {
       allow write: if isSystemAdmin() || (isLoggedIn() && id == getCompanyId() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin'));
     }
 
+    // --- Transactions (Custody Transactions) ---
+    match /transactions/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    // --- GL Accounts (Chart of Accounts) ---
+    match /gl_accounts/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Accountant');
+    }
+
+    // --- Journal Entries (Immutable Accounting Entries) ---
+    match /journal_entries/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create: if isSameCompanyWrite(request.resource.data, null) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Accountant');
+      allow update, delete: if false; // Journal entries are immutable
+    }
+
+    // --- Company Sequences ---
+    match /company_sequences/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data);
+    }
+
+    // --- CashVouchers (CamelCase) ---
+    match /CashVouchers/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data);
+    }
+
+    // --- Expenses (CamelCase) ---
+    match /Expenses/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Accountant');
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    // --- TransactionHistory ---
+    match /TransactionHistory/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data);
+    }
+
+    // --- deleted_transactions ---
+    match /deleted_transactions/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    // --- business_groups ---
+    match /business_groups/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    // --- warehouse_bins ---
+    match /warehouse_bins/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Storekeeper');
+    }
+
+    // --- vendors ---
+    match /vendors/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Accountant');
+    }
+
+    // --- purchase_requests ---
+    match /purchase_requests/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Accountant');
+    }
+
+    // --- customers ---
+    match /customers/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data);
+    }
+
+    // --- leads ---
+    match /leads/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data);
+    }
+
+    // --- sales_invoices ---
+    match /sales_invoices/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Accountant');
+    }
+
+    // --- pos_transactions ---
+    match /pos_transactions/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data);
+    }
+
+    // --- employees_payroll_items ---
+    match /employees_payroll_items/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    // --- fixed_assets_items ---
+    match /fixed_assets_items/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Accountant');
+    }
+
+    // --- payroll_processed_runs ---
+    match /payroll_processed_runs/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
     // --- Users ---
     match /users/{id} {
       allow read: if isLoggedIn() && (id == request.auth.uid || isSystemAdmin() || (resource != null && resource.data.company_id == getCompanyId()));

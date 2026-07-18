@@ -676,7 +676,36 @@ function updateLocalAndNotify(key: string, data: any) {
 
   const nextStr = JSON.stringify(data);
   if (currentStr !== nextStr) {
-    localStorage.setItem(localKey, nextStr);
+    try {
+      localStorage.setItem(localKey, nextStr);
+    } catch (error: any) {
+      if (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED' || (error.code && error.code === 22)) {
+        console.warn('LocalStorage quota exceeded! Cleaning up non-essential keys to free space...');
+        // Clear non-essential large collections to free space
+        const nonEssentialKeys = [
+          'custody_logs',
+          'custody_AuditLogs',
+          'custody_TransactionHistory',
+          'custody_Notifications',
+          'custody_activity_logs'
+        ];
+        nonEssentialKeys.forEach(k => {
+          try {
+            localStorage.removeItem(k);
+          } catch (e) {}
+        });
+        
+        // Try setting the item again
+        try {
+          localStorage.setItem(localKey, nextStr);
+          console.log('Successfully saved to LocalStorage after cleanup.');
+        } catch (retryError) {
+          console.error('Failed to save to LocalStorage even after cleanup:', retryError);
+        }
+      } else {
+        console.error('Error saving to LocalStorage:', error);
+      }
+    }
     
     // 9. Print count of elements after updateLocalAndNotify()
     let countAfter = 0;

@@ -1970,7 +1970,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
                 const userRegion = regions.find(r => r.id === userRegionId);
 
                 // Friendly role display
-                let friendlyRole = u.role;
+                let friendlyRole: string = u.role;
                 if (u.role === 'Admin') friendlyRole = isRtl ? 'ادمن الشركة' : 'Company Admin';
                 else if (u.role === 'RegionalManager') friendlyRole = isRtl ? 'مدير منطقة' : 'Regional Manager';
                 else if (u.role === 'StationAdmin') friendlyRole = isRtl ? 'مدير محطة' : 'Station Manager';

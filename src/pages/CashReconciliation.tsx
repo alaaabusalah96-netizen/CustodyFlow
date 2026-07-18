@@ -241,6 +241,18 @@ export default function CashReconciliation({
       });
     });
 
+    if (vNo) {
+      const vouchers = CustodyDB.getCashVouchers();
+      const voucher = vouchers.find(v => v.voucher_no === vNo);
+      if (voucher) {
+        CustodyDB.saveCashVoucher({
+          ...voucher,
+          status: 'Draft',
+          updated_at: new Date().toISOString()
+        });
+      }
+    }
+
     CustodyDB.addLog(
       user?.id || 'unknown',
       user?.full_name || 'Anonymous',
@@ -287,6 +299,24 @@ export default function CashReconciliation({
       status: 'Settled'
     });
 
+    const vNo = tx.voucher_no;
+    if (vNo) {
+      const vouchers = CustodyDB.getCashVouchers();
+      const voucher = vouchers.find(v => v.voucher_no === vNo);
+      if (voucher) {
+        // Find other transactions for this voucher number
+        const otherTxs = allTransactions.filter(t => t.voucher_no === vNo && t.id !== tx.id);
+        const allOtherSettled = otherTxs.every(t => t.status === 'Settled');
+        if (allOtherSettled) {
+          CustodyDB.saveCashVoucher({
+            ...voucher,
+            status: 'Approved',
+            updated_at: new Date().toISOString()
+          });
+        }
+      }
+    }
+
     CustodyDB.addLog(
       user?.id || 'unknown',
       user?.full_name || 'Anonymous',
@@ -311,6 +341,19 @@ export default function CashReconciliation({
     CustodyDB.updateTransaction(tx.id, {
       status: 'Rejected'
     });
+
+    const vNo = tx.voucher_no;
+    if (vNo) {
+      const vouchers = CustodyDB.getCashVouchers();
+      const voucher = vouchers.find(v => v.voucher_no === vNo);
+      if (voucher) {
+        CustodyDB.saveCashVoucher({
+          ...voucher,
+          status: 'Draft',
+          updated_at: new Date().toISOString()
+        });
+      }
+    }
 
     CustodyDB.addTransactionHistory({
       id: `hist-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -369,6 +412,18 @@ export default function CashReconciliation({
       });
     });
 
+    if (vNo) {
+      const vouchers = CustodyDB.getCashVouchers();
+      const voucher = vouchers.find(v => v.voucher_no === vNo);
+      if (voucher) {
+        CustodyDB.saveCashVoucher({
+          ...voucher,
+          status: 'Approved',
+          updated_at: new Date().toISOString()
+        });
+      }
+    }
+
     CustodyDB.addLog(
       user?.id || 'unknown',
       user?.full_name || 'Anonymous',
@@ -413,6 +468,18 @@ export default function CashReconciliation({
         notes: finalComments
       });
     });
+
+    if (vNo) {
+      const vouchers = CustodyDB.getCashVouchers();
+      const voucher = vouchers.find(v => v.voucher_no === vNo);
+      if (voucher) {
+        CustodyDB.saveCashVoucher({
+          ...voucher,
+          status: 'Draft',
+          updated_at: new Date().toISOString()
+        });
+      }
+    }
 
     CustodyDB.addLog(
       user?.id || 'unknown',

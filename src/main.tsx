@@ -3,10 +3,20 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { CustodyDB } from './db';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
-// Initialize remote Firebase database synchronization
-CustodyDB.initializeFirebase();
-CustodyDB.initializeCacheListener();
+// Initialize remote Firebase database synchronization safely
+try {
+  CustodyDB.initializeFirebase();
+} catch (err) {
+  console.error('Failed to initialize Firebase sync:', err);
+}
+
+try {
+  CustodyDB.initializeCacheListener();
+} catch (err) {
+  console.error('Failed to initialize Cache Listener:', err);
+}
 
 // Register Progressive Web App Service Worker
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
@@ -67,6 +77,8 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );

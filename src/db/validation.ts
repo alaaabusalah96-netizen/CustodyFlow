@@ -99,6 +99,45 @@ export class ValidationEngine {
       }
     }
 
+    // 8. Prevent duplicate transaction_no or invoice_no in the same station (excluding Deleted ones)
+    if (data.transaction_no && data.transaction_no.trim() !== '') {
+      const txNo = data.transaction_no.trim();
+      const stationId = data.station_id || user?.station_id;
+      if (stationId) {
+        const txs = StorageEngine.getStored<Transaction[]>('transactions', []);
+        const isDuplicate = txs.some(t => 
+          t.id !== data.id && 
+          t.status !== 'Deleted' && 
+          (t.status as string) !== 'deleted' &&
+          t.station_id === stationId && 
+          (t.transaction_no.trim().toLowerCase() === txNo.toLowerCase() || 
+           (t.invoice_no && t.invoice_no.trim().toLowerCase() === txNo.toLowerCase()))
+        );
+        if (isDuplicate) {
+          errors.push('رقم المستند مكرر لهذه المحطة / Document number is duplicated for this station.');
+        }
+      }
+    }
+
+    if (data.invoice_no && data.invoice_no.trim() !== '') {
+      const invNo = data.invoice_no.trim();
+      const stationId = data.station_id || user?.station_id;
+      if (stationId) {
+        const txs = StorageEngine.getStored<Transaction[]>('transactions', []);
+        const isDuplicate = txs.some(t => 
+          t.id !== data.id && 
+          t.status !== 'Deleted' && 
+          (t.status as string) !== 'deleted' &&
+          t.station_id === stationId && 
+          ((t.invoice_no && t.invoice_no.trim().toLowerCase() === invNo.toLowerCase()) ||
+           t.transaction_no.trim().toLowerCase() === invNo.toLowerCase())
+        );
+        if (isDuplicate) {
+          errors.push('رقم الفاتورة مكرر لهذه المحطة / Invoice number is duplicated for this station.');
+        }
+      }
+    }
+
     return {
       isValid: errors.length === 0,
       errors
