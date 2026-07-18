@@ -19,13 +19,13 @@ import {
 import { AppUser, ExpenseCategory, Transaction, ActivityLog, CustodyConfig, Region, Station, Company, Expense, CashVoucher, TransactionHistory, Notification, AuditLog, SystemPermission, SystemRole, DeletedTransaction, SignupRequest } from './types';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA2I_2GIEfQhawBL2KhXyxD6CwTLJR-jFw",
-  authDomain: "custodyflow.firebaseapp.com",
-  projectId: "custodyflow",
-  storageBucket: "custodyflow.firebasestorage.app",
-  messagingSenderId: "88602135716",
-  appId: "1:88602135716:web:f73fc0a3c44fc1ec3d6a31",
-  measurementId: "G-JNEFCLF157"
+  apiKey: "AIzaSyD_KQ7aA76ZGR-Z9zdhQBIZQIxHw-Hw5Vc",
+  authDomain: "refined-garage-5nzsc.firebaseapp.com",
+  projectId: "refined-garage-5nzsc",
+  storageBucket: "refined-garage-5nzsc.firebasestorage.app",
+  messagingSenderId: "619920731471",
+  appId: "1:619920731471:web:caa4ea274d68cfff45293a",
+  measurementId: ""
 };
 
 const app = initializeApp(firebaseConfig);
