@@ -31,13 +31,18 @@ const firebaseConfig = {
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe");
+const isSandboxProject = firebaseConfig.projectId === "refined-garage-5nzsc";
+const db = isSandboxProject
+  ? getFirestore(firebaseApp, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe")
+  : getFirestore(firebaseApp);
 
 // Initialize Firebase Admin SDK
 const adminApp = admin.initializeApp({
   projectId: firebaseConfig.projectId
 }, "admin-server-app");
-const adminDb = getFirestoreAdmin(adminApp, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe");
+const adminDb = isSandboxProject
+  ? getFirestoreAdmin(adminApp, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe")
+  : getFirestoreAdmin(adminApp);
 
 async function getSmtpConfig() {
   const envHost = process.env.SMTP_HOST;
