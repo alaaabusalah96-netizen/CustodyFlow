@@ -261,7 +261,7 @@ export class InventoryModule {
     const companyId = CompaniesModule.getSelectedCompanyId();
     const newW: Warehouse = {
       ...warehouse,
-      id: `wh-${Date.now()}`,
+      id: `wh-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
       company_id: companyId
     };
     list.push(newW);
@@ -287,7 +287,7 @@ export class InventoryModule {
     const list = StorageEngine.getStored<WarehouseBin[]>('warehouse_bins', []);
     const newBin: WarehouseBin = {
       ...bin,
-      id: `bin-${Date.now()}`
+      id: `bin-${Date.now()}-${Math.random().toString(36).substring(2, 6)}` // FIX: avoid id collisions under concurrent creation
     };
     list.push(newBin);
     InventoryModule.saveWarehouseBins(list);
@@ -518,7 +518,7 @@ export class InventoryModule {
     const companyId = CompaniesModule.getSelectedCompanyId();
     const newP: Product = {
       ...product,
-      id: `prod-${Date.now()}`,
+      id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
       company_id: companyId
     };
     list.push(newP);

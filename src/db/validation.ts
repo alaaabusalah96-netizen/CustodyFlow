@@ -110,7 +110,7 @@ export class ValidationEngine {
           t.status !== 'Deleted' && 
           (t.status as string) !== 'deleted' &&
           t.station_id === stationId && 
-          (t.transaction_no.trim().toLowerCase() === txNo.toLowerCase() || 
+          ((t.transaction_no || '').trim().toLowerCase() === txNo.toLowerCase() || 
            (t.invoice_no && t.invoice_no.trim().toLowerCase() === txNo.toLowerCase()))
         );
         if (isDuplicate) {
@@ -130,7 +130,7 @@ export class ValidationEngine {
           (t.status as string) !== 'deleted' &&
           t.station_id === stationId && 
           ((t.invoice_no && t.invoice_no.trim().toLowerCase() === invNo.toLowerCase()) ||
-           t.transaction_no.trim().toLowerCase() === invNo.toLowerCase())
+           (t.transaction_no || '').trim().toLowerCase() === invNo.toLowerCase())
         );
         if (isDuplicate) {
           errors.push('رقم الفاتورة مكرر لهذه المحطة / Invoice number is duplicated for this station.');

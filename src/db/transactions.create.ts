@@ -14,24 +14,38 @@ export class TransactionsCreateModule {
     const user = UsersModule.getActiveUser();
     const station_id = data.station_id || user?.station_id || 'stn-1-1-1';
     const company_id = user?.company_id || CompaniesModule.getSelectedCompanyId();
+    const status = data.status || 'Pending';
 
+    // FIX: Validate BEFORE assigning an id. Passing an object that already
+    // has an id makes ValidationEngine treat this as an UPDATE (checks
+    // edit_expense) instead of a CREATE (checks create_expense), which
+    // incorrectly blocked create-only users. This payload intentionally
+    // has no `id` field so validation resolves to "create" mode.
+    const validationPayload: Partial<Transaction> = {
+      ...data,
+      status,
+      station_id,
+      company_id
+    };
+    const validation = ValidationEngine.validateTransaction(validationPayload, user);
+    if (!validation.isValid) {
+      throw new Error(validation.errors.join(' \n '));
+    }
+
+    // FIX: append a random suffix to avoid duplicate ids when multiple
+    // transactions are created within the same millisecond under load
+    // (same pattern already used in transactions.delete.ts / restore.ts).
     const newTx: Transaction = {
       ...data,
-      id: `tx-${Date.now()}`,
+      id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       transaction_no: '',
-      status: data.status || 'Pending',
+      status,
       created_by: user?.id || 'unknown',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       station_id,
       company_id
     };
-
-    // Run Validation
-    const validation = ValidationEngine.validateTransaction(newTx, user);
-    if (!validation.isValid) {
-      throw new Error(validation.errors.join(' \n '));
-    }
 
     transactions.push(newTx);
     StorageEngine.setStored('transactions', transactions);

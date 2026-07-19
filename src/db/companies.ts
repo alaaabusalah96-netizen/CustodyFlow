@@ -19,7 +19,7 @@ export class CompaniesModule {
     const companies = CompaniesModule.getCompanies();
     const val = custodyValue ?? 0;
     const newCompany: Company = {
-      id: `comp-${Date.now()}`,
+      id: `comp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
       name,
       custody_value: val
     };

@@ -39,7 +39,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
   static addVendor(companyId: string, nameAr: string, nameEn: string, phone?: string, email?: string, taxNo?: string, address?: string): Vendor {
     const list = StorageEngine.getStored<Vendor[]>('vendors', []);
     const newVendor: Vendor = {
-      id: `vnd-${Date.now()}`,
+      id: `vnd-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
       company_id: companyId,
       nameAr,
       nameEn,
@@ -112,7 +112,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
           // 2. Create the document
           const pr: PurchaseRequest = {
-            id: `pr-${Date.now()}`,
+            id: `pr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
             company_id: companyId,
             prNumber,
             requesterId,
@@ -221,7 +221,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
           // 4. Create PO
           const po: PurchaseOrder = {
-            id: `po-${Date.now()}`,
+            id: `po-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
             company_id: companyId,
             poNumber,
             prId,

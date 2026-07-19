@@ -17,7 +17,7 @@ export class BusinessGroupsModule {
   static addGroup(code: string, nameAr: string, nameEn: string): BusinessGroup {
     const groups = BusinessGroupsModule.getGroups();
     const newGroup: BusinessGroup = {
-      id: `bg-${Date.now()}`,
+      id: `bg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
       code,
       nameAr,
       nameEn,

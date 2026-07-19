@@ -27,7 +27,7 @@ export class StationsModule {
     const regions = StationsModule.getRegions();
     const compId = companyId || CompaniesModule.getSelectedCompanyId();
     const newReg: Region = {
-      id: `reg-${Date.now()}`,
+      id: `reg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
       name,
       code: code || '',
       company_id: compId
@@ -80,7 +80,7 @@ export class StationsModule {
     const stations = StationsModule.getStations();
     const compId = companyId || CompaniesModule.getSelectedCompanyId();
     const newStn: Station = {
-      id: `stn-${Date.now()}`,
+      id: `stn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
       station_name: name,
       station_code: code,
       custody_amount: custodyAmount,
