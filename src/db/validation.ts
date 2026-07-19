@@ -3,6 +3,8 @@ import { UsersModule } from './users';
 import { CompaniesModule } from './companies';
 import { StationsModule } from './stations';
 import { StorageEngine } from './storage';
+import { db } from '../firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 export class ValidationEngine {
   static validateTransaction(
@@ -173,5 +175,25 @@ export class ValidationEngine {
       isValid: errors.length === 0,
       errors
     };
+  }
+}
+
+export async function reserveInvoiceNumber(stationId: string, invoiceNo: string): Promise<boolean> {
+  const cleanInvoiceNo = invoiceNo.trim().toLowerCase();
+  const uniqueKey = `${stationId}_${cleanInvoiceNo}`;
+  const lockRef = doc(db, 'unique_invoice_locks', uniqueKey);
+  
+  try {
+    // محاولة إنشاء المستند بشرط عدم وجوده مسبقاً لمنع التكرار
+    await setDoc(lockRef, {
+      reserved_at: new Date().toISOString(),
+      station_id: stationId,
+      invoice_no: cleanInvoiceNo
+    });
+    return true; // نجح الحجز والتفرد مضمون 100%
+  } catch (error) {
+    // إذا كان المستند موجوداً مسبقاً، سيفشل الطلب فورياً لضمان عدم التكرار
+    console.error('Invoice number is already taken:', uniqueKey);
+    return false;
   }
 }

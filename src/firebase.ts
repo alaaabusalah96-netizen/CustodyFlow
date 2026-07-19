@@ -14,7 +14,8 @@ import {
   query,
   limit,
   where,
-  startAfter
+  startAfter,
+  orderBy
 } from 'firebase/firestore';
 import { AppUser, ExpenseCategory, Transaction, ActivityLog, CustodyConfig, Region, Station, Company, Expense, CashVoucher, TransactionHistory, Notification, AuditLog, SystemPermission, SystemRole, DeletedTransaction, SignupRequest } from './types';
 
@@ -780,4 +781,28 @@ export async function dbFetchUserByEmail(email: string): Promise<AppUser | null>
     console.warn(`Error fetching user by email from Firestore:`, error);
   }
   return null;
+}
+
+export async function fetchTransactionsOnDemand(
+  companyId: string, 
+  pageSize: number = 20, 
+  lastDoc: any = null
+) {
+  let q = query(
+    collection(db, 'transactions'),
+    where('company_id', '==', companyId),
+    orderBy('created_at', 'desc'),
+    limit(pageSize)
+  );
+
+  if (lastDoc) {
+    q = query(q, startAfter(lastDoc));
+  }
+
+  const querySnapshot = await getDocs(q);
+  const data = querySnapshot.docs.map(doc => doc.data());
+  return {
+    data,
+    lastVisible: querySnapshot.docs[querySnapshot.docs.length - 1]
+  };
 }

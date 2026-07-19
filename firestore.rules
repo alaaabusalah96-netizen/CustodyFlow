@@ -379,6 +379,13 @@ service cloud.firestore {
       allow write: if isSystemAdmin();
     }
 
+    // --- Unique Invoice Locks ---
+    match /unique_invoice_locks/{id} {
+      allow read: if isLoggedIn();
+      allow create: if isLoggedIn();
+      allow update, delete: if false; // Only allow creation of locks to prevent overrides!
+    }
+
     // --- Signup Requests ---
     match /signup_requests/{id} {
       allow create: if isLoggedIn();

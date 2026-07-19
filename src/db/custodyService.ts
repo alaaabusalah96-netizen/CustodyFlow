@@ -2,9 +2,44 @@ import { Station, Company } from '../types';
 import { StorageEngine } from './storage';
 import { StationsModule } from './stations';
 import { CompaniesModule } from './companies';
-import { dbSetDoc } from '../firebase';
+import { db } from '../firebase';
+import { doc, updateDoc, increment } from 'firebase/firestore';
 
 export class CustodyService {
+  static async updateStationCustodyAtomic(stationId: string, amountChange: number): Promise<void> {
+    if (!stationId) return;
+    
+    // 1. تحديث الرصيد على مستوى خادم Firestore ذرياً ودون تصادم
+    const stationRef = doc(db, 'stations', stationId);
+    await updateDoc(stationRef, {
+      custody_amount: increment(amountChange)
+    });
+    
+    // 2. تحديث التخزين المحلي فقط لتأكيد الرؤية البصرية للمستخدم الحالي
+    const stations = StationsModule.getStations();
+    const idx = stations.findIndex(s => s.id === stationId);
+    if (idx !== -1) {
+      stations[idx].custody_amount = (stations[idx].custody_amount || 0) + amountChange;
+      StationsModule.saveStations(stations);
+    }
+  }
+
+  static async updateCompanyCustodyAtomic(companyId: string, amountChange: number): Promise<void> {
+    if (!companyId) return;
+    
+    const companyRef = doc(db, 'companies', companyId);
+    await updateDoc(companyRef, {
+      custody_value: increment(amountChange)
+    });
+    
+    const companies = CompaniesModule.getCompanies();
+    const idx = companies.findIndex(c => c.id === companyId);
+    if (idx !== -1) {
+      companies[idx].custody_value = (companies[idx].custody_value || 0) + amountChange;
+      CompaniesModule.saveCompanies(companies);
+    }
+  }
+
   static updateStationCustody(stationId: string, amountChange: number): Station | null {
     if (!stationId) return null;
     const stations = StationsModule.getStations();
@@ -17,7 +52,12 @@ export class CustodyService {
       };
       stations[idx] = updated;
       StationsModule.saveStations(stations);
-      dbSetDoc('stations', stationId, updated);
+      
+      // FIX: Atomic increment on Firestore
+      CustodyService.updateStationCustodyAtomic(stationId, amountChange).catch(err => {
+        console.error('Failed to update station custody atomically:', err);
+      });
+      
       return updated;
     }
     return null;
@@ -35,7 +75,12 @@ export class CustodyService {
       };
       companies[idx] = updated;
       CompaniesModule.saveCompanies(companies);
-      dbSetDoc('companies', companyId, updated);
+      
+      // FIX: Atomic increment on Firestore
+      CustodyService.updateCompanyCustodyAtomic(companyId, amountChange).catch(err => {
+        console.error('Failed to update company custody atomically:', err);
+      });
+      
       return updated;
     }
     return null;
