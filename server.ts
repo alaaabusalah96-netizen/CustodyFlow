@@ -14,9 +14,12 @@ import {
   getDocs, 
   deleteDoc 
 } from "firebase/firestore";
+import admin from "firebase-admin";
+import { getFirestore as getFirestoreAdmin } from "firebase-admin/firestore";
 import nodemailer from "nodemailer";
 import rateLimit from "express-rate-limit";
 import { runTenantMigrationUp, runTenantMigrationDown } from "./src/migrations/tenantMigration";
+import { hashPassword } from "./src/lib/hash";
 
 const firebaseConfig = {
   projectId: "refined-garage-5nzsc",
@@ -29,6 +32,12 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe");
+
+// Initialize Firebase Admin SDK
+const adminApp = admin.initializeApp({
+  projectId: firebaseConfig.projectId
+}, "admin-server-app");
+const adminDb = getFirestoreAdmin(adminApp, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe");
 
 async function getSmtpConfig() {
   const envHost = process.env.SMTP_HOST;
@@ -47,13 +56,12 @@ async function getSmtpConfig() {
     };
   }
 
-  // Fallback: Read from Firestore
+  // Fallback: Read from Firestore using Admin SDK
   try {
-    const configDocRef = doc(db, "system_config", "smtp");
-    const configDoc = await getDoc(configDocRef);
-    if (configDoc.exists()) {
+    const configDoc = await adminDb.collection("system_config").doc("smtp").get();
+    if (configDoc.exists) {
       const data = configDoc.data();
-      if (data.host && data.user && data.pass) {
+      if (data && data.host && data.user && data.pass) {
         return {
           host: data.host,
           port: parseInt(data.port || "587"),
@@ -200,10 +208,8 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
       }
 
-      // 2. Fetch the registered admin user to verify their details
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("email", "==", targetEmail));
-      const snapshot = await getDocs(q);
+      // 2. Fetch the registered admin user to verify their details using Admin SDK
+      const snapshot = await adminDb.collection("users").where("email", "==", targetEmail).get();
 
       if (snapshot.empty) {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
@@ -221,9 +227,8 @@ async function startServer() {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes validity
 
-      // 5. Store OTP securely in Firestore
-      const otpDocRef = doc(db, "password_reset_otps", targetEmail);
-      await setDoc(otpDocRef, {
+      // 5. Store OTP securely in Firestore using Admin SDK
+      await adminDb.collection("password_reset_otps").doc(targetEmail).set({
         email: targetEmail,
         code: otp,
         expiresAt,
@@ -259,33 +264,35 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
       }
 
-      const otpDocRef = doc(db, "password_reset_otps", targetEmail);
-      const otpDoc = await getDoc(otpDocRef);
+      const otpDoc = await adminDb.collection("password_reset_otps").doc(targetEmail).get();
 
-      if (!otpDoc.exists()) {
+      if (!otpDoc.exists) {
         return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
       }
 
       const otpData = otpDoc.data();
+      if (!otpData) {
+        return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
+      }
       const attempts = otpData.attempts || 0;
 
       if (attempts >= 5) {
-        await deleteDoc(otpDocRef);
+        await adminDb.collection("password_reset_otps").doc(targetEmail).delete();
         return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات المقبولة. تم إبطال الرمز، يرجى طلب رمز جديد." });
       }
 
       if (otpData.expiresAt < Date.now()) {
-        await deleteDoc(otpDocRef);
+        await adminDb.collection("password_reset_otps").doc(targetEmail).delete();
         return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
       }
 
       if (otpData.code !== code.trim()) {
         const newAttempts = attempts + 1;
         if (newAttempts >= 5) {
-          await deleteDoc(otpDocRef);
+          await adminDb.collection("password_reset_otps").doc(targetEmail).delete();
           return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات المقبولة. تم إبطال الرمز، يرجى طلب رمز جديد." });
         } else {
-          await updateDoc(otpDocRef, { attempts: newAttempts });
+          await adminDb.collection("password_reset_otps").doc(targetEmail).update({ attempts: newAttempts });
           return res.status(400).json({ success: false, message: `كود التحقق غير صحيح. المحاولات المتبقية: ${5 - newAttempts}` });
         }
       }
@@ -312,56 +319,57 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
       }
 
-      // Verify OTP again for maximum security
-      const otpDocRef = doc(db, "password_reset_otps", targetEmail);
-      const otpDoc = await getDoc(otpDocRef);
+      // Verify OTP again for maximum security using Admin SDK
+      const otpDoc = await adminDb.collection("password_reset_otps").doc(targetEmail).get();
 
-      if (!otpDoc.exists()) {
+      if (!otpDoc.exists) {
         return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
       }
 
       const otpData = otpDoc.data();
+      if (!otpData) {
+        return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
+      }
       const attempts = otpData.attempts || 0;
 
       if (attempts >= 5) {
-        await deleteDoc(otpDocRef);
+        await adminDb.collection("password_reset_otps").doc(targetEmail).delete();
         return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات المقبولة. تم إبطال الرمز، يرجى طلب رمز جديد." });
       }
 
       if (otpData.expiresAt < Date.now()) {
-        await deleteDoc(otpDocRef);
+        await adminDb.collection("password_reset_otps").doc(targetEmail).delete();
         return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
       }
 
       if (otpData.code !== code.trim()) {
         const newAttempts = attempts + 1;
         if (newAttempts >= 5) {
-          await deleteDoc(otpDocRef);
+          await adminDb.collection("password_reset_otps").doc(targetEmail).delete();
           return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات المقبولة. تم إبطال الرمز، يرجى طلب رمز جديد." });
         } else {
-          await updateDoc(otpDocRef, { attempts: newAttempts });
+          await adminDb.collection("password_reset_otps").doc(targetEmail).update({ attempts: newAttempts });
           return res.status(400).json({ success: false, message: `كود التحقق غير صحيح. المحاولات المتبقية: ${5 - newAttempts}` });
         }
       }
 
-      // OTP matches! Update the password in Firestore for all documents matching the email
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("email", "==", targetEmail));
-      const snapshot = await getDocs(q);
+      // OTP matches! Update the password in Firestore for all documents matching the email using Admin SDK
+      const snapshot = await adminDb.collection("users").where("email", "==", targetEmail).get();
 
       if (snapshot.empty) {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
       }
 
+      const hashedPassword = hashPassword(newPassword, targetEmail);
       const updatePromises = snapshot.docs.map(async (userDoc) => {
-        await updateDoc(doc(db, "users", userDoc.id), {
-          password: newPassword
+        await adminDb.collection("users").doc(userDoc.id).update({
+          password: hashedPassword
         });
       });
       await Promise.all(updatePromises);
 
-      // Clean up the used OTP
-      await deleteDoc(otpDocRef);
+      // Clean up the used OTP using Admin SDK
+      await adminDb.collection("password_reset_otps").doc(targetEmail).delete();
 
       return res.json({ success: true, message: "تم تحديث كلمة المرور بنجاح." });
     } catch (error) {
@@ -385,10 +393,8 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
       }
 
-      // Verify the stored password in Firestore
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("email", "==", targetEmail));
-      const snapshot = await getDocs(q);
+      // Verify the stored password in Firestore using Admin SDK
+      const snapshot = await adminDb.collection("users").where("email", "==", targetEmail).get();
 
       if (snapshot.empty) {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
@@ -397,17 +403,34 @@ async function startServer() {
       const userData = snapshot.docs[0].data();
       const storedPassword = userData.password || '';
 
-      if (storedPassword !== '' && storedPassword !== password) {
+      const enteredHashSalted = hashPassword(password, targetEmail);
+      const enteredHashLegacy = hashPassword(password);
+      const isPlainMatch = storedPassword !== '' && storedPassword === password;
+      const isLegacyHashMatch = storedPassword !== '' && storedPassword === enteredHashLegacy;
+      const isSaltedHashMatch = storedPassword !== '' && storedPassword === enteredHashSalted;
+      const isMatch = isPlainMatch || isLegacyHashMatch || isSaltedHashMatch;
+
+      if (storedPassword !== '' && !isMatch) {
         return res.status(400).json({ success: false, message: "كلمة المرور غير صحيحة لحساب أدمن المنصة." });
+      }
+
+      // Auto migrate legacy password to secure salted hash on Firestore using Admin SDK
+      if (storedPassword !== '' && (isPlainMatch || isLegacyHashMatch)) {
+        try {
+          await adminDb.collection("users").doc(snapshot.docs[0].id).update({
+            password: enteredHashSalted
+          });
+        } catch (migErr) {
+          console.warn("Failed to auto-migrate platform admin password on login request:", migErr);
+        }
       }
 
       // Generate login OTP
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = Date.now() + 15 * 60 * 1000;
 
-      // Store securely
-      const otpDocRef = doc(db, "admin_login_otps", targetEmail);
-      await setDoc(otpDocRef, {
+      // Store securely using Admin SDK
+      await adminDb.collection("admin_login_otps").doc(targetEmail).set({
         email: targetEmail,
         code: otp,
         expiresAt,
@@ -439,39 +462,41 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
       }
 
-      const otpDocRef = doc(db, "admin_login_otps", targetEmail);
-      const otpDoc = await getDoc(otpDocRef);
+      const otpDoc = await adminDb.collection("admin_login_otps").doc(targetEmail).get();
 
-      if (!otpDoc.exists()) {
+      if (!otpDoc.exists) {
         return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
       }
 
       const otpData = otpDoc.data();
+      if (!otpData) {
+        return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
+      }
       const attempts = otpData.attempts || 0;
 
       if (attempts >= 5) {
-        await deleteDoc(otpDocRef);
+        await adminDb.collection("admin_login_otps").doc(targetEmail).delete();
         return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات المقبولة. تم إبطال الرمز، يرجى طلب رمز جديد." });
       }
 
       if (otpData.expiresAt < Date.now()) {
-        await deleteDoc(otpDocRef);
+        await adminDb.collection("admin_login_otps").doc(targetEmail).delete();
         return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
       }
 
       if (otpData.code !== code.trim()) {
         const newAttempts = attempts + 1;
         if (newAttempts >= 5) {
-          await deleteDoc(otpDocRef);
+          await adminDb.collection("admin_login_otps").doc(targetEmail).delete();
           return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات المقبولة. تم إبطال الرمز، يرجى طلب رمز جديد." });
         } else {
-          await updateDoc(otpDocRef, { attempts: newAttempts });
+          await adminDb.collection("admin_login_otps").doc(targetEmail).update({ attempts: newAttempts });
           return res.status(400).json({ success: false, message: `كود التحقق غير صحيح. المحاولات المتبقية: ${5 - newAttempts}` });
         }
       }
 
-      // Clean up the used OTP
-      await deleteDoc(otpDocRef);
+      // Clean up the used OTP using Admin SDK
+      await adminDb.collection("admin_login_otps").doc(targetEmail).delete();
 
       return res.json({ success: true });
     } catch (error) {
@@ -530,10 +555,8 @@ async function startServer() {
         return res.status(403).json({ success: false, message: "هذا الإجراء متاح فقط لأدمن منصة KEMIT ERP." });
       }
 
-      // Verify credentials with Firestore users collection
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("email", "==", targetEmail));
-      const snapshot = await getDocs(q);
+      // Verify credentials with Firestore users collection using Admin SDK
+      const snapshot = await adminDb.collection("users").where("email", "==", targetEmail).get();
 
       if (snapshot.empty) {
         return res.status(400).json({ success: false, message: "بيانات الأدمن غير مسجلة في النظام." });
@@ -543,18 +566,35 @@ async function startServer() {
       const storedPassword = userData.password || '';
       const storedPin = userData.security_pin || '';
 
-      if (storedPassword !== '' && storedPassword !== adminPassword) {
+      const enteredHashSalted = hashPassword(adminPassword, targetEmail);
+      const enteredHashLegacy = hashPassword(adminPassword);
+      const isPlainMatch = storedPassword !== '' && storedPassword === adminPassword;
+      const isLegacyHashMatch = storedPassword !== '' && storedPassword === enteredHashLegacy;
+      const isSaltedHashMatch = storedPassword !== '' && storedPassword === enteredHashSalted;
+      const isMatch = isPlainMatch || isLegacyHashMatch || isSaltedHashMatch;
+
+      if (storedPassword !== '' && !isMatch) {
         return res.status(400).json({ success: false, message: "كلمة المرور غير صحيحة لحساب أدمن المنصة." });
+      }
+
+      // Auto migrate legacy password to secure salted hash on Firestore using Admin SDK
+      if (storedPassword !== '' && (isPlainMatch || isLegacyHashMatch)) {
+        try {
+          await adminDb.collection("users").doc(snapshot.docs[0].id).update({
+            password: enteredHashSalted
+          });
+        } catch (migErr) {
+          console.warn("Failed to auto-migrate platform admin password on SMTP save:", migErr);
+        }
       }
 
       if (storedPin !== '' && storedPin !== securityPin.trim()) {
         return res.status(400).json({ success: false, message: "كود الأمان PIN غير صحيح." });
       }
 
-      // Save to Firestore with cleaned password (spaces removed)
+      // Save to Firestore with cleaned password (spaces removed) using Admin SDK
       const cleanPass = smtpPass.trim().replace(/\s+/g, '');
-      const configDocRef = doc(db, "system_config", "smtp");
-      await setDoc(configDocRef, {
+      await adminDb.collection("system_config").doc("smtp").set({
         host: smtpHost.trim(),
         port: parseInt(smtpPort),
         user: smtpUser.trim(),

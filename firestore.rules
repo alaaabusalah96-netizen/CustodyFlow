@@ -395,5 +395,18 @@ service cloud.firestore {
         (resource == null || resource.data.company_id == getCompanyId())
       );
     }
+
+    // --- Secure Platform Server Collections (Locked Down from client-side SDK) ---
+    match /password_reset_otps/{id} {
+      allow read, write: if false;
+    }
+
+    match /admin_login_otps/{id} {
+      allow read, write: if false;
+    }
+
+    match /system_config/{id} {
+      allow read, write: if false;
+    }
   }
 }

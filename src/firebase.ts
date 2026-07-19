@@ -18,6 +18,7 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { AppUser, ExpenseCategory, Transaction, ActivityLog, CustodyConfig, Region, Station, Company, Expense, CashVoucher, TransactionHistory, Notification, AuditLog, SystemPermission, SystemRole, DeletedTransaction, SignupRequest } from './types';
+import { hashPassword } from './lib/hash';
 
 const firebaseConfig = {
   apiKey: "AIzaSyA2I_2GIEfQhawBL2KhXyxD6CwTLJR-jFw",
@@ -236,9 +237,13 @@ export async function seedDatabaseIfEmpty(defaults: {
         batch.set(doc(db, 'categories', c.id), c);
       });
 
-      // Seed users
+      // Seed users (with salted hashed passwords)
       defaults.users.forEach(u => {
-        batch.set(doc(db, 'users', u.id), u);
+        let pwd = u.password || '';
+        if (pwd && !/^[0-9a-f]{64}$/i.test(pwd)) {
+          pwd = hashPassword(pwd, u.email);
+        }
+        batch.set(doc(db, 'users', u.id), { ...u, password: pwd });
       });
 
       // Seed logs
@@ -397,7 +402,14 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
   const unsubUsers = onSnapshot(qUsers, (snapshot) => {
     const data: AppUser[] = [];
     snapshot.forEach(doc => {
-      data.push(doc.data() as AppUser);
+      const u = doc.data() as AppUser;
+      // Redact coworker password hashes to prevent reading coworker hashes (SEC-05)
+      if (u.id !== activeUser.id && activeUser.role !== 'SystemAdmin') {
+        if (u.password) {
+          u.password = 'REDACTED';
+        }
+      }
+      data.push(u);
     });
 
     // Crucial: preserve any existing SystemAdmin users in local cache to prevent them from being wiped out by company-scoped sync!

@@ -42,7 +42,8 @@ import {
 } from './db/defaults';
 
 import { LogsModule } from './db/logs';
-import { UsersModule, hashPassword } from './db/users';
+import { UsersModule } from './db/users';
+import { hashPassword } from './lib/hash';
 import { CompaniesModule } from './db/companies';
 import { StationsModule } from './db/stations';
 import { NotificationsModule } from './db/notifications';
@@ -52,8 +53,8 @@ import { ModulesModule, ERP_MODULES_REGISTRY, CompanyModuleSettings } from './db
 export { hashPassword, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings };
 
 export class CustodyDB {
-  static hashPassword(password: string): string {
-    return hashPassword(password);
+  static hashPassword(password: string, salt: string = ''): string {
+    return hashPassword(password, salt);
   }
 
   static initializeFirebase(): void {

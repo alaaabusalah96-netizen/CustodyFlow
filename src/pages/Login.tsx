@@ -217,7 +217,7 @@ export default function Login({
             u.email.toLowerCase().trim() === 'alaabusalah96@gmail.com'
           );
           if (isPlatformAdmin) {
-            return { ...u, password: newPassword };
+            return { ...u, password: CustodyDB.hashPassword(newPassword, u.email) };
           }
           return u;
         });
@@ -316,28 +316,31 @@ export default function Login({
 
     const isPlatformAdmin = emailLower === 'alaaabusalah96@gmail.com' || emailLower === 'alaabusalah96@gmail.com';
 
-    // Verify Password (Plain Text or Hash)
-    const storedPassword = foundUser.password || (isPlatformAdmin ? '' : '123456');
-    const enteredHash = CustodyDB.hashPassword(password);
+    // Verify Password (Plain Text, Legacy Hash, or Salted Hash) - Fallback "123456" removed for security
+    const storedPassword = foundUser.password || '';
+    const enteredHashSalted = CustodyDB.hashPassword(password, emailLower);
+    const enteredHashLegacy = CustodyDB.hashPassword(password); // unsalted fallback
     const isPlainMatch = storedPassword !== '' && storedPassword === password;
-    const isHashMatch = storedPassword !== '' && storedPassword === enteredHash;
+    const isLegacyHashMatch = storedPassword !== '' && storedPassword === enteredHashLegacy;
+    const isSaltedHashMatch = storedPassword !== '' && storedPassword === enteredHashSalted;
+    const isHashMatch = isSaltedHashMatch || isLegacyHashMatch;
 
     if (storedPassword !== '' && !isPlainMatch && !isHashMatch) {
       setError(isRtl ? 'كلمة المرور غير صحيحة.' : 'Incorrect password.');
       return;
     }
 
-    // Auto migrate legacy plain-text password to hash
-    const needsMigration = storedPassword !== '' && isPlainMatch;
+    // Auto migrate legacy plain-text or legacy unsalted hash to secure salted hash
+    const needsMigration = (storedPassword !== '' && isPlainMatch) || (storedPassword !== '' && isLegacyHashMatch);
     if (needsMigration) {
       const updatedUsers = users.map(u => {
         if (u.id === foundUser.id) {
-          return { ...u, password: enteredHash };
+          return { ...u, password: enteredHashSalted };
         }
         return u;
       });
       CustodyDB.saveUsers(updatedUsers);
-      foundUser.password = enteredHash;
+      foundUser.password = enteredHashSalted;
     }
 
     // Sync with Firebase Authentication
@@ -358,7 +361,7 @@ export default function Login({
         // Save under new Firebase uid
         const updatedUsers = currentUsers.map(u => {
           if (u.id === legacyUser.id) {
-            return { ...u, id: firebaseUser.uid, password: enteredHash };
+            return { ...u, id: firebaseUser.uid, password: enteredHashSalted };
           }
           return u;
         });
@@ -375,7 +378,7 @@ export default function Login({
           if (u.email.toLowerCase().trim() === emailLower) {
             return { 
               ...u, 
-              password: enteredHash, 
+              password: enteredHashSalted, 
               is_active: true,
               security_pin: '1234'
             };
@@ -383,7 +386,7 @@ export default function Login({
           return u;
         });
         CustodyDB.saveUsers(updatedUsers);
-        foundUser.password = enteredHash;
+        foundUser.password = enteredHashSalted;
         foundUser.security_pin = '1234';
       }
 
@@ -433,7 +436,7 @@ export default function Login({
         }
 
         // Save the typed password to the database (removes default password completely)
-        const hashedEntered = CustodyDB.hashPassword(adminLoginEnteredPassword);
+        const hashedEntered = CustodyDB.hashPassword(adminLoginEnteredPassword, adminLoginUser.email);
         const users = CustodyDB.getUsers();
         
         // Sync with Firebase Auth

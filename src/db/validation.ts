@@ -4,7 +4,7 @@ import { CompaniesModule } from './companies';
 import { StationsModule } from './stations';
 import { StorageEngine } from './storage';
 import { db } from '../firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, runTransaction } from 'firebase/firestore';
 
 export class ValidationEngine {
   static validateTransaction(
@@ -184,16 +184,22 @@ export async function reserveInvoiceNumber(stationId: string, invoiceNo: string)
   const lockRef = doc(db, 'unique_invoice_locks', uniqueKey);
   
   try {
-    // محاولة إنشاء المستند بشرط عدم وجوده مسبقاً لمنع التكرار
-    await setDoc(lockRef, {
-      reserved_at: new Date().toISOString(),
-      station_id: stationId,
-      invoice_no: cleanInvoiceNo
+    // محاولة إنشاء المستند ذرياً بشرط عدم وجوده مسبقاً لمنع التكرار والتصادم تحت الضغط العالي
+    const success = await runTransaction(db, async (transaction) => {
+      const docSnapshot = await transaction.get(lockRef);
+      if (docSnapshot.exists()) {
+        return false; // المستند موجود بالفعل، فشل حجز الرقم المكرر
+      }
+      transaction.set(lockRef, {
+        reserved_at: new Date().toISOString(),
+        station_id: stationId,
+        invoice_no: cleanInvoiceNo
+      });
+      return true; // نجح الحجز الحصري
     });
-    return true; // نجح الحجز والتفرد مضمون 100%
+    return success;
   } catch (error) {
-    // إذا كان المستند موجوداً مسبقاً، سيفشل الطلب فورياً لضمان عدم التكرار
-    console.error('Invoice number is already taken:', uniqueKey);
+    console.error('Error reserving invoice number in transaction:', error);
     return false;
   }
 }
