@@ -22,12 +22,12 @@ import { runTenantMigrationUp, runTenantMigrationDown } from "./src/migrations/t
 import { hashPassword } from "./src/lib/hash";
 
 const firebaseConfig = {
-  projectId: "refined-garage-5nzsc",
-  appId: "1:619920731471:web:caa4ea274d68cfff45293a",
-  apiKey: "AIzaSyD_KQ7aA76ZGR-Z9zdhQBIZQIxHw-Hw5Vc",
-  authDomain: "refined-garage-5nzsc.firebaseapp.com",
-  storageBucket: "refined-garage-5nzsc.firebasestorage.app",
-  messagingSenderId: "619920731471"
+  projectId: "custodyflow",
+  appId: "1:88602135716:web:b77559202f5e9f233d6a31",
+  apiKey: "AIzaSyA2I_2GIEfQhawBL2KhXyxD6CwTLJR-jFw",
+  authDomain: "custodyflow.firebaseapp.com",
+  storageBucket: "custodyflow.firebasestorage.app",
+  messagingSenderId: "88602135716"
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
