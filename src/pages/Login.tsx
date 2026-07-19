@@ -325,7 +325,12 @@ export default function Login({
     const isSaltedHashMatch = storedPassword !== '' && storedPassword === enteredHashSalted;
     const isHashMatch = isSaltedHashMatch || isLegacyHashMatch;
 
-    if (storedPassword !== '' && !isPlainMatch && !isHashMatch) {
+    if (storedPassword === '') {
+      if (!isPlatformAdmin) {
+        setError(isRtl ? 'لم يتم تعيين كلمة مرور لهذا الحساب بعد. يرجى التواصل مع المسؤول لتفعيل حسابك.' : 'No password has been set for this account yet. Please contact the administrator.');
+        return;
+      }
+    } else if (!isPlainMatch && !isHashMatch) {
       setError(isRtl ? 'كلمة المرور غير صحيحة.' : 'Incorrect password.');
       return;
     }
