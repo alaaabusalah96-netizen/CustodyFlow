@@ -175,10 +175,7 @@ export default function Settings({ language, theme }: SettingsProps) {
     }
 
     const usersList = CustodyDB.getUsers();
-    const adminUser = usersList.find(u => u.role === 'SystemAdmin' && (
-      u.email.toLowerCase().trim() === 'alaaabusalah96@gmail.com' ||
-      u.email.toLowerCase().trim() === 'alaabusalah96@gmail.com'
-    ));
+    const adminUser = usersList.find(u => u.role === 'SystemAdmin' && CustodyDB.isPlatformOwner(u.email));
 
     if (!adminUser) {
       setAdminSecurityError(isRtl ? '❌ لم يتم العثور على حساب أدمن المنصة في قاعدة البيانات!' : '❌ Platform Admin account not found.');
@@ -237,10 +234,7 @@ export default function Settings({ language, theme }: SettingsProps) {
 
     const usersList = CustodyDB.getUsers();
     const updated = usersList.map(u => {
-      const isPlatformAdmin = u.email && (
-        u.email.toLowerCase().trim() === 'alaaabusalah96@gmail.com' ||
-        u.email.toLowerCase().trim() === 'alaabusalah96@gmail.com'
-      );
+      const isPlatformAdmin = u.email && CustodyDB.isPlatformOwner(u.email);
       if (isPlatformAdmin) {
         return { ...u, password: newAdminPassword };
       }

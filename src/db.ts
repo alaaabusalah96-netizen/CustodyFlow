@@ -43,18 +43,22 @@ import {
 
 import { LogsModule } from './db/logs';
 import { UsersModule } from './db/users';
-import { hashPassword } from './lib/hash';
+import { hashPassword, legacyHashPassword } from './lib/hash';
 import { CompaniesModule } from './db/companies';
 import { StationsModule } from './db/stations';
 import { NotificationsModule } from './db/notifications';
 import { TransactionsModule } from './db/transactions';
 import { ModulesModule, ERP_MODULES_REGISTRY, CompanyModuleSettings } from './db/modules';
 
-export { hashPassword, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings };
+export { hashPassword, legacyHashPassword, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings };
 
 export class CustodyDB {
   static hashPassword(password: string, salt: string = ''): string {
     return hashPassword(password, salt);
+  }
+
+  static legacyHashPassword(password: string, salt: string = ''): string {
+    return legacyHashPassword(password, salt);
   }
 
   static initializeFirebase(): void {
@@ -136,6 +140,10 @@ export class CustodyDB {
   }
 
   // Users
+  static isPlatformOwner(email?: string): boolean {
+    return UsersModule.isPlatformOwner(email);
+  }
+
   static getUsers(): AppUser[] {
     return UsersModule.getUsers();
   }
@@ -336,12 +344,12 @@ export class CustodyDB {
     TransactionsModule.saveTransactions(transactions);
   }
 
-  static addTransaction(data: Omit<Transaction, 'id' | 'transaction_no' | 'status' | 'created_at' | 'updated_at' | 'created_by'> & { status?: TransactionStatus }): Transaction {
+  static addTransaction(data: Omit<Transaction, 'id' | 'transaction_no' | 'status' | 'created_at' | 'updated_at' | 'created_by'> & { status?: TransactionStatus }): { success: boolean; errors?: string[]; data?: Transaction } {
     return TransactionsModule.addTransaction(data);
   }
 
-  static updateTransaction(id: string, updates: Partial<Transaction>): void {
-    TransactionsModule.updateTransaction(id, updates);
+  static updateTransaction(id: string, updates: Partial<Transaction>): { success: boolean; errors?: string[] } {
+    return TransactionsModule.updateTransaction(id, updates);
   }
 
   static deleteTransaction(id: string, reason: string): Promise<boolean> {

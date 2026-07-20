@@ -49,6 +49,7 @@ export interface AppUser {
   region_id?: string;
   company_id?: string;
   is_active?: boolean;
+  is_platform_owner?: boolean;
   password?: string;
   security_pin?: string;
   impersonator?: AppUser;

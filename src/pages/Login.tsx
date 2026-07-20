@@ -100,7 +100,7 @@ export default function Login({
     setSuccess('');
 
     const targetEmail = resetEmail.toLowerCase().trim();
-    const isPlatformAdmin = targetEmail === 'alaaabusalah96@gmail.com' || targetEmail === 'alaabusalah96@gmail.com';
+    const isPlatformAdmin = CustodyDB.isPlatformOwner(targetEmail);
 
     if (!isPlatformAdmin) {
       setError(isRtl 
@@ -212,10 +212,7 @@ export default function Login({
         // Update password in local CustodyDB for local cache sync
         const users = CustodyDB.getUsers();
         const updatedUsers = users.map(u => {
-          const isPlatformAdmin = u.email && (
-            u.email.toLowerCase().trim() === 'alaaabusalah96@gmail.com' || 
-            u.email.toLowerCase().trim() === 'alaabusalah96@gmail.com'
-          );
+          const isPlatformAdmin = u.email && CustodyDB.isPlatformOwner(u.email);
           if (isPlatformAdmin) {
             return { ...u, password: CustodyDB.hashPassword(newPassword, u.email) };
           }
@@ -296,7 +293,10 @@ export default function Login({
 
     const emailLower = email.toLowerCase().trim();
 
-    // Proactively fetch user from Firestore to ensure local cache is fully hydrated & up to date
+    // Sync with Firebase Authentication first (Chicken-and-Egg solution)
+    const firebaseUser = password ? await syncWithFirebaseAuth(emailLower, password) : null;
+
+    // Now, after authentication, fetch user from Firestore securely
     try {
       const remoteUser = await CustodyDB.fetchUserByEmail(emailLower);
       if (remoteUser) {
@@ -314,16 +314,19 @@ export default function Login({
       return;
     }
 
-    const isPlatformAdmin = emailLower === 'alaaabusalah96@gmail.com' || emailLower === 'alaabusalah96@gmail.com';
+    const isPlatformAdmin = CustodyDB.isPlatformOwner(emailLower);
 
     // Verify Password (Plain Text, Legacy Hash, or Salted Hash) - Fallback "123456" removed for security
     const storedPassword = foundUser.password || '';
     const enteredHashSalted = CustodyDB.hashPassword(password, emailLower);
-    const enteredHashLegacy = CustodyDB.hashPassword(password); // unsalted fallback
+    const enteredHashOldSalted = CustodyDB.legacyHashPassword(password, emailLower); // old email-only salt
+    const enteredHashLegacy = CustodyDB.legacyHashPassword(password); // old unsalted fallback
+    
     const isPlainMatch = storedPassword !== '' && storedPassword === password;
     const isLegacyHashMatch = storedPassword !== '' && storedPassword === enteredHashLegacy;
+    const isOldSaltedMatch = storedPassword !== '' && storedPassword === enteredHashOldSalted;
     const isSaltedHashMatch = storedPassword !== '' && storedPassword === enteredHashSalted;
-    const isHashMatch = isSaltedHashMatch || isLegacyHashMatch;
+    const isHashMatch = isSaltedHashMatch || isOldSaltedMatch || isLegacyHashMatch;
 
     if (storedPassword === '') {
       if (!isPlatformAdmin) {
@@ -335,8 +338,10 @@ export default function Login({
       return;
     }
 
-    // Auto migrate legacy plain-text or legacy unsalted hash to secure salted hash
-    const needsMigration = (storedPassword !== '' && isPlainMatch) || (storedPassword !== '' && isLegacyHashMatch);
+    // Auto migrate legacy plain-text, old salted, or unsalted hash to secure salted-and-peppered hash
+    const needsMigration = (storedPassword !== '' && isPlainMatch) || 
+                          (storedPassword !== '' && isLegacyHashMatch) ||
+                          (storedPassword !== '' && isOldSaltedMatch);
     if (needsMigration) {
       const updatedUsers = users.map(u => {
         if (u.id === foundUser.id) {
@@ -347,9 +352,6 @@ export default function Login({
       CustodyDB.saveUsers(updatedUsers);
       foundUser.password = enteredHashSalted;
     }
-
-    // Sync with Firebase Authentication
-    const firebaseUser = await syncWithFirebaseAuth(emailLower, password);
 
     // Migrate user document ID to Firebase Auth UID to enforce multi-tenancy rules
     if (firebaseUser) {
@@ -498,7 +500,7 @@ export default function Login({
       return;
     }
 
-    const isPlatformAdmin = email.toLowerCase().trim() === 'alaaabusalah96@gmail.com' || email.toLowerCase().trim() === 'alaabusalah96@gmail.com';
+    const isPlatformAdmin = CustodyDB.isPlatformOwner(email);
 
     if (!isPlatformAdmin && !selectedCompanyId) {
       setError(isRtl ? 'يرجى اختيار الشركة التابع لها.' : 'Please select your company.');
@@ -997,8 +999,8 @@ export default function Login({
                 />
               </div>
 
-              {/* Conditionally hide company and role for alaaabusalah96@gmail.com which is the system owner */}
-              {!(email.toLowerCase().trim() === 'alaaabusalah96@gmail.com' || email.toLowerCase().trim() === 'alaabusalah96@gmail.com') && (
+              {/* Conditionally hide company and role for system owner */}
+              {!CustodyDB.isPlatformOwner(email) && (
                 <>
                   {/* Company selection */}
                   <div>

@@ -1,12 +1,11 @@
-export function hashPassword(password: string, salt: string = ''): string {
-  if (!password) return '';
-  const saltedPassword = salt ? `${password}:${salt.toLowerCase().trim()}` : password;
-  
+const SYSTEM_PEPPER = "CustodyFlowSecureSystemPepper2026!";
+
+function runSHA256(text: string): string {
   function rotateRight(n: number, x: number) {
     return (x >>> n) | (x << (32 - n));
   }
   const words: number[] = [];
-  const asciiBitLength = saltedPassword.length * 8;
+  const asciiBitLength = text.length * 8;
   
   let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
   let h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
@@ -24,8 +23,8 @@ export function hashPassword(password: string, salt: string = ''): string {
 
   const wordsCount = ((asciiBitLength + 64 >> 9) << 4) + 16;
   for (let i = 0; i < wordsCount; i++) words[i] = 0;
-  for (let i = 0; i < saltedPassword.length; i++) {
-    words[i >> 2] |= (saltedPassword.charCodeAt(i) & 0xff) << (24 - (i % 4) * 8);
+  for (let i = 0; i < text.length; i++) {
+    words[i >> 2] |= (text.charCodeAt(i) & 0xff) << (24 - (i % 4) * 8);
   }
   words[asciiBitLength >> 5] |= 0x80 << (24 - (asciiBitLength % 32));
   words[wordsCount - 1] = asciiBitLength;
@@ -71,4 +70,26 @@ export function hashPassword(password: string, salt: string = ''): string {
     result.push(('00000000' + hex).slice(-8));
   }
   return result.join('');
+}
+
+/**
+ * Hash a password using a combination of a user-specific salt (e.g. email) 
+ * and a robust system pepper. Prevents dictionary and rainbow table attacks.
+ */
+export function hashPassword(password: string, salt: string = ''): string {
+  if (!password) return '';
+  const combinedSalt = salt 
+    ? `${salt.toLowerCase().trim()}_${SYSTEM_PEPPER}` 
+    : SYSTEM_PEPPER;
+  const saltedPassword = `${password}:${combinedSalt}`;
+  return runSHA256(saltedPassword);
+}
+
+/**
+ * Legacy hash function for backward-compatibility checks and password migration.
+ */
+export function legacyHashPassword(password: string, salt: string = ''): string {
+  if (!password) return '';
+  const saltedPassword = salt ? `${password}:${salt.toLowerCase().trim()}` : password;
+  return runSHA256(saltedPassword);
 }

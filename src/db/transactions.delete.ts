@@ -35,6 +35,16 @@ export class TransactionsDeleteModule {
     const tx = transactions.find(t => t.id === id);
     if (!tx) return false;
 
+    if (tx.status === 'Settled') {
+      LogsModule.addLog(
+        user?.id || 'unknown',
+        user?.full_name || 'Anonymous',
+        'Delete Rejected',
+        `Attempted to delete settled transaction ${tx.transaction_no}. Blocked for security.`
+      );
+      return false;
+    }
+
     // Permissions check
     let isAuthorized = false;
     if (user.role === 'Admin' || user.role === 'SystemAdmin') {
@@ -221,7 +231,7 @@ export class TransactionsDeleteModule {
       const batch = writeBatch(db);
 
       // Rollback custody if Settled
-      if (tx.status === 'Settled') {
+      if ((tx.status as any) === 'Settled') {
         const amount = tx.amount;
         const stationId = tx.station_id;
         if (stationId) {

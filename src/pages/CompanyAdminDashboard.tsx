@@ -5,7 +5,7 @@ import {
   Building2, ShieldCheck, KeyRound, UserCheck, RefreshCw, AlertTriangle, 
   Plus, Calendar, Sparkles, User, LogOut, ClipboardList, Info, Check, Search, ShieldAlert,
   Globe, Laptop, FileText, CheckCircle2, XCircle, Network, X, Settings, Trash2, Edit,
-  PlusCircle, Building, Layers, Power, Activity, RotateCcw
+  PlusCircle, Building, Layers, Power, Activity, RotateCcw, Lock
 } from 'lucide-react';
 
 interface CompanyAdminDashboardProps {
@@ -877,7 +877,11 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
       }
     }
 
-    CustodyDB.updateTransaction(editingOp.id, updates);
+    const res = CustodyDB.updateTransaction(editingOp.id, updates);
+    if (!res.success) {
+      alert(res.errors?.join(' \n ') || 'Failed to update transaction');
+      return;
+    }
     
     CustodyDB.addLog(
       activeUser.id,
@@ -1489,7 +1493,12 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
                           <div className="font-semibold">{op.created_by}</div>
                         </td>
                         <td className="p-3 text-center whitespace-nowrap">
-                          {op.status !== 'Deleted' ? (
+                          {op.status === 'Settled' ? (
+                            <span className="text-xs text-slate-400 font-medium flex items-center justify-center gap-1 bg-slate-100 dark:bg-slate-800/40 px-2 py-1 rounded-md w-max mx-auto">
+                              <Lock size={12} className="text-slate-400 shrink-0" />
+                              <span>{isRtl ? 'حركة مغلقة' : 'Locked'}</span>
+                            </span>
+                          ) : op.status !== 'Deleted' ? (
                             <div className="flex items-center justify-center gap-2">
                               <button
                                 onClick={() => {

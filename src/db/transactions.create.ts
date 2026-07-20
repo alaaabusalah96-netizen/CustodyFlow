@@ -9,74 +9,82 @@ import { ValidationEngine } from './validation';
 import { DEFAULT_TRANSACTIONS } from './defaults';
 
 export class TransactionsCreateModule {
-  static addTransaction(data: Omit<Transaction, 'id' | 'transaction_no' | 'status' | 'created_at' | 'updated_at' | 'created_by'> & { status?: TransactionStatus }): Transaction {
-    const transactions = StorageEngine.getStored<Transaction[]>('transactions', DEFAULT_TRANSACTIONS);
-    const user = UsersModule.getActiveUser();
-    const station_id = data.station_id || user?.station_id || 'stn-1-1-1';
-    const company_id = user?.company_id || CompaniesModule.getSelectedCompanyId();
-    const status = data.status || 'Pending';
+  static addTransaction(data: Omit<Transaction, 'id' | 'transaction_no' | 'status' | 'created_at' | 'updated_at' | 'created_by'> & { status?: TransactionStatus }): { success: boolean; errors?: string[]; data?: Transaction } {
+    try {
+      const transactions = StorageEngine.getStored<Transaction[]>('transactions', DEFAULT_TRANSACTIONS);
+      const user = UsersModule.getActiveUser();
+      const station_id = data.station_id || user?.station_id;
+      const company_id = user?.company_id || CompaniesModule.getSelectedCompanyId();
+      const status = data.status || 'Pending';
+      const category_id = data.category_id || 'cat-6';
 
-    // FIX: Validate BEFORE assigning an id. Passing an object that already
-    // has an id makes ValidationEngine treat this as an UPDATE (checks
-    // edit_expense) instead of a CREATE (checks create_expense), which
-    // incorrectly blocked create-only users. This payload intentionally
-    // has no `id` field so validation resolves to "create" mode.
-    const validationPayload: Partial<Transaction> = {
-      ...data,
-      status,
-      station_id,
-      company_id
-    };
-    const validation = ValidationEngine.validateTransaction(validationPayload, user);
-    if (!validation.isValid) {
-      throw new Error(validation.errors.join(' \n '));
+      // FIX: Validate BEFORE assigning an id. Passing an object that already
+      // has an id makes ValidationEngine treat this as an UPDATE (checks
+      // edit_expense) instead of a CREATE (checks create_expense), which
+      // incorrectly blocked create-only users. This payload intentionally
+      // has no `id` field so validation resolves to "create" mode.
+      const validationPayload: Partial<Transaction> = {
+        ...data,
+        category_id,
+        status,
+        station_id,
+        company_id
+      };
+      const validation = ValidationEngine.validateTransaction(validationPayload, user);
+      if (!validation.isValid) {
+        return { success: false, errors: validation.errors };
+      }
+
+      // FIX: append a random suffix to avoid duplicate ids when multiple
+      // transactions are created within the same millisecond under load
+      // (same pattern already used in transactions.delete.ts / restore.ts).
+      const newTx: Transaction = {
+        ...data,
+        category_id,
+        id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        transaction_no: '',
+        status,
+        created_by: user?.id || 'unknown',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        station_id,
+        company_id
+      };
+
+      transactions.push(newTx);
+      StorageEngine.setStored('transactions', transactions);
+
+      dbSetDoc('transactions', newTx.id, newTx);
+
+      TransactionsHistoryModule.addTransactionHistory({
+        id: `txh-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        transaction_id: newTx.id,
+        action: 'Created',
+        performed_by: user?.id || 'unknown',
+        performed_by_name: user?.full_name || 'Anonymous',
+        timestamp: newTx.created_at,
+        new_status: newTx.status,
+        notes: newTx.notes || `Registered ${newTx.status} expense`
+      });
+
+      LogsModule.addLog(
+        user?.id || 'unknown',
+        user?.full_name || 'Anonymous',
+        'Create Transaction',
+        `Registered ${newTx.status} expense for ${newTx.amount.toLocaleString()} EGP - "${newTx.description}"`
+      );
+
+      // Enhanced Audit with metadata
+      LogsModule.logAudit(
+        'CREATE_TRANSACTION',
+        `Registered ${newTx.status} expense for ${newTx.amount.toLocaleString()} EGP - "${newTx.description}"`,
+        { after: newTx }
+      );
+
+      return { success: true, data: newTx };
+    } catch (err: any) {
+      console.error('Error creating transaction:', err);
+      return { success: false, errors: [err.message || 'Unknown error occurred'] };
     }
-
-    // FIX: append a random suffix to avoid duplicate ids when multiple
-    // transactions are created within the same millisecond under load
-    // (same pattern already used in transactions.delete.ts / restore.ts).
-    const newTx: Transaction = {
-      ...data,
-      id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      transaction_no: '',
-      status,
-      created_by: user?.id || 'unknown',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      station_id,
-      company_id
-    };
-
-    transactions.push(newTx);
-    StorageEngine.setStored('transactions', transactions);
-
-    dbSetDoc('transactions', newTx.id, newTx);
-
-    TransactionsHistoryModule.addTransactionHistory({
-      id: `txh-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      transaction_id: newTx.id,
-      action: 'Created',
-      performed_by: user?.id || 'unknown',
-      performed_by_name: user?.full_name || 'Anonymous',
-      timestamp: newTx.created_at,
-      new_status: newTx.status,
-      notes: newTx.notes || `Registered ${newTx.status} expense`
-    });
-
-    LogsModule.addLog(
-      user?.id || 'unknown',
-      user?.full_name || 'Anonymous',
-      'Create Transaction',
-      `Registered ${newTx.status} expense for ${newTx.amount.toLocaleString()} EGP - "${newTx.description}"`
-    );
-
-    // Enhanced Audit with metadata
-    LogsModule.logAudit(
-      'CREATE_TRANSACTION',
-      `Registered ${newTx.status} expense for ${newTx.amount.toLocaleString()} EGP - "${newTx.description}"`,
-      { after: newTx }
-    );
-
-    return newTx;
   }
 }

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB } from '../db';
-import { translations, Language, Theme, Transaction, Attachment } from '../types';
+import { translations, Language, Theme, Transaction, Attachment, ExpenseCategory } from '../types';
 import { getArabicTafqeet, getEnglishTafqeet } from '../utils/tafqeet';
 import { 
   PlusCircle, Calendar, FileText, DollarSign, FilePlus2, 
   CheckCircle2, Plus, Trash2, Coins, Paperclip, UploadCloud, 
-  FileIcon, X, HelpCircle, ArrowLeft, PenSquare, Save, ChevronRight
+  FileIcon, X, HelpCircle, ArrowLeft, PenSquare, Save, ChevronRight, Tag
 } from 'lucide-react';
 
 interface NewExpenseProps {
@@ -32,8 +32,18 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
   const t = translations[language];
   const isRtl = language === 'ar';
 
+  const activeUser = CustodyDB.getActiveUser();
+  const scopedStations = CustodyDB.getScopedStations();
+
   // Form states
+  const [stationId, setStationId] = useState<string>(() => {
+    if (activeUser?.station_id) return activeUser.station_id;
+    if (scopedStations.length > 0) return scopedStations[0].id;
+    return '';
+  });
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [categories] = useState<ExpenseCategory[]>(() => CustodyDB.getCategories());
+  const [categoryId, setCategoryId] = useState<string>('cat-6');
   const [items, setItems] = useState<ItemInput[]>([{ description: '', amount: '', sign: '+' }]);
   const [notes, setNotes] = useState<string>('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -98,6 +108,14 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     let hasErrors = false;
+
+    // Station validation
+    if (!stationId) {
+      newErrors['station_id'] = isRtl 
+        ? '⚠️ يجب اختيار الفرع/المحطة أولاً ولا يمكن إضافة حركة بدون فرع.' 
+        : '⚠️ A station must be selected. Creating transaction without a station is not allowed.';
+      hasErrors = true;
+    }
 
     // Date validation
     if (!date) {
@@ -261,10 +279,12 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
     
     if (editingTxId) {
       // Update existing transaction
-      CustodyDB.updateTransaction(editingTxId, {
+      const res = CustodyDB.updateTransaction(editingTxId, {
         date,
+        station_id: stationId,
         description: combinedDescription,
         amount: totalAmount,
+        category_id: categoryId,
         items: parsedItems,
         amount_in_words: {
           ar: getArabicTafqeet(totalAmount),
@@ -274,16 +294,23 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
         status: targetStatus,
         attachments: attachments
       });
+      
+      if (!res.success) {
+        setErrors({ submit: res.errors?.join(' \n ') || 'Failed to update transaction' });
+        return;
+      }
       
       setCreatedTxNo(editingTxNo || 'TX-Updated');
       setEditingTxId(null);
       setEditingTxNo('');
     } else {
       // Add transaction via CustodyDB manager
-      const newTx = CustodyDB.addTransaction({
+      const res = CustodyDB.addTransaction({
         date,
+        station_id: stationId,
         description: combinedDescription,
         amount: totalAmount,
+        category_id: categoryId,
         items: parsedItems,
         amount_in_words: {
           ar: getArabicTafqeet(totalAmount),
@@ -294,13 +321,21 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
         attachments: attachments
       });
       
-      setCreatedTxNo(newTx.transaction_no);
+      if (!res.success) {
+        setErrors({ submit: res.errors?.join(' \n ') || 'Failed to create transaction' });
+        return;
+      }
+      
+      setCreatedTxNo(res.data?.transaction_no || 'TX-Created');
     }
 
     // Reset Form
     setItems([{ description: '', amount: '', sign: '+' }]);
     setNotes('');
     setAttachments([]);
+    if (!(activeUser?.role === 'StationAdmin' && activeUser?.station_id)) {
+      setStationId(activeUser?.station_id || (scopedStations.length > 0 ? scopedStations[0].id : ''));
+    }
     setSuccessStatus(targetStatus);
     setShowToast(true);
 
@@ -320,7 +355,9 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
   const handleEditDraft = (tx: Transaction) => {
     setEditingTxId(tx.id);
     setEditingTxNo(tx.transaction_no);
+    setStationId(tx.station_id || '');
     setDate(tx.date);
+    setCategoryId(tx.category_id || 'cat-6');
     setNotes(tx.notes || '');
     if (tx.items && tx.items.length > 0) {
       setItems(tx.items.map(it => ({
@@ -362,6 +399,7 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
     setEditingTxId(null);
     setEditingTxNo('');
     setDate(new Date().toISOString().split('T')[0]);
+    setCategoryId('cat-6');
     setItems([{ description: '', amount: '', sign: '+' }]);
     setNotes('');
     setAttachments([]);
@@ -447,31 +485,91 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
             theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
           }`}>
             <form className="space-y-5">
-              {/* Date Input */}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <Calendar size={14} className="text-slate-400" />
-                  <span>{t.date} *</span>
-                </label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => {
-                    setDate(e.target.value);
-                    if (errors['date']) {
-                      const newErrors = { ...errors };
-                      delete newErrors['date'];
-                      setErrors(newErrors);
-                    }
-                  }}
-                  className={`w-full px-4 py-2.5 rounded-xl border text-sm font-semibold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors ${
-                    theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
-                  } ${errors['date'] ? 'border-rose-500 ring-1 ring-rose-500/10' : ''}`}
-                  required
-                />
-                {errors['date'] && (
-                  <span className="text-rose-500 text-[10px] mt-1 block font-bold">{errors['date']}</span>
-                )}
+              <div className="grid gap-4 sm:grid-cols-3">
+                {/* Station Selection */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <Coins size={14} className="text-slate-400" />
+                    <span>{isRtl ? 'الفرع / المحطة *' : 'Station / Branch *'}</span>
+                  </label>
+                  <select
+                    value={stationId}
+                    disabled={activeUser?.role === 'StationAdmin' && !!activeUser?.station_id}
+                    onChange={(e) => {
+                      setStationId(e.target.value);
+                      if (errors['station_id']) {
+                        const newErrors = { ...errors };
+                        delete newErrors['station_id'];
+                        setErrors(newErrors);
+                      }
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl border text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+                    } ${errors['station_id'] ? 'border-rose-500 ring-1 ring-rose-500/10' : ''} ${
+                      activeUser?.role === 'StationAdmin' && !!activeUser?.station_id ? 'opacity-70 cursor-not-allowed' : ''
+                    }`}
+                    required
+                  >
+                    <option value="">{isRtl ? '-- اختر الفرع --' : '-- Select Station --'}</option>
+                    {scopedStations.map(st => (
+                      <option key={st.id} value={st.id}>
+                        {st.station_name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors['station_id'] && (
+                    <span className="text-rose-500 text-[10px] mt-1 block font-bold">{errors['station_id']}</span>
+                  )}
+                </div>
+
+                {/* Date Input */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <Calendar size={14} className="text-slate-400" />
+                    <span>{t.date} *</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => {
+                      setDate(e.target.value);
+                      if (errors['date']) {
+                        const newErrors = { ...errors };
+                        delete newErrors['date'];
+                        setErrors(newErrors);
+                      }
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl border text-sm font-semibold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+                    } ${errors['date'] ? 'border-rose-500 ring-1 ring-rose-500/10' : ''}`}
+                    required
+                  />
+                  {errors['date'] && (
+                    <span className="text-rose-500 text-[10px] mt-1 block font-bold">{errors['date']}</span>
+                  )}
+                </div>
+
+                {/* Category Input */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <Tag size={14} className="text-slate-400" />
+                    <span>{isRtl ? 'تصنيف المصروف *' : 'Expense Category *'}</span>
+                  </label>
+                  <select
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                    className={`w-full px-4 py-2.5 rounded-xl border text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+                    }`}
+                    required
+                  >
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>
+                        {isRtl ? cat.name_ar : cat.name_en}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Items Section */}
@@ -746,6 +844,13 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
                   }`}
                 />
               </div>
+
+              {/* Validation/Submission Error Alert */}
+              {errors.submit && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 text-xs font-semibold dark:bg-rose-950/20 dark:border-rose-900/30 dark:text-rose-400 whitespace-pre-line">
+                  {errors.submit}
+                </div>
+              )}
 
               {/* Dynamic Action Buttons for Draft & Submit */}
               <div className="grid gap-3 sm:grid-cols-2 pt-3 border-t border-slate-100 dark:border-slate-800/80">

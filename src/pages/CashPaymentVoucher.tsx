@@ -575,12 +575,15 @@ export default function CashPaymentVoucher({
 
     // Update status of all bundled expenses in database to Under Settlement
     selectedTxIds.forEach(id => {
-      CustodyDB.updateTransaction(id, {
+      const res = CustodyDB.updateTransaction(id, {
         status: 'Under Settlement',
         voucher_no: finalVoucherNo,
         voucher_date: voucherDate,
         transaction_no: finalVoucherNo // Make transaction number match voucher number
       });
+      if (!res.success) {
+        console.error('Error settling item', id, res.errors);
+      }
     });
 
     // Save workflow history & logs
@@ -634,11 +637,14 @@ export default function CashPaymentVoucher({
 
     // Reset status of all bundled expenses back to Pending
     vc.expense_ids.forEach(txId => {
-      CustodyDB.updateTransaction(txId, {
+       const res = CustodyDB.updateTransaction(txId, {
         status: 'Pending',
         voucher_no: undefined,
         voucher_date: undefined
       });
+      if (!res.success) {
+        console.error('Error resetting item', txId, res.errors);
+      }
     });
 
     // Delete voucher
@@ -692,10 +698,13 @@ export default function CashPaymentVoucher({
     // Update bundled expenses' metadata
     if (editingVoucher.expense_ids && editingVoucher.expense_ids.length > 0) {
       editingVoucher.expense_ids.forEach(txId => {
-        CustodyDB.updateTransaction(txId, {
+        const res = CustodyDB.updateTransaction(txId, {
           voucher_no: editVoucherNo.trim(),
           voucher_date: editVoucherDate
         });
+        if (!res.success) {
+          console.error('Error updating item metadata', txId, res.errors);
+        }
       });
     }
 

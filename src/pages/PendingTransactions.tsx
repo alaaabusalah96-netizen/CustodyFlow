@@ -236,11 +236,16 @@ export default function PendingTransactions({
       return;
     }
 
-    CustodyDB.updateTransaction(editingTx.id, {
+    const res = CustodyDB.updateTransaction(editingTx.id, {
       description: editDesc,
       amount: amountNum,
       notes: editNotes || undefined
     });
+
+    if (!res.success) {
+      alert(res.errors?.join(' \n ') || 'Failed to update transaction');
+      return;
+    }
 
     showToast(t.successUpdated);
     setEditingTx(null);
@@ -278,11 +283,16 @@ export default function PendingTransactions({
       return;
     }
 
-    CustodyDB.updateTransaction(settlingTx.id, {
+    const res = CustodyDB.updateTransaction(settlingTx.id, {
       status: 'Under Settlement',
       voucher_no: voucherNo.trim(),
       voucher_date: voucherDate
     });
+
+    if (!res.success) {
+      setSettleError(res.errors?.join(' \n ') || 'Failed to settle transaction');
+      return;
+    }
 
     showToast(t.successSettled);
     setSettlingTx(null);
@@ -308,13 +318,26 @@ export default function PendingTransactions({
     }
 
     // Update each selected transaction
+    let bulkSuccess = true;
+    const bulkErrors: string[] = [];
     validIds.forEach(id => {
-      CustodyDB.updateTransaction(id, {
+      const res = CustodyDB.updateTransaction(id, {
         status: 'Under Settlement',
         voucher_no: bulkVoucherNo.trim(),
         voucher_date: bulkVoucherDate
       });
+      if (!res.success) {
+        bulkSuccess = false;
+        if (res.errors) {
+          bulkErrors.push(...res.errors);
+        }
+      }
     });
+
+    if (!bulkSuccess) {
+      alert((isRtl ? 'فشل تسوية بعض الحركات:\n' : 'Failed to settle some transactions:\n') + bulkErrors.join('\n'));
+      return;
+    }
 
     showToast(`${l.bulkSettleSuccess} "${bulkVoucherNo.trim()}"`);
     setIsBulkSettleOpen(false);

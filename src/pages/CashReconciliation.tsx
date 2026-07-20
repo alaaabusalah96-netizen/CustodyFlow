@@ -222,10 +222,14 @@ export default function CashReconciliation({
       ? allTransactions.filter(t => t.voucher_no === vNo)
       : [tx];
 
-    relatedTxs.forEach(t => {
-      CustodyDB.updateTransaction(t.id, {
+    for (const t of relatedTxs) {
+      const res = CustodyDB.updateTransaction(t.id, {
         status: 'Pending'
       });
+      if (!res.success) {
+        alert(res.errors?.join(' \n ') || 'Failed to revert transaction');
+        return;
+      }
       
       // Save specific workflow history for each transaction
       CustodyDB.addTransactionHistory({
@@ -239,7 +243,7 @@ export default function CashReconciliation({
         new_status: 'Pending',
         notes: finalComments
       });
-    });
+    }
 
     if (vNo) {
       const vouchers = CustodyDB.getCashVouchers();
@@ -295,9 +299,13 @@ export default function CashReconciliation({
       return;
     }
 
-    CustodyDB.updateTransaction(tx.id, {
+    const res = CustodyDB.updateTransaction(tx.id, {
       status: 'Settled'
     });
+    if (!res.success) {
+      alert(res.errors?.join(' \n ') || 'Failed to approve transaction');
+      return;
+    }
 
     const vNo = tx.voucher_no;
     if (vNo) {
@@ -338,9 +346,13 @@ export default function CashReconciliation({
 
     const finalComments = rejectReason.trim() || (isRtl ? 'تم رفض مستند الصرف وتحديث الحالة إلى مرفوض.' : 'Voucher successfully rejected.');
 
-    CustodyDB.updateTransaction(tx.id, {
+    const res = CustodyDB.updateTransaction(tx.id, {
       status: 'Rejected'
     });
+    if (!res.success) {
+      alert(res.errors?.join(' \n ') || 'Failed to reject transaction');
+      return;
+    }
 
     const vNo = tx.voucher_no;
     if (vNo) {
@@ -393,10 +405,14 @@ export default function CashReconciliation({
       ? allTransactions.filter(t => t.voucher_no === vNo)
       : [tx];
 
-    relatedTxs.forEach(t => {
-      CustodyDB.updateTransaction(t.id, {
+    for (const t of relatedTxs) {
+      const res = CustodyDB.updateTransaction(t.id, {
         status: 'Settled'
       });
+      if (!res.success) {
+        alert(res.errors?.join(' \n ') || 'Failed to approve transaction');
+        return;
+      }
       
       // Save specific workflow history for each transaction
       CustodyDB.addTransactionHistory({
@@ -410,7 +426,7 @@ export default function CashReconciliation({
         new_status: 'Settled',
         notes: comments || (isRtl ? 'تم الاعتماد والتسوية النهائية من مدير المنطقة' : 'Approved and settled by Regional Manager')
       });
-    });
+    }
 
     if (vNo) {
       const vouchers = CustodyDB.getCashVouchers();
@@ -451,10 +467,14 @@ export default function CashReconciliation({
       ? allTransactions.filter(t => t.voucher_no === vNo)
       : [tx];
 
-    relatedTxs.forEach(t => {
-      CustodyDB.updateTransaction(t.id, {
+    for (const t of relatedTxs) {
+      const res = CustodyDB.updateTransaction(t.id, {
         status: 'Rejected'
       });
+      if (!res.success) {
+        alert(res.errors?.join(' \n ') || 'Failed to reject transaction');
+        return;
+      }
       
       CustodyDB.addTransactionHistory({
         id: `hist-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -467,7 +487,7 @@ export default function CashReconciliation({
         new_status: 'Rejected',
         notes: finalComments
       });
-    });
+    }
 
     if (vNo) {
       const vouchers = CustodyDB.getCashVouchers();
@@ -505,11 +525,15 @@ export default function CashReconciliation({
       // Inline update to "Under Settlement" with quick temporary voucher info
       const tempVoucherNo = 'TEMP-' + Math.floor(1000 + Math.random() * 9000);
       const tempDate = new Date().toISOString().split('T')[0];
-      CustodyDB.updateTransaction(tx.id, {
+      const res = CustodyDB.updateTransaction(tx.id, {
         status: 'Under Settlement',
         voucher_no: tempVoucherNo,
         voucher_date: tempDate
       });
+      if (!res.success) {
+        alert(res.errors?.join(' \n ') || 'Failed to settle transaction');
+        return;
+      }
       showToast(isRtl ? 'تم عمل تسوية سريعة للمستند بنجاح.' : 'Quick voucher generated successfully.');
       refreshData();
     }
@@ -540,7 +564,7 @@ export default function CashReconciliation({
   const custodyBase = metrics.custodyValue;
   const originalCustodyBase = metrics.originalCustodyValue ?? custodyBase;
   const settledTotal = metrics.settledTotal || 0;
-  const netCashAvailable = originalCustodyBase - totalUnderSettlement - totalPending - settledTotal;
+  const netCashAvailable = metrics.cashAvailable;
 
   const handlePageReplenishSubmit = (e: React.FormEvent) => {
     e.preventDefault();

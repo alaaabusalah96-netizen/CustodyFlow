@@ -879,12 +879,15 @@ export class InventoryModule {
   /**
    * Deletes a Draft document
    */
-  static deleteInventoryDocument(docId: string): void {
-    const documents = InventoryModule.getInventoryDocuments();
-    const doc = documents.find(d => d.id === docId);
-    if (doc) {
+  static deleteInventoryDocument(docId: string): { success: boolean; errors?: string[] } {
+    try {
+      const documents = InventoryModule.getInventoryDocuments();
+      const doc = documents.find(d => d.id === docId);
+      if (!doc) {
+        return { success: false, errors: ['Document not found.'] };
+      }
       if (doc.status !== 'Draft') {
-        throw new Error('Only Draft documents can be deleted.');
+        return { success: false, errors: ['Only Draft documents can be deleted.'] };
       }
       const filtered = documents.filter(d => d.id !== docId);
       InventoryModule.saveInventoryDocuments(filtered);
@@ -897,6 +900,10 @@ export class InventoryModule {
         'Delete Inventory Document',
         `Deleted draft document ${doc.doc_no}`
       );
+      return { success: true };
+    } catch (err: any) {
+      console.error('Error deleting inventory document:', err);
+      return { success: false, errors: [err.message || 'Failed to delete inventory document.'] };
     }
   }
 

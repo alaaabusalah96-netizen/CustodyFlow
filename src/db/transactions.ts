@@ -84,27 +84,36 @@ export class TransactionsModule {
   static getScopedTransactions(): Transaction[] {
     const txs = TransactionsModule.getTransactions().filter(t => t.status !== 'Deleted' && (t.status as string) !== 'deleted');
     const user = UsersModule.getActiveUser();
-    if (!user) return txs;
+    if (!user) return [];
     
-    const targetCompanyId = CompaniesModule.getSelectedCompanyId();
+    const targetCompanyId = user.role === 'SystemAdmin' 
+      ? CompaniesModule.getSelectedCompanyId() 
+      : user.company_id;
+      
     const companyTxs = txs.filter(t => t.company_id === targetCompanyId);
     
-    if (user.role === 'Admin' || user.role === 'SystemAdmin') {
+    if (user.role === 'SystemAdmin' || user.role === 'Admin') {
       return companyTxs;
     }
+    
     if (user.role === 'RegionalManager') {
       const stations = StationsModule.getStations();
       const regionStations = stations.filter(s => {
         const isSameCompany = s.company_id === targetCompanyId;
         if (!isSameCompany) return false;
-        if (!user.region_id) return true;
-        return s.region_id === user.region_id || !s.region_id || s.region_id === '' || s.region_id === 'none';
+        if (!user.region_id) return false;
+        return s.region_id === user.region_id;
       });
       const targetStationIds = regionStations.map(s => s.id);
       return companyTxs.filter(t => t.station_id && targetStationIds.includes(t.station_id));
     }
-    const userStationId = user.station_id || 'stn-1-1-1';
-    return companyTxs.filter(t => t.station_id === userStationId);
+    
+    if (user.role === 'StationAdmin') {
+      if (!user.station_id) return [];
+      return companyTxs.filter(t => t.station_id === user.station_id);
+    }
+    
+    return [];
   }
 
   static saveTransactions(transactions: Transaction[]): void {
@@ -112,13 +121,13 @@ export class TransactionsModule {
   }
 
   // Create
-  static addTransaction(data: Omit<Transaction, 'id' | 'transaction_no' | 'status' | 'created_at' | 'updated_at' | 'created_by'> & { status?: TransactionStatus }): Transaction {
+  static addTransaction(data: Omit<Transaction, 'id' | 'transaction_no' | 'status' | 'created_at' | 'updated_at' | 'created_by'> & { status?: TransactionStatus }): { success: boolean; errors?: string[]; data?: Transaction } {
     return TransactionsCreateModule.addTransaction(data);
   }
 
   // Update
-  static updateTransaction(id: string, updates: Partial<Transaction>): void {
-    TransactionsUpdateModule.updateTransaction(id, updates);
+  static updateTransaction(id: string, updates: Partial<Transaction>): { success: boolean; errors?: string[] } {
+    return TransactionsUpdateModule.updateTransaction(id, updates);
   }
 
   // Delete

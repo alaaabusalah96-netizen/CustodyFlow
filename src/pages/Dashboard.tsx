@@ -238,9 +238,13 @@ export default function Dashboard({
 
   // Revert settlement status
   const handleRevert = (tx: Transaction) => {
-    CustodyDB.updateTransaction(tx.id, {
+    const res = CustodyDB.updateTransaction(tx.id, {
       status: 'Pending'
     });
+    if (!res.success) {
+      alert(res.errors?.join(' \n ') || 'Failed to revert transaction');
+      return;
+    }
     // Additional log for revert
     CustodyDB.addLog(
       user?.id || 'unknown',
@@ -261,9 +265,13 @@ export default function Dashboard({
       return;
     }
 
-    CustodyDB.updateTransaction(tx.id, {
+    const res = CustodyDB.updateTransaction(tx.id, {
       status: 'Settled'
     });
+    if (!res.success) {
+      alert(res.errors?.join(' \n ') || 'Failed to approve transaction');
+      return;
+    }
 
     CustodyDB.addLog(
       user?.id || 'unknown',
@@ -284,9 +292,13 @@ export default function Dashboard({
       return;
     }
 
-    CustodyDB.updateTransaction(tx.id, {
+    const res = CustodyDB.updateTransaction(tx.id, {
       status: 'Rejected'
     });
+    if (!res.success) {
+      alert(res.errors?.join(' \n ') || 'Failed to reject transaction');
+      return;
+    }
 
     CustodyDB.addLog(
       user?.id || 'unknown',
@@ -308,11 +320,15 @@ export default function Dashboard({
       // Fallback: quick settle
       const tempVoucherNo = tx.transaction_no;
       const tempDate = new Date().toISOString().split('T')[0];
-      CustodyDB.updateTransaction(tx.id, {
+      const res = CustodyDB.updateTransaction(tx.id, {
         status: 'Under Settlement',
         voucher_no: tempVoucherNo,
         voucher_date: tempDate
       });
+      if (!res.success) {
+        alert(res.errors?.join(' \n ') || 'Failed to settle transaction');
+        return;
+      }
       showToast(isRtl ? 'تم عمل تسوية سريعة للمستند بنجاح.' : 'Quick voucher generated successfully.');
       refreshData();
     }

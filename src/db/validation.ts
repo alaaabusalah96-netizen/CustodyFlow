@@ -57,7 +57,9 @@ export class ValidationEngine {
     }
 
     const targetStationId = data.station_id || user?.station_id;
-    if (targetStationId) {
+    if (!targetStationId) {
+      errors.push('يجب ربط الحركة بمحطة أو فرع محدد / A station must be specified for this transaction.');
+    } else {
       const stations = StationsModule.getStations();
       const station = stations.find(s => s.id === targetStationId);
       if (!station) {

@@ -179,7 +179,11 @@ export default function Inventory({ language, theme }: InventoryProps) {
 
   const handleDelete = (docId: string) => {
     if (confirm(isRtl ? 'هل أنت متأكد من حذف هذه المسودة نهائياً؟' : 'Are you sure you want to delete this draft?')) {
-      InventoryModule.deleteInventoryDocument(docId);
+      const res = InventoryModule.deleteInventoryDocument(docId);
+      if (!res.success) {
+        alert(res.errors?.join('\n') || 'Failed to delete document');
+        return;
+      }
       setSelectedDocId(null);
       setRefreshKey(prev => prev + 1);
     }

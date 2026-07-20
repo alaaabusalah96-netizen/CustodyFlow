@@ -59,7 +59,9 @@ export class TransactionsReconciliationModule {
       .filter(t => t.status === 'Settled')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const cashAvailable = custodyValue - settledTotal - underSettlementTotal;
+    // Unified Cash Available calculation matching CashReconciliation.tsx:
+    // Remaining liquid cash = custodyValue - underSettlementTotal - pendingTotal
+    const cashAvailable = custodyValue - underSettlementTotal - pendingTotal;
 
     const pendingCount = filteredTxs.filter(t => t.status === 'Pending').length;
     const underSettlementCount = filteredTxs.filter(t => t.status === 'Under Settlement').length;

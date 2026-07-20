@@ -32,6 +32,7 @@ export const DEFAULT_USERS: AppUser[] = [
     full_name: 'Alaa Abu Salah (علاء أبو صلاح)',
     role: 'SystemAdmin',
     is_active: true,
+    is_platform_owner: true,
     password: '',
     permissions: {
       create_expense: true,

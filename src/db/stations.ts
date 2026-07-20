@@ -14,8 +14,36 @@ export class StationsModule {
 
   static getScopedRegions(): Region[] {
     const regions = StationsModule.getRegions();
-    const targetCompanyId = CompaniesModule.getSelectedCompanyId();
-    return regions.filter(r => r.company_id === targetCompanyId);
+    const user = UsersModule.getActiveUser();
+    if (!user) return [];
+
+    if (user.role === 'SystemAdmin') {
+      const targetCompanyId = CompaniesModule.getSelectedCompanyId();
+      return regions.filter(r => r.company_id === targetCompanyId);
+    }
+
+    const userCompanyId = user.company_id;
+    let filtered = regions.filter(r => r.company_id === userCompanyId);
+
+    if (user.role === 'RegionalManager') {
+      if (user.region_id) {
+        filtered = filtered.filter(r => r.id === user.region_id);
+      }
+    } else if (user.role === 'StationAdmin') {
+      if (user.station_id) {
+        const stations = StationsModule.getStations();
+        const station = stations.find(s => s.id === user.station_id);
+        if (station && station.region_id) {
+          filtered = filtered.filter(r => r.id === station.region_id);
+        } else {
+          return [];
+        }
+      } else {
+        return [];
+      }
+    }
+
+    return filtered;
   }
 
   static saveRegions(regions: Region[]): void {
@@ -65,8 +93,30 @@ export class StationsModule {
 
   static getScopedStations(): Station[] {
     const stations = StationsModule.getStations();
-    const targetCompanyId = CompaniesModule.getSelectedCompanyId();
-    return stations.filter(s => s.company_id === targetCompanyId);
+    const user = UsersModule.getActiveUser();
+    if (!user) return [];
+
+    if (user.role === 'SystemAdmin') {
+      const targetCompanyId = CompaniesModule.getSelectedCompanyId();
+      return stations.filter(s => s.company_id === targetCompanyId);
+    }
+
+    const userCompanyId = user.company_id;
+    let filtered = stations.filter(s => s.company_id === userCompanyId);
+
+    if (user.role === 'RegionalManager') {
+      if (user.region_id) {
+        filtered = filtered.filter(s => s.region_id === user.region_id);
+      }
+    } else if (user.role === 'StationAdmin') {
+      if (user.station_id) {
+        filtered = filtered.filter(s => s.id === user.station_id);
+      } else {
+        return [];
+      }
+    }
+
+    return filtered;
   }
 
   static saveStations(stations: Station[]): void {

@@ -98,9 +98,13 @@ export default function UnderSettlement({ language, theme, onNavigate }: UnderSe
       return;
     }
 
-    CustodyDB.updateTransaction(tx.id, {
+    const res = CustodyDB.updateTransaction(tx.id, {
       status: 'Pending'
     });
+    if (!res.success) {
+      alert(res.errors?.join(' \n ') || 'Failed to return transaction');
+      return;
+    }
     
     CustodyDB.addLog(
       user?.id || 'unknown',
@@ -121,9 +125,13 @@ export default function UnderSettlement({ language, theme, onNavigate }: UnderSe
       return;
     }
 
-    CustodyDB.updateTransaction(tx.id, {
+    const res = CustodyDB.updateTransaction(tx.id, {
       status: 'Rejected'
     });
+    if (!res.success) {
+      alert(res.errors?.join(' \n ') || 'Failed to reject transaction');
+      return;
+    }
 
     CustodyDB.addLog(
       user?.id || 'unknown',
@@ -144,9 +152,13 @@ export default function UnderSettlement({ language, theme, onNavigate }: UnderSe
       return;
     }
 
-    CustodyDB.updateTransaction(tx.id, {
+    const res = CustodyDB.updateTransaction(tx.id, {
       status: 'Settled'
     });
+    if (!res.success) {
+      alert(res.errors?.join(' \n ') || 'Failed to approve transaction');
+      return;
+    }
 
     CustodyDB.addLog(
       user?.id || 'unknown',
@@ -166,9 +178,13 @@ export default function UnderSettlement({ language, theme, onNavigate }: UnderSe
       return;
     }
 
-    CustodyDB.updateTransaction(tx.id, {
+    const res = CustodyDB.updateTransaction(tx.id, {
       status: 'Under Settlement'
     });
+    if (!res.success) {
+      alert(res.errors?.join(' \n ') || 'Failed to revert transaction approval');
+      return;
+    }
 
     CustodyDB.addLog(
       user?.id || 'unknown',
@@ -572,25 +588,10 @@ export default function UnderSettlement({ language, theme, onNavigate }: UnderSe
                           <span>{isRtl ? 'عرض فقط' : 'View Only'}</span>
                         </button>
 
-                        {/* 2. Admin actions to cancel approval or delete (Only when NOT read-only mode) */}
-                        {!readOnlyMode && isAdmin ? (
-                          <>
-                            <button
-                              onClick={() => handleRevertApproval(tx)}
-                              className="px-1.5 py-1 rounded bg-amber-500/10 hover:bg-amber-600 text-amber-600 hover:text-white transition-all text-[9px] font-bold"
-                              title={isRtl ? 'إلغاء الاعتماد وإرجاع لتحت التسوية' : 'Revert Approval'}
-                            >
-                              {isRtl ? 'إلغاء الاعتماد' : 'Cancel Approval'}
-                            </button>
-                            <button
-                              onClick={() => setDeletingId(tx.id)}
-                              className="p-1 rounded text-rose-600 hover:bg-rose-500/10 transition-colors"
-                              title={isRtl ? 'حذف نهائي' : 'Delete'}
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </>
-                        ) : null}
+                        {/* 2. Settled transactions are locked and cannot be deleted or un-approved */}
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          {isRtl ? '🔒 الحركة مغلقة' : '🔒 Transaction Locked'}
+                        </span>
                       </div>
                     </td>
                   </tr>

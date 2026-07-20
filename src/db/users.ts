@@ -6,6 +6,12 @@ import { LogsModule } from './logs';
 import { hashPassword } from '../lib/hash';
 
 export class UsersModule {
+  static isPlatformOwner(email?: string): boolean {
+    if (!email) return false;
+    const cleaned = email.toLowerCase().trim();
+    return cleaned === 'alaaabusalah96@gmail.com';
+  }
+
   static enrichUserPermissions(role: UserRole, currentPerms?: Partial<UserPermissions>): UserPermissions {
     const isSystemAdmin = role === 'SystemAdmin';
     const isAdmin = role === 'Admin';
@@ -37,8 +43,7 @@ export class UsersModule {
     let users = StorageEngine.getStored<AppUser[]>('users', DEFAULT_USERS);
     
     // Safety fallback: Ensure any SystemAdmin from DEFAULT_USERS is never missing from the returned list
-    const adminEmails = ['alaaabusalah96@gmail.com', 'alaabusalah96@gmail.com'];
-    const defaultAdmins = DEFAULT_USERS.filter(u => u.email && adminEmails.includes(u.email.toLowerCase().trim()));
+    const defaultAdmins = DEFAULT_USERS.filter(u => u.email && UsersModule.isPlatformOwner(u.email));
     let hasAddedMissingAdmin = false;
     
     defaultAdmins.forEach(defAdmin => {
@@ -55,20 +60,19 @@ export class UsersModule {
 
     let changed = false;
     const updated = users.map(u => {
-      const isPlatformAdminEmail = u.email && (
-        u.email.toLowerCase().trim() === 'alaaabusalah96@gmail.com' || 
-        u.email.toLowerCase().trim() === 'alaabusalah96@gmail.com'
-      );
+      const isPlatformAdminEmail = u.email && UsersModule.isPlatformOwner(u.email);
       const role = isPlatformAdminEmail ? ('SystemAdmin' as const) : u.role;
       const is_active = isPlatformAdminEmail ? true : (u.is_active ?? true);
+      const is_platform_owner = isPlatformAdminEmail ? true : (u.is_platform_owner ?? false);
       
-      if (role !== u.role || is_active !== u.is_active) {
+      if (role !== u.role || is_active !== u.is_active || is_platform_owner !== u.is_platform_owner) {
         changed = true;
       }
       return {
         ...u,
         role,
         is_active,
+        is_platform_owner,
         permissions: UsersModule.enrichUserPermissions(role, u.permissions)
       };
     });
@@ -96,15 +100,13 @@ export class UsersModule {
     }
     const parsed = JSON.parse(userStr);
     if (parsed) {
-      const isPlatformAdminEmail = parsed.email && (
-        parsed.email.toLowerCase().trim() === 'alaaabusalah96@gmail.com' || 
-        parsed.email.toLowerCase().trim() === 'alaabusalah96@gmail.com'
-      );
-      if (isPlatformAdminEmail && (parsed.role !== 'SystemAdmin' || !parsed.is_active)) {
+      const isPlatformAdminEmail = parsed.email && UsersModule.isPlatformOwner(parsed.email);
+      if (isPlatformAdminEmail && (parsed.role !== 'SystemAdmin' || !parsed.is_active || !parsed.is_platform_owner)) {
         const updated = {
           ...parsed,
           role: 'SystemAdmin' as const,
           is_active: true,
+          is_platform_owner: true,
           permissions: UsersModule.enrichUserPermissions('SystemAdmin')
         };
         localStorage.setItem('custody_active_user', JSON.stringify(updated));
@@ -112,6 +114,9 @@ export class UsersModule {
         return updated;
       }
       parsed.permissions = UsersModule.enrichUserPermissions(parsed.role, parsed.permissions);
+      if (isPlatformAdminEmail) {
+        parsed.is_platform_owner = true;
+      }
       StorageEngine.cache['active_user'] = parsed;
       return parsed as AppUser;
     }
@@ -180,15 +185,34 @@ export class UsersModule {
   static getScopedUsers(): AppUser[] {
     const users = UsersModule.getUsers();
     const activeUser = UsersModule.getActiveUser();
-    if (!activeUser) return users;
+    if (!activeUser) return [];
     
     const savedCompanyId = typeof localStorage !== 'undefined' ? localStorage.getItem('custody_selected_company_id') : null;
-    const targetCompanyId = activeUser.role !== 'SystemAdmin' && activeUser.company_id ? activeUser.company_id : (savedCompanyId || 'comp-1');
+    const targetCompanyId = activeUser.role === 'SystemAdmin' 
+      ? (savedCompanyId || 'comp-1')
+      : activeUser.company_id;
 
     if (activeUser.role === 'SystemAdmin') {
       return users.filter(u => u.role === 'SystemAdmin' || u.company_id === targetCompanyId);
     }
-    return users.filter(u => u.company_id === activeUser.company_id);
+    
+    let filtered = users.filter(u => u.company_id === activeUser.company_id);
+    
+    if (activeUser.role === 'RegionalManager') {
+      if (activeUser.region_id) {
+        const stations = StorageEngine.getStored<any[]>('stations', []);
+        const regionStationIds = stations.filter(s => s.region_id === activeUser.region_id).map(s => s.id);
+        filtered = filtered.filter(u => u.region_id === activeUser.region_id || (u.station_id && regionStationIds.includes(u.station_id)) || u.id === activeUser.id);
+      }
+    } else if (activeUser.role === 'StationAdmin') {
+      if (activeUser.station_id) {
+        filtered = filtered.filter(u => u.station_id === activeUser.station_id || u.id === activeUser.id);
+      } else {
+        filtered = filtered.filter(u => u.id === activeUser.id);
+      }
+    }
+    
+    return filtered;
   }
 
   static impersonateUser(targetUser: AppUser, reason?: string): void {
