@@ -48,7 +48,10 @@ export class TransactionsCreateModule {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         station_id,
-        company_id
+        company_id,
+        metadata: {
+          version: 1
+        }
       };
 
       transactions.push(newTx);

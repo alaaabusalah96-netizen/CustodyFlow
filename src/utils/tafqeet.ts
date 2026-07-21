@@ -43,23 +43,38 @@ export function getArabicTafqeet(amount: number): string {
     if (p === 2) return 'جنيهان';
     if (p >= 3 && p <= 10) return convertBelowThousand(p) + ' جنيهات';
     
-    let result = '';
-    const th = Math.floor(p / 1000);
+    let parts: string[] = [];
+    const billions = Math.floor(p / 1000000000);
+    const millions = Math.floor((p % 1000000000) / 1000000);
+    const thousands = Math.floor((p % 1000000) / 1000);
     const rem = p % 1000;
 
-    if (th > 0) {
-      if (th === 1) result += 'ألف';
-      else if (th === 2) result += 'ألفان';
-      else if (th >= 3 && th <= 10) result += convertBelowThousand(th) + ' آلاف';
-      else result += convertBelowThousand(th) + ' ألف';
+    if (billions > 0) {
+      if (billions === 1) parts.push('مليار');
+      else if (billions === 2) parts.push('ملياران');
+      else if (billions >= 3 && billions <= 10) parts.push(convertBelowThousand(billions) + ' مليارات');
+      else parts.push(convertBelowThousand(billions) + ' مليار');
+    }
+
+    if (millions > 0) {
+      if (millions === 1) parts.push('مليون');
+      else if (millions === 2) parts.push('مليونان');
+      else if (millions >= 3 && millions <= 10) parts.push(convertBelowThousand(millions) + ' ملايين');
+      else parts.push(convertBelowThousand(millions) + ' مليون');
+    }
+
+    if (thousands > 0) {
+      if (thousands === 1) parts.push('ألف');
+      else if (thousands === 2) parts.push('ألفان');
+      else if (thousands >= 3 && thousands <= 10) parts.push(convertBelowThousand(thousands) + ' آلاف');
+      else parts.push(convertBelowThousand(thousands) + ' ألف');
     }
 
     if (rem > 0) {
-      if (th > 0) result += ' و';
-      result += convertBelowThousand(rem);
+      parts.push(convertBelowThousand(rem));
     }
 
-    return result + ' جنيه';
+    return parts.join(' و ') + ' جنيه';
   }
 
   let text = formatPounds(pounds);

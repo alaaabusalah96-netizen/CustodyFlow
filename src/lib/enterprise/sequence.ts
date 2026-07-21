@@ -22,7 +22,7 @@ export class SequenceEngine {
   static async generateNextSequence(
     dbInstance: Firestore,
     companyId: string,
-    sequenceKey: string = 'last_voucher_no',
+    sequenceKey: string = 'last_cash_voucher_no',
     options: SequenceOptions
   ): Promise<string> {
     if (!companyId) {
@@ -38,30 +38,23 @@ export class SequenceEngine {
       if (!sfDoc.exists()) {
         const initialDoc: Record<string, any> = {
           id: companyId,
-          company_id: companyId,
-          last_voucher_no: 1001 // Base field for backward compatibility
+          company_id: companyId
         };
         initialDoc[sequenceKey] = defaultStart;
-        
-        // Ensure last_voucher_no reflects the current update if sequenceKey is 'last_voucher_no'
-        if (sequenceKey === 'last_voucher_no') {
-          initialDoc.last_voucher_no = defaultStart;
-        }
 
         transaction.set(seqDocRef, initialDoc);
         return defaultStart;
       } else {
         const data = sfDoc.data();
-        const lastNo = data[sequenceKey] !== undefined ? data[sequenceKey] : (defaultStart - 1);
-        const nextVal = lastNo + 1;
+        let lastNo = data[sequenceKey];
+        if (lastNo === undefined && sequenceKey === 'last_cash_voucher_no') {
+          lastNo = data['last_voucher_no'];
+        }
+        const lastNoVal = lastNo !== undefined ? lastNo : (defaultStart - 1);
+        const nextVal = lastNoVal + 1;
         
         const updateData: Record<string, any> = {};
         updateData[sequenceKey] = nextVal;
-        
-        // Keep the base last_voucher_no updated if the key matches or if it's the default field
-        if (sequenceKey === 'last_voucher_no') {
-          updateData.last_voucher_no = nextVal;
-        }
 
         transaction.update(seqDocRef, updateData);
         return nextVal;

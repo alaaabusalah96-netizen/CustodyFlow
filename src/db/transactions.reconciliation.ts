@@ -19,7 +19,12 @@ export class TransactionsReconciliationModule {
       const st = stations.find(s => s.id === stationId);
       custodyValue = st ? st.custody_amount : 0;
     } else if (regionId) {
-      const regionStations = stations.filter(s => s.region_id === regionId || !s.region_id || s.region_id === '' || s.region_id === 'none');
+      const regionStations = stations.filter(s => {
+        if (regionId === 'none' || regionId === 'unassigned') {
+          return !s.region_id || s.region_id === '' || s.region_id === 'none' || s.region_id === 'unassigned';
+        }
+        return s.region_id === regionId;
+      });
       targetStationIds = regionStations.map(s => s.id);
       custodyValue = regionStations.reduce((sum, s) => sum + s.custody_amount, 0);
     } else if (user) {
@@ -28,8 +33,10 @@ export class TransactionsReconciliationModule {
         custodyValue = stations.reduce((sum, s) => sum + s.custody_amount, 0);
       } else if (user.role === 'RegionalManager') {
         const regionStations = stations.filter(s => {
-          if (!user.region_id) return true;
-          return s.region_id === user.region_id || !s.region_id || s.region_id === '' || s.region_id === 'none';
+          if (!user.region_id || user.region_id === 'none' || user.region_id === '') {
+            return !s.region_id || s.region_id === '' || s.region_id === 'none';
+          }
+          return s.region_id === user.region_id;
         });
         targetStationIds = regionStations.map(s => s.id);
         custodyValue = regionStations.reduce((sum, s) => sum + s.custody_amount, 0);

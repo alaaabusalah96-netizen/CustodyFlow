@@ -314,10 +314,10 @@ export class InventoryModule {
   }
 
   // Stock tracking at Bin Level
-  static getBinProductStock(productId: string, binId: string): number {
+  static getBinProductStock(productId: string, binId: string, warehouseId?: string): number {
     const movements = InventoryModule.getStockMovements();
     return movements
-      .filter(m => m.product_id === productId && m.bin_id === binId)
+      .filter(m => m.product_id === productId && m.bin_id === binId && (!warehouseId || m.warehouse_id === warehouseId))
       .reduce((sum, m) => sum + m.qty_change, 0);
   }
 
@@ -392,11 +392,15 @@ export class InventoryModule {
     const ledgerEntries = InventoryModule.getInventoryLedger();
 
     // 1. Negative movement from source bin
+    const uniqueSuffix = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+    const relocDocId = `reloc-${Date.now()}-${uniqueSuffix}`;
+    const relocDocNo = `RELOC-${Date.now()}-${uniqueSuffix}`;
+
     const movFromId = `mov-${Date.now()}-${productId}-reloc-out-${Math.floor(Math.random() * 1000)}`;
     const movFrom: StockMovement = {
       id: movFromId,
-      doc_id: `reloc-${Date.now()}`,
-      doc_no: `RELOC-${Date.now()}`,
+      doc_id: relocDocId,
+      doc_no: relocDocNo,
       doc_type: 'Adjustment', // adjustment-type stock record
       product_id: productId,
       warehouse_id: warehouseId,
@@ -749,7 +753,7 @@ export class InventoryModule {
 
   static getProductStockInWarehouse(warehouseId: string, productId: string, binId?: string): number {
     if (binId) {
-      return InventoryModule.getBinProductStock(productId, binId);
+      return InventoryModule.getBinProductStock(productId, binId, warehouseId);
     }
     return InventoryModule.getProductStock(productId, warehouseId);
   }

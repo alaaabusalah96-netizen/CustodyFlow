@@ -1,5 +1,5 @@
 import { Firestore } from 'firebase/firestore';
-import { EventEnvelope } from '../../types/enterprise';
+import { EventEnvelope, FsmConfig } from '../../types/enterprise';
 import { BusinessEngineContract, EngineExecutionResult } from './warehouse_contracts';
 import { DocumentLifecycleEngine } from './lifecycle';
 import { SequenceEngine } from './sequence';
@@ -10,6 +10,53 @@ import { StorageEngine } from '../../db/storage';
 import { dbSetDoc, db } from '../../firebase';
 import { InventoryModule } from '../../db/inventory';
 import { AccountingBusinessEngine } from './accounting_engine';
+
+const prFsmConfig: FsmConfig<PRStatus, string, any> = {
+  documentType: 'PurchaseRequest',
+  initialState: 'PENDING_APPROVAL',
+  states: {
+    PENDING_APPROVAL: { name: 'PENDING_APPROVAL', labelAr: 'قيد الاعتماد', labelEn: 'Pending Approval' },
+    APPROVED: { name: 'APPROVED', labelAr: 'معتمد', labelEn: 'Approved', isTerminal: true },
+    REJECTED: { name: 'REJECTED', labelAr: 'مرفوض', labelEn: 'Rejected', isTerminal: true }
+  },
+  transitions: [
+    {
+      event: 'APPROVE',
+      from: 'PENDING_APPROVAL',
+      to: 'APPROVED',
+      labelAr: 'اعتماد',
+      labelEn: 'Approve',
+      authorizedRoles: ['Admin', 'RegionalManager', 'SystemAdmin']
+    },
+    {
+      event: 'REJECT',
+      from: 'PENDING_APPROVAL',
+      to: 'REJECTED',
+      labelAr: 'رفض',
+      labelEn: 'Reject',
+      authorizedRoles: ['Admin', 'RegionalManager', 'SystemAdmin']
+    }
+  ]
+};
+
+const poFsmConfig: FsmConfig<POStatus, string, any> = {
+  documentType: 'PurchaseOrder',
+  initialState: 'ISSUED',
+  states: {
+    ISSUED: { name: 'ISSUED', labelAr: 'صادر', labelEn: 'Issued' },
+    RECEIVED: { name: 'RECEIVED', labelAr: 'مستلم', labelEn: 'Received', isTerminal: true }
+  },
+  transitions: [
+    {
+      event: 'RECEIVE',
+      from: 'ISSUED',
+      to: 'RECEIVED',
+      labelAr: 'استلام',
+      labelEn: 'Receive',
+      authorizedRoles: ['Admin', 'RegionalManager', 'SystemAdmin', 'StationAdmin']
+    }
+  ]
+};
 
 /**
  * Enterprise Purchasing & Procurement Business Engine
@@ -102,6 +149,12 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           const { requesterId, requesterName, items, notes, department } = event.payload;
           const companyId = event.tenantId;
 
+          // Check Creation Permission for PR (BUG-10)
+          const allowedCreatorRoles = ['Admin', 'RegionalManager', 'SystemAdmin', 'StationAdmin'];
+          if (!allowedCreatorRoles.includes(event.user_role)) {
+            throw new Error(`User role (${event.user_role}) is not authorized to submit a Purchase Request`);
+          }
+
           // 1. Generate sequence
           const prNumber = await SequenceEngine.generateNextSequence(
             dbInstance,
@@ -143,13 +196,21 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
         }
 
         case 'PR_APPROVED': {
-          const { prId } = event.payload;
+          const { prId, version } = event.payload;
           const allPRs = StorageEngine.getStored<PurchaseRequest[]>('purchase_requests', []);
           const idx = allPRs.findIndex(pr => pr.id === prId);
           if (idx === -1) throw new Error('Purchase Request not found');
 
-          if (allPRs[idx].status !== 'PENDING_APPROVAL') {
-            throw new Error(`Invalid state transition from ${allPRs[idx].status}`);
+          // Concurrency lock check (BUG-07)
+          if (version !== undefined && allPRs[idx].metadata.version !== version) {
+            throw new Error('⚠️ عذراً، تم تعديل هذا الطلب بواسطة مستخدم آخر. يرجى تحديث الصفحة والمحاولة مجدداً. / This Purchase Request has been modified by another user. Please refresh and try again.');
+          }
+
+          // FSM Transition Check (BUG-10)
+          const fsm = new DocumentLifecycleEngine(prFsmConfig);
+          const clearance = await fsm.canTransition(allPRs[idx].status, 'APPROVE', event.user_role, allPRs[idx]);
+          if (!clearance.can) {
+            throw new Error(`Lifecycle check failed: ${clearance.reasonEn}`);
           }
 
           allPRs[idx].status = 'APPROVED';
@@ -168,13 +229,21 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
         }
 
         case 'PR_REJECTED': {
-          const { prId } = event.payload;
+          const { prId, version } = event.payload;
           const allPRs = StorageEngine.getStored<PurchaseRequest[]>('purchase_requests', []);
           const idx = allPRs.findIndex(pr => pr.id === prId);
           if (idx === -1) throw new Error('Purchase Request not found');
 
-          if (allPRs[idx].status !== 'PENDING_APPROVAL') {
-            throw new Error(`Invalid state transition from ${allPRs[idx].status}`);
+          // Concurrency lock check (BUG-07)
+          if (version !== undefined && allPRs[idx].metadata.version !== version) {
+            throw new Error('⚠️ عذراً، تم تعديل هذا الطلب بواسطة مستخدم آخر. يرجى تحديث الصفحة والمحاولة مجدداً. / This Purchase Request has been modified by another user. Please refresh and try again.');
+          }
+
+          // FSM Transition Check (BUG-10)
+          const fsm = new DocumentLifecycleEngine(prFsmConfig);
+          const clearance = await fsm.canTransition(allPRs[idx].status, 'REJECT', event.user_role, allPRs[idx]);
+          if (!clearance.can) {
+            throw new Error(`Lifecycle check failed: ${clearance.reasonEn}`);
           }
 
           allPRs[idx].status = 'REJECTED';
@@ -195,6 +264,12 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
         case 'PO_ISSUED': {
           const { prId, vendorId, items, notes, deliveryWarehouseId } = event.payload;
           const companyId = event.tenantId;
+
+          // Check Creation Permission for PO (BUG-10)
+          const allowedIssuerRoles = ['Admin', 'RegionalManager', 'SystemAdmin'];
+          if (!allowedIssuerRoles.includes(event.user_role)) {
+            throw new Error(`User role (${event.user_role}) is not authorized to issue a Purchase Order`);
+          }
 
           // 1. Fetch vendor
           const vendors = StorageEngine.getStored<Vendor[]>('vendors', []);
@@ -257,15 +332,23 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
         }
 
         case 'PO_RECEIVED': {
-          const { poId, warehouseId } = event.payload;
+          const { poId, warehouseId, version } = event.payload;
           const allPOs = StorageEngine.getStored<PurchaseOrder[]>('purchase_orders', []);
           const idx = allPOs.findIndex(po => po.id === poId);
           if (idx === -1) throw new Error('Purchase Order not found');
 
+          // Concurrency lock check (BUG-07)
+          if (version !== undefined && allPOs[idx].metadata.version !== version) {
+            throw new Error('⚠️ عذراً، تم تعديل هذا الأمر بواسطة مستخدم آخر. يرجى تحديث الصفحة والمحاولة مجدداً. / This Purchase Order has been modified by another user. Please refresh and try again.');
+          }
+
           const companyId = allPOs[idx].metadata.tenantId;
 
-          if (allPOs[idx].status !== 'ISSUED') {
-            throw new Error(`PO is not in ISSUED state. Current: ${allPOs[idx].status}`);
+          // FSM Transition Check (BUG-10)
+          const fsm = new DocumentLifecycleEngine(poFsmConfig);
+          const clearance = await fsm.canTransition(allPOs[idx].status, 'RECEIVE', event.user_role, allPOs[idx]);
+          if (!clearance.can) {
+            throw new Error(`Lifecycle check failed: ${clearance.reasonEn}`);
           }
 
           // 1. Change status
@@ -298,7 +381,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
             const statementAr = `قيد تلقائي: استلام بضاعة أمر الشراء ${poNum} للمستودع ${targetWh.name}`;
             const statementEn = `Auto-post: Stock Receipt for PO ${poNum} into warehouse ${targetWh.name}`;
             
-            AccountingBusinessEngine.postOperationalDoubleEntry(
+            await AccountingBusinessEngine.postOperationalDoubleEntry(
               companyId,
               event.user_id,
               `PO #${poNum}`,
@@ -308,7 +391,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
                 { accountCode: '120101', debit: amount, credit: 0, notes: `Debit: Warehouse Stock Inventory` },
                 { accountCode: '210101', debit: 0, credit: amount, notes: `Credit: Accounts Payable (${allPOs[idx].vendorName})` }
               ]
-            ).catch(err => console.error('Automated double-entry posting for PO failed:', err));
+            );
           } catch (err) {
             console.error('Automated double-entry posting preparation for PO failed:', err);
           }

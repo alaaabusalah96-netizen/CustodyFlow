@@ -29,10 +29,26 @@ export class TransactionsUpdateModule {
           };
         }
 
+        // Optimistic Concurrency Control (BUG-07)
+        if (old.metadata?.version !== undefined) {
+          if (!updates.metadata || updates.metadata.version !== old.metadata.version) {
+            return {
+              success: false,
+              errors: ['⚠️ عذراً، تم تعديل هذه المعاملة بواسطة مستخدم آخر. يرجى تحديث الصفحة والمحاولة مجدداً. / This transaction has been modified by another user. Please refresh and try again (concurrency conflict).']
+            };
+          }
+        }
+
+        const newVersion = (old.metadata?.version || 1) + 1;
         const updated = {
           ...old,
           category_id: old.category_id || updates.category_id || 'cat-6',
           ...updates,
+          metadata: {
+            ...old.metadata,
+            ...updates.metadata,
+            version: newVersion
+          },
           updated_at: new Date().toISOString()
         };
 

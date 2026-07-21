@@ -39,11 +39,11 @@ export class DocumentLifecycleEngine<TState extends string = string, TEvent exte
     userRole: string,
     context: TContext
   ): Promise<{ can: boolean; reasonAr: string; reasonEn: string }> {
-    const transition = this.config.transitions.find(
+    const matchingTransitions = this.config.transitions.filter(
       t => t.from === currentState && t.event === event
     );
 
-    if (!transition) {
+    if (matchingTransitions.length === 0) {
       return {
         can: false,
         reasonAr: `الانتقال غير مسموح به من الحالة الحالية (${currentState}) عبر الحدث (${event})`,
@@ -51,42 +51,53 @@ export class DocumentLifecycleEngine<TState extends string = string, TEvent exte
       };
     }
 
-    // Check Role Authority
-    if (transition.authorizedRoles && transition.authorizedRoles.length > 0) {
-      if (!transition.authorizedRoles.includes(userRole)) {
-        return {
-          can: false,
-          reasonAr: `غير مصرح لدور المستخدم (${userRole}) بتنفيذ هذا الإجراء`,
-          reasonEn: `User role (${userRole}) is not authorized to execute this action`
-        };
-      }
-    }
+    let lastResult: { can: boolean; reasonAr: string; reasonEn: string } | null = null;
 
-    // Check Guard Conditions
-    if (transition.guard) {
-      try {
-        const guardPassed = await transition.guard(context);
-        if (!guardPassed) {
-          return {
+    for (const transition of matchingTransitions) {
+      // Check Role Authority
+      if (transition.authorizedRoles && transition.authorizedRoles.length > 0) {
+        if (!transition.authorizedRoles.includes(userRole)) {
+          lastResult = {
             can: false,
-            reasonAr: `لم يتم استيفاء شروط التحقق المسبقة للانتقال`,
-            reasonEn: `Pre-conditions for this transition were not met`
+            reasonAr: `غير مصرح لدور المستخدم (${userRole}) بتنفيذ هذا الإجراء`,
+            reasonEn: `User role (${userRole}) is not authorized to execute this action`
           };
+          continue;
         }
-      } catch (err: any) {
-        return {
-          can: false,
-          reasonAr: `فشل التحقق المسبق: ${err.message}`,
-          reasonEn: `Pre-condition check failed: ${err.message}`
-        };
       }
+
+      // Check Guard Conditions
+      if (transition.guard) {
+        try {
+          const guardPassed = await transition.guard(context);
+          if (!guardPassed) {
+            lastResult = {
+              can: false,
+              reasonAr: `لم يتم استيفاء شروط التحقق المسبقة للانتقال`,
+              reasonEn: `Pre-conditions for this transition were not met`
+            };
+            continue;
+          }
+        } catch (err: any) {
+          lastResult = {
+            can: false,
+            reasonAr: `فشل التحقق المسبق: ${err.message}`,
+            reasonEn: `Pre-condition check failed: ${err.message}`
+          };
+          continue;
+        }
+      }
+
+      // If we reach here, this transition is fully valid and authorized!
+      return {
+        can: true,
+        reasonAr: 'الانتقال متاح',
+        reasonEn: 'Transition is available'
+      };
     }
 
-    return {
-      can: true,
-      reasonAr: 'الانتقال متاح',
-      reasonEn: 'Transition is available'
-    };
+    // If none of the matching transitions succeeded, return the last error encountered
+    return lastResult!;
   }
 
   /**
@@ -98,11 +109,11 @@ export class DocumentLifecycleEngine<TState extends string = string, TEvent exte
     userRole: string,
     context: TContext
   ): Promise<FsmTransitionResult<TState>> {
-    const transition = this.config.transitions.find(
+    const matchingTransitions = this.config.transitions.filter(
       t => t.from === currentState && t.event === event
     );
 
-    if (!transition) {
+    if (matchingTransitions.length === 0) {
       return {
         success: false,
         fromState: currentState,
@@ -112,21 +123,63 @@ export class DocumentLifecycleEngine<TState extends string = string, TEvent exte
       };
     }
 
-    const clearance = await this.canTransition(currentState, event, userRole, context);
-    if (!clearance.can) {
+    let chosenTransition: typeof this.config.transitions[0] | null = null;
+    let lastErrorClearance: { can: boolean; reasonAr: string; reasonEn: string } | null = null;
+
+    for (const transition of matchingTransitions) {
+      // Check Role Authority
+      if (transition.authorizedRoles && transition.authorizedRoles.length > 0) {
+        if (!transition.authorizedRoles.includes(userRole)) {
+          lastErrorClearance = {
+            can: false,
+            reasonAr: `غير مصرح لدور المستخدم (${userRole}) بتنفيذ هذا الإجراء`,
+            reasonEn: `User role (${userRole}) is not authorized to execute this action`
+          };
+          continue;
+        }
+      }
+
+      // Check Guard Conditions
+      if (transition.guard) {
+        try {
+          const guardPassed = await transition.guard(context);
+          if (!guardPassed) {
+            lastErrorClearance = {
+              can: false,
+              reasonAr: `لم يتم استيفاء شروط التحقق المسبقة للانتقال`,
+              reasonEn: `Pre-conditions for this transition were not met`
+            };
+            continue;
+          }
+        } catch (err: any) {
+          lastErrorClearance = {
+            can: false,
+            reasonAr: `فشل التحقق المسبق: ${err.message}`,
+            reasonEn: `Pre-condition check failed: ${err.message}`
+          };
+          continue;
+        }
+      }
+
+      // Found the first valid matching transition!
+      chosenTransition = transition;
+      break;
+    }
+
+    if (!chosenTransition) {
       return {
         success: false,
         fromState: currentState,
         toState: currentState,
-        messageAr: clearance.reasonAr,
-        messageEn: clearance.reasonEn
+        messageAr: lastErrorClearance?.reasonAr || `فشل التحقق المسبق للانتقال للحدث (${event})`,
+        messageEn: lastErrorClearance?.reasonEn || `Pre-condition check failed for transition event (${event})`
       };
     }
 
     // Execute the post-transition action hook
-    if (transition.action) {
+    if (chosenTransition.action) {
       try {
-        await transition.action(context);
+        await chosenTransition.action(context);
       } catch (actionErr: any) {
         return {
           success: false,
@@ -141,9 +194,9 @@ export class DocumentLifecycleEngine<TState extends string = string, TEvent exte
     return {
       success: true,
       fromState: currentState,
-      toState: transition.to,
-      messageAr: `تم الانتقال بنجاح إلى: ${this.config.states[transition.to]?.labelAr || transition.to}`,
-      messageEn: `Transitioned successfully to: ${this.config.states[transition.to]?.labelEn || transition.to}`
+      toState: chosenTransition.to,
+      messageAr: `تم الانتقال بنجاح إلى: ${this.config.states[chosenTransition.to]?.labelAr || chosenTransition.to}`,
+      messageEn: `Transitioned successfully to: ${this.config.states[chosenTransition.to]?.labelEn || chosenTransition.to}`
     };
   }
 }

@@ -60,6 +60,7 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
 
   // Validation & feedback states
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showToast, setShowToast] = useState<boolean>(false);
   const [successStatus, setSuccessStatus] = useState<'Draft' | 'Pending'>('Pending');
   const [createdTxNo, setCreatedTxNo] = useState<string>('');
@@ -259,93 +260,104 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
   // Submit form with explicit status target
   const handleSubmit = (e: React.FormEvent, targetStatus: 'Draft' | 'Pending') => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!validate()) return;
 
-    // Map items to sub-items structure
-    const parsedItems = items.map(it => {
-      const val = parseFloat(it.amount) || 0;
-      const signedVal = it.sign === '-' ? -val : val;
-      return {
-        description: it.description.trim(),
-        amount: signedVal
-      };
-    });
-
-    // Combined descriptions for lists
-    const combinedDescription = parsedItems.map(it => {
-      const prefix = it.amount < 0 ? '(-)' : '';
-      return `${prefix}${it.description}`;
-    }).join(' / ');
-    
-    if (editingTxId) {
-      // Update existing transaction
-      const res = CustodyDB.updateTransaction(editingTxId, {
-        date,
-        station_id: stationId,
-        description: combinedDescription,
-        amount: totalAmount,
-        category_id: categoryId,
-        items: parsedItems,
-        amount_in_words: {
-          ar: getArabicTafqeet(totalAmount),
-          en: getEnglishTafqeet(totalAmount)
-        },
-        notes: notes.trim() || undefined,
-        status: targetStatus,
-        attachments: attachments
+    setIsSubmitting(true);
+    try {
+      // Map items to sub-items structure
+      const parsedItems = items.map(it => {
+        const val = parseFloat(it.amount) || 0;
+        const signedVal = it.sign === '-' ? -val : val;
+        return {
+          description: it.description.trim(),
+          amount: signedVal
+        };
       });
+
+      // Combined descriptions for lists
+      const combinedDescription = parsedItems.map(it => {
+        const prefix = it.amount < 0 ? '(-)' : '';
+        return `${prefix}${it.description}`;
+      }).join(' / ');
       
-      if (!res.success) {
-        setErrors({ submit: res.errors?.join(' \n ') || 'Failed to update transaction' });
-        return;
+      if (editingTxId) {
+        // Update existing transaction
+        const res = CustodyDB.updateTransaction(editingTxId, {
+          date,
+          station_id: stationId,
+          description: combinedDescription,
+          amount: totalAmount,
+          category_id: categoryId,
+          items: parsedItems,
+          amount_in_words: {
+            ar: getArabicTafqeet(totalAmount),
+            en: getEnglishTafqeet(totalAmount)
+          },
+          notes: notes.trim() || undefined,
+          status: targetStatus,
+          attachments: attachments
+        });
+        
+        if (!res.success) {
+          setErrors({ submit: res.errors?.join(' \n ') || 'Failed to update transaction' });
+          setIsSubmitting(false);
+          return;
+        }
+        
+        setCreatedTxNo(editingTxNo || 'TX-Updated');
+        setEditingTxId(null);
+        setEditingTxNo('');
+      } else {
+        // Add transaction via CustodyDB manager
+        const res = CustodyDB.addTransaction({
+          date,
+          station_id: stationId,
+          description: combinedDescription,
+          amount: totalAmount,
+          category_id: categoryId,
+          items: parsedItems,
+          amount_in_words: {
+            ar: getArabicTafqeet(totalAmount),
+            en: getEnglishTafqeet(totalAmount)
+          },
+          notes: notes.trim() || undefined,
+          status: targetStatus,
+          attachments: attachments
+        });
+        
+        if (!res.success) {
+          setErrors({ submit: res.errors?.join(' \n ') || 'Failed to create transaction' });
+          setIsSubmitting(false);
+          return;
+        }
+        
+        setCreatedTxNo(res.data?.transaction_no || 'TX-Created');
       }
-      
-      setCreatedTxNo(editingTxNo || 'TX-Updated');
-      setEditingTxId(null);
-      setEditingTxNo('');
-    } else {
-      // Add transaction via CustodyDB manager
-      const res = CustodyDB.addTransaction({
-        date,
-        station_id: stationId,
-        description: combinedDescription,
-        amount: totalAmount,
-        category_id: categoryId,
-        items: parsedItems,
-        amount_in_words: {
-          ar: getArabicTafqeet(totalAmount),
-          en: getEnglishTafqeet(totalAmount)
-        },
-        notes: notes.trim() || undefined,
-        status: targetStatus,
-        attachments: attachments
-      });
-      
-      if (!res.success) {
-        setErrors({ submit: res.errors?.join(' \n ') || 'Failed to create transaction' });
-        return;
+
+      // Reset Form
+      setItems([{ description: '', amount: '', sign: '+' }]);
+      setNotes('');
+      setAttachments([]);
+      if (!(activeUser?.role === 'StationAdmin' && activeUser?.station_id)) {
+        setStationId(activeUser?.station_id || (scopedStations.length > 0 ? scopedStations[0].id : ''));
       }
-      
-      setCreatedTxNo(res.data?.transaction_no || 'TX-Created');
+      setSuccessStatus(targetStatus);
+      setShowToast(true);
+
+      // Auto scroll to top of page to see toast and feedback
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Auto hide toast after 5 seconds
+      setTimeout(() => {
+        setShowToast(false);
+      }, 5000);
+    } catch (err: any) {
+      console.error('Submission failed:', err);
+      setErrors({ submit: err.message || 'An unexpected error occurred.' });
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // Reset Form
-    setItems([{ description: '', amount: '', sign: '+' }]);
-    setNotes('');
-    setAttachments([]);
-    if (!(activeUser?.role === 'StationAdmin' && activeUser?.station_id)) {
-      setStationId(activeUser?.station_id || (scopedStations.length > 0 ? scopedStations[0].id : ''));
-    }
-    setSuccessStatus(targetStatus);
-    setShowToast(true);
-
-    // Auto scroll to top of page to see toast and feedback
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-
-    // Auto hide toast after 5 seconds
-    setTimeout(() => {
-      setShowToast(false);
-    }, 5000);
   };
 
   // Load Saved Drafts for this station/user scoped environment
@@ -857,26 +869,32 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
                 {/* Save as Draft */}
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={(e) => handleSubmit(e, 'Draft')}
                   className={`flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all border ${
+                    isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+                  } ${
                     theme === 'dark' 
                       ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' 
                       : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                   }`}
                 >
                   <Save size={16} />
-                  <span>{isRtl ? 'حفظ كمسودة (Draft)' : 'Save as Draft'}</span>
+                  <span>{isSubmitting ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ كمسودة (Draft)' : 'Save as Draft')}</span>
                 </button>
 
                 {/* Submit as Pending */}
                 <button
                   id="btn-submit-expense"
                   type="button"
+                  disabled={isSubmitting}
                   onClick={(e) => handleSubmit(e, 'Pending')}
-                  className="flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-md shadow-emerald-600/10 hover:shadow-lg hover:scale-[1.01]"
+                  className={`flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-md shadow-emerald-600/10 hover:shadow-lg hover:scale-[1.01] ${
+                    isSubmitting ? 'opacity-50 cursor-not-allowed bg-emerald-700' : ''
+                  }`}
                 >
                   <FilePlus2 size={16} />
-                  <span>{isRtl ? 'تقديم كطلب معلق (Pending)' : 'Submit as Pending'}</span>
+                  <span>{isSubmitting ? (isRtl ? 'جاري التقديم...' : 'Submitting...') : (isRtl ? 'تقديم كطلب معلق (Pending)' : 'Submit as Pending')}</span>
                 </button>
               </div>
             </form>

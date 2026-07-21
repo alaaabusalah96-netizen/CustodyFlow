@@ -109,6 +109,13 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     const engine = new AccountingBusinessEngine();
     const accounts = AccountingBusinessEngine.getAccounts(companyId);
 
+    // Validate non-negative values (BUG-05)
+    for (const ln of lines) {
+      if (ln.debit < 0 || ln.credit < 0) {
+        throw new Error(`Accounting entries cannot contain negative values. Found debit: ${ln.debit}, credit: ${ln.credit}`);
+      }
+    }
+
     // Form complete Ledger Lines
     const ledgerLines: LedgerLine[] = lines.map(ln => {
       const acc = accounts.find(a => a.code === ln.accountCode);

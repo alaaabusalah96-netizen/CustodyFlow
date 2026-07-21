@@ -125,6 +125,9 @@ export interface Transaction {
   attachments?: Attachment[];
   tenantId?: string;
   organizationId?: string;
+  metadata?: {
+    version: number;
+  };
 }
 
 export interface ActivityLog {

@@ -49,8 +49,11 @@ import { StationsModule } from './db/stations';
 import { NotificationsModule } from './db/notifications';
 import { TransactionsModule } from './db/transactions';
 import { ModulesModule, ERP_MODULES_REGISTRY, CompanyModuleSettings } from './db/modules';
+import { ConfigurationEngine } from './lib/enterprise/configuration';
+import { TenantSettings } from './types/enterprise';
+import { db } from './firebase';
 
-export { hashPassword, legacyHashPassword, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings };
+export { hashPassword, legacyHashPassword, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings, ConfigurationEngine, type TenantSettings };
 
 export class CustodyDB {
   static hashPassword(password: string, salt: string = ''): string {
@@ -450,6 +453,20 @@ export class CustodyDB {
     lastDocId?: string
   ): Promise<{ data: T[]; lastDocId?: string; hasMore: boolean }> {
     return TransactionsModule.fetchPaginated<T>(collectionName, limitVal, lastDocId);
+  }
+
+  static getConfigurationEngine(): ConfigurationEngine {
+    return new ConfigurationEngine(db as any);
+  }
+
+  static async getTenantSettings(tenantId: string): Promise<TenantSettings> {
+    const engine = CustodyDB.getConfigurationEngine();
+    return await engine.getTenantSettings(tenantId);
+  }
+
+  static async saveTenantSettings(tenantId: string, settings: Partial<TenantSettings>): Promise<TenantSettings> {
+    const engine = CustodyDB.getConfigurationEngine();
+    return await engine.saveTenantSettings(tenantId, settings);
   }
 }
 

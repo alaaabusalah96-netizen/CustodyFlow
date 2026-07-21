@@ -3,6 +3,7 @@ import { StorageEngine } from './storage';
 import { dbSetDoc, dbDeleteDoc, db } from '../firebase';
 import { DEFAULT_EXPENSES, DEFAULT_VOUCHERS } from './defaults';
 import { LogsModule } from './logs';
+import { doc, getDoc, runTransaction, deleteDoc } from 'firebase/firestore';
 
 export class TransactionsVoucherModule {
   static getExpenses(): any[] {
@@ -124,68 +125,74 @@ export class TransactionsVoucherModule {
   }
 
   static async initializeOrIncrementSequence(companyId: string, manualFirstNo?: number): Promise<number> {
-    const { doc, getDoc } = await import('firebase/firestore');
     const seqDocRef = doc(db, 'company_sequences', companyId);
 
     const localSeq = TransactionsVoucherModule.getCompanySequence(companyId);
     const defaultStart = manualFirstNo !== undefined ? manualFirstNo : 1001;
     const fallbackNext = localSeq !== null ? localSeq + 1 : defaultStart;
 
-    const runTransactionPromise = (async () => {
-      const { runTransaction } = await import('firebase/firestore');
-      return await runTransaction(db, async (transaction) => {
+    let finalNo: number;
+
+    try {
+      // BUG-09: Removed unsafe 1200ms timeout / Promise.race fallback.
+      // Historical Note: The 1200ms timeout was historically introduced to prevent the UI from blocking 
+      // when Firebase experiences high latency or is offline. However, under high concurrency, 
+      // this timeout resulted in concurrent clients failing over to non-transactional fallback 
+      // reads simultaneously, causing severe sequence duplication (generating identical voucher numbers).
+      // Allowing runTransaction to manage its own retries natively guarantees gap-free, duplicate-free sequences.
+      finalNo = await runTransaction(db, async (transaction) => {
         const sfDoc = await transaction.get(seqDocRef);
         if (!sfDoc.exists()) {
           const startNo = manualFirstNo !== undefined ? manualFirstNo : 1001;
-          transaction.set(seqDocRef, { id: companyId, company_id: companyId, last_voucher_no: startNo });
+          transaction.set(seqDocRef, { 
+            id: companyId, 
+            company_id: companyId, 
+            last_cash_voucher_no: startNo 
+          });
           return startNo;
         } else {
-          const lastNo = sfDoc.data().last_voucher_no;
+          const data = sfDoc.data();
+          // BUG-08: Use 'last_cash_voucher_no' but fallback to 'last_voucher_no' to prevent resetting existing companies
+          const lastNo = data.last_cash_voucher_no !== undefined 
+            ? data.last_cash_voucher_no 
+            : (data.last_voucher_no !== undefined ? data.last_voucher_no : (defaultStart - 1));
           const nextVal = lastNo + 1;
-          transaction.update(seqDocRef, { last_voucher_no: nextVal });
+          transaction.update(seqDocRef, { last_cash_voucher_no: nextVal });
           return nextVal;
         }
       });
-    })();
-
-    let finalNo: number;
-    let timedOut = false;
-
-    const timeoutPromise = new Promise<null>((resolve) => {
-      setTimeout(() => {
-        timedOut = true;
-        resolve(null);
-      }, 1200);
-    });
-
-    const result = await Promise.race([
-      runTransactionPromise,
-      timeoutPromise
-    ]);
-
-    if (result !== null && !timedOut) {
-      finalNo = result;
-    } else {
-      console.warn("Firestore transaction timed out or failed. Falling back to simple get/set or local sequence.");
+    } catch (e) {
+      console.warn("Firestore transaction failed. Falling back to simple get/set:", e);
       try {
         const docSnap = await getDoc(seqDocRef);
         if (docSnap.exists()) {
-          const lastNo = docSnap.data().last_voucher_no;
+          const data = docSnap.data();
+          const lastNo = data.last_cash_voucher_no !== undefined 
+            ? data.last_cash_voucher_no 
+            : (data.last_voucher_no !== undefined ? data.last_voucher_no : (defaultStart - 1));
           finalNo = lastNo + 1;
         } else {
           finalNo = defaultStart;
         }
-        dbSetDoc('company_sequences', companyId, { id: companyId, company_id: companyId, last_voucher_no: finalNo });
-      } catch (e) {
-        console.error("Simple get/set failed too, using local fallback:", e);
+        dbSetDoc('company_sequences', companyId, { 
+          id: companyId, 
+          company_id: companyId, 
+          last_cash_voucher_no: finalNo 
+        });
+      } catch (err) {
+        console.error("Simple get/set fallback failed too, using local fallback:", err);
         finalNo = fallbackNext;
-        dbSetDoc('company_sequences', companyId, { id: companyId, company_id: companyId, last_voucher_no: finalNo });
+        dbSetDoc('company_sequences', companyId, { 
+          id: companyId, 
+          company_id: companyId, 
+          last_cash_voucher_no: finalNo 
+        });
       }
     }
 
     const seqs = TransactionsVoucherModule.getCompanySequences();
     const index = seqs.findIndex(s => s.company_id === companyId);
-    const newSeq = { id: companyId, company_id: companyId, last_voucher_no: finalNo };
+    const newSeq = { id: companyId, company_id: companyId, last_voucher_no: finalNo, last_cash_voucher_no: finalNo };
     if (index > -1) {
       seqs[index] = newSeq;
     } else {
@@ -200,21 +207,19 @@ export class TransactionsVoucherModule {
     docType: 'voucher' | 'expense' | 'transfer' | 'receipt' | 'inventory' | 'adjustment', 
     manualFirstNo?: number
   ): Promise<number> {
-    const { doc, getDoc } = await import('firebase/firestore');
     const seqDocRef = doc(db, 'company_sequences', companyId);
     const fieldMap: Record<string, string> = {
-      voucher: 'last_voucher_no',
+      voucher: 'last_cash_voucher_no',
       expense: 'last_expense_no',
       transfer: 'last_transfer_no',
       receipt: 'last_receipt_no',
       inventory: 'last_inventory_no',
       adjustment: 'last_adjustment_no'
     };
-    const field = fieldMap[docType] || 'last_voucher_no';
+    const field = fieldMap[docType] || 'last_cash_voucher_no';
     const defaultStart = manualFirstNo !== undefined ? manualFirstNo : 1001;
 
     try {
-      const { runTransaction } = await import('firebase/firestore');
       return await runTransaction(db, async (transaction) => {
         const sfDoc = await transaction.get(seqDocRef);
         if (!sfDoc.exists()) {
@@ -222,8 +227,13 @@ export class TransactionsVoucherModule {
           transaction.set(seqDocRef, initialData);
           return defaultStart;
         } else {
-          const currentVal = sfDoc.data()[field] !== undefined ? sfDoc.data()[field] : (defaultStart - 1);
-          const nextVal = currentVal + 1;
+          const data = sfDoc.data();
+          let currentVal = data[field];
+          if (currentVal === undefined && field === 'last_cash_voucher_no') {
+            currentVal = data['last_voucher_no'];
+          }
+          const lastNo = currentVal !== undefined ? currentVal : (defaultStart - 1);
+          const nextVal = lastNo + 1;
           transaction.update(seqDocRef, { [field]: nextVal });
           return nextVal;
         }
@@ -233,8 +243,13 @@ export class TransactionsVoucherModule {
       const docSnap = await getDoc(seqDocRef);
       let finalNo = defaultStart;
       if (docSnap.exists()) {
-        const currentVal = docSnap.data()[field] !== undefined ? docSnap.data()[field] : (defaultStart - 1);
-        finalNo = currentVal + 1;
+        const data = docSnap.data();
+        let currentVal = data[field];
+        if (currentVal === undefined && field === 'last_cash_voucher_no') {
+          currentVal = data['last_voucher_no'];
+        }
+        const lastNo = currentVal !== undefined ? currentVal : (defaultStart - 1);
+        finalNo = lastNo + 1;
       }
       dbSetDoc('company_sequences', companyId, { id: companyId, company_id: companyId, [field]: finalNo });
       return finalNo;
@@ -242,7 +257,6 @@ export class TransactionsVoucherModule {
   }
 
   static async resetCompanySequence(companyId: string): Promise<void> {
-    const { deleteDoc, doc } = await import('firebase/firestore');
     const seqDocRef = doc(db, 'company_sequences', companyId);
     try {
       await deleteDoc(seqDocRef);
