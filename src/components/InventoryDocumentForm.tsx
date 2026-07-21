@@ -15,7 +15,11 @@ import {
   Hash,
   Activity,
   DollarSign,
-  Layers
+  Layers,
+  Truck,
+  PackageCheck,
+  Package,
+  X
 } from 'lucide-react';
 import { 
   InventoryDocument, 
@@ -28,6 +32,8 @@ import {
 } from '../types/inventory';
 import { InventoryModule } from '../db/inventory';
 import { CustodyDB } from '../db';
+import { PurchasingBusinessEngine } from '../lib/enterprise/purchasing_engine';
+import { PurchaseOrder } from '../types/purchasing';
 import kemitLogo from '../assets/images/kemit_logo_1784280480891.jpg';
 
 interface InventoryDocumentFormProps {
@@ -84,6 +90,215 @@ export default function InventoryDocumentForm({
   const [statement, setStatement] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [items, setItems] = useState<(Omit<InventoryDocItem, 'product_code' | 'product_name' | 'unit'> & { batch_no?: string; expiry_date?: string })[]>([]);
+
+  // PO & Transfer Selection States
+  const [poSearchQuery, setPoSearchQuery] = useState<string>('');
+  const [selectedShipmentRef, setSelectedShipmentRef] = useState<string>('');
+
+  // Sample Purchase Orders for Supplier Receipts
+  const samplePurchaseOrders: PurchaseOrder[] = useMemo(() => [
+    {
+      id: 'sample-po-1',
+      company_id: activeUser?.company_id || 'comp-1',
+      poNumber: 'PO-2026-0001',
+      vendorId: 'sup-1',
+      vendorName: 'Shell Egypt (شل مصر)',
+      date: '2026-07-20',
+      totalAmount: 70500,
+      status: 'ISSUED',
+      notes: 'طلب توريد زيوت شل هيلكس وفلاتر هواء للمخازن',
+      items: [
+        { productId: 'prod-1', productCode: 'PRD-MTR-01', productName: 'Shell Helix Motor Oil 4L (زيت محرك شل هيلكس 4 لتر)', unit: 'عبوة (Bottle)', qty: 50, unitPrice: 1200, totalPrice: 60000 },
+        { productId: 'prod-4', productCode: 'PRD-FIL-04', productName: 'Air Filter (فلتر هواء محرك)', unit: 'عدد (Piece)', qty: 30, unitPrice: 350, totalPrice: 10500 }
+      ],
+      metadata: { createdAt: new Date().toISOString(), createdBy: 'system', companyId: 'comp-1', version: 1 }
+    },
+    {
+      id: 'sample-po-2',
+      company_id: activeUser?.company_id || 'comp-1',
+      poNumber: 'PO-2026-0002',
+      vendorId: 'sup-2',
+      vendorName: 'Bridgestone Middle East (بريدجستون الشرق الأوسط)',
+      date: '2026-07-21',
+      totalAmount: 96000,
+      status: 'ISSUED',
+      notes: 'أمر شراء إطارات بريدجستون الأصلي',
+      items: [
+        { productId: 'prod-3', productCode: 'PRD-TIR-03', productName: 'Bridgestone Tire 205/55R16 (إطار بريدجستون 205/55R16)', unit: 'عدد (Piece)', qty: 20, unitPrice: 4800, totalPrice: 96000 }
+      ],
+      metadata: { createdAt: new Date().toISOString(), createdBy: 'system', companyId: 'comp-1', version: 1 }
+    },
+    {
+      id: 'sample-po-3',
+      company_id: activeUser?.company_id || 'comp-1',
+      poNumber: 'PO-2026-0003',
+      vendorId: 'sup-3',
+      vendorName: 'El-Ahram Batteries Co. (شركة الأهرام للبطاريات)',
+      date: '2026-07-21',
+      totalAmount: 73750,
+      status: 'ISSUED',
+      notes: 'توريد بطاريات سيارات وأطقم تيل فرامل',
+      items: [
+        { productId: 'prod-2', productCode: 'PRD-BAT-02', productName: '12V 70Ah Car Battery (بطارية سيارة 12 فولت 70 أمبير)', unit: 'عدد (Piece)', qty: 15, unitPrice: 3500, totalPrice: 52500 },
+        { productId: 'prod-5', productCode: 'PRD-BRK-05', productName: 'Front Brake Pads Set (طقم تيل فرامل أمامي)', unit: 'طقم (Set)', qty: 25, unitPrice: 850, totalPrice: 21250 }
+      ],
+      metadata: { createdAt: new Date().toISOString(), createdBy: 'system', companyId: 'comp-1', version: 1 }
+    },
+    {
+      id: 'sample-po-4',
+      company_id: activeUser?.company_id || 'comp-1',
+      poNumber: 'PO-2026-0004',
+      vendorId: 'sup-4',
+      vendorName: 'Ghabour Auto Parts (جي بي غبور لقطع الغيار)',
+      date: '2026-07-21',
+      totalAmount: 53200,
+      status: 'ISSUED',
+      notes: 'شحنة قطع غيار وفلاتر محركات',
+      items: [
+        { productId: 'prod-5', productCode: 'PRD-BRK-05', productName: 'Front Brake Pads Set (طقم تيل فرامل أمامي)', unit: 'طقم (Set)', qty: 40, unitPrice: 820, totalPrice: 32800 },
+        { productId: 'prod-4', productCode: 'PRD-FIL-04', productName: 'Air Filter (فلتر هواء محرك)', unit: 'عدد (Piece)', qty: 60, unitPrice: 340, totalPrice: 20400 }
+      ],
+      metadata: { createdAt: new Date().toISOString(), createdBy: 'system', companyId: 'comp-1', version: 1 }
+    }
+  ], [activeUser]);
+
+  // Combine real & sample purchase orders
+  const availablePurchaseOrders = useMemo(() => {
+    const companyId = activeUser?.company_id || 'comp-1';
+    const realPOs = PurchasingBusinessEngine.getPurchaseOrders(companyId);
+    const existingNumbers = new Set(realPOs.map(p => p.poNumber));
+    const uniqueSamples = samplePurchaseOrders.filter(p => !existingNumbers.has(p.poNumber));
+    return [...realPOs, ...uniqueSamples];
+  }, [activeUser, samplePurchaseOrders]);
+
+  // Filter purchase orders by PO number search query
+  const filteredPurchaseOrders = useMemo(() => {
+    if (!poSearchQuery.trim()) return availablePurchaseOrders;
+    const q = poSearchQuery.toLowerCase().trim();
+    return availablePurchaseOrders.filter(po => 
+      po.poNumber.toLowerCase().includes(q) ||
+      po.vendorName.toLowerCase().includes(q) ||
+      po.items.some(i => i.productName.toLowerCase().includes(q) || i.productCode.toLowerCase().includes(q))
+    );
+  }, [availablePurchaseOrders, poSearchQuery]);
+
+  // Sample Transfer Shipments
+  const sampleTransferShipments = useMemo(() => [
+    {
+      id: 'sample-trf-1',
+      doc_no: 'TRF-2026-0010',
+      date: '2026-07-20',
+      doc_type: 'BranchTransfer' as InventoryDocType,
+      source_warehouse_id: 'wh-1',
+      dest_entity_id: sourceWarehouseId || 'wh-2',
+      dest_entity_type: 'warehouse' as const,
+      reason: 'تحويل مخزني لسد عجز المنتجات بالفرع',
+      recipient: 'أحمد المحمودي (سائق الشاحنة #542)',
+      statement: 'شحنة زيوت وبطاريات محولة من المخزن الرئيسي بالقاهرة',
+      status: 'Posted' as InventoryDocStatus,
+      company_id: activeUser?.company_id || 'comp-1',
+      tenantId: activeUser?.company_id || 'comp-1',
+      organizationId: activeUser?.company_id || 'comp-1',
+      version: 1,
+      created_at: new Date().toISOString(),
+      created_by: 'system',
+      items: [
+        { product_id: 'prod-1', product_code: 'PRD-MTR-01', product_name: 'Shell Helix Motor Oil 4L (زيت محرك شل هيلكس 4 لتر)', unit: 'عبوة (Bottle)', qty: 30, last_purchase_price: 1200, batch_no: 'BAT-2026-01', expiry_date: '2028-12-31' },
+        { product_id: 'prod-2', product_code: 'PRD-BAT-02', product_name: '12V 70Ah Car Battery (بطارية سيارة 12 فولت 70 أمبير)', unit: 'عدد (Piece)', qty: 10, last_purchase_price: 3500, batch_no: 'BAT-2026-02', expiry_date: '2029-06-30' }
+      ]
+    },
+    {
+      id: 'sample-trf-2',
+      doc_no: 'TRF-2026-0011',
+      date: '2026-07-21',
+      doc_type: 'Transfer' as InventoryDocType,
+      source_warehouse_id: 'wh-2',
+      dest_entity_id: sourceWarehouseId || 'wh-3',
+      dest_entity_type: 'warehouse' as const,
+      reason: 'شحنة تحويل إطارات وفلاتر عاجلة',
+      recipient: 'محمود الخولي (سائق النقل)',
+      statement: 'إذن تحويل وارد من مستودع الإسكندرية الفرعي',
+      status: 'Posted' as InventoryDocStatus,
+      company_id: activeUser?.company_id || 'comp-1',
+      tenantId: activeUser?.company_id || 'comp-1',
+      organizationId: activeUser?.company_id || 'comp-1',
+      version: 1,
+      created_at: new Date().toISOString(),
+      created_by: 'system',
+      items: [
+        { product_id: 'prod-3', product_code: 'PRD-TIR-03', product_name: 'Bridgestone Tire 205/55R16 (إطار بريدجستون 205/55R16)', unit: 'عدد (Piece)', qty: 12, last_purchase_price: 4800, batch_no: 'BAT-2026-03', expiry_date: '2030-01-01' },
+        { product_id: 'prod-4', product_code: 'PRD-FIL-04', product_name: 'Air Filter (فلتر هواء محرك)', unit: 'عدد (Piece)', qty: 25, last_purchase_price: 350, batch_no: 'BAT-2026-04', expiry_date: '2028-06-01' }
+      ]
+    },
+    {
+      id: 'sample-trf-3',
+      doc_no: 'TRF-2026-0012',
+      date: '2026-07-21',
+      doc_type: 'BranchTransfer' as InventoryDocType,
+      source_warehouse_id: 'wh-1',
+      dest_entity_id: sourceWarehouseId || 'wh-1',
+      dest_entity_type: 'warehouse' as const,
+      reason: 'إعادة توزيع مخزون قطع غيار بين الأفرع',
+      recipient: 'سامح حسن (مندوب الفرع)',
+      statement: 'شحنة أطقم تيل فرامل وزيوت محركات',
+      status: 'Posted' as InventoryDocStatus,
+      company_id: activeUser?.company_id || 'comp-1',
+      tenantId: activeUser?.company_id || 'comp-1',
+      organizationId: activeUser?.company_id || 'comp-1',
+      version: 1,
+      created_at: new Date().toISOString(),
+      created_by: 'system',
+      items: [
+        { product_id: 'prod-1', product_code: 'PRD-MTR-01', product_name: 'Shell Helix Motor Oil 4L (زيت محرك شل هيلكس 4 لتر)', unit: 'عبوة (Bottle)', qty: 20, last_purchase_price: 1200, batch_no: 'BAT-2026-05', expiry_date: '2028-11-15' },
+        { product_id: 'prod-5', product_code: 'PRD-BRK-05', product_name: 'Front Brake Pads Set (طقم تيل فرامل أمامي)', unit: 'طقم (Set)', qty: 15, last_purchase_price: 850, batch_no: 'BAT-2026-06', expiry_date: '2031-05-01' }
+      ]
+    }
+  ], [activeUser, sourceWarehouseId]);
+
+  // Combine real & sample transfers
+  const availableTransferShipments = useMemo(() => {
+    const realTrfs = InventoryModule.getInventoryDocuments().filter(d => 
+      ['Transfer', 'BranchTransfer', 'StationTransfer'].includes(d.doc_type)
+    );
+    const existingDocNos = new Set(realTrfs.map(t => t.doc_no));
+    const uniqueSamples = sampleTransferShipments.filter(t => !existingDocNos.has(t.doc_no));
+    return [...realTrfs, ...uniqueSamples];
+  }, [sampleTransferShipments]);
+
+  // Handle PO Selection
+  const handleSelectPO = (po: PurchaseOrder) => {
+    setDestEntityId(po.vendorId);
+    setItems(po.items.map(i => ({
+      product_id: i.productId,
+      qty: i.qty,
+      last_purchase_price: i.unitPrice,
+      batch_no: '',
+      expiry_date: '',
+      notes: ''
+    })));
+    setStatement(isRtl ? `استلام توريد شحنة بضاعة بموجب أمر الشراء رقم ${po.poNumber}` : `Goods receipt per PO #${po.poNumber}`);
+    setReason(isRtl ? `استلام مشتريات توريد من المورد ${po.vendorName}` : `Supplier goods receipt from ${po.vendorName}`);
+    setRecipient(isRtl ? 'مسؤول استلام المشتريات بالفرع' : 'Branch Receiving Inspector');
+    setSelectedShipmentRef(po.poNumber);
+  };
+
+  // Handle Transfer Selection
+  const handleSelectTransfer = (trf: InventoryDocument) => {
+    setReceiptTransferEntityId(trf.source_warehouse_id);
+    setItems(trf.items.map(i => ({
+      product_id: i.product_id,
+      qty: i.qty,
+      batch_no: i.batch_no || '',
+      expiry_date: i.expiry_date || '',
+      last_purchase_price: i.last_purchase_price || 0,
+      notes: i.notes || ''
+    })));
+    const srcName = warehouses.find(w => w.id === trf.source_warehouse_id)?.name || (isRtl ? 'الفرع المحول منه' : 'Source Branch');
+    setStatement(isRtl ? `استلام شحنة تحويل واردة رقم ${trf.doc_no} من ${srcName}` : `Received transfer shipment #${trf.doc_no}`);
+    setReason(trf.reason || (isRtl ? 'إذن استلام تحويل بين الفروع / المخازن' : 'Inter-branch stock transfer receipt'));
+    setRecipient(trf.recipient || (isRtl ? 'مشرف استلام المخزن' : 'Store Receiving Supervisor'));
+    setSelectedShipmentRef(trf.doc_no);
+  };
 
   // Phase 3 Multi-bin States
   const [activeBins, setActiveBins] = useState<WarehouseBin[]>([]);
@@ -693,6 +908,7 @@ export default function InventoryDocumentForm({
                   setReceiptSourceType('transfer');
                   setDestEntityId('');
                   setReceiptTransferEntityId('');
+                  setSelectedShipmentRef('');
                 }}
                 className={`flex-1 w-full px-4 py-3 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center justify-center gap-2 text-right ${
                   receiptSourceType === 'transfer'
@@ -711,6 +927,201 @@ export default function InventoryDocumentForm({
                 </div>
               </button>
             </div>
+
+            {/* Shipment Selection List for Transfer Receipts */}
+            {receiptSourceType === 'transfer' && (
+              <div className="p-4 rounded-xl border bg-slate-50/80 dark:bg-slate-800/40 border-blue-500/30 space-y-3 mt-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                    <Truck size={14} />
+                    <span>{isRtl ? 'اختر شحنة التحويل الواردة للفرع (استلام أوتوماتيكي بدون كتابة):' : 'Select Incoming Transfer Shipment:'}</span>
+                  </span>
+                  <span className="text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2.5 py-0.5 rounded-full font-bold">
+                    {availableTransferShipments.length} {isRtl ? 'شحنات صادرة للفرع' : 'Shipments'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2.5 max-h-60 overflow-y-auto pr-1">
+                  {availableTransferShipments.map(trf => {
+                    const isSelected = selectedShipmentRef === trf.doc_no;
+                    const srcWarehouse = warehouses.find(w => w.id === trf.source_warehouse_id);
+                    const itemsSummary = trf.items.map(i => `${i.product_name || products.find(p => p.id === i.product_id)?.name || i.product_id}: ${i.qty}`).join(' | ');
+
+                    return (
+                      <div 
+                        key={trf.id}
+                        onClick={() => handleSelectTransfer(trf)}
+                        className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-right ${
+                          isSelected 
+                            ? 'bg-blue-600/10 border-blue-500 text-blue-600 dark:text-blue-300 ring-2 ring-blue-500/20' 
+                            : theme === 'dark' 
+                              ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-800' 
+                              : 'bg-white border-slate-200 text-slate-800 hover:bg-blue-50/50'
+                        }`}
+                      >
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 bg-blue-600 text-white rounded-md text-[10px] font-mono font-bold">
+                              {trf.doc_no}
+                            </span>
+                            <span className="font-bold text-xs truncate">
+                              {isRtl ? `من: ${srcWarehouse?.name || 'المخزن الرئيسي'}` : `From: ${srcWarehouse?.name || 'Main Warehouse'}`}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">({trf.date})</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
+                            <Package size={12} className="shrink-0 text-blue-500" />
+                            <span><strong className="text-slate-700 dark:text-slate-300">{isRtl ? 'النوع والعدد:' : 'Items & Qty:'}</strong> {itemsSummary}</span>
+                          </div>
+                          {trf.recipient && (
+                            <div className="text-[10px] text-slate-400">
+                              {isRtl ? `الناقل/السائق: ${trf.recipient}` : `Driver: ${trf.recipient}`}
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectTransfer(trf);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 flex items-center gap-1 transition-all ${
+                            isSelected 
+                              ? 'bg-blue-600 text-white shadow-sm' 
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-blue-600 hover:text-white'
+                          }`}
+                        >
+                          <PackageCheck size={13} />
+                          <span>{isSelected ? (isRtl ? 'مختارة' : 'Selected') : (isRtl ? 'استلام الشحنة' : 'Receive')}</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Shipment Selection List with Search for Supplier Receipts */}
+            {receiptSourceType === 'supplier' && (
+              <div className="p-4 rounded-xl border bg-slate-50/80 dark:bg-slate-800/40 border-emerald-500/30 space-y-3 mt-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                    <PackageCheck size={14} />
+                    <span>{isRtl ? 'اختر أمر الشراء (PO) أو ابحث برقم الـ PO لاستلام الشحنة أوتوماتيكياً:' : 'Select or Search Purchase Order (PO) to Receive:'}</span>
+                  </span>
+                  
+                  {/* Search Input for PO */}
+                  <div className="relative flex items-center min-w-[220px]">
+                    <Search size={13} className="absolute right-3 text-slate-400" />
+                    <input
+                      type="text"
+                      value={poSearchQuery}
+                      onChange={(e) => setPoSearchQuery(e.target.value)}
+                      placeholder={isRtl ? 'ابحث برقم الـ PO أو المورد...' : 'Search PO # or vendor...'}
+                      className={`w-full pr-8 pl-3 py-1.5 text-xs rounded-xl border focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
+                        theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+                      }`}
+                    />
+                    {poSearchQuery && (
+                      <button 
+                        type="button" 
+                        onClick={() => setPoSearchQuery('')}
+                        className="absolute left-2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2.5 max-h-60 overflow-y-auto pr-1">
+                  {filteredPurchaseOrders.length === 0 ? (
+                    <div className="text-center py-4 text-xs text-slate-400">
+                      {isRtl ? 'لا توجد أذونات/أوامر شراء مطابقة للبحث' : 'No matching purchase orders found'}
+                    </div>
+                  ) : (
+                    filteredPurchaseOrders.map(po => {
+                      const isSelected = selectedShipmentRef === po.poNumber;
+                      const itemsSummary = po.items.map(i => `${i.productName}: ${i.qty} ${i.unit}`).join(' | ');
+
+                      return (
+                        <div 
+                          key={po.id}
+                          onClick={() => handleSelectPO(po)}
+                          className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-right ${
+                            isSelected 
+                              ? 'bg-emerald-600/10 border-emerald-500 text-emerald-600 dark:text-emerald-300 ring-2 ring-emerald-500/20' 
+                              : theme === 'dark' 
+                                ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-800' 
+                                : 'bg-white border-slate-200 text-slate-800 hover:bg-emerald-50/50'
+                          }`}
+                        >
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 bg-emerald-600 text-white rounded-md text-[10px] font-mono font-bold">
+                                {po.poNumber}
+                              </span>
+                              <span className="font-bold text-xs truncate text-emerald-700 dark:text-emerald-400">
+                                {po.vendorName}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">({po.date})</span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
+                              <Package size={12} className="shrink-0 text-emerald-500" />
+                              <span><strong className="text-slate-700 dark:text-slate-300">{isRtl ? 'النوع والعدد:' : 'Type & Qty:'}</strong> {itemsSummary}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              {isRtl ? `إجمالي القيمة: ${po.totalAmount.toLocaleString()} ج.م` : `Total: $${po.totalAmount.toLocaleString()}`}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectPO(po);
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 flex items-center gap-1 transition-all ${
+                              isSelected 
+                                ? 'bg-emerald-600 text-white shadow-sm' 
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-emerald-600 hover:text-white'
+                            }`}
+                          >
+                            <PackageCheck size={13} />
+                            <span>{isSelected ? (isRtl ? 'مختارة' : 'Selected') : (isRtl ? 'استلام الشحنة' : 'Receive PO')}</span>
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Auto-filled Confirmation Banner */}
+            {selectedShipmentRef && (
+              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-between text-xs text-emerald-700 dark:text-emerald-300 font-bold animate-fade-in mt-3">
+                <div className="flex items-center gap-2">
+                  <Check size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>
+                    {isRtl 
+                      ? `تم اختيار الشحنة/أمر الشراء [${selectedShipmentRef}] بنجاح - تم استيراد الأصناف والكميات والبيانات تلقائياً دون حاجة لإدخال يدوي.` 
+                      : `Shipment [${selectedShipmentRef}] selected successfully - All items, quantities, and details prefilled.`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedShipmentRef('');
+                    setItems([]);
+                  }}
+                  className="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 text-[11px] underline shrink-0 mr-2"
+                >
+                  {isRtl ? 'إلغاء الاختيار' : 'Clear'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

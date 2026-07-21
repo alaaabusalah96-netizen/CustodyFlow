@@ -151,4 +151,20 @@ export interface ProductBatchStock {
   available_qty: number;
 }
 
+export interface InventoryWorkflowConfig {
+  valuation_method: 'FEFO' | 'FIFO' | 'LIFO' | 'MANUAL';
+  allow_overdraft: 'STRICT' | 'WARNING' | 'ALLOWED';
+  bin_tracking_policy: 'MANDATORY' | 'OPTIONAL' | 'DISABLED';
+  batch_expiry_policy: 'MANDATORY' | 'WARNING' | 'OPTIONAL';
+  transfer_approval_mode: 'TWO_STEP' | 'DIRECT';
+  auto_post_accounting: boolean;
+  require_approval_for_posting: boolean;
+  reorder_alert_threshold_percent: number;
+  default_inventory_account_code: string;
+  default_ap_account_code: string;
+  default_cogs_account_code: string;
+  default_variance_account_code: string;
+  default_scrap_account_code: string;
+}
+
 

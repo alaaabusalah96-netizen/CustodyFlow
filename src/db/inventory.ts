@@ -1,4 +1,4 @@
-import { Warehouse, Product, InventoryDocument, StockMovement, InventoryDocType, InventoryDocStatus, InventoryLedgerEntry, WarehouseBin } from '../types/inventory';
+import { Warehouse, Product, InventoryDocument, StockMovement, InventoryDocType, InventoryDocStatus, InventoryLedgerEntry, WarehouseBin, InventoryWorkflowConfig } from '../types/inventory';
 import { StorageEngine } from './storage';
 import { dbSetDoc, dbDeleteDoc, db } from '../firebase';
 import { UsersModule } from './users';
@@ -502,6 +502,39 @@ export class InventoryModule {
     };
   }
 
+  private static readonly DEFAULT_INVENTORY_CONFIG: InventoryWorkflowConfig = {
+    valuation_method: 'FEFO',
+    allow_overdraft: 'STRICT',
+    bin_tracking_policy: 'OPTIONAL',
+    batch_expiry_policy: 'WARNING',
+    transfer_approval_mode: 'TWO_STEP',
+    auto_post_accounting: true,
+    require_approval_for_posting: true,
+    reorder_alert_threshold_percent: 20,
+    default_inventory_account_code: '120101',
+    default_ap_account_code: '210101',
+    default_cogs_account_code: '510101',
+    default_variance_account_code: '510401',
+    default_scrap_account_code: '410101'
+  };
+
+  // Workflow Configuration
+  static getInventoryConfig(): InventoryWorkflowConfig {
+    const companyId = CompaniesModule.getSelectedCompanyId();
+    const key = `custodyflow_inventory_config_${companyId}`;
+    const stored = StorageEngine.getStored<InventoryWorkflowConfig>(key, InventoryModule.DEFAULT_INVENTORY_CONFIG);
+    return { ...InventoryModule.DEFAULT_INVENTORY_CONFIG, ...stored };
+  }
+
+  static saveInventoryConfig(config: Partial<InventoryWorkflowConfig>): InventoryWorkflowConfig {
+    const companyId = CompaniesModule.getSelectedCompanyId();
+    const key = `custodyflow_inventory_config_${companyId}`;
+    const current = InventoryModule.getInventoryConfig();
+    const updated = { ...current, ...config };
+    StorageEngine.setStored(key, updated);
+    return updated;
+  }
+
   // Products
   static getProducts(): Product[] {
     const companyId = CompaniesModule.getSelectedCompanyId();
@@ -749,12 +782,13 @@ export class InventoryModule {
   }
 
   /**
-   * Helper to compute real-time product stock grouped by Batch and Expiry Date, ordered FEFO (First Expired, First Out).
+   * Helper to compute real-time product stock grouped by Batch and Expiry Date, ordered dynamically based on company valuation strategy (FEFO / FIFO / LIFO / MANUAL).
    */
   static getProductBatches(productId: string, warehouseId: string): { batch_no: string; expiry_date?: string; available_qty: number }[] {
     if (!productId || !warehouseId) return [];
     const movements = InventoryModule.getStockMovements();
-    const batchMap = new Map<string, { batch_no: string; expiry_date?: string; available_qty: number }>();
+    const config = InventoryModule.getInventoryConfig();
+    const batchMap = new Map<string, { batch_no: string; expiry_date?: string; available_qty: number; first_date?: string }>();
 
     movements
       .filter(m => m.product_id === productId && m.warehouse_id === warehouseId)
@@ -763,7 +797,7 @@ export class InventoryModule {
         const expiry = m.expiry_date || '';
         const key = `${batchNo}___${expiry}`;
 
-        const existing = batchMap.get(key) || { batch_no: batchNo, expiry_date: expiry, available_qty: 0 };
+        const existing = batchMap.get(key) || { batch_no: batchNo, expiry_date: expiry, available_qty: 0, first_date: m.created_at || m.date };
         existing.available_qty += m.qty_change;
         batchMap.set(key, existing);
       });
@@ -771,14 +805,22 @@ export class InventoryModule {
     // Filter to positive balance batches
     const activeBatches = Array.from(batchMap.values()).filter(b => b.available_qty > 0);
 
-    // Sort FEFO: Oldest expiry date first
+    const method = config.valuation_method || 'FEFO';
     activeBatches.sort((a, b) => {
-      if (a.expiry_date && b.expiry_date) {
-        return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
+      if (method === 'FEFO') {
+        if (a.expiry_date && b.expiry_date) {
+          return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
+        }
+        if (a.expiry_date) return -1;
+        if (a.expiry_date) return 1;
+        return a.batch_no.localeCompare(b.batch_no);
+      } else if (method === 'FIFO') {
+        return (a.first_date || '').localeCompare(b.first_date || '');
+      } else if (method === 'LIFO') {
+        return (b.first_date || '').localeCompare(a.first_date || '');
+      } else {
+        return a.batch_no.localeCompare(b.batch_no);
       }
-      if (a.expiry_date) return -1;
-      if (b.expiry_date) return 1;
-      return a.batch_no.localeCompare(b.batch_no);
     });
 
     return activeBatches;
@@ -1461,6 +1503,11 @@ export class InventoryModule {
     operatorId: string
   ): Promise<void> {
     try {
+      const config = InventoryModule.getInventoryConfig();
+      if (!config.auto_post_accounting) {
+        return; // Auto accounting GL entry generation disabled by company workflow
+      }
+
       const companyId = doc.tenantId || 'comp-1';
       const products = InventoryModule.getProducts();
 
@@ -1488,27 +1535,33 @@ export class InventoryModule {
       const statementAr = `أثر محاسبي تلقائي: ${docTypeNameAr} رقم ${doc.doc_no} - ${doc.statement || doc.reason}`;
       const statementEn = `Auto Inventory Posting: ${doc.doc_type} #${doc.doc_no} - ${doc.statement || doc.reason}`;
 
+      const invAcc = config.default_inventory_account_code || '120101';
+      const apAcc = config.default_ap_account_code || '210101';
+      const cogsAcc = config.default_cogs_account_code || '510101';
+      const varAcc = config.default_variance_account_code || '510401';
+      const scrapAcc = config.default_scrap_account_code || '410101';
+
       const lines: { accountCode: string; debit: number; credit: number; notes?: string }[] = [];
 
       switch (doc.doc_type) {
         case 'Receipt':
           if (doc.receipt_source_type === 'transfer') {
             lines.push(
-              { accountCode: '120101', debit: totalAmount, credit: 0, notes: `Debit: Target Inventory (${doc.doc_no})` },
-              { accountCode: '120101', debit: 0, credit: totalAmount, notes: `Credit: Transfer Clearing (${doc.doc_no})` }
+              { accountCode: invAcc, debit: totalAmount, credit: 0, notes: `Debit: Target Inventory (${doc.doc_no})` },
+              { accountCode: invAcc, debit: 0, credit: totalAmount, notes: `Credit: Transfer Clearing (${doc.doc_no})` }
             );
           } else {
             lines.push(
-              { accountCode: '120101', debit: totalAmount, credit: 0, notes: `Debit: Warehouse Stock Inventory` },
-              { accountCode: '210101', debit: 0, credit: totalAmount, notes: `Credit: Accounts Payable (${doc.recipient || 'Supplier'})` }
+              { accountCode: invAcc, debit: totalAmount, credit: 0, notes: `Debit: Warehouse Stock Inventory` },
+              { accountCode: apAcc, debit: 0, credit: totalAmount, notes: `Credit: Accounts Payable (${doc.recipient || 'Supplier'})` }
             );
           }
           break;
 
         case 'Issue':
           lines.push(
-            { accountCode: '510101', debit: totalAmount, credit: 0, notes: `Debit: Operational Expense (${doc.reason})` },
-            { accountCode: '120101', debit: 0, credit: totalAmount, notes: `Credit: Warehouse Stock Inventory` }
+            { accountCode: cogsAcc, debit: totalAmount, credit: 0, notes: `Debit: Operational Expense (${doc.reason})` },
+            { accountCode: invAcc, debit: 0, credit: totalAmount, notes: `Credit: Warehouse Stock Inventory` }
           );
           break;
 
@@ -1516,43 +1569,43 @@ export class InventoryModule {
         case 'BranchTransfer':
         case 'StationTransfer':
           lines.push(
-            { accountCode: '120101', debit: totalAmount, credit: 0, notes: `Debit: Target Location Stock` },
-            { accountCode: '120101', debit: 0, credit: totalAmount, notes: `Credit: Source Location Stock` }
+            { accountCode: invAcc, debit: totalAmount, credit: 0, notes: `Debit: Target Location Stock` },
+            { accountCode: invAcc, debit: 0, credit: totalAmount, notes: `Credit: Source Location Stock` }
           );
           break;
 
         case 'SupplierReturn':
           lines.push(
-            { accountCode: '210101', debit: totalAmount, credit: 0, notes: `Debit: Accounts Payable Refund` },
-            { accountCode: '120101', debit: 0, credit: totalAmount, notes: `Credit: Warehouse Stock Inventory` }
+            { accountCode: apAcc, debit: totalAmount, credit: 0, notes: `Debit: Accounts Payable Refund` },
+            { accountCode: invAcc, debit: 0, credit: totalAmount, notes: `Credit: Warehouse Stock Inventory` }
           );
           break;
 
         case 'BranchReturn':
           lines.push(
-            { accountCode: '120101', debit: totalAmount, credit: 0, notes: `Debit: Warehouse Stock Inventory` },
-            { accountCode: '510101', debit: 0, credit: totalAmount, notes: `Credit: Operational Expense Adjustment` }
+            { accountCode: invAcc, debit: totalAmount, credit: 0, notes: `Debit: Warehouse Stock Inventory` },
+            { accountCode: cogsAcc, debit: 0, credit: totalAmount, notes: `Credit: Operational Expense Adjustment` }
           );
           break;
 
         case 'Damage':
           if (doc.scrap_action === 'IN') {
             lines.push(
-              { accountCode: '510301', debit: totalAmount, credit: 0, notes: `Debit: Scrapped Assets Expense` },
-              { accountCode: '120101', debit: 0, credit: totalAmount, notes: `Credit: Warehouse Stock Inventory` }
+              { accountCode: cogsAcc, debit: totalAmount, credit: 0, notes: `Debit: Scrapped Assets Expense` },
+              { accountCode: invAcc, debit: 0, credit: totalAmount, notes: `Credit: Warehouse Stock Inventory` }
             );
           } else {
             lines.push(
-              { accountCode: '110101', debit: totalAmount, credit: 0, notes: `Debit: Cash Receipts from Scrap` },
-              { accountCode: '410101', debit: 0, credit: totalAmount, notes: `Credit: Scrap Sales Revenue` }
+              { accountCode: scrapAcc, debit: totalAmount, credit: 0, notes: `Debit: Scrap Sales Account` },
+              { accountCode: invAcc, debit: 0, credit: totalAmount, notes: `Credit: Scrap Outflow` }
             );
           }
           break;
 
         case 'Adjustment':
           lines.push(
-            { accountCode: '120101', debit: totalAmount, credit: 0, notes: `Debit: Stock Adjustment` },
-            { accountCode: '510401', debit: 0, credit: totalAmount, notes: `Credit: Inventory Variance Adjustment` }
+            { accountCode: invAcc, debit: totalAmount, credit: 0, notes: `Debit: Stock Adjustment` },
+            { accountCode: varAcc, debit: 0, credit: totalAmount, notes: `Credit: Inventory Variance Adjustment` }
           );
           break;
 
@@ -1620,13 +1673,14 @@ export class InventoryModule {
         }
       }
 
-      // 1. Validate simple overdraft
+      // 1. Validate simple overdraft based on company workflow policy
+      const config = InventoryModule.getInventoryConfig();
       if (sourceQtyChange < 0 && (currentStock + sourceQtyChange) < 0) {
-        if (doc.doc_type !== 'Adjustment') {
+        if (doc.doc_type !== 'Adjustment' && config.allow_overdraft === 'STRICT') {
           return {
             success: false,
-            messageAr: `عذراً، الرصيد غير كافٍ للصنف ${item.product_name} في المخزن المحدد (الرصيد الحالي: ${currentStock})`,
-            messageEn: `Sorry, insufficient stock for item ${item.product_name} in selected warehouse (Current stock: ${currentStock})`
+            messageAr: `عذراً، الرصيد غير كافٍ للصنف ${item.product_name} في المخزن المحدد (الرصيد الحالي: ${currentStock}). يمكن تعديل سياسة الصرف بالسالب من إعدادات المخازن.`,
+            messageEn: `Sorry, insufficient stock for item ${item.product_name} in selected warehouse (Current stock: ${currentStock}). Overdraft policy can be updated in Inventory Settings.`
           };
         }
       }
