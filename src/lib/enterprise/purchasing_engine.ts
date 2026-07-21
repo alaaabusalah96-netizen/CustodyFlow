@@ -15,11 +15,20 @@ const prFsmConfig: FsmConfig<PRStatus, string, any> = {
   documentType: 'PurchaseRequest',
   initialState: 'PENDING_APPROVAL',
   states: {
+    DRAFT: { name: 'DRAFT', labelAr: 'مسودة', labelEn: 'Draft' },
     PENDING_APPROVAL: { name: 'PENDING_APPROVAL', labelAr: 'قيد الاعتماد', labelEn: 'Pending Approval' },
     APPROVED: { name: 'APPROVED', labelAr: 'معتمد', labelEn: 'Approved', isTerminal: true },
     REJECTED: { name: 'REJECTED', labelAr: 'مرفوض', labelEn: 'Rejected', isTerminal: true }
   },
   transitions: [
+    {
+      event: 'SUBMIT',
+      from: 'DRAFT',
+      to: 'PENDING_APPROVAL',
+      labelAr: 'تقديم الطلب',
+      labelEn: 'Submit Request',
+      authorizedRoles: ['Admin', 'RegionalManager', 'SystemAdmin', 'StationAdmin']
+    },
     {
       event: 'APPROVE',
       from: 'PENDING_APPROVAL',
@@ -43,10 +52,20 @@ const poFsmConfig: FsmConfig<POStatus, string, any> = {
   documentType: 'PurchaseOrder',
   initialState: 'ISSUED',
   states: {
+    DRAFT: { name: 'DRAFT', labelAr: 'مسودة', labelEn: 'Draft' },
     ISSUED: { name: 'ISSUED', labelAr: 'صادر', labelEn: 'Issued' },
-    RECEIVED: { name: 'RECEIVED', labelAr: 'مستلم', labelEn: 'Received', isTerminal: true }
+    RECEIVED: { name: 'RECEIVED', labelAr: 'مستلم', labelEn: 'Received', isTerminal: true },
+    CANCELLED: { name: 'CANCELLED', labelAr: 'ملغى', labelEn: 'Cancelled', isTerminal: true }
   },
   transitions: [
+    {
+      event: 'ISSUE',
+      from: 'DRAFT',
+      to: 'ISSUED',
+      labelAr: 'إصدار أمر الشراء',
+      labelEn: 'Issue PO',
+      authorizedRoles: ['Admin', 'RegionalManager', 'SystemAdmin']
+    },
     {
       event: 'RECEIVE',
       from: 'ISSUED',
@@ -54,6 +73,14 @@ const poFsmConfig: FsmConfig<POStatus, string, any> = {
       labelAr: 'استلام',
       labelEn: 'Receive',
       authorizedRoles: ['Admin', 'RegionalManager', 'SystemAdmin', 'StationAdmin']
+    },
+    {
+      event: 'CANCEL',
+      from: 'ISSUED',
+      to: 'CANCELLED',
+      labelAr: 'إلغاء أمر الشراء',
+      labelEn: 'Cancel PO',
+      authorizedRoles: ['Admin', 'RegionalManager', 'SystemAdmin']
     }
   ]
 };
