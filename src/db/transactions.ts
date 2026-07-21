@@ -126,7 +126,7 @@ export class TransactionsModule {
   }
 
   // Update
-  static updateTransaction(id: string, updates: Partial<Transaction>): { success: boolean; errors?: string[] } {
+  static async updateTransaction(id: string, updates: Partial<Transaction>): Promise<{ success: boolean; errors?: string[] }> {
     return TransactionsUpdateModule.updateTransaction(id, updates);
   }
 

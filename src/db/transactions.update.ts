@@ -14,7 +14,7 @@ import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 import { CustodyDB } from '../db';
 
 export class TransactionsUpdateModule {
-  static updateTransaction(id: string, updates: Partial<Transaction>): { success: boolean; errors?: string[] } {
+  static async updateTransaction(id: string, updates: Partial<Transaction>): Promise<{ success: boolean; errors?: string[] }> {
     try {
       const transactions = StorageEngine.getStored<Transaction[]>('transactions', DEFAULT_TRANSACTIONS);
       const idx = transactions.findIndex(t => t.id === id);
@@ -76,7 +76,7 @@ export class TransactionsUpdateModule {
             const statementAr = `قيد تلقائي: تسوية مصروف ${cat ? (cat.name_ar || cat.name_en || '') : ''} - سند رقم ${updated.voucher_no || ''}`;
             const statementEn = `Auto-post: Settlement of ${catName} expense - Voucher #${updated.voucher_no || ''}`;
             
-            AccountingBusinessEngine.postOperationalDoubleEntry(
+            await AccountingBusinessEngine.postOperationalDoubleEntry(
               compId,
               user?.id || 'system',
               `Voucher #${updated.voucher_no || 'N/A'}`,
@@ -86,9 +86,13 @@ export class TransactionsUpdateModule {
                 { accountCode: expenseCode, debit: amount, credit: 0, notes: `Debit: Operational Expense (${updated.transaction_no})` },
                 { accountCode: '110101', debit: 0, credit: amount, notes: `Credit: Cash in Hand` }
               ]
-            ).catch(err => console.error('Automated double-entry posting failed:', err));
+            );
           } catch (err) {
-            console.error('Automated double-entry posting preparation failed:', err);
+            console.error('Automated double-entry posting failed:', err);
+            return {
+              success: false,
+              errors: [`⚠️ فشل تسجيل القيد المحاسبي التلقائي: ${err instanceof Error ? err.message : String(err)}`]
+            };
           }
         }
 

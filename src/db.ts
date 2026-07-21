@@ -351,7 +351,7 @@ export class CustodyDB {
     return TransactionsModule.addTransaction(data);
   }
 
-  static updateTransaction(id: string, updates: Partial<Transaction>): { success: boolean; errors?: string[] } {
+  static async updateTransaction(id: string, updates: Partial<Transaction>): Promise<{ success: boolean; errors?: string[] }> {
     return TransactionsModule.updateTransaction(id, updates);
   }
 

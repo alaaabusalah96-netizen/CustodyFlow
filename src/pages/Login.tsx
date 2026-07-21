@@ -214,7 +214,8 @@ export default function Login({
         const updatedUsers = users.map(u => {
           const isPlatformAdmin = u.email && CustodyDB.isPlatformOwner(u.email);
           if (isPlatformAdmin) {
-            return { ...u, password: CustodyDB.hashPassword(newPassword, u.email) };
+            const userSalt = u.salt || u.email;
+            return { ...u, password: CustodyDB.hashPassword(newPassword, userSalt) };
           }
           return u;
         });
@@ -318,7 +319,8 @@ export default function Login({
 
     // Verify Password (Plain Text, Legacy Hash, or Salted Hash) - Fallback "123456" removed for security
     const storedPassword = foundUser.password || '';
-    const enteredHashSalted = CustodyDB.hashPassword(password, emailLower);
+    const userSalt = foundUser.salt || emailLower;
+    const enteredHashSalted = CustodyDB.hashPassword(password, userSalt);
     const enteredHashOldSalted = CustodyDB.legacyHashPassword(password, emailLower); // old email-only salt
     const enteredHashLegacy = CustodyDB.legacyHashPassword(password); // old unsalted fallback
     
@@ -443,7 +445,8 @@ export default function Login({
         }
 
         // Save the typed password to the database (removes default password completely)
-        const hashedEntered = CustodyDB.hashPassword(adminLoginEnteredPassword, adminLoginUser.email);
+        const adminSalt = adminLoginUser.salt || adminLoginUser.email;
+        const hashedEntered = CustodyDB.hashPassword(adminLoginEnteredPassword, adminSalt);
         const users = CustodyDB.getUsers();
         
         // Sync with Firebase Auth

@@ -240,10 +240,11 @@ export async function seedDatabaseIfEmpty(defaults: {
       // Seed users (with salted hashed passwords)
       defaults.users.forEach(u => {
         let pwd = u.password || '';
+        const salt = u.salt || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : u.email);
         if (pwd && !/^[0-9a-f]{64}$/i.test(pwd)) {
-          pwd = hashPassword(pwd, u.email);
+          pwd = hashPassword(pwd, salt);
         }
-        batch.set(doc(db, 'users', u.id), { ...u, password: pwd });
+        batch.set(doc(db, 'users', u.id), { ...u, salt, password: pwd });
       });
 
       // Seed logs

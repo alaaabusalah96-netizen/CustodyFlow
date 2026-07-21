@@ -51,6 +51,7 @@ export interface AppUser {
   is_active?: boolean;
   is_platform_owner?: boolean;
   password?: string;
+  salt?: string;
   security_pin?: string;
   impersonator?: AppUser;
   tenantId?: string;

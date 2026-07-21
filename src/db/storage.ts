@@ -34,11 +34,28 @@ export class StorageEngine {
 
   static setStored<T>(key: string, value: T): void {
     this.cache[key] = value;
-    localStorage.setItem(`custody_${key}`, JSON.stringify(value));
-    if (typeof window !== 'undefined') {
-      setTimeout(() => {
-        window.dispatchEvent(new Event('custody_db_updated'));
-      }, 0);
+    try {
+      localStorage.setItem(`custody_${key}`, JSON.stringify(value));
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          window.dispatchEvent(new Event('custody_db_updated'));
+        }, 0);
+      }
+    } catch (err: any) {
+      console.error(`Failed to write custody_${key} to localStorage:`, err);
+      const isQuotaError =
+        err?.name === 'QuotaExceededError' ||
+        err?.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+        err?.code === 22 ||
+        err?.code === 1014 ||
+        (typeof err?.message === 'string' && err.message.toLowerCase().includes('quota'));
+
+      if (isQuotaError) {
+        console.warn('⚠️ التخزين المحلي ممتلئ / Local storage quota exceeded.');
+        if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+          window.alert('⚠️ التخزين المحلي ممتلئ! يرجى تفريغ مساحة في المتصفح أو مسح البيانات القديمة.');
+        }
+      }
     }
   }
 }

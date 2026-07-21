@@ -124,7 +124,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       expect(result.errors?.length).toBeGreaterThan(0);
     });
 
-    it('should block modifying a Settled transaction and return error instead of throwing', () => {
+    it('should block modifying a Settled transaction and return error instead of throwing', async () => {
       const settledTx = {
         id: 'tx-settled-1',
         amount: 1000,
@@ -138,7 +138,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
 
       StorageEngine.setStored('transactions', [settledTx]);
 
-      const result = TransactionsUpdateModule.updateTransaction('tx-settled-1', { amount: 1200 });
+      const result = await TransactionsUpdateModule.updateTransaction('tx-settled-1', { amount: 1200 });
       expect(result.success).toBe(false);
       expect(result.errors?.[0]).toContain('Cannot modify, update, or void a Settled transaction');
     });
@@ -209,7 +209,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
   });
 
   describe('Custody Settlement Multi-Deduction Mitigation & Validation Test', () => {
-    it('should correctly process a 5,000 EGP settlement 5 consecutive times without double/triple deduction', () => {
+    it('should correctly process a 5,000 EGP settlement 5 consecutive times without double/triple deduction', async () => {
       // 5 consecutive iterations of the same settlement scenario
       for (let i = 1; i <= 5; i++) {
         // Reset state for this iteration
@@ -249,7 +249,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
         expect(reconBefore.underSettlementTotal).toBe(settlementAmount);
 
         // 2. Simulate clicking the UI button to settle (updateTransaction)
-        const result = TransactionsUpdateModule.updateTransaction(tx.id, { status: 'Settled' });
+        const result = await TransactionsUpdateModule.updateTransaction(tx.id, { status: 'Settled' });
         expect(result.success).toBe(true);
 
         // 3. Simulate onSnapshot sync from Firestore to client local state
@@ -280,7 +280,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       }
     });
 
-    it('should correctly process a 5,000 EGP settlement 10 consecutive times on the same custody, ensuring total deduction is exactly 50,000 EGP', () => {
+    it('should correctly process a 5,000 EGP settlement 10 consecutive times on the same custody, ensuring total deduction is exactly 50,000 EGP', async () => {
       const initialCustody = 100000;
       const settlementAmount = 5000;
       let currentCustody = initialCustody;
@@ -320,7 +320,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
         expect(reconBefore.cashAvailable).toBe(currentCustody - settlementAmount);
 
         // 2. Simulate clicking the UI button to settle (updateTransaction)
-        const result = TransactionsUpdateModule.updateTransaction(tx.id, { status: 'Settled' });
+        const result = await TransactionsUpdateModule.updateTransaction(tx.id, { status: 'Settled' });
         expect(result.success).toBe(true);
 
         // 3. Simulate onSnapshot sync from Firestore to client local state
@@ -401,7 +401,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
   });
 
   describe('Stage 3: Optimistic Concurrency Control (BUG-07)', () => {
-    it('should successfully update a transaction and increment its version if matching', () => {
+    it('should successfully update a transaction and increment its version if matching', async () => {
       // Mock validation requirements
       StorageEngine.setStored('active_user', DEFAULT_USERS[0]); // SystemAdmin
       StorageEngine.setStored('categories', [{ id: 'cat-6', name_ar: 'عام', name_en: 'General' }]);
@@ -429,7 +429,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       StorageEngine.setStored('transactions', [initialTx]);
 
       // Attempt to update with a matching version
-      const updateResult = TransactionsUpdateModule.updateTransaction('tx-concurrency-1', {
+      const updateResult = await TransactionsUpdateModule.updateTransaction('tx-concurrency-1', {
         amount: 300,
         metadata: { version: 1 }
       });
@@ -444,7 +444,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       expect(updatedTx.metadata.version).toBe(2);
     });
 
-    it('should reject modification and return an error if versions do not match', () => {
+    it('should reject modification and return an error if versions do not match', async () => {
       // Mock validation requirements
       StorageEngine.setStored('active_user', DEFAULT_USERS[0]); // SystemAdmin
       StorageEngine.setStored('categories', [{ id: 'cat-6', name_ar: 'عام', name_en: 'General' }]);
@@ -471,7 +471,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       StorageEngine.setStored('transactions', [initialTx]);
 
       // Attempt to update with a non-matching version (e.g. 4)
-      const updateResult = TransactionsUpdateModule.updateTransaction('tx-concurrency-2', {
+      const updateResult = await TransactionsUpdateModule.updateTransaction('tx-concurrency-2', {
         amount: 600,
         metadata: { version: 4 }
       });
@@ -686,7 +686,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       expect(unassignedRecon.custodyValue).toBe(40000);
     });
 
-    it('should successfully transition pending transactions to Under Settlement status without metadata concurrency errors', () => {
+    it('should successfully transition pending transactions to Under Settlement status without metadata concurrency errors', async () => {
       StorageEngine.setStored('active_user', DEFAULT_USERS[0]);
       StorageEngine.setStored('categories', [{ id: 'cat-6', name_ar: 'عام', name_en: 'General' }]);
       StorageEngine.setStored('stations', [{ id: 'stn-1', company_id: 'comp-1', custody_amount: 10000 }]);
@@ -712,7 +712,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       StorageEngine.setStored('transactions', [initialTx]);
 
       // Perform update to 'Under Settlement' as done when linking a cash payment voucher
-      const updateResult = TransactionsUpdateModule.updateTransaction('tx-settle-test-1', {
+      const updateResult = await TransactionsUpdateModule.updateTransaction('tx-settle-test-1', {
         status: 'Under Settlement',
         voucher_no: 'CPV-2026-001',
         voucher_date: '2026-07-21'
@@ -726,6 +726,52 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       expect(updatedTx.status).toBe('Under Settlement');
       expect(updatedTx.voucher_no).toBe('CPV-2026-001');
       expect(updatedTx.metadata.version).toBe(2);
+    });
+
+    it('should catch QuotaExceededError in StorageEngine.setStored without crashing (STORAGE-01)', () => {
+      const originalSetItem = localStorage.setItem;
+      let alertMessage = '';
+      const originalAlert = window.alert;
+      window.alert = (msg: string) => { alertMessage = msg; };
+
+      try {
+        localStorage.setItem = () => {
+          const err = new Error('Quota exceeded');
+          err.name = 'QuotaExceededError';
+          throw err;
+        };
+
+        expect(() => {
+          StorageEngine.setStored('test_quota_key', { foo: 'bar' });
+        }).not.toThrow();
+
+        expect(alertMessage).toContain('التخزين المحلي ممتلئ');
+      } finally {
+        localStorage.setItem = originalSetItem;
+        window.alert = originalAlert;
+      }
+    });
+
+    it('should generate unique user salt using crypto.randomUUID and store it with user (BUG-03)', () => {
+      const newUser: any = {
+        id: 'usr-salt-test-1',
+        email: 'salt_user@example.com',
+        full_name: 'Salt User Test',
+        role: 'StationAdmin' as const,
+        password: 'MyPassword123!',
+        permissions: {}
+      };
+
+      StorageEngine.setStored('users', []);
+      UsersModule.saveUsers([newUser]);
+
+      const storedUsers = StorageEngine.getStored<any[]>('users', []);
+      const saved = storedUsers.find(u => u.id === 'usr-salt-test-1');
+      expect(saved).toBeDefined();
+      expect(saved.salt).toBeDefined();
+      expect(saved.salt).not.toBe(saved.email);
+      expect(saved.password).not.toBe('MyPassword123!');
+      expect(saved.password).toHaveLength(64);
     });
   });
 });

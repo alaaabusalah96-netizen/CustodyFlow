@@ -153,12 +153,14 @@ export class UsersModule {
       if (pwd === 'REDACTED' && oldUser) {
         pwd = oldUser.password || '';
       }
+      const salt = u.salt || oldUser?.salt || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : u.email);
       const isHashed = /^[0-9a-f]{64}$/i.test(pwd);
       if (pwd && pwd !== 'REDACTED' && !isHashed) {
-        pwd = hashPassword(pwd, u.email);
+        pwd = hashPassword(pwd, salt);
       }
       return {
         ...u,
+        salt,
         password: pwd,
         permissions: UsersModule.enrichUserPermissions(u.role, u.permissions)
       };
@@ -283,8 +285,10 @@ export class UsersModule {
     const users = UsersModule.getUsers();
     const idx = users.findIndex(u => u.id === userId);
     if (idx !== -1) {
-      const hashed = hashPassword(newPasswordPlain, users[idx].email);
-      users[idx] = { ...users[idx], password: hashed };
+      const targetUser = users[idx];
+      const salt = targetUser.salt || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : targetUser.email);
+      const hashed = hashPassword(newPasswordPlain, salt);
+      users[idx] = { ...users[idx], salt, password: hashed };
       UsersModule.saveUsers(users);
       
       const activeUser = UsersModule.getActiveUser();
