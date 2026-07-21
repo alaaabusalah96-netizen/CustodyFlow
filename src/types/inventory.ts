@@ -51,6 +51,8 @@ export interface InventoryDocItem {
   product_name: string;
   unit: string;
   qty: number;
+  batch_no?: string;
+  expiry_date?: string;
   notes?: string;
   last_purchase_price?: number;
   qty_received?: number;
@@ -67,6 +69,8 @@ export interface InventoryDocument extends BaseMetadata {
   source_warehouse_id: string; // From warehouse
   dest_entity_id: string;       // To warehouse, branch, station, supplier, customer, etc.
   dest_entity_type: 'warehouse' | 'branch' | 'station' | 'supplier' | 'customer' | 'scrap' | 'adjustment';
+  receipt_source_type?: 'supplier' | 'transfer'; // For Receipt doc: Supplier vs Internal Transfer
+  receipt_transfer_entity_id?: string;
   reason: string;
   recipient: string;
   statement: string;
@@ -95,6 +99,8 @@ export interface StockMovement {
   created_by: string;
   bin_id?: string;    // Specific bin targeted by this movement
   bin_code?: string;  // Specific bin code targeted
+  batch_no?: string;  // Batch / Lot number
+  expiry_date?: string; // Expiration date
 }
 
 export interface InventoryReportFilter {
@@ -125,6 +131,8 @@ export interface InventoryLedgerEntry {
   audit_ref: string; // audit trace code
   bin_id?: string;    // Bin location of this ledger transaction
   bin_code?: string;  // Bin location code
+  batch_no?: string;  // Batch / Lot number
+  expiry_date?: string; // Expiration date
 }
 
 export interface WarehouseBin {
@@ -135,6 +143,12 @@ export interface WarehouseBin {
   max_capacity_qty: number; // Maximum units allowed in this bin
   is_active: boolean;
   zone?: string;      // e.g., Ambient, Cold Storage, Hazardous, etc.
+}
+
+export interface ProductBatchStock {
+  batch_no: string;
+  expiry_date?: string;
+  available_qty: number;
 }
 
 

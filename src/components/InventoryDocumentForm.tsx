@@ -74,6 +74,8 @@ export default function InventoryDocumentForm({
   // Form states
   const [docType, setDocType] = useState<InventoryDocType>(initialDocType);
   const [scrapAction, setScrapAction] = useState<'IN' | 'OUT'>('IN');
+  const [receiptSourceType, setReceiptSourceType] = useState<'supplier' | 'transfer'>('supplier');
+  const [receiptTransferEntityId, setReceiptTransferEntityId] = useState<string>('');
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [sourceWarehouseId, setSourceWarehouseId] = useState<string>('');
   const [destEntityId, setDestEntityId] = useState<string>('');
@@ -81,7 +83,7 @@ export default function InventoryDocumentForm({
   const [recipient, setRecipient] = useState<string>('');
   const [statement, setStatement] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
-  const [items, setItems] = useState<Omit<InventoryDocItem, 'product_code' | 'product_name' | 'unit'>[]>([]);
+  const [items, setItems] = useState<(Omit<InventoryDocItem, 'product_code' | 'product_name' | 'unit'> & { batch_no?: string; expiry_date?: string })[]>([]);
 
   // Phase 3 Multi-bin States
   const [activeBins, setActiveBins] = useState<WarehouseBin[]>([]);
@@ -154,6 +156,12 @@ export default function InventoryDocumentForm({
         if (document.scrap_action) {
           setScrapAction(document.scrap_action);
         }
+        if (document.receipt_source_type) {
+          setReceiptSourceType(document.receipt_source_type);
+        }
+        if (document.receipt_transfer_entity_id) {
+          setReceiptTransferEntityId(document.receipt_transfer_entity_id);
+        }
         setDate(document.date);
         setSourceWarehouseId(document.source_warehouse_id);
         setDestEntityId(document.dest_entity_id);
@@ -165,6 +173,8 @@ export default function InventoryDocumentForm({
         setItems(document.items.map(i => ({
           product_id: i.product_id,
           qty: i.qty,
+          batch_no: i.batch_no || '',
+          expiry_date: i.expiry_date || '',
           notes: i.notes || '',
           last_purchase_price: i.last_purchase_price,
           bin_allocations: i.bin_allocations || []
@@ -213,6 +223,17 @@ export default function InventoryDocumentForm({
 
   // Dynamically resolve target entity list for searchable dropdown
   const destEntityList = useMemo((): DropdownItem[] => {
+    if (docType === 'Receipt') {
+      if (receiptSourceType === 'transfer') {
+        const whItems = warehouses
+          .filter(w => w.id !== sourceWarehouseId)
+          .map(w => ({ id: w.id, name: w.name, code: w.code, subText: isRtl ? 'مخزن/فرع محول منه' : 'Source Warehouse' }));
+        const branchItems = regions.map(r => ({ id: r.id, name: r.name, code: r.code || r.id, subText: isRtl ? 'فرع محول منه' : 'Source Branch' }));
+        const stationItems = stations.map(s => ({ id: s.id, name: s.station_name, code: s.station_code, subText: isRtl ? 'محطة محول منها' : 'Source Station' }));
+        return [...whItems, ...branchItems, ...stationItems];
+      }
+      return DEFAULT_SUPPLIERS;
+    }
     switch (destEntityType) {
       case 'warehouse':
         return warehouses
@@ -227,7 +248,7 @@ export default function InventoryDocumentForm({
       default:
         return [];
     }
-  }, [destEntityType, warehouses, sourceWarehouseId, regions, stations, isRtl]);
+  }, [docType, receiptSourceType, destEntityType, warehouses, sourceWarehouseId, regions, stations, isRtl]);
 
   // Autocomplete suggestions for fields
   const [activeDropdown, setActiveDropdown] = useState<{ type: 'dest' | number; search: string } | null>(null);
@@ -237,10 +258,17 @@ export default function InventoryDocumentForm({
     const newErrors: Record<string, string> = {};
 
     if (!sourceWarehouseId) {
-      newErrors.sourceWarehouseId = isRtl ? 'المخزن المصدر إلزامي' : 'Source warehouse is required';
+      newErrors.sourceWarehouseId = isRtl ? 'المخزن المستلم/الرئيسي إلزامي' : 'Main/Receiving warehouse is required';
     }
 
-    if (destEntityType !== 'scrap' && destEntityType !== 'adjustment' && !destEntityId) {
+    if (docType === 'Receipt') {
+      if (receiptSourceType === 'supplier' && !destEntityId) {
+        newErrors.destEntityId = isRtl ? 'حقل المورد إلزامي' : 'Supplier is required';
+      }
+      if (receiptSourceType === 'transfer' && !receiptTransferEntityId) {
+        newErrors.receiptTransferEntityId = isRtl ? 'الفرع/المخزن المحول منه إلزامي' : 'Transfer source entity is required';
+      }
+    } else if (destEntityType !== 'scrap' && destEntityType !== 'adjustment' && !destEntityId) {
       newErrors.destEntityId = isRtl ? 'الجهة المستلمة/المعنية إلزامية' : 'Destination entity is required';
     }
 
@@ -305,11 +333,21 @@ export default function InventoryDocumentForm({
         product_name: prod?.name || '',
         unit: prod?.unit || '',
         qty: item.qty,
+        batch_no: item.batch_no || '',
+        expiry_date: item.expiry_date || '',
         notes: item.notes,
         last_purchase_price: item.last_purchase_price || prod?.last_purchase_price || 0,
         bin_allocations: item.bin_allocations || []
       };
     });
+
+    const targetDestEntityId = docType === 'Receipt'
+      ? (receiptSourceType === 'transfer' ? receiptTransferEntityId : destEntityId)
+      : destEntityId;
+
+    const targetDestEntityType = docType === 'Receipt'
+      ? (receiptSourceType === 'transfer' ? 'warehouse' : 'supplier')
+      : destEntityType;
 
     try {
       if (docId) {
@@ -318,8 +356,10 @@ export default function InventoryDocumentForm({
           date,
           doc_type: docType,
           source_warehouse_id: sourceWarehouseId,
-          dest_entity_id: destEntityId,
-          dest_entity_type: destEntityType,
+          dest_entity_id: targetDestEntityId,
+          dest_entity_type: targetDestEntityType,
+          receipt_source_type: docType === 'Receipt' ? receiptSourceType : undefined,
+          receipt_transfer_entity_id: docType === 'Receipt' && receiptSourceType === 'transfer' ? receiptTransferEntityId : undefined,
           reason,
           recipient,
           statement,
@@ -334,8 +374,10 @@ export default function InventoryDocumentForm({
           date,
           doc_type: docType,
           source_warehouse_id: sourceWarehouseId,
-          dest_entity_id: destEntityId,
-          dest_entity_type: destEntityType,
+          dest_entity_id: targetDestEntityId,
+          dest_entity_type: targetDestEntityType,
+          receipt_source_type: docType === 'Receipt' ? receiptSourceType : undefined,
+          receipt_transfer_entity_id: docType === 'Receipt' && receiptSourceType === 'transfer' ? receiptTransferEntityId : undefined,
           reason,
           recipient,
           statement,
@@ -385,9 +427,39 @@ export default function InventoryDocumentForm({
       if (prod) {
         updated[index].last_purchase_price = prod.last_purchase_price || 0;
       }
+      if (docType !== 'Receipt' && sourceWarehouseId) {
+        const batches = InventoryModule.getProductBatches(value, sourceWarehouseId);
+        if (batches.length > 0) {
+          updated[index].batch_no = batches[0].batch_no;
+          updated[index].expiry_date = batches[0].expiry_date || '';
+        } else {
+          updated[index].batch_no = '';
+          updated[index].expiry_date = '';
+        }
+      }
     }
 
     setItems(updated);
+  };
+
+  const handleSourceWarehouseChange = (whId: string) => {
+    setSourceWarehouseId(whId);
+    if (docType !== 'Receipt' && whId) {
+      const updated = items.map(item => {
+        if (item.product_id) {
+          const batches = InventoryModule.getProductBatches(item.product_id, whId);
+          if (batches.length > 0) {
+            return {
+              ...item,
+              batch_no: batches[0].batch_no,
+              expiry_date: batches[0].expiry_date || ''
+            };
+          }
+        }
+        return item;
+      });
+      setItems(updated);
+    }
   };
 
   return (
@@ -495,7 +567,7 @@ export default function InventoryDocumentForm({
             </label>
             <select
               value={sourceWarehouseId}
-              onChange={(e) => setSourceWarehouseId(e.target.value)}
+              onChange={(e) => handleSourceWarehouseChange(e.target.value)}
               className={`w-full px-3.5 py-2 text-xs border rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
                 theme === 'dark' ? 'text-slate-100 bg-[#1e293b] border-[#334155]' : 'text-slate-800 bg-white border-slate-200'
               } ${errors.sourceWarehouseId ? 'border-rose-500' : ''}`}
@@ -582,6 +654,66 @@ export default function InventoryDocumentForm({
           </div>
         )}
 
+        {/* Receipt Document Specific Options: Split between "Receipt from Supplier" vs "Receipt from Transfer" */}
+        {docType === 'Receipt' && (
+          <div className="p-5 rounded-2xl border mb-8 bg-blue-500/5 border-blue-500/20 space-y-4 animate-fade-in">
+            <h4 className="text-xs font-black text-blue-600 dark:text-blue-400 flex items-center gap-1.5 uppercase tracking-wider">
+              <Layers size={14} />
+              <span>{isRtl ? 'مصدر الإضافة للمخزن' : 'Receipt Source Type'}</span>
+            </h4>
+            
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setReceiptSourceType('supplier');
+                  setDestEntityId('');
+                  setReceiptTransferEntityId('');
+                }}
+                className={`flex-1 w-full px-4 py-3 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center justify-center gap-2 text-right ${
+                  receiptSourceType === 'supplier'
+                    ? 'bg-emerald-600 border-emerald-600 text-white shadow-md'
+                    : theme === 'dark'
+                      ? 'bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-800'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${receiptSourceType === 'supplier' ? 'bg-white animate-pulse' : 'bg-emerald-500'}`} />
+                <div>
+                  <div className="font-extrabold">{isRtl ? 'إضافة من مورد' : 'Receipt from Supplier'}</div>
+                  <div className={`text-[10px] mt-0.5 ${receiptSourceType === 'supplier' ? 'text-emerald-100' : 'text-slate-400'}`}>
+                    {isRtl ? 'استلام منتجات وشحنات واردة من مورد خارجي' : 'Products received from external vendor'}
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setReceiptSourceType('transfer');
+                  setDestEntityId('');
+                  setReceiptTransferEntityId('');
+                }}
+                className={`flex-1 w-full px-4 py-3 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center justify-center gap-2 text-right ${
+                  receiptSourceType === 'transfer'
+                    ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                    : theme === 'dark'
+                      ? 'bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-800'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${receiptSourceType === 'transfer' ? 'bg-white animate-pulse' : 'bg-blue-500'}`} />
+                <div>
+                  <div className="font-extrabold">{isRtl ? 'إضافة بالتحويل' : 'Receipt from Transfer'}</div>
+                  <div className={`text-[10px] mt-0.5 ${receiptSourceType === 'transfer' ? 'text-blue-100' : 'text-slate-400'}`}>
+                    {isRtl ? 'استلام منتجات محولة من فروع أو مخازن أخرى بالشركة' : 'Products transferred from internal branches/warehouses'}
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Dynamic target selection block depending on docType */}
         {destEntityType !== 'adjustment' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -591,16 +723,26 @@ export default function InventoryDocumentForm({
                 <div className="w-full">
                   <SearchableDropdown
                     label={
-                      destEntityType === 'warehouse' ? (isRtl ? 'المخزن المستلم' : 'Destination Warehouse') :
+                      docType === 'Receipt' ? (
+                        receiptSourceType === 'transfer'
+                          ? (isRtl ? 'إضافة بالتحويل (المستند/الفرع المحول منه)' : 'Source Warehouse/Branch')
+                          : (isRtl ? 'إضافة من مورد (المورد المورد)' : 'External Supplier')
+                      ) : destEntityType === 'warehouse' ? (isRtl ? 'المخزن المستلم' : 'Destination Warehouse') :
                       destEntityType === 'branch' ? (isRtl ? 'الفرع المستلم' : 'Target Branch') :
                       destEntityType === 'station' ? (isRtl ? 'المحطة المستلمة' : 'Target Station') :
                       isRtl ? 'المورد المستهدف' : 'Supplier Target'
                     }
                     placeholder={isRtl ? 'اختر الجهة...' : 'Select entity...'}
-                    value={destEntityId}
+                    value={docType === 'Receipt' && receiptSourceType === 'transfer' ? receiptTransferEntityId : destEntityId}
                     list={destEntityList}
-                    onSelect={(id) => setDestEntityId(id)}
-                    error={errors.destEntityId}
+                    onSelect={(id) => {
+                      if (docType === 'Receipt' && receiptSourceType === 'transfer') {
+                        setReceiptTransferEntityId(id);
+                      } else {
+                        setDestEntityId(id);
+                      }
+                    }}
+                    error={docType === 'Receipt' && receiptSourceType === 'transfer' ? errors.receiptTransferEntityId : errors.destEntityId}
                     typeKey="dest"
                     theme={theme}
                     isRtl={isRtl}
@@ -724,6 +866,8 @@ export default function InventoryDocumentForm({
                   <th className="p-3 w-28">{isRtl ? 'الوحدة' : 'Unit'}</th>
                   <th className="p-3 w-28 text-center">{isRtl ? 'الرصيد المتاح' : 'Available Stock'}</th>
                   <th className="p-3 w-28">{isRtl ? 'الكمية المطلوبة' : 'Quantity'}</th>
+                  <th className="p-3 w-32">{isRtl ? 'رقم الباتش / التشغيلة' : 'Batch No.'}</th>
+                  <th className="p-3 w-36">{isRtl ? 'تاريخ الصلاحية' : 'Expiry Date'}</th>
                   {docType === 'Receipt' && <th className="p-3 w-32">{isRtl ? 'سعر الشراء (ج.م)' : 'Purchase Price'}</th>}
                   <th className="p-3 min-w-[150px]">{isRtl ? 'ملاحظات الصنف' : 'Item Notes'}</th>
                   <th className="p-3 w-24 text-center">{isRtl ? 'إجراءات' : 'Actions'}</th>
@@ -799,6 +943,116 @@ export default function InventoryDocumentForm({
                             } ${errors[`item_qty_${idx}`] ? 'border-rose-500 ring-2 ring-rose-500/10' : ''}`}
                           />
                           {errors[`item_qty_${idx}`] && <p className="text-[9px] text-rose-500 font-bold mt-1 text-center">{errors[`item_qty_${idx}`]}</p>}
+                        </td>
+
+                        {/* Batch Number */}
+                        <td className="p-2 min-w-[180px]">
+                          {docType === 'Receipt' ? (
+                            <input
+                              type="text"
+                              value={item.batch_no || ''}
+                              onChange={(e) => handleUpdateItemValue(idx, 'batch_no', e.target.value)}
+                              placeholder={isRtl ? 'رقم الباتش...' : 'Batch #...'}
+                              className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
+                                theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+                              }`}
+                            />
+                          ) : (
+                            (() => {
+                              const availableBatches = item.product_id && sourceWarehouseId 
+                                ? InventoryModule.getProductBatches(item.product_id, sourceWarehouseId) 
+                                : [];
+
+                              if (!item.product_id || !sourceWarehouseId) {
+                                return (
+                                  <span className="text-slate-400 italic text-[11px] block text-center">
+                                    {isRtl ? 'اختر الصنف والمخزن' : 'Select product & store'}
+                                  </span>
+                                );
+                              }
+
+                              if (availableBatches.length === 0) {
+                                return (
+                                  <div className="space-y-1">
+                                    <input
+                                      type="text"
+                                      value={item.batch_no || ''}
+                                      onChange={(e) => handleUpdateItemValue(idx, 'batch_no', e.target.value)}
+                                      placeholder={isRtl ? 'عام / بدون باتش' : 'General Stock'}
+                                      className={`w-full px-2 py-1 rounded-lg border text-xs font-mono focus:outline-none ${
+                                        theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'
+                                      }`}
+                                    />
+                                    <span className="text-[9px] font-semibold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 block text-center">
+                                      {isRtl ? 'لا توجد باتشات مقيدة' : 'No batch logged'}
+                                    </span>
+                                  </div>
+                                );
+                              }
+
+                              const currentValKey = `${item.batch_no || ''}___${item.expiry_date || ''}`;
+
+                              return (
+                                <div className="space-y-1">
+                                  <select
+                                    value={currentValKey}
+                                    onChange={(e) => {
+                                      const [bNo, expDate] = e.target.value.split('___');
+                                      const updated = [...items];
+                                      updated[idx] = {
+                                        ...updated[idx],
+                                        batch_no: bNo,
+                                        expiry_date: expDate || ''
+                                      };
+                                      setItems(updated);
+                                    }}
+                                    className={`w-full px-2 py-1.5 rounded-lg border text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
+                                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+                                    }`}
+                                  >
+                                    {availableBatches.map((b, bIdx) => {
+                                      const optionValKey = `${b.batch_no}___${b.expiry_date || ''}`;
+                                      return (
+                                        <option key={`${b.batch_no}-${b.expiry_date}-${bIdx}`} value={optionValKey}>
+                                          {bIdx === 0 ? (isRtl ? '⭐ [الأقدم صلاحية FEFO] ' : '⭐ [FEFO Oldest] ') : ''}
+                                          {b.batch_no} | {b.expiry_date ? (isRtl ? `انتهاء: ${b.expiry_date}` : `Exp: ${b.expiry_date}`) : (isRtl ? 'بدون تاريخ' : 'No Exp')} | {isRtl ? `المتاح: ${b.available_qty}` : `Stock: ${b.available_qty}`}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+
+                                  <div className="flex items-center justify-between text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 px-1">
+                                    <span className="flex items-center gap-0.5">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse inline-block"></span>
+                                      {isRtl ? 'مرتبة FEFO (الأقدم صلاحية أولاً)' : 'FEFO Sorted (Oldest First)'}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })()
+                          )}
+                        </td>
+
+                        {/* Expiry Date */}
+                        <td className="p-2 min-w-[130px]">
+                          {docType === 'Receipt' ? (
+                            <input
+                              type="date"
+                              value={item.expiry_date || ''}
+                              onChange={(e) => handleUpdateItemValue(idx, 'expiry_date', e.target.value)}
+                              className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
+                                theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+                              }`}
+                            />
+                          ) : (
+                            <div className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono text-center font-bold ${
+                              item.expiry_date
+                                ? theme === 'dark' ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800'
+                                : theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'
+                            }`}>
+                              {item.expiry_date || (isRtl ? 'غير محدد' : 'N/A')}
+                            </div>
+                          )}
                         </td>
 
                         {/* Last Purchase Price (only for Receipt) */}

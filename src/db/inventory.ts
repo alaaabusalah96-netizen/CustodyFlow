@@ -9,6 +9,7 @@ import { FsmConfig } from '../types/enterprise';
 import { CompaniesModule } from './companies';
 import { createBaseMetadata, updateBaseMetadata, createEventEnvelope } from '../lib/enterprise/metadata';
 import { AuditLogEngine } from '../lib/enterprise/audit';
+import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 
 // Default seeded warehouses
 const DEFAULT_WAREHOUSES: Warehouse[] = [
@@ -747,6 +748,42 @@ export class InventoryModule {
       .reduce((sum, m) => sum + m.qty_change, 0);
   }
 
+  /**
+   * Helper to compute real-time product stock grouped by Batch and Expiry Date, ordered FEFO (First Expired, First Out).
+   */
+  static getProductBatches(productId: string, warehouseId: string): { batch_no: string; expiry_date?: string; available_qty: number }[] {
+    if (!productId || !warehouseId) return [];
+    const movements = InventoryModule.getStockMovements();
+    const batchMap = new Map<string, { batch_no: string; expiry_date?: string; available_qty: number }>();
+
+    movements
+      .filter(m => m.product_id === productId && m.warehouse_id === warehouseId)
+      .forEach(m => {
+        const batchNo = m.batch_no || 'بدون باتش';
+        const expiry = m.expiry_date || '';
+        const key = `${batchNo}___${expiry}`;
+
+        const existing = batchMap.get(key) || { batch_no: batchNo, expiry_date: expiry, available_qty: 0 };
+        existing.available_qty += m.qty_change;
+        batchMap.set(key, existing);
+      });
+
+    // Filter to positive balance batches
+    const activeBatches = Array.from(batchMap.values()).filter(b => b.available_qty > 0);
+
+    // Sort FEFO: Oldest expiry date first
+    activeBatches.sort((a, b) => {
+      if (a.expiry_date && b.expiry_date) {
+        return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
+      }
+      if (a.expiry_date) return -1;
+      if (b.expiry_date) return 1;
+      return a.batch_no.localeCompare(b.batch_no);
+    });
+
+    return activeBatches;
+  }
+
   static getWarehouseStock(warehouseId: string): number {
     return InventoryModule.getWarehouseTotalStock(warehouseId);
   }
@@ -1055,6 +1092,7 @@ export class InventoryModule {
     if (nextStatus === 'Dispatched') {
       try {
         InventoryModule.generateStockMovementsForDoc(updatedDoc, user.id, 'Dispatched');
+        await InventoryModule.postAccountingEntryForDoc(updatedDoc, user.id);
       } catch (err: any) {
         return {
           success: false,
@@ -1068,6 +1106,7 @@ export class InventoryModule {
     if (nextStatus === 'Posted') {
       try {
         InventoryModule.generateStockMovementsForDoc(updatedDoc, user.id, 'Posted');
+        await InventoryModule.postAccountingEntryForDoc(updatedDoc, user.id);
       } catch (err: any) {
         return {
           success: false,
@@ -1221,7 +1260,9 @@ export class InventoryModule {
               created_at: new Date().toISOString(),
               created_by: operatorId,
               bin_id: alloc.bin_id,
-              bin_code: alloc.bin_code
+              bin_code: alloc.bin_code,
+              batch_no: item.batch_no,
+              expiry_date: item.expiry_date
             };
             movements.push(movSource);
 
@@ -1244,7 +1285,9 @@ export class InventoryModule {
               user_name: userName,
               audit_ref: `${doc.doc_no}-LEDGER`,
               bin_id: alloc.bin_id,
-              bin_code: alloc.bin_code
+              bin_code: alloc.bin_code,
+              batch_no: item.batch_no,
+              expiry_date: item.expiry_date
             };
             ledgerEntries.push(ledgerSource);
             runningStock = newBalanceAfter;
@@ -1265,7 +1308,9 @@ export class InventoryModule {
             date: doc.date,
             company_id: doc.tenantId,
             created_at: new Date().toISOString(),
-            created_by: operatorId
+            created_by: operatorId,
+            batch_no: item.batch_no,
+            expiry_date: item.expiry_date
           };
           movements.push(movSource);
 
@@ -1287,7 +1332,9 @@ export class InventoryModule {
             timestamp: new Date().toISOString(),
             user_id: operatorId,
             user_name: userName,
-            audit_ref: `${doc.doc_no}-LEDGER`
+            audit_ref: `${doc.doc_no}-LEDGER`,
+            batch_no: item.batch_no,
+            expiry_date: item.expiry_date
           };
           ledgerEntries.push(ledgerSource);
         }
@@ -1320,7 +1367,9 @@ export class InventoryModule {
               created_at: new Date().toISOString(),
               created_by: operatorId,
               bin_id: alloc.bin_id,
-              bin_code: alloc.bin_code
+              bin_code: alloc.bin_code,
+              batch_no: item.batch_no,
+              expiry_date: item.expiry_date
             };
             movements.push(movTarget);
 
@@ -1344,7 +1393,9 @@ export class InventoryModule {
               user_name: userName,
               audit_ref: `${doc.doc_no}-LEDGER`,
               bin_id: alloc.bin_id,
-              bin_code: alloc.bin_code
+              bin_code: alloc.bin_code,
+              batch_no: item.batch_no,
+              expiry_date: item.expiry_date
             };
             ledgerEntries.push(ledgerTarget);
             runningStock = newBalanceAfter;
@@ -1363,7 +1414,9 @@ export class InventoryModule {
             date: doc.date,
             company_id: doc.tenantId,
             created_at: new Date().toISOString(),
-            created_by: operatorId
+            created_by: operatorId,
+            batch_no: item.batch_no,
+            expiry_date: item.expiry_date
           };
           movements.push(movTarget);
 
@@ -1385,7 +1438,9 @@ export class InventoryModule {
             timestamp: new Date().toISOString(),
             user_id: operatorId,
             user_name: userName,
-            audit_ref: `${doc.doc_no}-LEDGER`
+            audit_ref: `${doc.doc_no}-LEDGER`,
+            batch_no: item.batch_no,
+            expiry_date: item.expiry_date
           };
           ledgerEntries.push(ledgerTarget);
         }
@@ -1396,6 +1451,128 @@ export class InventoryModule {
     InventoryModule.saveStockMovements(movements);
     InventoryModule.saveInventoryLedger(ledgerEntries);
     InventoryModule.saveProducts(updatedProductsList);
+  }
+
+  /**
+   * Posts automated double-entry GL journal entries for an inventory movement.
+   */
+  public static async postAccountingEntryForDoc(
+    doc: InventoryDocument,
+    operatorId: string
+  ): Promise<void> {
+    try {
+      const companyId = doc.tenantId || 'comp-1';
+      const products = InventoryModule.getProducts();
+
+      // Calculate total document monetary value
+      const totalAmount = doc.items.reduce((sum, item) => {
+        const prod = products.find(p => p.id === item.product_id);
+        const cost = item.last_purchase_price || prod?.last_purchase_price || 0;
+        return sum + (item.qty * cost);
+      }, 0);
+
+      if (totalAmount <= 0) {
+        return; // Skip posting for zero-value documents
+      }
+
+      const docTypeNameAr = 
+        doc.doc_type === 'Receipt' ? (doc.receipt_source_type === 'transfer' ? 'إذن إضافة بالتحويل' : 'إذن إضافة من مورد') :
+        doc.doc_type === 'Issue' ? 'إذن صرف مخزني' :
+        doc.doc_type === 'Transfer' ? 'إذن تحويل بين المخازن' :
+        doc.doc_type === 'BranchTransfer' ? 'إذن تحويل فرع' :
+        doc.doc_type === 'StationTransfer' ? 'إذن تحويل محطة' :
+        doc.doc_type === 'SupplierReturn' ? 'إذن مرتجع لمورد' :
+        doc.doc_type === 'BranchReturn' ? 'إذن مرتجع من فرع' :
+        doc.doc_type === 'Damage' ? 'إذن خردة/إتلاف' : 'سند تسوية جردية';
+
+      const statementAr = `أثر محاسبي تلقائي: ${docTypeNameAr} رقم ${doc.doc_no} - ${doc.statement || doc.reason}`;
+      const statementEn = `Auto Inventory Posting: ${doc.doc_type} #${doc.doc_no} - ${doc.statement || doc.reason}`;
+
+      const lines: { accountCode: string; debit: number; credit: number; notes?: string }[] = [];
+
+      switch (doc.doc_type) {
+        case 'Receipt':
+          if (doc.receipt_source_type === 'transfer') {
+            lines.push(
+              { accountCode: '120101', debit: totalAmount, credit: 0, notes: `Debit: Target Inventory (${doc.doc_no})` },
+              { accountCode: '120101', debit: 0, credit: totalAmount, notes: `Credit: Transfer Clearing (${doc.doc_no})` }
+            );
+          } else {
+            lines.push(
+              { accountCode: '120101', debit: totalAmount, credit: 0, notes: `Debit: Warehouse Stock Inventory` },
+              { accountCode: '210101', debit: 0, credit: totalAmount, notes: `Credit: Accounts Payable (${doc.recipient || 'Supplier'})` }
+            );
+          }
+          break;
+
+        case 'Issue':
+          lines.push(
+            { accountCode: '510101', debit: totalAmount, credit: 0, notes: `Debit: Operational Expense (${doc.reason})` },
+            { accountCode: '120101', debit: 0, credit: totalAmount, notes: `Credit: Warehouse Stock Inventory` }
+          );
+          break;
+
+        case 'Transfer':
+        case 'BranchTransfer':
+        case 'StationTransfer':
+          lines.push(
+            { accountCode: '120101', debit: totalAmount, credit: 0, notes: `Debit: Target Location Stock` },
+            { accountCode: '120101', debit: 0, credit: totalAmount, notes: `Credit: Source Location Stock` }
+          );
+          break;
+
+        case 'SupplierReturn':
+          lines.push(
+            { accountCode: '210101', debit: totalAmount, credit: 0, notes: `Debit: Accounts Payable Refund` },
+            { accountCode: '120101', debit: 0, credit: totalAmount, notes: `Credit: Warehouse Stock Inventory` }
+          );
+          break;
+
+        case 'BranchReturn':
+          lines.push(
+            { accountCode: '120101', debit: totalAmount, credit: 0, notes: `Debit: Warehouse Stock Inventory` },
+            { accountCode: '510101', debit: 0, credit: totalAmount, notes: `Credit: Operational Expense Adjustment` }
+          );
+          break;
+
+        case 'Damage':
+          if (doc.scrap_action === 'IN') {
+            lines.push(
+              { accountCode: '510301', debit: totalAmount, credit: 0, notes: `Debit: Scrapped Assets Expense` },
+              { accountCode: '120101', debit: 0, credit: totalAmount, notes: `Credit: Warehouse Stock Inventory` }
+            );
+          } else {
+            lines.push(
+              { accountCode: '110101', debit: totalAmount, credit: 0, notes: `Debit: Cash Receipts from Scrap` },
+              { accountCode: '410101', debit: 0, credit: totalAmount, notes: `Credit: Scrap Sales Revenue` }
+            );
+          }
+          break;
+
+        case 'Adjustment':
+          lines.push(
+            { accountCode: '120101', debit: totalAmount, credit: 0, notes: `Debit: Stock Adjustment` },
+            { accountCode: '510401', debit: 0, credit: totalAmount, notes: `Credit: Inventory Variance Adjustment` }
+          );
+          break;
+
+        default:
+          return;
+      }
+
+      if (lines.length > 0) {
+        await AccountingBusinessEngine.postOperationalDoubleEntry(
+          companyId,
+          operatorId,
+          `INV #${doc.doc_no}`,
+          statementAr,
+          statementEn,
+          lines
+        );
+      }
+    } catch (err) {
+      console.error(`Error posting accounting entry for document ${doc.doc_no}:`, err);
+    }
   }
 
   /**
