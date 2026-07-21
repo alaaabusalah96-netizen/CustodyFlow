@@ -685,5 +685,47 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       const unassignedRecon = TransactionsReconciliationModule.getReconciliation(undefined, 'none');
       expect(unassignedRecon.custodyValue).toBe(40000);
     });
+
+    it('should successfully transition pending transactions to Under Settlement status without metadata concurrency errors', () => {
+      StorageEngine.setStored('active_user', DEFAULT_USERS[0]);
+      StorageEngine.setStored('categories', [{ id: 'cat-6', name_ar: 'عام', name_en: 'General' }]);
+      StorageEngine.setStored('stations', [{ id: 'stn-1', company_id: 'comp-1', custody_amount: 10000 }]);
+      StorageEngine.setStored('companies', [{ id: 'comp-1', name_ar: 'الشركة', name_en: 'Company' }]);
+      StorageEngine.setStored('selected_company_id', 'comp-1');
+
+      const initialTx = {
+        id: 'tx-settle-test-1',
+        transaction_no: 'TX-2026-9999',
+        date: new Date().toISOString().split('T')[0],
+        description: 'Test pending expense for voucher',
+        category_id: 'cat-6',
+        station_id: 'stn-1',
+        company_id: 'comp-1',
+        amount: 800,
+        status: 'Pending' as const,
+        created_by: 'user-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        metadata: { version: 1 }
+      };
+
+      StorageEngine.setStored('transactions', [initialTx]);
+
+      // Perform update to 'Under Settlement' as done when linking a cash payment voucher
+      const updateResult = TransactionsUpdateModule.updateTransaction('tx-settle-test-1', {
+        status: 'Under Settlement',
+        voucher_no: 'CPV-2026-001',
+        voucher_date: '2026-07-21'
+      });
+
+      expect(updateResult.errors).toBeUndefined();
+      expect(updateResult.success).toBe(true);
+
+      const updatedTxs = StorageEngine.getStored<any[]>('transactions', []);
+      const updatedTx = updatedTxs.find(t => t.id === 'tx-settle-test-1');
+      expect(updatedTx.status).toBe('Under Settlement');
+      expect(updatedTx.voucher_no).toBe('CPV-2026-001');
+      expect(updatedTx.metadata.version).toBe(2);
+    });
   });
 });

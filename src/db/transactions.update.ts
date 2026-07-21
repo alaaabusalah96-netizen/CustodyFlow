@@ -31,7 +31,7 @@ export class TransactionsUpdateModule {
 
         // Optimistic Concurrency Control (BUG-07)
         if (old.metadata?.version !== undefined) {
-          if (!updates.metadata || updates.metadata.version !== old.metadata.version) {
+          if (updates.metadata?.version !== undefined && updates.metadata.version !== old.metadata.version) {
             return {
               success: false,
               errors: ['⚠️ عذراً، تم تعديل هذه المعاملة بواسطة مستخدم آخر. يرجى تحديث الصفحة والمحاولة مجدداً. / This transaction has been modified by another user. Please refresh and try again (concurrency conflict).']
