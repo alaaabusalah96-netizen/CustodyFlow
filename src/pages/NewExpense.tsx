@@ -258,7 +258,7 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
   };
 
   // Submit form with explicit status target
-  const handleSubmit = (e: React.FormEvent, targetStatus: 'Draft' | 'Pending') => {
+  const handleSubmit = async (e: React.FormEvent, targetStatus: 'Draft' | 'Pending') => {
     e.preventDefault();
     if (isSubmitting) return;
     if (!validate()) return;
@@ -283,7 +283,7 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
       
       if (editingTxId) {
         // Update existing transaction
-        const res = CustodyDB.updateTransaction(editingTxId, {
+        const res = await CustodyDB.updateTransaction(editingTxId, {
           date,
           station_id: stationId,
           description: combinedDescription,

@@ -208,7 +208,7 @@ export default function CashReconciliation({
   };
 
   // Revert settlement status (for Regional Manager or Admins) with comments support
-  const handleRevert = (tx: Transaction, comments?: string) => {
+  const handleRevert = async (tx: Transaction, comments?: string) => {
     if (!isManager) {
       setAuthError(isRtl ? 'عذراً، يتطلب إلغاء تسوية الحركات صلاحية مدير المنطقة أو الأدمن.' : 'Unauthorized: Requires Regional Manager or Admin credentials.');
       return;
@@ -223,7 +223,7 @@ export default function CashReconciliation({
       : [tx];
 
     for (const t of relatedTxs) {
-      const res = CustodyDB.updateTransaction(t.id, {
+      const res = await CustodyDB.updateTransaction(t.id, {
         status: 'Pending'
       });
       if (!res.success) {
@@ -292,14 +292,14 @@ export default function CashReconciliation({
   };
 
   // Approve / Settle Final Handler (For RegionalManager or Admin)
-  const handleApprove = (tx: Transaction) => {
+  const handleApprove = async (tx: Transaction) => {
     if (!isManager) {
       setAuthError(isRtl ? 'عذراً، يتطلب اعتماد وتسوية الحركات صلاحية مدير المنطقة أو الأدمن.' : 'Unauthorized: Requires Regional Manager or Admin credentials.');
       setApprovingTx(null);
       return;
     }
 
-    const res = CustodyDB.updateTransaction(tx.id, {
+    const res = await CustodyDB.updateTransaction(tx.id, {
       status: 'Settled'
     });
     if (!res.success) {
@@ -337,7 +337,7 @@ export default function CashReconciliation({
   };
 
   // Reject transaction handler (Sets status to 'Rejected')
-  const handleReject = (tx: Transaction) => {
+  const handleReject = async (tx: Transaction) => {
     if (!isManager) {
       setAuthError(isRtl ? 'عذراً، يحتاج هذا الإجراء إلى صلاحيات الإدارة أو مدير المنطقة.' : 'Unauthorized: Rejecting requires Manager or Admin permissions.');
       setRejectingTx(null);
@@ -346,7 +346,7 @@ export default function CashReconciliation({
 
     const finalComments = rejectReason.trim() || (isRtl ? 'تم رفض مستند الصرف وتحديث الحالة إلى مرفوض.' : 'Voucher successfully rejected.');
 
-    const res = CustodyDB.updateTransaction(tx.id, {
+    const res = await CustodyDB.updateTransaction(tx.id, {
       status: 'Rejected'
     });
     if (!res.success) {
@@ -393,7 +393,7 @@ export default function CashReconciliation({
   };
 
   // Approve / Settle Final Handler (For RegionalManager or Admin) with comments support
-  const handleApproveVoucher = (tx: Transaction, comments: string) => {
+  const handleApproveVoucher = async (tx: Transaction, comments: string) => {
     if (!isManager) {
       setAuthError(isRtl ? 'عذراً، يتطلب اعتماد وتسوية الحركات صلاحية مدير المنطقة أو الأدمن.' : 'Unauthorized: Requires Regional Manager or Admin credentials.');
       return;
@@ -406,7 +406,7 @@ export default function CashReconciliation({
       : [tx];
 
     for (const t of relatedTxs) {
-      const res = CustodyDB.updateTransaction(t.id, {
+      const res = await CustodyDB.updateTransaction(t.id, {
         status: 'Settled'
       });
       if (!res.success) {
@@ -454,7 +454,7 @@ export default function CashReconciliation({
   };
 
   // Reject transaction handler (Sets status to 'Rejected') with comments support
-  const handleRejectVoucher = (tx: Transaction, comments: string) => {
+  const handleRejectVoucher = async (tx: Transaction, comments: string) => {
     if (!isManager) {
       setAuthError(isRtl ? 'عذراً، يحتاج هذا الإجراء إلى صلاحيات الإدارة أو مدير المنطقة.' : 'Unauthorized: Rejecting requires Manager or Admin permissions.');
       return;
@@ -468,7 +468,7 @@ export default function CashReconciliation({
       : [tx];
 
     for (const t of relatedTxs) {
-      const res = CustodyDB.updateTransaction(t.id, {
+      const res = await CustodyDB.updateTransaction(t.id, {
         status: 'Rejected'
       });
       if (!res.success) {
@@ -517,7 +517,7 @@ export default function CashReconciliation({
   };
 
   // Settle action triggers routing to voucher page with preselected transaction
-  const handleStartSettle = (tx: Transaction) => {
+  const handleStartSettle = async (tx: Transaction) => {
     if (onSelectTransactionForSettle && onNavigate) {
       onSelectTransactionForSettle(tx);
       onNavigate('voucher');
@@ -525,7 +525,7 @@ export default function CashReconciliation({
       // Inline update to "Under Settlement" with quick temporary voucher info
       const tempVoucherNo = 'TEMP-' + Math.floor(1000 + Math.random() * 9000);
       const tempDate = new Date().toISOString().split('T')[0];
-      const res = CustodyDB.updateTransaction(tx.id, {
+      const res = await CustodyDB.updateTransaction(tx.id, {
         status: 'Under Settlement',
         voucher_no: tempVoucherNo,
         voucher_date: tempDate

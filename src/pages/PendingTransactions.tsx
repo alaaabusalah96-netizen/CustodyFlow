@@ -224,7 +224,7 @@ export default function PendingTransactions({
   };
 
   // Save Edits
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingTx) return;
     if (editingTx.status === 'Rejected') {
       alert(isRtl ? 'لا يمكن تعديل حركة مرفوضة نهائياً.' : 'Cannot edit a permanently rejected transaction.');
@@ -236,7 +236,7 @@ export default function PendingTransactions({
       return;
     }
 
-    const res = CustodyDB.updateTransaction(editingTx.id, {
+    const res = await CustodyDB.updateTransaction(editingTx.id, {
       description: editDesc,
       amount: amountNum,
       notes: editNotes || undefined
@@ -272,7 +272,7 @@ export default function PendingTransactions({
   };
 
   // Save Settle (Inline Voucher preparation)
-  const saveSettle = () => {
+  const saveSettle = async () => {
     if (!settlingTx) return;
     if (settlingTx.status === 'Rejected') {
       alert(isRtl ? 'لا يمكن إعادة تسوية حركة مرفوضة نهائياً.' : 'Cannot settle a permanently rejected transaction.');
@@ -283,7 +283,7 @@ export default function PendingTransactions({
       return;
     }
 
-    const res = CustodyDB.updateTransaction(settlingTx.id, {
+    const res = await CustodyDB.updateTransaction(settlingTx.id, {
       status: 'Under Settlement',
       voucher_no: voucherNo.trim(),
       voucher_date: voucherDate
@@ -300,7 +300,7 @@ export default function PendingTransactions({
   };
 
   // Bulk Settle Execution
-  const handleBulkSettleSubmit = () => {
+  const handleBulkSettleSubmit = async () => {
     if (!bulkVoucherNo.trim()) {
       setBulkSettleError(t.required);
       return;
@@ -320,8 +320,8 @@ export default function PendingTransactions({
     // Update each selected transaction
     let bulkSuccess = true;
     const bulkErrors: string[] = [];
-    validIds.forEach(id => {
-      const res = CustodyDB.updateTransaction(id, {
+    for (const id of validIds) {
+      const res = await CustodyDB.updateTransaction(id, {
         status: 'Under Settlement',
         voucher_no: bulkVoucherNo.trim(),
         voucher_date: bulkVoucherDate
@@ -332,7 +332,7 @@ export default function PendingTransactions({
           bulkErrors.push(...res.errors);
         }
       }
-    });
+    }
 
     if (!bulkSuccess) {
       alert((isRtl ? 'فشل تسوية بعض الحركات:\n' : 'Failed to settle some transactions:\n') + bulkErrors.join('\n'));

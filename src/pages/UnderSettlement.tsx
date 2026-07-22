@@ -91,14 +91,14 @@ export default function UnderSettlement({ language, theme, onNavigate }: UnderSe
   };
 
   // Revert settlement action for typo corrections (Return for modification)
-  const handleRevert = (tx: Transaction) => {
+  const handleRevert = async (tx: Transaction) => {
     if (!isManager) {
       setAuthError(isRtl ? 'عذراً، يحتاج هذا الإجراء إلى صلاحيات الإدارة أو مدير المنطقة.' : 'Unauthorized: Reverting requires Manager or Admin permissions.');
       setRevertingTx(null);
       return;
     }
 
-    const res = CustodyDB.updateTransaction(tx.id, {
+    const res = await CustodyDB.updateTransaction(tx.id, {
       status: 'Pending'
     });
     if (!res.success) {
@@ -118,14 +118,14 @@ export default function UnderSettlement({ language, theme, onNavigate }: UnderSe
   };
 
   // Reject transaction handler (Sets status to 'Rejected')
-  const handleReject = (tx: Transaction) => {
+  const handleReject = async (tx: Transaction) => {
     if (!isManager) {
       setAuthError(isRtl ? 'عذراً، يحتاج هذا الإجراء إلى صلاحيات الإدارة أو مدير المنطقة.' : 'Unauthorized: Rejecting requires Manager or Admin permissions.');
       setRejectingTx(null);
       return;
     }
 
-    const res = CustodyDB.updateTransaction(tx.id, {
+    const res = await CustodyDB.updateTransaction(tx.id, {
       status: 'Rejected'
     });
     if (!res.success) {
@@ -145,14 +145,14 @@ export default function UnderSettlement({ language, theme, onNavigate }: UnderSe
   };
 
   // Approve / Settle Final Handler (For RegionalManager or Admin)
-  const handleApprove = (tx: Transaction) => {
+  const handleApprove = async (tx: Transaction) => {
     if (!isManager) {
       setAuthError(isRtl ? 'عذراً، يتطلب اعتماد وتسوية الحركات صلاحية مدير المنطقة أو الأدمن.' : 'Unauthorized: Requires Regional Manager or Admin credentials.');
       setApprovingTx(null);
       return;
     }
 
-    const res = CustodyDB.updateTransaction(tx.id, {
+    const res = await CustodyDB.updateTransaction(tx.id, {
       status: 'Settled'
     });
     if (!res.success) {
@@ -172,13 +172,13 @@ export default function UnderSettlement({ language, theme, onNavigate }: UnderSe
   };
 
   // Un-approve / revert to under settlement
-  const handleRevertApproval = (tx: Transaction) => {
+  const handleRevertApproval = async (tx: Transaction) => {
     if (!isAdmin) {
       setAuthError(isRtl ? 'عذراً، يحتاج هذا الإجراء إلى صلاحيات مدير النظام (Admin)' : 'Unauthorized: Reverting requires Admin permissions.');
       return;
     }
 
-    const res = CustodyDB.updateTransaction(tx.id, {
+    const res = await CustodyDB.updateTransaction(tx.id, {
       status: 'Under Settlement'
     });
     if (!res.success) {

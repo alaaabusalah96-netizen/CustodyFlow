@@ -454,6 +454,8 @@ export interface CashVoucher {
   station_id: string;
   company_id: string;
   amount: number;
+  total_amount?: number;
+  notes?: string;
   amount_in_words: {
     ar: string;
     en: string;

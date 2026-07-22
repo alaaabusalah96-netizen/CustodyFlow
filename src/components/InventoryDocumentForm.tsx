@@ -111,7 +111,7 @@ export default function InventoryDocumentForm({
         { productId: 'prod-1', productCode: 'PRD-MTR-01', productName: 'Shell Helix Motor Oil 4L (زيت محرك شل هيلكس 4 لتر)', unit: 'عبوة (Bottle)', qty: 50, unitPrice: 1200, totalPrice: 60000 },
         { productId: 'prod-4', productCode: 'PRD-FIL-04', productName: 'Air Filter (فلتر هواء محرك)', unit: 'عدد (Piece)', qty: 30, unitPrice: 350, totalPrice: 10500 }
       ],
-      metadata: { createdAt: new Date().toISOString(), createdBy: 'system', companyId: 'comp-1', version: 1 }
+      metadata: { tenantId: activeUser?.company_id || 'comp-1', organizationId: activeUser?.company_id || 'comp-1', created_at: new Date().toISOString(), created_by: 'system', companyId: activeUser?.company_id || 'comp-1', version: 1 }
     },
     {
       id: 'sample-po-2',
@@ -126,7 +126,7 @@ export default function InventoryDocumentForm({
       items: [
         { productId: 'prod-3', productCode: 'PRD-TIR-03', productName: 'Bridgestone Tire 205/55R16 (إطار بريدجستون 205/55R16)', unit: 'عدد (Piece)', qty: 20, unitPrice: 4800, totalPrice: 96000 }
       ],
-      metadata: { createdAt: new Date().toISOString(), createdBy: 'system', companyId: 'comp-1', version: 1 }
+      metadata: { tenantId: activeUser?.company_id || 'comp-1', organizationId: activeUser?.company_id || 'comp-1', created_at: new Date().toISOString(), created_by: 'system', companyId: activeUser?.company_id || 'comp-1', version: 1 }
     },
     {
       id: 'sample-po-3',
@@ -142,7 +142,7 @@ export default function InventoryDocumentForm({
         { productId: 'prod-2', productCode: 'PRD-BAT-02', productName: '12V 70Ah Car Battery (بطارية سيارة 12 فولت 70 أمبير)', unit: 'عدد (Piece)', qty: 15, unitPrice: 3500, totalPrice: 52500 },
         { productId: 'prod-5', productCode: 'PRD-BRK-05', productName: 'Front Brake Pads Set (طقم تيل فرامل أمامي)', unit: 'طقم (Set)', qty: 25, unitPrice: 850, totalPrice: 21250 }
       ],
-      metadata: { createdAt: new Date().toISOString(), createdBy: 'system', companyId: 'comp-1', version: 1 }
+      metadata: { tenantId: activeUser?.company_id || 'comp-1', organizationId: activeUser?.company_id || 'comp-1', created_at: new Date().toISOString(), created_by: 'system', companyId: activeUser?.company_id || 'comp-1', version: 1 }
     },
     {
       id: 'sample-po-4',
@@ -158,7 +158,7 @@ export default function InventoryDocumentForm({
         { productId: 'prod-5', productCode: 'PRD-BRK-05', productName: 'Front Brake Pads Set (طقم تيل فرامل أمامي)', unit: 'طقم (Set)', qty: 40, unitPrice: 820, totalPrice: 32800 },
         { productId: 'prod-4', productCode: 'PRD-FIL-04', productName: 'Air Filter (فلتر هواء محرك)', unit: 'عدد (Piece)', qty: 60, unitPrice: 340, totalPrice: 20400 }
       ],
-      metadata: { createdAt: new Date().toISOString(), createdBy: 'system', companyId: 'comp-1', version: 1 }
+      metadata: { tenantId: activeUser?.company_id || 'comp-1', organizationId: activeUser?.company_id || 'comp-1', created_at: new Date().toISOString(), created_by: 'system', companyId: activeUser?.company_id || 'comp-1', version: 1 }
     }
   ], [activeUser]);
 

@@ -66,14 +66,17 @@ export interface InventoryDocument extends BaseMetadata {
   doc_no: string;
   date: string;
   doc_type: InventoryDocType;
-  source_warehouse_id: string; // From warehouse
-  dest_entity_id: string;       // To warehouse, branch, station, supplier, customer, etc.
-  dest_entity_type: 'warehouse' | 'branch' | 'station' | 'supplier' | 'customer' | 'scrap' | 'adjustment';
+  company_id?: string;
+  source_warehouse_id?: string; // From warehouse
+  dest_entity_id?: string;       // To warehouse, branch, station, supplier, customer, etc.
+  dest_entity_type?: 'warehouse' | 'branch' | 'station' | 'supplier' | 'customer' | 'scrap' | 'adjustment';
   receipt_source_type?: 'supplier' | 'transfer'; // For Receipt doc: Supplier vs Internal Transfer
   receipt_transfer_entity_id?: string;
-  reason: string;
-  recipient: string;
-  statement: string;
+  supplier_name?: string;
+  ref_no?: string;
+  reason?: string;
+  recipient?: string;
+  statement?: string;
   notes?: string;
   items: InventoryDocItem[];
   status: InventoryDocStatus;

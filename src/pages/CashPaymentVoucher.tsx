@@ -574,8 +574,8 @@ export default function CashPaymentVoucher({
     CustodyDB.saveCashVoucher(newVoucher);
 
     // Update status of all bundled expenses in database to Under Settlement
-    selectedTxIds.forEach(id => {
-      const res = CustodyDB.updateTransaction(id, {
+    for (const id of selectedTxIds) {
+      const res = await CustodyDB.updateTransaction(id, {
         status: 'Under Settlement',
         voucher_no: finalVoucherNo,
         voucher_date: voucherDate,
@@ -584,7 +584,7 @@ export default function CashPaymentVoucher({
       if (!res.success) {
         console.error('Error settling item', id, res.errors);
       }
-    });
+    }
 
     // Save workflow history & logs
     CustodyDB.addLog(
@@ -631,13 +631,13 @@ export default function CashPaymentVoucher({
   };
 
   // Delete Voucher handler
-  const handleDeleteVoucher = (id: string) => {
+  const handleDeleteVoucher = async (id: string) => {
     const vc = vouchersList.find(v => v.id === id);
     if (!vc) return;
 
     // Reset status of all bundled expenses back to Pending
-    vc.expense_ids.forEach(txId => {
-       const res = CustodyDB.updateTransaction(txId, {
+    for (const txId of vc.expense_ids) {
+       const res = await CustodyDB.updateTransaction(txId, {
         status: 'Pending',
         voucher_no: undefined,
         voucher_date: undefined
@@ -645,7 +645,7 @@ export default function CashPaymentVoucher({
       if (!res.success) {
         console.error('Error resetting item', txId, res.errors);
       }
-    });
+    }
 
     // Delete voucher
     CustodyDB.deleteCashVoucher(id);
@@ -674,7 +674,7 @@ export default function CashPaymentVoucher({
     setEditApprovedBy(vc.approved_by || '');
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingVoucher) return;
 
@@ -697,15 +697,15 @@ export default function CashPaymentVoucher({
 
     // Update bundled expenses' metadata
     if (editingVoucher.expense_ids && editingVoucher.expense_ids.length > 0) {
-      editingVoucher.expense_ids.forEach(txId => {
-        const res = CustodyDB.updateTransaction(txId, {
+      for (const txId of editingVoucher.expense_ids) {
+        const res = await CustodyDB.updateTransaction(txId, {
           voucher_no: editVoucherNo.trim(),
           voucher_date: editVoucherDate
         });
         if (!res.success) {
           console.error('Error updating item metadata', txId, res.errors);
         }
-      });
+      }
     }
 
     CustodyDB.addLog(

@@ -2,14 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, Plus, FileText, Check, X, ClipboardList, ShoppingCart, 
   Store, Phone, Mail, MapPin, Hash, ShieldAlert, ArrowLeftRight, Clock,
-  Calendar, CheckCircle2, ChevronRight, CornerDownLeft, Printer
+  Calendar, CheckCircle2, ChevronRight, CornerDownLeft, Printer,
+  Sliders, Settings, DollarSign, Award, TrendingUp, Send, Layers, Eye,
+  Building2, Search, ArrowUpRight, Scale, RefreshCw
 } from 'lucide-react';
 import { PurchasingBusinessEngine } from '../lib/enterprise/purchasing_engine';
 import { InventoryModule } from '../db/inventory';
 import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
 import { CustodyDB } from '../db';
-import { PurchaseRequest, PurchaseOrder, Vendor, PRItem, POItem } from '../types/purchasing';
+import { 
+  PurchaseRequest, PurchaseOrder, Vendor, PRItem, POItem, 
+  RFQ, VendorQuotation, PurchasingWorkflowConfig, VendorAPStatementItem 
+} from '../types/purchasing';
 import { Product, Warehouse } from '../types/inventory';
 import { createEventEnvelope } from '../lib/enterprise/metadata';
 
@@ -23,27 +28,36 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
   const activeUser = UsersModule.getActiveUser();
   const companyId = CompaniesModule.getSelectedCompanyId();
 
-  // Active Tab: 'requests' | 'orders' | 'vendors'
-  const [activeTab, setActiveTab] = useState<'requests' | 'orders' | 'vendors'>('requests');
+  // Active Tab: 'requests' | 'rfq' | 'orders' | 'vendors' | 'config'
+  const [activeTab, setActiveTab] = useState<'requests' | 'rfq' | 'orders' | 'vendors' | 'config'>('requests');
 
-  // Load Data
+  // Loaded Data
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
+  const [rfqs, setRfqs] = useState<RFQ[]>([]);
+  const [quotations, setQuotations] = useState<VendorQuotation[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [workflowConfig, setWorkflowConfig] = useState<PurchasingWorkflowConfig>(
+    PurchasingBusinessEngine.getWorkflowConfig(companyId)
+  );
 
   // Modals & Forms State
   const [showAddVendor, setShowAddVendor] = useState(false);
   const [showCreatePR, setShowCreatePR] = useState(false);
+  const [showCreateRFQ, setShowCreateRFQ] = useState(false);
+  const [showSubmitQuote, setShowSubmitQuote] = useState<RFQ | null>(null);
+  const [showDirectPO, setShowDirectPO] = useState(false);
   const [showReceivePO, setShowReceivePO] = useState<string | null>(null);
+  const [selectedVendorForStatement, setSelectedVendorForStatement] = useState<Vendor | null>(null);
 
-  // New Vendor Form
+  // Vendor Form
   const [vendorForm, setVendorForm] = useState({
     nameAr: '', nameEn: '', phone: '', email: '', taxNo: '', address: ''
   });
 
-  // New PR Form
+  // PR Form
   const [prNotes, setPrNotes] = useState('');
   const [prDepartment, setPrDepartment] = useState('');
   const [prItems, setPrItems] = useState<PRItem[]>([]);
@@ -51,30 +65,56 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
   const [selectedQty, setSelectedQty] = useState(1);
   const [selectedEstPrice, setSelectedEstPrice] = useState(0);
 
-  // Selected Warehouse for PO receiving
+  // RFQ Form
+  const [rfqSourcePrId, setRfqSourcePrId] = useState('');
+  const [rfqDeadline, setRfqDeadline] = useState('');
+  const [rfqSelectedVendors, setRfqSelectedVendors] = useState<string[]>([]);
+  const [rfqNotes, setRfqNotes] = useState('');
+
+  // Quote Form
+  const [quoteNumber, setQuoteNumber] = useState('');
+  const [quoteDeliveryDays, setQuoteDeliveryDays] = useState(7);
+  const [quotePaymentTerms, setQuotePaymentTerms] = useState('Net 30 Days');
+  const [quoteItems, setQuoteItems] = useState<{ productId: string; productCode: string; productName: string; unit: string; qty: number; unitPrice: number }[]>([]);
+
+  // Direct PO Form
+  const [directPoVendorId, setDirectPoVendorId] = useState('');
+  const [directPoNotes, setDirectPoNotes] = useState('');
+  const [directPoItems, setDirectPoItems] = useState<POItem[]>([]);
+
+  // PO Receiving Warehouse
   const [receiveWarehouseId, setReceiveWarehouseId] = useState('');
+
+  // Search & Filter
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Printing State
   const [printPR, setPrintPR] = useState<PurchaseRequest | null>(null);
   const [printPO, setPrintPO] = useState<PurchaseOrder | null>(null);
 
-  // Status message
+  // Feedback toast
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadAllData = () => {
     const v = PurchasingBusinessEngine.getVendors(companyId);
     const pr = PurchasingBusinessEngine.getPurchaseRequests(companyId);
     const po = PurchasingBusinessEngine.getPurchaseOrders(companyId);
+    const r = PurchasingBusinessEngine.getRFQs(companyId);
+    const q = PurchasingBusinessEngine.getQuotations(companyId);
     const prd = InventoryModule.getProducts();
     const wh = InventoryModule.getWarehouses();
+    const cfg = PurchasingBusinessEngine.getWorkflowConfig(companyId);
 
     setVendors(v);
     setRequests(pr);
     setOrders(po);
+    setRfqs(r);
+    setQuotations(q);
     setProducts(prd);
     setWarehouses(wh);
+    setWorkflowConfig(cfg);
 
-    if (wh.length > 0) {
+    if (wh.length > 0 && !receiveWarehouseId) {
       setReceiveWarehouseId(wh[0].id);
     }
   };
@@ -88,7 +128,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
     setTimeout(() => setFeedback(null), 4000);
   };
 
-  // 1. Submit Vendor
+  // 1. Add Vendor
   const handleAddVendor = (e: React.FormEvent) => {
     e.preventDefault();
     if (!vendorForm.nameAr || !vendorForm.nameEn) {
@@ -112,13 +152,12 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
     loadAllData();
   };
 
-  // 2. PR Item Management
+  // 2. Add PR Item
   const handleAddPRItem = () => {
     if (!selectedProductId) return;
     const prod = products.find(p => p.id === selectedProductId);
     if (!prod) return;
 
-    // Check if already in items
     if (prItems.some(item => item.productId === selectedProductId)) {
       triggerFeedback('error', isRtl ? 'هذا المنتج مضاف بالفعل' : 'Product already added');
       return;
@@ -143,7 +182,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
     setPrItems(prItems.filter(item => item.productId !== productId));
   };
 
-  // 3. Submit PR
+  // 3. Create PR
   const handleCreatePR = async () => {
     if (prItems.length === 0) {
       triggerFeedback('error', isRtl ? 'يرجى إضافة صنف واحد على الأقل للطلب' : 'Please add at least one item');
@@ -220,7 +259,124 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
     }
   };
 
-  // 5. Convert PR to PO (Issue PO)
+  // 5. Create RFQ
+  const handleCreateRFQ = async () => {
+    let itemsToUse: PRItem[] = prItems;
+
+    if (rfqSourcePrId) {
+      const sourcePr = requests.find(p => p.id === rfqSourcePrId);
+      if (sourcePr) {
+        itemsToUse = sourcePr.items;
+      }
+    }
+
+    if (itemsToUse.length === 0) {
+      triggerFeedback('error', isRtl ? 'يرجى اختيار طلب شراء مصدري أو إضافة بنود لطلب العرض' : 'Please select a source PR or add items');
+      return;
+    }
+
+    if (rfqSelectedVendors.length === 0) {
+      triggerFeedback('error', isRtl ? 'يرجى تحديد مورد واحد على الأقل لإرسال الطلب إليه' : 'Please select at least one vendor');
+      return;
+    }
+
+    const engine = new PurchasingBusinessEngine();
+    const event = createEventEnvelope({
+      eventType: 'RFQ_CREATED',
+      tenantId: companyId,
+      userId: activeUser?.id || 'system',
+      userName: activeUser?.full_name || 'System',
+      userRole: activeUser?.role as any || 'System',
+      payload: {
+        prId: rfqSourcePrId || undefined,
+        deadline: rfqDeadline || new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().split('T')[0],
+        items: itemsToUse,
+        vendorIds: rfqSelectedVendors,
+        notes: rfqNotes
+      }
+    });
+
+    const result = await engine.processEvent(event);
+    if (result.success) {
+      triggerFeedback('success', isRtl ? result.messageAr : result.messageEn);
+      setShowCreateRFQ(false);
+      setRfqSourcePrId('');
+      setRfqSelectedVendors([]);
+      setRfqNotes('');
+      loadAllData();
+    } else {
+      triggerFeedback('error', isRtl ? result.messageAr : result.messageEn);
+    }
+  };
+
+  // 6. Record Vendor Quotation
+  const handleOpenSubmitQuote = (rfq: RFQ) => {
+    setShowSubmitQuote(rfq);
+    setQuoteItems(rfq.items.map(it => ({
+      productId: it.productId,
+      productCode: it.productCode,
+      productName: it.productName,
+      unit: it.unit,
+      qty: it.qty,
+      unitPrice: it.estimatedPrice
+    })));
+  };
+
+  const handleSubmitVendorQuote = async (vendorId: string) => {
+    if (!showSubmitQuote) return;
+
+    const engine = new PurchasingBusinessEngine();
+    const event = createEventEnvelope({
+      eventType: 'QUOTATION_SUBMITTED',
+      tenantId: companyId,
+      userId: activeUser?.id || 'system',
+      userName: activeUser?.full_name || 'System',
+      userRole: activeUser?.role as any || 'System',
+      payload: {
+        rfqId: showSubmitQuote.id,
+        vendorId,
+        quoteNumber: quoteNumber.trim() || `QT-${Date.now().toString().substring(6)}`,
+        items: quoteItems,
+        deliveryDays: quoteDeliveryDays,
+        paymentTerms: quotePaymentTerms,
+        notes: ''
+      }
+    });
+
+    const result = await engine.processEvent(event);
+    if (result.success) {
+      triggerFeedback('success', isRtl ? result.messageAr : result.messageEn);
+      setShowSubmitQuote(null);
+      setQuoteNumber('');
+      loadAllData();
+    } else {
+      triggerFeedback('error', isRtl ? result.messageAr : result.messageEn);
+    }
+  };
+
+  // 7. Accept Winning Quote
+  const handleAcceptQuotation = async (quoteId: string) => {
+    const engine = new PurchasingBusinessEngine();
+    const event = createEventEnvelope({
+      eventType: 'QUOTATION_ACCEPTED',
+      tenantId: companyId,
+      userId: activeUser?.id || 'system',
+      userName: activeUser?.full_name || 'System',
+      userRole: activeUser?.role as any || 'System',
+      payload: { quoteId }
+    });
+
+    const result = await engine.processEvent(event);
+    if (result.success) {
+      triggerFeedback('success', isRtl ? result.messageAr : result.messageEn);
+      setActiveTab('orders');
+      loadAllData();
+    } else {
+      triggerFeedback('error', isRtl ? result.messageAr : result.messageEn);
+    }
+  };
+
+  // 8. Convert PR to PO or Direct PO
   const handleConvertPRToPO = async (pr: PurchaseRequest) => {
     if (vendors.length === 0) {
       triggerFeedback('error', isRtl ? 'يرجى تسجيل مورد واحد على الأقل أولاً' : 'Please register at least one vendor first');
@@ -261,7 +417,46 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
     }
   };
 
-  // 6. Receive PO Stock
+  // 9. Issue Direct PO
+  const handleCreateDirectPO = async () => {
+    if (!directPoVendorId) {
+      triggerFeedback('error', isRtl ? 'يرجى اختيار المورد' : 'Please select vendor');
+      return;
+    }
+
+    if (directPoItems.length === 0) {
+      triggerFeedback('error', isRtl ? 'يرجى إضافة أصناف لأمر الشراء' : 'Please add items');
+      return;
+    }
+
+    const engine = new PurchasingBusinessEngine();
+    const event = createEventEnvelope({
+      eventType: 'PO_ISSUED',
+      tenantId: companyId,
+      userId: activeUser?.id || 'system',
+      userName: activeUser?.full_name || 'System',
+      userRole: activeUser?.role as any || 'System',
+      payload: {
+        vendorId: directPoVendorId,
+        items: directPoItems,
+        notes: directPoNotes,
+        deliveryWarehouseId: warehouses[0]?.id
+      }
+    });
+
+    const result = await engine.processEvent(event);
+    if (result.success) {
+      triggerFeedback('success', isRtl ? result.messageAr : result.messageEn);
+      setShowDirectPO(false);
+      setDirectPoItems([]);
+      setDirectPoNotes('');
+      loadAllData();
+    } else {
+      triggerFeedback('error', isRtl ? result.messageAr : result.messageEn);
+    }
+  };
+
+  // 10. Receive PO Stock
   const handleReceivePO = async (poId: string) => {
     if (!receiveWarehouseId) {
       triggerFeedback('error', isRtl ? 'يرجى تحديد مستودع الاستلام' : 'Please select receiving warehouse');
@@ -291,25 +486,37 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
     }
   };
 
+  // 11. Save Workflow Config
+  const handleSaveWorkflowConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    PurchasingBusinessEngine.saveWorkflowConfig(workflowConfig);
+    triggerFeedback('success', isRtl ? 'تم حفظ إعدادات وسياسات المشتريات بنجاح' : 'Purchasing policies saved successfully');
+  };
+
+  // Compute AP Statement data for active selected vendor
+  const selectedVendorStatementData = selectedVendorForStatement
+    ? PurchasingBusinessEngine.getVendorAPStatement(companyId, selectedVendorForStatement.id)
+    : null;
+
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto" dir={isRtl ? 'rtl' : 'ltr'}>
+    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto font-sans" dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-indigo-900 to-slate-800 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 shadow-2xl relative overflow-hidden border border-indigo-500/20">
         <div className="absolute right-0 bottom-0 opacity-10">
-          <ShoppingCart className="h-64 w-64 translate-x-12 translate-y-12" />
+          <ShoppingCart className="h-64 w-64 translate-x-12 translate-y-12 text-indigo-400" />
         </div>
         <div className="relative z-10 space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-200 text-xs font-bold">
-            <ShoppingCart className="h-3 w-3" />
-            {isRtl ? 'موديول المشتريات والتموين' : 'Purchasing & Procurement Module'}
+            <ShoppingCart className="h-3.5 w-3.5" />
+            {isRtl ? 'موديول المشتريات والتموين والربط المحاسبي' : 'Purchasing, Procurement & Ledger Integration'}
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-sans">
-            {isRtl ? 'إدارة التموين والمشتريات' : 'Procurement & Supply Chain'}
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+            {isRtl ? 'إدارة التموين والمشتريات وحسابات الموردين' : 'Procurement & Vendor AP Management'}
           </h1>
-          <p className="text-xs sm:text-sm text-indigo-100 max-w-xl leading-relaxed font-semibold">
+          <p className="text-xs sm:text-sm text-indigo-100/80 max-w-2xl leading-relaxed">
             {isRtl 
-              ? 'إدارة الموردين وطلبات الشراء الداخلية المعتمدة، وإصدار أوامر الشراء المباشرة مع تحديث الأرصدة والقيود تلقائياً.'
-              : 'Seamless vendor management, internal purchase requests, binding purchase orders, and automated multi-warehouse stock updates.'}
+              ? 'دورة مستندية متكاملة تشمل طلبات الشراء (PR)، عروض الأسعار والتثمين (RFQ)، أوامر التوريد (PO)، الاستلام المخزني الآلي، وكشوف حسابات الموردين مع التخصيص الكامل لسياسات الاعتماد.'
+              : 'End-to-end procurement lifecycle covering PRs, RFQs, binding POs, automated inventory receipt, supplier AP ledgers, and zero-code workflow policy configuration.'}
           </p>
         </div>
       </div>
@@ -318,163 +525,232 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
       {feedback && (
         <div className={`p-4 rounded-2xl border flex items-center gap-3 animate-fade-in ${
           feedback.type === 'success' 
-            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' 
-            : 'bg-rose-500/10 border-rose-500/20 text-rose-500'
+            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+            : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
         }`}>
           <CheckCircle2 className="h-5 w-5 shrink-0" />
-          <p className="text-xs font-bold font-sans">{feedback.text}</p>
+          <p className="text-xs font-bold">{feedback.text}</p>
         </div>
       )}
 
       {/* Nav Tabs */}
-      <div className="flex border-b border-slate-200 dark:border-slate-800 gap-1 overflow-x-auto">
+      <div className="flex border-b border-slate-200 dark:border-slate-800 gap-1 overflow-x-auto pb-1">
         <button
           onClick={() => setActiveTab('requests')}
-          className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+          className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 rounded-t-xl ${
             activeTab === 'requests' 
-              ? 'border-indigo-600 text-indigo-600' 
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20' 
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <FileText className="h-4 w-4" />
           {isRtl ? 'طلبات الشراء (PR)' : 'Purchase Requests'}
-          <span className="ml-1 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-[10px]">
+          <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-[10px]">
             {requests.length}
           </span>
         </button>
 
         <button
+          onClick={() => setActiveTab('rfq')}
+          className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 rounded-t-xl ${
+            activeTab === 'rfq' 
+              ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20' 
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+          }`}
+        >
+          <Scale className="h-4 w-4" />
+          {isRtl ? 'عروض الأسعار (RFQ)' : 'RFQs & Quotes'}
+          <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-[10px]">
+            {rfqs.length}
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('orders')}
-          className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+          className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 rounded-t-xl ${
             activeTab === 'orders' 
-              ? 'border-indigo-600 text-indigo-600' 
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20' 
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <ShoppingCart className="h-4 w-4" />
-          {isRtl ? 'أوامر الشراء (PO)' : 'Purchase Orders'}
-          <span className="ml-1 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-[10px]">
+          {isRtl ? 'أوامر التوريد (PO)' : 'Purchase Orders'}
+          <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-[10px]">
             {orders.length}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('vendors')}
-          className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+          className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 rounded-t-xl ${
             activeTab === 'vendors' 
-              ? 'border-indigo-600 text-indigo-600' 
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20' 
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <Users className="h-4 w-4" />
-          {isRtl ? 'دليل الموردين' : 'Vendors Directory'}
-          <span className="ml-1 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-[10px]">
+          {isRtl ? 'الموردون وكشف الحساب' : 'Vendors & AP Ledger'}
+          <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-[10px]">
             {vendors.length}
           </span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('config')}
+          className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 rounded-t-xl ${
+            activeTab === 'config' 
+              ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/20' 
+              : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+          }`}
+        >
+          <Sliders className="h-4 w-4" />
+          {isRtl ? 'سياسات واعتمادات الشراء' : 'Workflow Matrix & Policy'}
+        </button>
       </div>
 
-      {/* 1. Purchase Requests Section */}
+      {/* ========================================================================= */}
+      {/* TAB 1: PURCHASE REQUESTS (PR) */}
+      {/* ========================================================================= */}
       {activeTab === 'requests' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-base font-extrabold text-slate-800 dark:text-slate-200">
-              {isRtl ? 'سجل طلبات الشراء الداخلية' : 'Purchase Requests Ledger'}
-            </h2>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-800 dark:text-slate-100">
+                {isRtl ? 'طلبات الشراء والاحتياجات الداخلية' : 'Internal Purchase Requests (PR)'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {isRtl ? 'تفريغ وتوثيق الاحتياجات واعتمادها وفق الصلاحيات المعرفة' : 'Manage internal requisition requests and approval chain'}
+              </p>
+            </div>
             <button
               onClick={() => setShowCreatePR(true)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-sm"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md transition-all"
             >
               <Plus className="h-4 w-4" />
-              {isRtl ? 'تقديم طلب شراء' : 'New Purchase Request'}
+              {isRtl ? 'إنشاء طلب شراء جديد (PR)' : 'New Purchase Request'}
             </button>
           </div>
 
           <div className="grid grid-cols-1 gap-4">
             {requests.length === 0 ? (
-              <div className="p-8 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-center text-slate-400">
-                <ClipboardList className="h-10 w-10 mx-auto opacity-40 mb-2" />
-                <p className="text-xs font-semibold">{isRtl ? 'لا توجد طلبات شراء مسجلة حالياً' : 'No purchase requests recorded yet'}</p>
+              <div className="text-center py-12 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800">
+                <FileText className="h-12 w-12 text-slate-400 mx-auto mb-3 opacity-50" />
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-400">
+                  {isRtl ? 'لا توجد طلبات شراء مسجلة حالياً' : 'No purchase requests recorded yet'}
+                </p>
               </div>
             ) : (
-              requests.map((pr) => (
-                <div key={pr.id} className="p-5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-sm space-y-4">
-                  <div className="flex justify-between items-start gap-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100">{pr.prNumber}</span>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          pr.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-500' :
-                          pr.status === 'REJECTED' ? 'bg-rose-500/10 text-rose-500' :
-                          'bg-amber-500/10 text-amber-500'
-                        }`}>
-                          {isRtl ? (
-                            pr.status === 'APPROVED' ? 'معتمد' : pr.status === 'REJECTED' ? 'مرفوض' : 'قيد الاعتماد'
-                          ) : pr.status}
-                        </span>
+              requests.map(pr => (
+                <div key={pr.id} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all space-y-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600">
+                        <FileText className="h-5 w-5" />
                       </div>
-                      <p className="text-xs text-slate-400 font-semibold flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> {pr.date} • {isRtl ? 'بواسطة:' : 'By:'} {pr.requesterName}
-                      </p>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-sm text-slate-900 dark:text-slate-100">{pr.prNumber}</span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            pr.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' :
+                            pr.status === 'REJECTED' ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20' :
+                            'bg-amber-500/10 text-amber-600 border border-amber-500/20'
+                          }`}>
+                            {pr.status === 'APPROVED' ? (isRtl ? 'معتمد' : 'Approved') :
+                             pr.status === 'REJECTED' ? (isRtl ? 'مرفوض' : 'Rejected') :
+                             (isRtl ? 'قيد الاعتماد' : 'Pending Approval')}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          {isRtl ? `طالب الطلب: ${pr.requesterName}` : `Requested by: ${pr.requesterName}`}
+                          {pr.department && ` | ${pr.department}`}
+                        </p>
+                      </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-slate-400 font-bold">{isRtl ? 'إجمالي المقدر' : 'Total Est.'}</p>
-                      <p className="text-sm font-black text-indigo-600">{pr.totalAmount.toLocaleString()} EGP</p>
+                      <span className="text-xs text-slate-400 block">{pr.date}</span>
+                      <span className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400">
+                        {pr.totalAmount.toLocaleString()} {isRtl ? 'ج.م' : 'EGP'}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Items list */}
-                  <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl space-y-1.5">
-                    {pr.items.map((item, idx) => (
-                      <div key={idx} className="flex justify-between text-xs text-slate-600 dark:text-slate-400 font-semibold">
-                        <span>{item.productName} ({item.qty} {item.unit})</span>
-                        <span>{item.estimatedPrice.toLocaleString()} EGP</span>
-                      </div>
-                    ))}
+                  {/* Items Summary Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-right border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-500">
+                          <th className="p-2 rounded-r-lg">{isRtl ? 'الكود' : 'Code'}</th>
+                          <th className="p-2">{isRtl ? 'اسم المنتج' : 'Product'}</th>
+                          <th className="p-2">{isRtl ? 'الكمية المطلوب الشراء لها' : 'Qty'}</th>
+                          <th className="p-2">{isRtl ? 'السعر التقديري' : 'Est. Price'}</th>
+                          <th className="p-2 rounded-l-lg">{isRtl ? 'الإجمالي' : 'Total'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                        {pr.items.map((it, idx) => (
+                          <tr key={idx} className="text-slate-700 dark:text-slate-300">
+                            <td className="p-2 font-mono font-bold text-slate-500">{it.productCode}</td>
+                            <td className="p-2 font-bold">{it.productName}</td>
+                            <td className="p-2">{it.qty} {it.unit}</td>
+                            <td className="p-2">{it.estimatedPrice.toLocaleString()}</td>
+                            <td className="p-2 font-bold">{ (it.qty * it.estimatedPrice).toLocaleString() }</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
 
-                  {pr.notes && (
-                    <p className="text-xs text-slate-500 font-semibold italic bg-amber-500/5 px-3 py-1.5 rounded-lg">
-                      *{isRtl ? 'ملاحظة:' : 'Notes:'} {pr.notes}
-                    </p>
-                  )}
-
-                  {/* Quick Actions & Print */}
-                  <div className="flex justify-between items-center border-t border-slate-100 dark:border-slate-800 pt-3 gap-2">
+                  {/* Actions */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                     <button
                       onClick={() => setPrintPR(pr)}
-                      className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 transition-all cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold"
                     >
-                      <Printer className="h-3 w-3" />
-                      <span>{isRtl ? 'طباعة الطلب' : 'Print PR'}</span>
+                      <Printer className="h-3.5 w-3.5" />
+                      {isRtl ? 'طباعة إذن الطلب' : 'Print PR'}
                     </button>
 
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                       {pr.status === 'PENDING_APPROVAL' && (
                         <>
                           <button
                             onClick={() => handleRejectPR(pr.id)}
-                            className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-bold transition-all"
                           >
-                            <X className="h-3 w-3" /> {isRtl ? 'رفض' : 'Reject'}
+                            <X className="h-3.5 w-3.5" />
+                            {isRtl ? 'رفض الطلب' : 'Reject'}
                           </button>
                           <button
                             onClick={() => handleApprovePR(pr.id)}
-                            className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
                           >
-                            <Check className="h-3 w-3" /> {isRtl ? 'اعتماد' : 'Approve'}
+                            <Check className="h-3.5 w-3.5" />
+                            {isRtl ? 'اعتماد الطلب' : 'Approve'}
                           </button>
                         </>
                       )}
 
                       {pr.status === 'APPROVED' && (
-                        <button
-                          onClick={() => handleConvertPRToPO(pr)}
-                          className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
-                        >
-                          <ShoppingCart className="h-3 w-3" />
-                          {isRtl ? 'توليد أمر توريد PO' : 'Convert to PO'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setRfqSourcePrId(pr.id);
+                              setShowCreateRFQ(true);
+                              setActiveTab('rfq');
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100"
+                          >
+                            <Scale className="h-3.5 w-3.5" />
+                            {isRtl ? 'طلب عروض أسعار (RFQ)' : 'Request RFQ'}
+                          </button>
+                          <button
+                            onClick={() => handleConvertPRToPO(pr)}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm"
+                          >
+                            <ShoppingCart className="h-3.5 w-3.5" />
+                            {isRtl ? 'تحويل لأمر شراء توريد (PO)' : 'Issue PO'}
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -485,72 +761,252 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
         </div>
       )}
 
-      {/* 2. Purchase Orders Section */}
+      {/* ========================================================================= */}
+      {/* TAB 2: RFQ & QUOTATIONS */}
+      {/* ========================================================================= */}
+      {activeTab === 'rfq' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-800 dark:text-slate-100">
+                {isRtl ? 'طلبات عروض الأسعار والتثمين (RFQ & Quotations)' : 'Requests for Quotations (RFQ) & Evaluation'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {isRtl ? 'استدراج عروض الأسعار والمقارنة المباشرة واختيار أفضل عرض لإصدار أمر الشراء تلقائياً' : 'Request quotes from vendors, compare offers, and award winning quotation'}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowCreateRFQ(true)}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md transition-all"
+            >
+              <Plus className="h-4 w-4" />
+              {isRtl ? 'إصدار طلب عرض أسعار جديد (RFQ)' : 'New RFQ'}
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {rfqs.length === 0 ? (
+              <div className="text-center py-12 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800">
+                <Scale className="h-12 w-12 text-slate-400 mx-auto mb-3 opacity-50" />
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-400">
+                  {isRtl ? 'لا توجد طلبات عروض أسعار مسجلة حالياً' : 'No RFQs recorded yet'}
+                </p>
+              </div>
+            ) : (
+              rfqs.map(rfq => {
+                const rfqQuotes = quotations.filter(q => q.rfqId === rfq.id);
+
+                return (
+                  <div key={rfq.id} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600">
+                          <Scale className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-sm text-slate-900 dark:text-slate-100">{rfq.rfqNumber}</span>
+                            {rfq.prNumber && (
+                              <span className="text-xs text-slate-500 font-mono">({rfq.prNumber})</span>
+                            )}
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              rfq.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-blue-500/10 text-blue-600'
+                            }`}>
+                              {rfq.status === 'COMPLETED' ? (isRtl ? 'مكتمل / تم الترسية' : 'Completed') : (isRtl ? 'نشط / قيد استلام العروض' : 'Active')}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500">
+                            {isRtl ? `تاريخ الإصدار: ${rfq.date} | الموعد النهائي: ${rfq.deadline || '-'}` : `Issued: ${rfq.date} | Deadline: ${rfq.deadline || '-'}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleOpenSubmitQuote(rfq)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-bold hover:bg-indigo-100"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        {isRtl ? 'تسجيل عرض سعر مورد' : 'Record Quote'}
+                      </button>
+                    </div>
+
+                    {/* Quotations comparison grid */}
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-500 mb-2">
+                        {isRtl ? `العروض المقدمة من الموردين (${rfqQuotes.length}):` : `Received Quotes (${rfqQuotes.length}):`}
+                      </h4>
+
+                      {rfqQuotes.length === 0 ? (
+                        <p className="text-xs italic text-slate-400 bg-slate-50 dark:bg-slate-800/30 p-3 rounded-xl text-center">
+                          {isRtl ? 'لم يتم تقديم عروض أسعار من الموردين بعد لهذا الطلب' : 'No quotes submitted for this RFQ yet'}
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {rfqQuotes.map(quote => {
+                            const isWinning = quote.status === 'ACCEPTED';
+
+                            return (
+                              <div key={quote.id} className={`p-4 rounded-xl border transition-all ${
+                                isWinning 
+                                  ? 'bg-emerald-500/5 border-emerald-500/30 ring-2 ring-emerald-500/20' 
+                                  : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
+                              }`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="font-extrabold text-xs text-slate-800 dark:text-slate-100">{quote.vendorName}</span>
+                                  {isWinning ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-600 bg-emerald-100 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full">
+                                      <Award className="h-3 w-3" />
+                                      {isRtl ? 'العرض الفائز' : 'Awarded'}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 font-mono">#{quote.quoteNumber}</span>
+                                  )}
+                                </div>
+
+                                <div className="space-y-1 mb-3">
+                                  <div className="text-lg font-black text-indigo-600 dark:text-indigo-400">
+                                    {quote.totalAmount.toLocaleString()} {isRtl ? 'ج.م' : 'EGP'}
+                                  </div>
+                                  <p className="text-[11px] text-slate-500">
+                                    {isRtl ? `مدة التوريد: ${quote.deliveryDays || 7} أيام` : `Lead time: ${quote.deliveryDays || 7} days`}
+                                    {quote.paymentTerms && ` | ${quote.paymentTerms}`}
+                                  </p>
+                                </div>
+
+                                {!isWinning && rfq.status !== 'COMPLETED' && (
+                                  <button
+                                    onClick={() => handleAcceptQuotation(quote.id)}
+                                    className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1"
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                    {isRtl ? 'قبول العرض وترسية الأمر' : 'Award & Issue PO'}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 3: PURCHASE ORDERS (PO) */}
+      {/* ========================================================================= */}
       {activeTab === 'orders' && (
         <div className="space-y-4">
-          <h2 className="text-base font-extrabold text-slate-800 dark:text-slate-200">
-            {isRtl ? 'أوامر التوريد والشراء الصادرة' : 'Issued Purchase Orders'}
-          </h2>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-800 dark:text-slate-100">
+                {isRtl ? 'أوامر التوريد والشراء المباشر (PO)' : 'Binding Purchase Orders (PO)'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {isRtl ? 'أوامر التوريد الصادرة للموردين واستلام الشحنات وتغذية الأرصدة والقيود المحاسبية' : 'Issued POs, shipment receipts, and automated GL entries'}
+              </p>
+            </div>
+            {workflowConfig.allowDirectPoWithoutPr && (
+              <button
+                onClick={() => setShowDirectPO(true)}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md transition-all"
+              >
+                <Plus className="h-4 w-4" />
+                {isRtl ? 'إصدار أمر شراء مباشر' : 'Direct PO'}
+              </button>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 gap-4">
             {orders.length === 0 ? (
-              <div className="p-8 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-center text-slate-400">
-                <ShoppingCart className="h-10 w-10 mx-auto opacity-40 mb-2" />
-                <p className="text-xs font-semibold">{isRtl ? 'لا توجد أوامر توريد مسجلة حالياً' : 'No purchase orders issued yet'}</p>
+              <div className="text-center py-12 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800">
+                <ShoppingCart className="h-12 w-12 text-slate-400 mx-auto mb-3 opacity-50" />
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-400">
+                  {isRtl ? 'لا توجد أوامر شراء مسجلة حالياً' : 'No purchase orders recorded yet'}
+                </p>
               </div>
             ) : (
-              orders.map((po) => (
-                <div key={po.id} className="p-5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-sm space-y-4">
-                  <div className="flex justify-between items-start gap-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100">{po.poNumber}</span>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          po.status === 'RECEIVED' ? 'bg-emerald-500/10 text-emerald-500' :
-                          'bg-sky-500/10 text-sky-500'
-                        }`}>
-                          {isRtl ? (
-                            po.status === 'RECEIVED' ? 'تم الاستلام' : 'صادر للمورد'
-                          ) : po.status}
-                        </span>
+              orders.map(po => (
+                <div key={po.id} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all space-y-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600">
+                        <ShoppingCart className="h-5 w-5" />
                       </div>
-                      <p className="text-xs text-slate-400 font-semibold flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> {po.date} • {isRtl ? 'المورد:' : 'Supplier:'} <span className="text-indigo-600 font-extrabold">{po.vendorName}</span>
-                      </p>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-sm text-slate-900 dark:text-slate-100">{po.poNumber}</span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            po.status === 'RECEIVED' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' :
+                            po.status === 'CANCELLED' ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20' :
+                            'bg-blue-500/10 text-blue-600 border border-blue-500/20'
+                          }`}>
+                            {po.status === 'RECEIVED' ? (isRtl ? 'تم الاستلام بالمخزن' : 'Fully Received') :
+                             po.status === 'CANCELLED' ? (isRtl ? 'ملغى' : 'Cancelled') :
+                             (isRtl ? 'صادر / قيد التوريد' : 'Issued / Pending Delivery')}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          {isRtl ? `المورد: ${po.vendorName}` : `Vendor: ${po.vendorName}`}
+                          {po.prNumber && ` | ${isRtl ? 'مرجع الطلب:' : 'PR:'} ${po.prNumber}`}
+                        </p>
+                      </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-slate-400 font-bold">{isRtl ? 'قيمة الأمر الإجمالية' : 'PO Value'}</p>
-                      <p className="text-sm font-black text-emerald-600">{po.totalAmount.toLocaleString()} EGP</p>
+                      <span className="text-xs text-slate-400 block">{po.date}</span>
+                      <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                        {po.totalAmount.toLocaleString()} {isRtl ? 'ج.م' : 'EGP'}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Items List */}
-                  <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl space-y-1.5">
-                    {po.items.map((item, idx) => (
-                      <div key={idx} className="flex justify-between text-xs text-slate-600 dark:text-slate-400 font-semibold">
-                        <span>{item.productName} ({item.qty} {item.unit})</span>
-                        <span>{item.totalPrice.toLocaleString()} EGP</span>
-                      </div>
-                    ))}
+                  {/* Items Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-right border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-500">
+                          <th className="p-2 rounded-r-lg">{isRtl ? 'الكود' : 'Code'}</th>
+                          <th className="p-2">{isRtl ? 'الصنف' : 'Product'}</th>
+                          <th className="p-2">{isRtl ? 'الكمية' : 'Qty'}</th>
+                          <th className="p-2">{isRtl ? 'سعر الوحدة' : 'Unit Price'}</th>
+                          <th className="p-2 rounded-l-lg">{isRtl ? 'الإجمالي' : 'Total'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                        {po.items.map((it, idx) => (
+                          <tr key={idx} className="text-slate-700 dark:text-slate-300">
+                            <td className="p-2 font-mono font-bold text-slate-500">{it.productCode}</td>
+                            <td className="p-2 font-bold">{it.productName}</td>
+                            <td className="p-2">{it.qty} {it.unit}</td>
+                            <td className="p-2">{it.unitPrice.toLocaleString()}</td>
+                            <td className="p-2 font-bold">{it.totalPrice.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
 
-                  {/* Print & Actions */}
-                  <div className="flex justify-between items-center border-t border-slate-100 dark:border-slate-800 pt-3 gap-2">
+                  {/* PO Actions */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                     <button
                       onClick={() => setPrintPO(po)}
-                      className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 transition-all cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 text-xs font-bold"
                     >
-                      <Printer className="h-3 w-3" />
-                      <span>{isRtl ? 'طباعة الأمر' : 'Print PO'}</span>
+                      <Printer className="h-3.5 w-3.5" />
+                      {isRtl ? 'طباعة أمر التوريد الرسمى' : 'Print PO'}
                     </button>
 
                     {po.status === 'ISSUED' && (
                       <button
                         onClick={() => setShowReceivePO(po.id)}
-                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-all"
                       >
-                        <Check className="h-3.5 w-3.5" />
-                        {isRtl ? 'إثبات الاستلام في المخازن' : 'Log Warehouse Receipt'}
+                        <CheckCircle2 className="h-4 w-4" />
+                        {isRtl ? 'استلام الشحنة وتغذية المخزون' : 'Receive Goods & Update Stock'}
                       </button>
                     )}
                   </div>
@@ -561,585 +1017,769 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
         </div>
       )}
 
-      {/* 3. Vendors Section */}
+      {/* ========================================================================= */}
+      {/* TAB 4: VENDORS & AP STATEMENT */}
+      {/* ========================================================================= */}
       {activeTab === 'vendors' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-base font-extrabold text-slate-800 dark:text-slate-200">
-              {isRtl ? 'قائمة الموردين المعتمدين' : 'Approved Vendors Register'}
-            </h2>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-800 dark:text-slate-100">
+                {isRtl ? 'دليل الموردين وكشوف حسابات الدائنين (AP Ledger)' : 'Vendors Directory & Accounts Payable Ledger'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {isRtl ? 'إدارة الموردين والاطلاع على كشف حساب الشحنات والمسدادات والرصيد المتبقي' : 'Vendor contacts and detailed financial statement history'}
+              </p>
+            </div>
             <button
               onClick={() => setShowAddVendor(true)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-sm"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md transition-all"
             >
               <Plus className="h-4 w-4" />
-              {isRtl ? 'إضافة مورد جديد' : 'Add New Supplier'}
+              {isRtl ? 'إضافة مورد جديد' : 'New Vendor'}
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {vendors.length === 0 ? (
-              <div className="p-8 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-center text-slate-400 col-span-full">
-                <Store className="h-10 w-10 mx-auto opacity-40 mb-2" />
-                <p className="text-xs font-semibold">{isRtl ? 'لا يوجد موردون مسجلون حالياً' : 'No registered vendors yet'}</p>
+              <div className="col-span-full text-center py-12 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800">
+                <Users className="h-12 w-12 text-slate-400 mx-auto mb-3 opacity-50" />
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-400">
+                  {isRtl ? 'لا يوجد موردون مسجلون بعد' : 'No vendors registered yet'}
+                </p>
               </div>
             ) : (
-              vendors.map((v) => (
-                <div key={v.id} className="p-5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-sm space-y-3 relative overflow-hidden">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 rounded-xl">
-                      <Store className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-slate-100">
-                        {isRtl ? v.nameAr : v.nameEn}
-                      </h3>
-                      <p className="text-[10px] text-slate-400 font-bold">{v.code}</p>
-                    </div>
-                  </div>
+              vendors.map(vendor => {
+                const stmt = PurchasingBusinessEngine.getVendorAPStatement(companyId, vendor.id);
 
-                  <div className="space-y-1.5 border-t border-slate-100 dark:border-slate-800 pt-3 text-xs text-slate-500 font-semibold">
-                    {v.phone && (
-                      <p className="flex items-center gap-1.5">
-                        <Phone className="h-3 w-3 text-slate-400" /> {v.phone}
-                      </p>
-                    )}
-                    {v.email && (
-                      <p className="flex items-center gap-1.5">
-                        <Mail className="h-3 w-3 text-slate-400" /> {v.email}
-                      </p>
-                    )}
-                    {v.taxNo && (
-                      <p className="flex items-center gap-1.5">
-                        <Hash className="h-3 w-3 text-slate-400" /> {isRtl ? 'سجل ضريبي:' : 'Tax No:'} {v.taxNo}
-                      </p>
-                    )}
+                return (
+                  <div key={vendor.id} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all space-y-3 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-lg">
+                          {vendor.code}
+                        </span>
+                        <span className="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-bold">
+                          {vendor.status}
+                        </span>
+                      </div>
+
+                      <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-base">
+                        {isRtl ? vendor.nameAr : vendor.nameEn}
+                      </h3>
+
+                      <div className="space-y-1 text-xs text-slate-500">
+                        {vendor.phone && <p className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-slate-400" />{vendor.phone}</p>}
+                        {vendor.email && <p className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-slate-400" />{vendor.email}</p>}
+                        {vendor.taxNo && <p className="flex items-center gap-1.5"><Hash className="h-3.5 w-3.5 text-slate-400" />{isRtl ? 'الرقم الضريبي:' : 'Tax:'} {vendor.taxNo}</p>}
+                      </div>
+                    </div>
+
+                    {/* Quick Financial Summary */}
+                    <div className="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">{isRtl ? 'إجمالي المشتريات:' : 'Invoiced:'}</span>
+                        <span className="font-bold">{stmt.totalInvoiced.toLocaleString()} EGP</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">{isRtl ? 'إجمالي المسدد:' : 'Paid:'}</span>
+                        <span className="font-bold text-emerald-600">{stmt.totalPaid.toLocaleString()} EGP</span>
+                      </div>
+                      <div className="flex justify-between text-xs border-t border-slate-200 dark:border-slate-700 pt-1">
+                        <span className="font-bold text-slate-700 dark:text-slate-300">{isRtl ? 'صافي المتبقي للمورد:' : 'Net Payable:'}</span>
+                        <span className="font-extrabold text-indigo-600">{stmt.netBalance.toLocaleString()} EGP</span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedVendorForStatement(vendor)}
+                      className="w-full py-2 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      {isRtl ? 'عرض كشف حساب المورد (Ledger)' : 'View Statement'}
+                    </button>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
       )}
 
-      {/* MODAL: Create Purchase Request */}
-      {showCreatePR && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100">
-              {isRtl ? 'تعبئة طلب شراء جديد' : 'Initiate New Purchase Request'}
-            </h3>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-[11px] font-black text-slate-500 uppercase">{isRtl ? 'القسم / الإدارة الطالبة' : 'Requesting Department'}</label>
-                <input
-                  type="text"
-                  value={prDepartment}
-                  onChange={(e) => setPrDepartment(e.target.value)}
-                  placeholder={isRtl ? 'مثال: محطة وقود العباسية' : 'e.g. Abbassia Fuel Station'}
-                  className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              {/* Add Item Subsection */}
-              <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl space-y-2">
-                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">{isRtl ? 'إضافة صنف إلى السلة' : 'Add Item to Cart'}</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <select
-                    value={selectedProductId}
-                    onChange={(e) => setSelectedProductId(e.target.value)}
-                    className="px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
-                  >
-                    <option value="">{isRtl ? 'اختر صنفاً...' : 'Select product...'}</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-
-                  <input
-                    type="number"
-                    value={selectedQty}
-                    onChange={(e) => setSelectedQty(Math.max(1, parseInt(e.target.value) || 1))}
-                    placeholder={isRtl ? 'الكمية' : 'Qty'}
-                    className="px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
-                  />
-
-                  <input
-                    type="number"
-                    value={selectedEstPrice}
-                    onChange={(e) => setSelectedEstPrice(Math.max(0, parseFloat(e.target.value) || 0))}
-                    placeholder={isRtl ? 'سعر تقديري' : 'Est Price'}
-                    className="px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleAddPRItem}
-                  className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all"
-                >
-                  {isRtl ? 'تأكيد إضافة الصنف' : 'Add to items list'}
-                </button>
-              </div>
-
-              {/* Display items added */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-black text-slate-500 uppercase">{isRtl ? 'قائمة الأصناف المضافة' : 'Cart Items'}</label>
-                {prItems.length === 0 ? (
-                  <p className="text-[11px] text-slate-400 italic">{isRtl ? 'لم تضف أي أصناف بعد' : 'No items added yet'}</p>
-                ) : (
-                  <div className="border border-slate-100 dark:border-slate-800 rounded-xl p-3 space-y-1.5 bg-slate-50 dark:bg-slate-950">
-                    {prItems.map((item, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        <span>{item.productName} ({item.qty} {item.unit}) @ {item.estimatedPrice} EGP</span>
-                        <button
-                          onClick={() => handleRemovePRItem(item.productId)}
-                          className="text-rose-500 hover:text-rose-600 text-[10px]"
-                        >
-                          {isRtl ? 'إزالة' : 'Remove'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="text-[11px] font-black text-slate-500 uppercase">{isRtl ? 'ملاحظات إضافية' : 'Procurement Notes'}</label>
-                <textarea
-                  value={prNotes}
-                  onChange={(e) => setPrNotes(e.target.value)}
-                  placeholder={isRtl ? 'تفاصيل تسليم البضاعة أو متطلبات الجودة...' : 'Add delivery conditions or specifications...'}
-                  className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent focus:ring-2 focus:ring-indigo-500 h-20"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3">
-              <button
-                onClick={() => setShowCreatePR(false)}
-                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-100"
-              >
-                {isRtl ? 'إلغاء' : 'Cancel'}
-              </button>
-              <button
-                onClick={handleCreatePR}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
-              >
-                {isRtl ? 'إرسال للاعتماد' : 'Submit Request'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Receive Goods */}
-      {showReceivePO && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
-            <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Plus className="h-5 w-5 text-emerald-500" />
-              {isRtl ? 'إثبات استلام وتوريد البضاعة' : 'Verify PO Delivery & Storage'}
-            </h3>
-            <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-              {isRtl 
-                ? 'سيقوم النظام آلياً بإدخال الكميات المذكورة في شحنة التوريد إلى المستودع المختار، وترحيل قيود الدائن والمدين المحاسبية لحسابات المورد المعتمدة.'
-                : 'This will automatically deposit the PO items into the selected destination warehouse, and generate standard balanced ledger entries matching AP rules.'}
+      {/* ========================================================================= */}
+      {/* TAB 5: WORKFLOW MATRIX & CONFIGURATION */}
+      {/* ========================================================================= */}
+      {activeTab === 'config' && (
+        <form onSubmit={handleSaveWorkflowConfig} className="space-y-6 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div>
+            <h2 className="text-lg font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <Sliders className="h-5 w-5 text-indigo-600" />
+              {isRtl ? 'سياسات واعتمادات دورة المشتريات (No-Code Configuration)' : 'Purchasing Workflow & Approval Matrix'}
+            </h2>
+            <p className="text-xs text-slate-500">
+              {isRtl ? 'تحديد مصفوفات الاعتماد حسب قيمة الشراء والبوادئ المستندية بدون الحاجة لأي تعديل برمجي مستقبلي' : 'Define approval limits and prefixes with zero future code updates needed'}
             </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isRtl ? 'بادئة طلبات الشراء (PR Prefix)' : 'PR Prefix'}
+              </label>
+              <input
+                type="text"
+                value={workflowConfig.prPrefix}
+                onChange={e => setWorkflowConfig({ ...workflowConfig, prPrefix: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-mono font-bold"
+              />
+            </div>
 
             <div>
-              <label className="text-[11px] font-black text-slate-500 uppercase">{isRtl ? 'مستودع الوجهة للاستلام' : 'Select Destination Warehouse'}</label>
-              <select
-                value={receiveWarehouseId}
-                onChange={(e) => setReceiveWarehouseId(e.target.value)}
-                className="w-full mt-1.5 px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
-              >
-                {warehouses.map(wh => (
-                  <option key={wh.id} value={wh.id}>{wh.name}</option>
-                ))}
-              </select>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isRtl ? 'بادئة أوامر الشراء (PO Prefix)' : 'PO Prefix'}
+              </label>
+              <input
+                type="text"
+                value={workflowConfig.poPrefix}
+                onChange={e => setWorkflowConfig({ ...workflowConfig, poPrefix: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-mono font-bold"
+              />
             </div>
 
-            <div className="flex justify-end gap-2 pt-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isRtl ? 'بادئة عروض الأسعار (RFQ Prefix)' : 'RFQ Prefix'}
+              </label>
+              <input
+                type="text"
+                value={workflowConfig.rfqPrefix}
+                onChange={e => setWorkflowConfig({ ...workflowConfig, rfqPrefix: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-mono font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isRtl ? 'بادئة كود الموردين (Vendor Prefix)' : 'Vendor Prefix'}
+              </label>
+              <input
+                type="text"
+                value={workflowConfig.vendorPrefix}
+                onChange={e => setWorkflowConfig({ ...workflowConfig, vendorPrefix: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-mono font-bold"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+              {isRtl ? 'خيارات التشغيل الآلي للسياسات' : 'Policy Automation Options'}
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <input
+                  type="checkbox"
+                  checked={workflowConfig.requirePrApproval}
+                  onChange={e => setWorkflowConfig({ ...workflowConfig, requirePrApproval: e.target.checked })}
+                  className="rounded text-indigo-600 h-4 w-4"
+                />
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  {isRtl ? 'اشتراط الاعتماد لطلبات الشراء قبل تحويلها لأوامر شراء' : 'Require PR approval before PO conversion'}
+                </span>
+              </label>
+
+              <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <input
+                  type="checkbox"
+                  checked={workflowConfig.autoCreatePoOnPrApprove}
+                  onChange={e => setWorkflowConfig({ ...workflowConfig, autoCreatePoOnPrApprove: e.target.checked })}
+                  className="rounded text-indigo-600 h-4 w-4"
+                />
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  {isRtl ? 'إنشاء أمر التوريد تلقائياً عند اعتماد طلب الشراء' : 'Auto-issue PO on PR approval'}
+                </span>
+              </label>
+
+              <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <input
+                  type="checkbox"
+                  checked={workflowConfig.allowDirectPoWithoutPr}
+                  onChange={e => setWorkflowConfig({ ...workflowConfig, allowDirectPoWithoutPr: e.target.checked })}
+                  className="rounded text-indigo-600 h-4 w-4"
+                />
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  {isRtl ? 'السماح بإصدار أمر شراء مباشر بدون طلب شراء سابق' : 'Allow direct PO without PR'}
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+            <button
+              type="submit"
+              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-2"
+            >
+              <Check className="h-4 w-4" />
+              {isRtl ? 'حفظ السياسات والاعتمادات' : 'Save Workflow Policies'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* ========================================================================= */}
+      {/* VENDOR AP STATEMENT MODAL */}
+      {/* ========================================================================= */}
+      {selectedVendorForStatement && selectedVendorStatementData && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 rounded-xl">
+                  <Building2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-lg text-slate-900 dark:text-slate-100">
+                    {isRtl ? `كشف حساب المورد: ${selectedVendorForStatement.nameAr}` : `AP Statement: ${selectedVendorForStatement.nameEn}`}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    {selectedVendorForStatement.code} {selectedVendorForStatement.taxNo && `| Tax: ${selectedVendorForStatement.taxNo}`}
+                  </p>
+                </div>
+              </div>
               <button
-                onClick={() => setShowReceivePO(null)}
-                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-100"
+                onClick={() => setSelectedVendorForStatement(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
-                {isRtl ? 'إلغاء' : 'Cancel'}
+                <X className="h-5 w-5" />
               </button>
+            </div>
+
+            {/* KPI Cards */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span className="text-[11px] text-slate-500 block">{isRtl ? 'إجمالي قيم الشحنات' : 'Total Invoiced'}</span>
+                <span className="text-base font-extrabold text-slate-800 dark:text-slate-100">{selectedVendorStatementData.totalInvoiced.toLocaleString()} EGP</span>
+              </div>
+              <div className="p-3 bg-emerald-500/5 rounded-xl border border-emerald-500/20">
+                <span className="text-[11px] text-emerald-600 block">{isRtl ? 'إجمالي السدادات' : 'Total Payments'}</span>
+                <span className="text-base font-extrabold text-emerald-600">{selectedVendorStatementData.totalPaid.toLocaleString()} EGP</span>
+              </div>
+              <div className="p-3 bg-indigo-500/5 rounded-xl border border-indigo-500/20">
+                <span className="text-[11px] text-indigo-600 block">{isRtl ? 'صافي المتبقي للمورد' : 'Net Payable Balance'}</span>
+                <span className="text-base font-extrabold text-indigo-600">{selectedVendorStatementData.netBalance.toLocaleString()} EGP</span>
+              </div>
+            </div>
+
+            {/* Ledger Table */}
+            <div className="overflow-x-auto border rounded-2xl border-slate-200 dark:border-slate-800">
+              <table className="w-full text-xs text-right border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    <th className="p-3">{isRtl ? 'التاريخ' : 'Date'}</th>
+                    <th className="p-3">{isRtl ? 'نوع المستند' : 'Type'}</th>
+                    <th className="p-3">{isRtl ? 'رقم المستند' : 'Doc No'}</th>
+                    <th className="p-3">{isRtl ? 'البيان والتفاصيل' : 'Description'}</th>
+                    <th className="p-3 text-emerald-600">{isRtl ? 'مدين (مسدد)' : 'Debit (Paid)'}</th>
+                    <th className="p-3 text-rose-600">{isRtl ? 'دائن (شحنة)' : 'Credit (Invoiced)'}</th>
+                    <th className="p-3">{isRtl ? 'الرصيد الجاري' : 'Balance'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {selectedVendorStatementData.items.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-6 text-center text-slate-400">
+                        {isRtl ? 'لا توجد حركات مسجلة لهذا المورد حتى الآن' : 'No statement transactions recorded for this vendor yet'}
+                      </td>
+                    </tr>
+                  ) : (
+                    selectedVendorStatementData.items.map(it => (
+                      <tr key={it.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td className="p-3 font-mono text-slate-500">{it.date}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            it.docType === 'PO_RECEIPT' ? 'bg-indigo-500/10 text-indigo-600' : 'bg-emerald-500/10 text-emerald-600'
+                          }`}>
+                            {it.docType === 'PO_RECEIPT' ? (isRtl ? 'استلام شحنة' : 'PO Receipt') : (isRtl ? 'سند صرف نقدية' : 'Cash Voucher')}
+                          </span>
+                        </td>
+                        <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{it.docNo}</td>
+                        <td className="p-3 font-medium">{isRtl ? it.descriptionAr : it.descriptionEn}</td>
+                        <td className="p-3 font-bold text-emerald-600">{it.debit > 0 ? it.debit.toLocaleString() : '-'}</td>
+                        <td className="p-3 font-bold text-rose-600">{it.credit > 0 ? it.credit.toLocaleString() : '-'}</td>
+                        <td className="p-3 font-extrabold text-indigo-600">{it.balance.toLocaleString()} EGP</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end pt-2">
               <button
-                onClick={() => handleReceivePO(showReceivePO)}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                onClick={() => setSelectedVendorForStatement(null)}
+                className="px-5 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-200"
               >
-                {isRtl ? 'تأكيد التوريد والاستلام' : 'Confirm & Post'}
+                {isRtl ? 'إغلاق' : 'Close'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: Register Vendor */}
+      {/* ========================================================================= */}
+      {/* MODAL: ADD VENDOR */}
+      {/* ========================================================================= */}
       {showAddVendor && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleAddVendor} className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
-            <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Users className="h-5 w-5 text-indigo-600" />
-              {isRtl ? 'إضافة مورد جديد لقاعدة البيانات' : 'Register New Vendor'}
-            </h3>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-extrabold text-slate-900 dark:text-slate-100">
+                {isRtl ? 'تسجيل مورد جديد' : 'Register New Vendor'}
+              </h3>
+              <button onClick={() => setShowAddVendor(false)} className="p-1 text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
-            <div className="space-y-3">
+            <form onSubmit={handleAddVendor} className="space-y-3">
               <div>
-                <label className="text-[11px] font-black text-slate-500 uppercase">{isRtl ? 'الاسم باللغة العربية' : 'Arabic Name'}</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {isRtl ? 'اسم المورد بالعربية *' : 'Vendor Arabic Name *'}
+                </label>
                 <input
                   type="text"
                   required
                   value={vendorForm.nameAr}
-                  onChange={(e) => setVendorForm({ ...vendorForm, nameAr: e.target.value })}
-                  placeholder="مثال: شركة النيل لزيوت البترول"
-                  className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent focus:ring-2 focus:ring-indigo-500"
+                  onChange={e => setVendorForm({ ...vendorForm, nameAr: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-black text-slate-500 uppercase">{isRtl ? 'الاسم باللغة الإنجليزية' : 'English Name'}</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {isRtl ? 'اسم المورد بالإنجليزية *' : 'Vendor English Name *'}
+                </label>
                 <input
                   type="text"
                   required
                   value={vendorForm.nameEn}
-                  onChange={(e) => setVendorForm({ ...vendorForm, nameEn: e.target.value })}
-                  placeholder="e.g. Nile Petroleum Oils Company"
-                  className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent focus:ring-2 focus:ring-indigo-500"
+                  onChange={e => setVendorForm({ ...vendorForm, nameEn: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[11px] font-black text-slate-500 uppercase">{isRtl ? 'رقم الهاتف' : 'Phone'}</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">{isRtl ? 'الهاتف' : 'Phone'}</label>
                   <input
                     type="text"
                     value={vendorForm.phone}
-                    onChange={(e) => setVendorForm({ ...vendorForm, phone: e.target.value })}
-                    className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    onChange={e => setVendorForm({ ...vendorForm, phone: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-black text-slate-500 uppercase">{isRtl ? 'الرقم الضريبي' : 'Tax Registration'}</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">{isRtl ? 'الرقم الضريبي' : 'Tax No'}</label>
                   <input
                     type="text"
                     value={vendorForm.taxNo}
-                    onChange={(e) => setVendorForm({ ...vendorForm, taxNo: e.target.value })}
-                    className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    onChange={e => setVendorForm({ ...vendorForm, taxNo: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[11px] font-black text-slate-500 uppercase">{isRtl ? 'البريد الإلكتروني' : 'Email Address'}</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">{isRtl ? 'البريد الإلكتروني' : 'Email'}</label>
                 <input
                   type="email"
                   value={vendorForm.email}
-                  onChange={(e) => setVendorForm({ ...vendorForm, email: e.target.value })}
-                  className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                  onChange={e => setVendorForm({ ...vendorForm, email: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs"
                 />
               </div>
 
-              <div>
-                <label className="text-[11px] font-black text-slate-500 uppercase">{isRtl ? 'الموقع والعنوان الرئيسي' : 'Main Office Address'}</label>
-                <input
-                  type="text"
-                  value={vendorForm.address}
-                  onChange={(e) => setVendorForm({ ...vendorForm, address: e.target.value })}
-                  className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
-                />
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAddVendor(false)}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md"
+                >
+                  {isRtl ? 'حفظ المورد' : 'Save Vendor'}
+                </button>
               </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3">
-              <button
-                type="button"
-                onClick={() => setShowAddVendor(false)}
-                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-100"
-              >
-                {isRtl ? 'إلغاء' : 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
-              >
-                {isRtl ? 'تأكيد التسجيل' : 'Confirm Registration'}
-              </button>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
       )}
 
-      {/* PR PRINT MODAL */}
-      {printPR && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:backdrop-blur-none animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-4 print:p-0 print:shadow-none print:rounded-none">
-            <div className="flex justify-between items-center print:hidden border-b pb-3 dark:border-slate-800">
-              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
-                {isRtl ? 'معاينة طلب الشراء للطباعة' : 'Purchase Request Print Preview'}
+      {/* ========================================================================= */}
+      {/* MODAL: CREATE PR */}
+      {/* ========================================================================= */}
+      {showCreatePR && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-extrabold text-slate-900 dark:text-slate-100">
+                {isRtl ? 'إنشاء طلب شراء داخلي جديد (PR)' : 'Create Purchase Request (PR)'}
               </h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <Printer size={14} />
-                  <span>{isRtl ? 'طباعة المستند' : 'Print Voucher'}</span>
-                </button>
-                <button
-                  onClick={() => setPrintPR(null)}
-                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
-                >
-                  <X size={16} />
-                </button>
-              </div>
+              <button onClick={() => setShowCreatePR(false)} className="p-1 text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
             </div>
 
-            <div
-              id="voucher-sheet-printable"
-              className="w-[210mm] min-h-[297mm] mx-auto p-12 border border-slate-300 bg-white text-black text-xs font-bold leading-relaxed shadow-xl relative print:shadow-none print:border-none print:w-full print:min-h-0 print:p-2"
-              dir={isRtl ? 'rtl' : 'ltr'}
-              style={{
-                backgroundImage: (CustodyDB.getConfig().use_custom_template && CustodyDB.getConfig().custom_template_image) ? `url(${CustodyDB.getConfig().custom_template_image})` : undefined,
-                backgroundSize: '100% 100%',
-                backgroundRepeat: 'no-repeat',
-              }}
-            >
-              <div className="flex justify-between items-center border-b-2 border-black pb-5 mb-6 gap-4">
-                {!CustodyDB.getConfig().use_custom_template ? (
-                  <div className="flex items-center gap-3">
-                    <div className="border-[2.5px] border-black rounded-[50%/50%] px-3 py-1.5 flex flex-col items-center justify-center leading-none bg-white shrink-0 shadow-sm h-[52px] w-[90px]">
-                      <span className="text-[20px] font-black leading-none text-black">كوكي</span>
-                      <span className="text-[9px] font-bold font-mono tracking-wider mt-0.5 leading-none text-black">Koki</span>
-                    </div>
-                    <div className="text-right space-y-0.5">
-                      <h1 className="text-[13px] font-black text-black">شركة / القاهرة الجديدة للدواجن</h1>
-                      <p className="text-[10px] text-neutral-800 font-bold">{isRtl ? 'إدارة المشتريات والتموين' : 'Procurement & Logistics Dept'}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-right space-y-0.5">
-                    <h1 className="text-[13px] font-black text-emerald-600">{CustodyDB.getConfig().company_name}</h1>
-                    <p className="text-[10px] text-neutral-800 font-bold">{isRtl ? 'إدارة المشتريات والتموين' : 'Procurement & Logistics Dept'}</p>
-                  </div>
-                )}
-                
-                <div className="text-center">
-                  <h2 className="text-[14px] font-black border-[2.5px] border-black px-4 py-2 bg-neutral-100 text-black shadow-sm uppercase">
-                    {isRtl ? 'طلب شراء بضائع رسمي' : 'Purchase Request (PR)'}
-                  </h2>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    {isRtl ? 'القسم / الإدارة الطالبة' : 'Department'}
+                  </label>
+                  <input
+                    type="text"
+                    value={prDepartment}
+                    onChange={e => setPrDepartment(e.target.value)}
+                    placeholder={isRtl ? 'مثال: قسم الصيانة والتشغيل' : 'Maintenance & Operations'}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs"
+                  />
                 </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    {isRtl ? 'ملاحظات وتبرير الطلب' : 'Justification Notes'}
+                  </label>
+                  <input
+                    type="text"
+                    value={prNotes}
+                    onChange={e => setPrNotes(e.target.value)}
+                    placeholder={isRtl ? 'تغذية المخزون الدوري' : 'Routine stock replenishment'}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs"
+                  />
+                </div>
+              </div>
 
-                <div className="text-right space-y-1">
-                  <div className="text-xs font-mono font-bold text-black border border-black px-2.5 py-1 bg-neutral-50 rounded">
-                    {isRtl ? 'طلب رقم: ' : 'PR #: '} <span className="font-black font-mono">{printPR.prNumber}</span>
+              {/* Add Item Builder */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                  {isRtl ? 'إضافة صنف لطلب الشراء:' : 'Add Item to PR:'}
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                  <div className="sm:col-span-2">
+                    <select
+                      value={selectedProductId}
+                      onChange={e => {
+                        setSelectedProductId(e.target.value);
+                        const p = products.find(prod => prod.id === e.target.value);
+                        if (p) setSelectedEstPrice(p.last_purchase_price || 0);
+                      }}
+                      className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-bold"
+                    >
+                      <option value="">{isRtl ? '-- اختر صنفاً --' : '-- Select Product --'}</option>
+                      {products.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                      ))}
+                    </select>
                   </div>
-                  <div className="text-[10px] font-mono text-slate-600">
-                    {isRtl ? 'التاريخ: ' : 'Date: '} {printPR.date}
+                  <div>
+                    <input
+                      type="number"
+                      min="1"
+                      value={selectedQty}
+                      onChange={e => setSelectedQty(Number(e.target.value))}
+                      placeholder={isRtl ? 'الكمية' : 'Qty'}
+                      className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={handleAddPRItem}
+                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold"
+                    >
+                      {isRtl ? 'إضافة الصنف' : 'Add Item'}
+                    </button>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 border border-black p-3 rounded mb-6 bg-neutral-50/50">
-                <div>
-                  <span className="text-slate-500 font-semibold">{isRtl ? 'مقدم الطلب:' : 'Requester Name:'}</span>
-                  <p className="font-bold text-black">{printPR.requesterName}</p>
-                </div>
-                <div>
-                  <span className="text-slate-500 font-semibold">{isRtl ? 'القسم / الإدارة:' : 'Department:'}</span>
-                  <p className="font-bold text-black">{printPR.department || (isRtl ? 'التشغيل والإنتاج' : 'Operations')}</p>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-slate-500 font-semibold">{isRtl ? 'البيان وملاحظات الطلب:' : 'PR Statement & Notes:'}</span>
-                  <p className="font-bold text-black">{printPR.notes || '---'}</p>
+              {/* Added Items List */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  {isRtl ? `البنود المضافة (${prItems.length}):` : `Added Items (${prItems.length}):`}
+                </span>
+                <div className="divide-y divide-slate-100 dark:divide-slate-800 border rounded-xl border-slate-200 dark:border-slate-800 max-h-40 overflow-y-auto">
+                  {prItems.length === 0 ? (
+                    <p className="p-4 text-center text-xs text-slate-400">{isRtl ? 'لم يتم إضافة أصناف بعد' : 'No items added yet'}</p>
+                  ) : (
+                    prItems.map(it => (
+                      <div key={it.productId} className="p-2.5 flex items-center justify-between text-xs">
+                        <div>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{it.productName}</span>
+                          <span className="text-slate-400 font-mono ml-2">({it.productCode})</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold">{it.qty} {it.unit}</span>
+                          <button
+                            onClick={() => handleRemovePRItem(it.productId)}
+                            className="p-1 text-rose-500 hover:bg-rose-50 rounded"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
-              <table className="w-full text-right border-collapse text-xs border border-black mb-8">
-                <thead>
-                  <tr className="bg-neutral-100 border-b border-black text-black font-black">
-                    <th className="p-2 border-r border-black w-10 text-center">#</th>
-                    <th className="p-2 border-r border-black">{isRtl ? 'اسم الصنف والمواصفات' : 'Product & Description'}</th>
-                    <th className="p-2 border-r border-black w-24 text-center">{isRtl ? 'الكمية المطلوبة' : 'Requested Qty'}</th>
-                    <th className="p-2 border-r border-black w-24 text-center">{isRtl ? 'الوحدة' : 'Unit'}</th>
-                    <th className="p-2 border-r border-black w-28 text-center">{isRtl ? 'السعر التقديري (ج.م)' : 'Estimated Price'}</th>
-                    <th className="p-2 w-32 text-center">{isRtl ? 'الإجمالي التقديري' : 'Estimated Total'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-black text-black">
-                  {printPR.items.map((item, index) => (
-                    <tr key={index} className="border-b border-black">
-                      <td className="p-2 border-r border-black text-center font-mono font-bold">{index + 1}</td>
-                      <td className="p-2 border-r border-black font-extrabold">{item.productName}</td>
-                      <td className="p-2 border-r border-black text-center font-mono font-black">{item.qty}</td>
-                      <td className="p-2 border-r border-black text-center font-medium">{item.unit || (isRtl ? 'وحدة' : 'Unit')}</td>
-                      <td className="p-2 border-r border-black text-center font-mono">{item.estimatedPrice.toLocaleString()} EGP</td>
-                      <td className="p-2 text-center font-mono font-black">{(item.qty * item.estimatedPrice).toLocaleString()} EGP</td>
-                    </tr>
-                  ))}
-                  <tr className="bg-neutral-100 font-black border-t-2 border-black">
-                    <td colSpan={5} className="p-2 border-r border-black text-left">{isRtl ? 'إجمالي تقديري لمستند الطلب:' : 'Total Estimated Request Value:'}</td>
-                    <td className="p-2 text-center font-mono text-indigo-900 text-xs font-black">{printPR.totalAmount.toLocaleString()} EGP</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div className="grid grid-cols-3 gap-6 text-center mt-12 pt-6 border-t border-slate-300">
-                <div className="space-y-6">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase">{isRtl ? 'مقدم الطلب' : 'Requested by'}</p>
-                  <div className="h-10 border-b border-black w-40 mx-auto border-dashed"></div>
-                  <p className="text-[10px] text-black font-semibold">{printPR.requesterName}</p>
-                </div>
-                <div className="space-y-6">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase">{isRtl ? 'مدير القسم التابع' : 'Department Manager'}</p>
-                  <div className="h-10 border-b border-black w-40 mx-auto border-dashed"></div>
-                  <p className="text-[10px] text-black font-mono">---</p>
-                </div>
-                <div className="space-y-6">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase">{isRtl ? 'اعتماد إدارة المشتريات' : 'Procurements Director'}</p>
-                  <div className="h-10 border-b border-black w-40 mx-auto border-dashed"></div>
-                  <p className="text-[10px] text-black font-mono">{printPR.status === 'APPROVED' ? '✓ APPROVED_PR' : '---'}</p>
-                </div>
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowCreatePR(false)}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreatePR}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md"
+                >
+                  {isRtl ? 'تقديم طلب الشراء' : 'Submit PR'}
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* PO PRINT MODAL */}
-      {printPO && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:backdrop-blur-none animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-4 print:p-0 print:shadow-none print:rounded-none">
-            <div className="flex justify-between items-center print:hidden border-b pb-3 dark:border-slate-800">
-              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
-                {isRtl ? 'معاينة أمر التوريد والشراء للطباعة' : 'Purchase Order Print Preview'}
+      {/* ========================================================================= */}
+      {/* MODAL: CREATE RFQ */}
+      {/* ========================================================================= */}
+      {showCreateRFQ && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-extrabold text-slate-900 dark:text-slate-100">
+                {isRtl ? 'إصدار طلب عرض أسعار الموردين (RFQ)' : 'Issue Request for Quotations (RFQ)'}
               </h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+              <button onClick={() => setShowCreateRFQ(false)} className="p-1 text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {isRtl ? 'ربط بطلب شراء معتمد (PR)' : 'Link to Approved PR'}
+                </label>
+                <select
+                  value={rfqSourcePrId}
+                  onChange={e => setRfqSourcePrId(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-bold"
                 >
-                  <Printer size={14} />
-                  <span>{isRtl ? 'طباعة المستند' : 'Print Voucher'}</span>
+                  <option value="">{isRtl ? '-- طلب جديد قائم بحد ذاته --' : '-- Standalone RFQ --'}</option>
+                  {requests.filter(r => r.status === 'APPROVED').map(p => (
+                    <option key={p.id} value={p.id}>{p.prNumber} - {p.requesterName} ({p.items.length} items)</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {isRtl ? 'تحديد الموردين الموجه إليهم الطلب' : 'Select Target Vendors'}
+                </label>
+                <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto border p-2 rounded-xl border-slate-200 dark:border-slate-800">
+                  {vendors.map(v => (
+                    <label key={v.id} className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rfqSelectedVendors.includes(v.id)}
+                        onChange={e => {
+                          if (e.target.checked) setRfqSelectedVendors([...rfqSelectedVendors, v.id]);
+                          else setRfqSelectedVendors(rfqSelectedVendors.filter(id => id !== v.id));
+                        }}
+                        className="rounded text-indigo-600 h-3.5 w-3.5"
+                      />
+                      <span>{v.nameAr} ({v.code})</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateRFQ(false)}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 rounded-xl text-xs font-bold"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button
-                  onClick={() => setPrintPO(null)}
-                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
+                  type="button"
+                  onClick={handleCreateRFQ}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md"
                 >
-                  <X size={16} />
+                  {isRtl ? 'تعميم طلب الأسعار' : 'Publish RFQ'}
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            <div
-              id="voucher-sheet-printable"
-              className="w-[210mm] min-h-[297mm] mx-auto p-12 border border-slate-300 bg-white text-black text-xs font-bold leading-relaxed shadow-xl relative print:shadow-none print:border-none print:w-full print:min-h-0 print:p-2"
-              dir={isRtl ? 'rtl' : 'ltr'}
-              style={{
-                backgroundImage: (CustodyDB.getConfig().use_custom_template && CustodyDB.getConfig().custom_template_image) ? `url(${CustodyDB.getConfig().custom_template_image})` : undefined,
-                backgroundSize: '100% 100%',
-                backgroundRepeat: 'no-repeat',
-              }}
-            >
-              <div className="flex justify-between items-center border-b-2 border-black pb-5 mb-6 gap-4">
-                {!CustodyDB.getConfig().use_custom_template ? (
-                  <div className="flex items-center gap-3">
-                    <div className="border-[2.5px] border-black rounded-[50%/50%] px-3 py-1.5 flex flex-col items-center justify-center leading-none bg-white shrink-0 shadow-sm h-[52px] w-[90px]">
-                      <span className="text-[20px] font-black leading-none text-black">كوكي</span>
-                      <span className="text-[9px] font-bold font-mono tracking-wider mt-0.5 leading-none text-black">Koki</span>
-                    </div>
-                    <div className="text-right space-y-0.5">
-                      <h1 className="text-[13px] font-black text-black">شركة / القاهرة الجديدة للدواجن</h1>
-                      <p className="text-[10px] text-neutral-800 font-bold">{isRtl ? 'إدارة المشتريات والتموين' : 'Procurement & Logistics Dept'}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-right space-y-0.5">
-                    <h1 className="text-[13px] font-black text-emerald-600">{CustodyDB.getConfig().company_name}</h1>
-                    <p className="text-[10px] text-neutral-800 font-bold">{isRtl ? 'إدارة المشتريات والتموين' : 'Procurement & Logistics Dept'}</p>
-                  </div>
-                )}
-                
-                <div className="text-center">
-                  <h2 className="text-[14px] font-black border-[2.5px] border-black px-4 py-2 bg-neutral-100 text-black shadow-sm uppercase">
-                    {isRtl ? 'أمر شراء وتوريد رسمي' : 'Purchase Order (PO)'}
-                  </h2>
-                </div>
+      {/* ========================================================================= */}
+      {/* MODAL: RECORD VENDOR QUOTATION */}
+      {/* ========================================================================= */}
+      {showSubmitQuote && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-extrabold text-slate-900 dark:text-slate-100">
+                {isRtl ? `تسجيل عرض سعر المورد لـ ${showSubmitQuote.rfqNumber}` : `Record Vendor Quote for ${showSubmitQuote.rfqNumber}`}
+              </h3>
+              <button onClick={() => setShowSubmitQuote(null)} className="p-1 text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
-                <div className="text-right space-y-1">
-                  <div className="text-xs font-mono font-bold text-black border border-black px-2.5 py-1 bg-neutral-50 rounded">
-                    {isRtl ? 'أمر توريد رقم: ' : 'PO #: '} <span className="font-black font-mono">{printPO.poNumber}</span>
-                  </div>
-                  <div className="text-[10px] font-mono text-slate-600">
-                    {isRtl ? 'التاريخ: ' : 'Date: '} {printPO.date}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 border border-black p-3 rounded mb-6 bg-neutral-50/50">
-                <div>
-                  <span className="text-slate-500 font-semibold">{isRtl ? 'السيد المورد المسئول:' : 'Vendor / Supplier:'}</span>
-                  <p className="font-bold text-black">{printPO.vendorName}</p>
-                </div>
-                <div>
-                  <span className="text-slate-500 font-semibold">{isRtl ? 'حالة التوريد والاعتماد:' : 'Compliance Status:'}</span>
-                  <p className="font-bold text-black">{printPO.status === 'RECEIVED' ? (isRtl ? 'تم الاستلام والترحيل للمخزن' : 'Items Received & Stocked') : (isRtl ? 'صادر وبانتظار التوريد' : 'Issued for Delivery')}</p>
-                </div>
-              </div>
-
-              <table className="w-full text-right border-collapse text-xs border border-black mb-8">
-                <thead>
-                  <tr className="bg-neutral-100 border-b border-black text-black font-black">
-                    <th className="p-2 border-r border-black w-10 text-center">#</th>
-                    <th className="p-2 border-r border-black">{isRtl ? 'اسم الصنف والمواصفات المعتمدة' : 'Product & Description'}</th>
-                    <th className="p-2 border-r border-black w-24 text-center">{isRtl ? 'الكمية المطلوبة' : 'PO Quantity'}</th>
-                    <th className="p-2 border-r border-black w-24 text-center">{isRtl ? 'الوحدة' : 'Unit'}</th>
-                    <th className="p-2 border-r border-black w-28 text-center">{isRtl ? 'سعر الوحدة الشراء' : 'Unit Purchase Price'}</th>
-                    <th className="p-2 w-32 text-center">{isRtl ? 'القيمة الإجمالية السطر' : 'Line Total'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-black text-black">
-                  {printPO.items.map((item, index) => (
-                    <tr key={index} className="border-b border-black">
-                      <td className="p-2 border-r border-black text-center font-mono font-bold">{index + 1}</td>
-                      <td className="p-2 border-r border-black font-extrabold">{item.productName}</td>
-                      <td className="p-2 border-r border-black text-center font-mono font-black">{item.qty}</td>
-                      <td className="p-2 border-r border-black text-center font-medium">{item.unit || (isRtl ? 'وحدة' : 'Unit')}</td>
-                      <td className="p-2 border-r border-black text-center font-mono">{item.unitPrice.toLocaleString()} EGP</td>
-                      <td className="p-2 text-center font-mono font-black">{item.totalPrice.toLocaleString()} EGP</td>
-                    </tr>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {isRtl ? 'اختر المورد مقدم العرض' : 'Select Vendor'}
+                </label>
+                <select
+                  id="quote-vendor-select"
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-bold"
+                >
+                  {vendors.map(v => (
+                    <option key={v.id} value={v.id}>{v.nameAr} ({v.code})</option>
                   ))}
-                  <tr className="bg-neutral-100 font-black border-t-2 border-black">
-                    <td colSpan={5} className="p-2 border-r border-black text-left">{isRtl ? 'القيمة الإجمالية الصافية للأمر الشراء:' : 'Total net PO Amount:'}</td>
-                    <td className="p-2 text-center font-mono text-emerald-900 text-xs font-black">{printPO.totalAmount.toLocaleString()} EGP</td>
-                  </tr>
-                </tbody>
-              </table>
+                </select>
+              </div>
 
-              <div className="grid grid-cols-4 gap-4 text-center mt-12 pt-6 border-t border-slate-300">
-                <div className="space-y-6">
-                  <p className="text-[9px] text-slate-500 font-bold uppercase">{isRtl ? 'مسؤول المشتريات' : 'Buyer'}</p>
-                  <div className="h-10 border-b border-black w-32 mx-auto border-dashed"></div>
-                  <p className="text-[9px] text-black font-semibold">---</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">{isRtl ? 'رقم عرض المورد' : 'Quote Ref No'}</label>
+                  <input
+                    type="text"
+                    value={quoteNumber}
+                    onChange={e => setQuoteNumber(e.target.value)}
+                    placeholder="e.g. QT-9988"
+                    className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs"
+                  />
                 </div>
-                <div className="space-y-6">
-                  <p className="text-[9px] text-slate-500 font-bold uppercase">{isRtl ? 'مراجعة الحسابات' : 'Financial Accountant'}</p>
-                  <div className="h-10 border-b border-black w-32 mx-auto border-dashed"></div>
-                  <p className="text-[9px] text-black font-mono">---</p>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">{isRtl ? 'مدة التوريد (أيام)' : 'Lead Time (Days)'}</label>
+                  <input
+                    type="number"
+                    value={quoteDeliveryDays}
+                    onChange={e => setQuoteDeliveryDays(Number(e.target.value))}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs"
+                  />
                 </div>
-                <div className="space-y-6">
-                  <p className="text-[9px] text-slate-500 font-bold uppercase">{isRtl ? 'مدير المشتريات والتموين' : 'Purchasing Manager'}</p>
-                  <div className="h-10 border-b border-black w-32 mx-auto border-dashed"></div>
-                  <p className="text-[9px] text-black font-mono">✓ COMPLIANT_PO</p>
-                </div>
-                <div className="space-y-6">
-                  <p className="text-[9px] text-slate-500 font-bold uppercase">{isRtl ? 'اعتماد الإدارة العليا' : 'General Manager / CFO'}</p>
-                  <div className="h-10 border-b border-black w-32 mx-auto border-dashed"></div>
-                  <p className="text-[9px] text-black font-mono">✓ APPROVED_RELEASED</p>
-                </div>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">{isRtl ? 'أسعار البنود المعروضة من المورد:' : 'Item Pricing:'}</span>
+                {quoteItems.map((it, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs">
+                    <span className="font-bold">{it.productName} ({it.qty} {it.unit})</span>
+                    <input
+                      type="number"
+                      value={it.unitPrice}
+                      onChange={e => {
+                        const updated = [...quoteItems];
+                        updated[idx].unitPrice = Number(e.target.value);
+                        setQuoteItems(updated);
+                      }}
+                      className="w-24 p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs text-center font-bold"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowSubmitQuote(null)}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 rounded-xl text-xs font-bold"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sel = (document.getElementById('quote-vendor-select') as HTMLSelectElement)?.value;
+                    if (sel) handleSubmitVendorQuote(sel);
+                  }}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md"
+                >
+                  {isRtl ? 'حفظ عرض السعر' : 'Save Quote'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: RECEIVE PO STOCK */}
+      {/* ========================================================================= */}
+      {showReceivePO && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-extrabold text-slate-900 dark:text-slate-100">
+                {isRtl ? 'استلام شحنة التوريد بالمخزن' : 'Receive PO Goods into Store'}
+              </h3>
+              <button onClick={() => setShowReceivePO(null)} className="p-1 text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {isRtl ? 'تحديد المخزن/المستودع المستلم' : 'Select Destination Warehouse'}
+                </label>
+                <select
+                  value={receiveWarehouseId}
+                  onChange={e => setReceiveWarehouseId(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-bold"
+                >
+                  {warehouses.map(w => (
+                    <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-600 rounded-xl text-xs">
+                {isRtl 
+                  ? 'سيتم إضافة البنود مباشرة إلى أرصدة المستودع المحدد، وتثبيت إذن الاستلام المخزني وترحيل القيود المحاسبية التلقائية.'
+                  : 'Items will be added directly into target warehouse stock, creating a goods receipt document and GL double-entry.'}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowReceivePO(null)}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 rounded-xl text-xs font-bold"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleReceivePO(showReceivePO)}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md"
+                >
+                  {isRtl ? 'تأكيد الاستلام بالمخزن' : 'Confirm Receipt'}
+                </button>
               </div>
             </div>
           </div>

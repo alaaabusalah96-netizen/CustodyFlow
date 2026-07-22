@@ -237,8 +237,8 @@ export default function Dashboard({
   };
 
   // Revert settlement status
-  const handleRevert = (tx: Transaction) => {
-    const res = CustodyDB.updateTransaction(tx.id, {
+  const handleRevert = async (tx: Transaction) => {
+    const res = await CustodyDB.updateTransaction(tx.id, {
       status: 'Pending'
     });
     if (!res.success) {
@@ -258,14 +258,14 @@ export default function Dashboard({
   };
 
   // Approve / Settle Final Handler (For RegionalManager or Admin)
-  const handleApprove = (tx: Transaction) => {
+  const handleApprove = async (tx: Transaction) => {
     if (!isManager) {
       setAuthError(isRtl ? 'عذراً، يتطلب اعتماد وتسوية الحركات صلاحية مدير المنطقة أو الأدمن.' : 'Unauthorized: Requires Regional Manager or Admin credentials.');
       setApprovingTx(null);
       return;
     }
 
-    const res = CustodyDB.updateTransaction(tx.id, {
+    const res = await CustodyDB.updateTransaction(tx.id, {
       status: 'Settled'
     });
     if (!res.success) {
@@ -285,14 +285,14 @@ export default function Dashboard({
   };
 
   // Reject transaction handler (Sets status to 'Rejected')
-  const handleReject = (tx: Transaction) => {
+  const handleReject = async (tx: Transaction) => {
     if (!isManager) {
       setAuthError(isRtl ? 'عذراً، يحتاج هذا الإجراء إلى صلاحيات الإدارة أو مدير المنطقة.' : 'Unauthorized: Rejecting requires Manager or Admin permissions.');
       setRejectingTx(null);
       return;
     }
 
-    const res = CustodyDB.updateTransaction(tx.id, {
+    const res = await CustodyDB.updateTransaction(tx.id, {
       status: 'Rejected'
     });
     if (!res.success) {
@@ -312,7 +312,7 @@ export default function Dashboard({
   };
 
   // Start settlement
-  const handleStartSettle = (tx: Transaction) => {
+  const handleStartSettle = async (tx: Transaction) => {
     if (onSelectTransactionForSettle) {
       onSelectTransactionForSettle(tx);
       onNavigate('voucher');
@@ -320,7 +320,7 @@ export default function Dashboard({
       // Fallback: quick settle
       const tempVoucherNo = tx.transaction_no;
       const tempDate = new Date().toISOString().split('T')[0];
-      const res = CustodyDB.updateTransaction(tx.id, {
+      const res = await CustodyDB.updateTransaction(tx.id, {
         status: 'Under Settlement',
         voucher_no: tempVoucherNo,
         voucher_date: tempDate

@@ -777,7 +777,7 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
   }, [compiledOperations, opStationFilter, opStatusFilter, opSearchQuery, stations]);
 
   // Handle Edit Operation
-  const handleEditTransactionSubmit = (e: React.FormEvent) => {
+  const handleEditTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingOp) return;
     const amountVal = parseFloat(opEditAmount);
@@ -807,7 +807,7 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
       }
     }
 
-    const res = CustodyDB.updateTransaction(editingOp.id, updates);
+    const res = await CustodyDB.updateTransaction(editingOp.id, updates);
     if (!res.success) {
       alert(res.errors?.join(' \n ') || 'Failed to update transaction');
       return;
