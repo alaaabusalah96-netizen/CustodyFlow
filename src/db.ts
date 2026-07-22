@@ -167,8 +167,8 @@ export class CustodyDB {
     UsersModule.setActiveUser(user);
   }
 
-  static saveUsers(users: AppUser[]): void {
-    UsersModule.saveUsers(users);
+  static async saveUsers(users: AppUser[]): Promise<void> {
+    return UsersModule.saveUsers(users);
   }
 
   static async fetchUserByEmail(email: string): Promise<AppUser | null> {

@@ -56,7 +56,9 @@ export default function Inventory({ language, theme }: InventoryProps) {
   const getDocTypeLabel = (type: string, scrapAction?: 'IN' | 'OUT') => {
     switch (type) {
       case 'Receipt':
-        return isRtl ? 'إذن إضافة' : 'Receipt';
+        return isRtl ? 'إذن استلام' : 'Receipt';
+      case 'Addition':
+        return isRtl ? 'إذن إضافة' : 'Addition';
       case 'Issue':
         return isRtl ? 'إذن صرف' : 'Issue';
       case 'Transfer':
@@ -655,7 +657,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
                     <th className="p-3">{isRtl ? 'الصنف الكود والاسم' : 'Item Description'}</th>
                     <th className="p-3 text-center">{isRtl ? 'الوحدة' : 'Unit'}</th>
                     <th className="p-3 text-center">{isRtl ? 'الكمية المستندة' : 'Quantity'}</th>
-                    {activeDoc.doc_type === 'Receipt' && <th className="p-3 text-center">{isRtl ? 'سعر الشراء (ج.م)' : 'Purchase Price'}</th>}
+                    {(activeDoc.doc_type === 'Receipt' || activeDoc.doc_type === 'Addition') && <th className="p-3 text-center">{isRtl ? 'سعر الشراء (ج.م)' : 'Purchase Price'}</th>}
                     <th className="p-3">{isRtl ? 'ملاحظات الصنف' : 'Item Notes'}</th>
                   </tr>
                 </thead>
@@ -668,7 +670,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
                       </td>
                       <td className="p-3 text-center text-slate-500 dark:text-slate-400">{item.unit}</td>
                       <td className="p-3 text-center font-mono font-bold text-slate-800 dark:text-slate-200">{item.qty}</td>
-                      {activeDoc.doc_type === 'Receipt' && <td className="p-3 text-center font-mono">{item.last_purchase_price || 0}</td>}
+                      {(activeDoc.doc_type === 'Receipt' || activeDoc.doc_type === 'Addition') && <td className="p-3 text-center font-mono">{item.last_purchase_price || 0}</td>}
                       <td className="p-3 text-slate-500 dark:text-slate-400">{item.notes || <span className="italic text-slate-400">---</span>}</td>
                     </tr>
                   ))}
@@ -823,7 +825,8 @@ export default function Inventory({ language, theme }: InventoryProps) {
                     }`}
                   >
                     <option value="all">{isRtl ? 'كل أنواع المستندات' : 'All Document Types'}</option>
-                    <option value="Receipt">{isRtl ? 'إذن إضافة' : 'Receipt'}</option>
+                    <option value="Receipt">{isRtl ? 'إذن استلام (الاستلامات)' : 'Receipt'}</option>
+                    <option value="Addition">{isRtl ? 'إذن إضافة' : 'Addition'}</option>
                     <option value="Issue">{isRtl ? 'إذن صرف' : 'Issue'}</option>
                     <option value="Transfer">{isRtl ? 'تحويل بين مخازن' : 'Transfer'}</option>
                     <option value="BranchTransfer">{isRtl ? 'تحويل إلى فرع' : 'Branch Transfer'}</option>

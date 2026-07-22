@@ -91,11 +91,11 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     companyAccounts.forEach(a => dbSetDoc('gl_accounts', a.id, a));
   }
 
-  static saveJournalEntries(list: JournalEntry[]): void {
+  static async saveJournalEntries(list: JournalEntry[]): Promise<void> {
     StorageEngine.setStored('journal_entries', list);
-    list.forEach(je => {
-      syncWriteWithOfflineFallback('journal_entries', je.id, je);
-    });
+    for (const je of list) {
+      await syncWriteWithOfflineFallback('journal_entries', je.id, je);
+    }
   }
 
   /**
@@ -168,7 +168,7 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     // Commit Journal Entry
     const allJEs = StorageEngine.getStored<JournalEntry[]>('journal_entries', []);
     allJEs.push(je);
-    AccountingBusinessEngine.saveJournalEntries(allJEs);
+    await AccountingBusinessEngine.saveJournalEntries(allJEs);
 
     // Update balances on GL accounts
     const updatedAccounts = accounts.map(acc => {

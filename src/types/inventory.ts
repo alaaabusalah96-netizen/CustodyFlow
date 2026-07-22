@@ -1,7 +1,8 @@
 import { BaseMetadata } from './enterprise';
 
 export type InventoryDocType =
-  | 'Receipt'          // إذن إضافة
+  | 'Receipt'          // إذن استلام / الاستلامات
+  | 'Addition'         // إذن إضافة
   | 'Issue'            // إذن صرف
   | 'Transfer'         // إذن تحويل بين المخازن
   | 'BranchTransfer'   // إذن تحويل إلى فرع

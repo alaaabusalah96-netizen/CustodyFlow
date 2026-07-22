@@ -146,7 +146,7 @@ export class UsersModule {
     }
   }
 
-  static saveUsers(users: AppUser[]): void {
+  static async saveUsers(users: AppUser[]): Promise<void> {
     const existing = StorageEngine.getStored<AppUser[]>('users', []);
     const enriched = users.map(u => {
       let pwd = u.password || '';
@@ -177,14 +177,14 @@ export class UsersModule {
     StorageEngine.setStored('users', enriched);
 
     // Strictly write only sanitized user profiles to 'users' and private credentials to 'user_credentials'
-    changedUsers.forEach(u => {
+    for (const u of changedUsers) {
       // 1. Write public profile to 'users' collection WITHOUT password or salt
       const { password, salt, ...publicUser } = u;
-      syncWriteWithOfflineFallback('users', u.id, publicUser);
+      await syncWriteWithOfflineFallback('users', u.id, publicUser);
 
       // 2. Write private authentication credentials to restricted 'user_credentials' vault
       if (password && password !== 'REDACTED') {
-        syncWriteWithOfflineFallback('user_credentials', u.id, {
+        await syncWriteWithOfflineFallback('user_credentials', u.id, {
           id: u.id,
           company_id: u.company_id,
           email: u.email,
@@ -193,7 +193,7 @@ export class UsersModule {
           updated_at: new Date().toISOString()
         });
       }
-    });
+    }
 
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Users', 'Modified user roles and system permission profiles.');

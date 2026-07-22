@@ -1200,8 +1200,8 @@ export class InventoryModule {
     const userName = activeUser?.full_name || 'System';
 
     doc.items.forEach(item => {
-      // Find and update product's last_purchase_price if doc is Receipt
-      if (doc.doc_type === 'Receipt' && item.last_purchase_price) {
+      // Find and update product's last_purchase_price if doc is Receipt or Addition
+      if ((doc.doc_type === 'Receipt' || doc.doc_type === 'Addition') && item.last_purchase_price) {
         const prodIdx = updatedProductsList.findIndex(p => p.id === item.product_id);
         if (prodIdx !== -1) {
           updatedProductsList[prodIdx] = {
@@ -1241,7 +1241,8 @@ export class InventoryModule {
         // Simple/other documents processed entirely at 'Posted' stage
         if (stage === 'Posted') {
           switch (doc.doc_type) {
-            case 'Receipt': // الإضافة
+            case 'Receipt': // استلام
+            case 'Addition': // إضافة
             case 'BranchReturn': // مرتجع من فرع
               sourceQtyChange = item.qty;
               break;
@@ -1523,7 +1524,8 @@ export class InventoryModule {
       }
 
       const docTypeNameAr = 
-        doc.doc_type === 'Receipt' ? (doc.receipt_source_type === 'transfer' ? 'إذن إضافة بالتحويل' : 'إذن إضافة من مورد') :
+        doc.doc_type === 'Receipt' ? (doc.receipt_source_type === 'transfer' ? 'إذن استلام بالتحويل' : 'إذن استلام من مورد') :
+        doc.doc_type === 'Addition' ? 'إذن إضافة مخزني' :
         doc.doc_type === 'Issue' ? 'إذن صرف مخزني' :
         doc.doc_type === 'Transfer' ? 'إذن تحويل بين المخازن' :
         doc.doc_type === 'BranchTransfer' ? 'إذن تحويل فرع' :
@@ -1556,6 +1558,13 @@ export class InventoryModule {
               { accountCode: apAcc, debit: 0, credit: totalAmount, notes: `Credit: Accounts Payable (${doc.recipient || 'Supplier'})` }
             );
           }
+          break;
+
+        case 'Addition':
+          lines.push(
+            { accountCode: invAcc, debit: totalAmount, credit: 0, notes: `Debit: Warehouse Stock Inventory` },
+            { accountCode: varAcc, debit: 0, credit: totalAmount, notes: `Credit: General Stock Addition Adjustment` }
+          );
           break;
 
         case 'Issue':
@@ -1656,6 +1665,7 @@ export class InventoryModule {
         if (stage === 'Posted') {
           switch (doc.doc_type) {
             case 'Receipt':
+            case 'Addition':
             case 'BranchReturn':
               sourceQtyChange = item.qty;
               break;

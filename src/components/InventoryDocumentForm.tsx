@@ -517,8 +517,8 @@ export default function InventoryDocumentForm({
       }
 
       // Overdraft check if it decreases stock
-      if (item.product_id && sourceWarehouseId && (docType as string) !== 'Receipt' && (docType as string) !== 'BranchReturn' && (docType as string) !== 'Adjustment') {
-        const isAddition = (docType as string) === 'Receipt' || (docType as string) === 'BranchReturn' || (docType === 'Damage' && scrapAction === 'IN');
+      if (item.product_id && sourceWarehouseId && (docType as string) !== 'Receipt' && (docType as string) !== 'Addition' && (docType as string) !== 'BranchReturn' && (docType as string) !== 'Adjustment') {
+        const isAddition = (docType as string) === 'Receipt' || (docType as string) === 'Addition' || (docType as string) === 'BranchReturn' || (docType === 'Damage' && scrapAction === 'IN');
         if (!isAddition) {
           const currentStock = InventoryModule.getProductStock(item.product_id, sourceWarehouseId);
           if (currentStock < item.qty) {
@@ -642,7 +642,7 @@ export default function InventoryDocumentForm({
       if (prod) {
         updated[index].last_purchase_price = prod.last_purchase_price || 0;
       }
-      if (docType !== 'Receipt' && sourceWarehouseId) {
+      if (docType !== 'Receipt' && docType !== 'Addition' && sourceWarehouseId) {
         const batches = InventoryModule.getProductBatches(value, sourceWarehouseId);
         if (batches.length > 0) {
           updated[index].batch_no = batches[0].batch_no;
@@ -659,7 +659,7 @@ export default function InventoryDocumentForm({
 
   const handleSourceWarehouseChange = (whId: string) => {
     setSourceWarehouseId(whId);
-    if (docType !== 'Receipt' && whId) {
+    if (docType !== 'Receipt' && docType !== 'Addition' && whId) {
       const updated = items.map(item => {
         if (item.product_id) {
           const batches = InventoryModule.getProductBatches(item.product_id, whId);
@@ -700,7 +700,8 @@ export default function InventoryDocumentForm({
             {/* Center: Main Document Title Card */}
             <div className="text-center bg-slate-50 dark:bg-slate-800 px-6 py-2 rounded-2xl border border-slate-200/50 dark:border-slate-700">
               <h2 className="text-sm md:text-lg font-black text-emerald-600 dark:text-emerald-400">
-                {docType === 'Receipt' && (isRtl ? 'إذن إضافة مخزنـي (Receipt Voucher)' : 'Inventory Receipt Voucher')}
+                {docType === 'Receipt' && (isRtl ? 'إذن استلام مخزنـي (Receipt Voucher)' : 'Inventory Receipt Voucher')}
+                {docType === 'Addition' && (isRtl ? 'إذن إضافة مخزنـي (Addition Voucher)' : 'Inventory Addition Voucher')}
                 {docType === 'Issue' && (isRtl ? 'إذن صرف مخزنـي (Issue Voucher)' : 'Inventory Issue Voucher')}
                 {docType === 'Transfer' && (isRtl ? 'إذن تحويل مخزنـي (Transfer Voucher)' : 'Warehouse Transfer Voucher')}
                 {docType === 'BranchTransfer' && (isRtl ? 'تحويل مخزني إلى فرع (Branch Transfer)' : 'Branch Transfer Voucher')}
@@ -761,7 +762,8 @@ export default function InventoryDocumentForm({
                 theme === 'dark' ? 'text-slate-100 bg-[#1e293b] border-[#334155]' : 'text-slate-800 bg-white border-slate-200'
               }`}
             >
-              <option value="Receipt">{isRtl ? 'إذن إضافة' : 'Receipt'}</option>
+              <option value="Receipt">{isRtl ? 'إذن استلام (الاستلامات)' : 'Receipt'}</option>
+              <option value="Addition">{isRtl ? 'إذن إضافة' : 'Addition'}</option>
               <option value="Issue">{isRtl ? 'إذن صرف' : 'Issue'}</option>
               <option value="Transfer">{isRtl ? 'إذن تحويل بين المخازن' : 'Transfer'}</option>
               <option value="BranchTransfer">{isRtl ? 'إذن تحويل إلى فرع' : 'Branch Transfer'}</option>
@@ -1279,7 +1281,7 @@ export default function InventoryDocumentForm({
                   <th className="p-3 w-28">{isRtl ? 'الكمية المطلوبة' : 'Quantity'}</th>
                   <th className="p-3 w-32">{isRtl ? 'رقم الباتش / التشغيلة' : 'Batch No.'}</th>
                   <th className="p-3 w-36">{isRtl ? 'تاريخ الصلاحية' : 'Expiry Date'}</th>
-                  {docType === 'Receipt' && <th className="p-3 w-32">{isRtl ? 'سعر الشراء (ج.م)' : 'Purchase Price'}</th>}
+                  {(docType === 'Receipt' || docType === 'Addition') && <th className="p-3 w-32">{isRtl ? 'سعر الشراء (ج.م)' : 'Purchase Price'}</th>}
                   <th className="p-3 min-w-[150px]">{isRtl ? 'ملاحظات الصنف' : 'Item Notes'}</th>
                   <th className="p-3 w-24 text-center">{isRtl ? 'إجراءات' : 'Actions'}</th>
                 </tr>
@@ -1466,8 +1468,8 @@ export default function InventoryDocumentForm({
                           )}
                         </td>
 
-                        {/* Last Purchase Price (only for Receipt) */}
-                        {docType === 'Receipt' && (
+                        {/* Last Purchase Price (for Receipt or Addition) */}
+                        {(docType === 'Receipt' || docType === 'Addition') && (
                           <td className="p-2">
                             <input
                               type="number"
@@ -1531,7 +1533,7 @@ export default function InventoryDocumentForm({
                       {/* Bin Allocation Sub-Row */}
                       {openBinIdx === idx && activeBins.length > 0 && item.product_id && (
                         <tr className="bg-slate-500/5 dark:bg-slate-800/10">
-                          <td colSpan={docType === 'Receipt' ? 8 : 7} className="p-4 border-t border-slate-100 dark:border-slate-800">
+                          <td colSpan={(docType === 'Receipt' || docType === 'Addition') ? 8 : 7} className="p-4 border-t border-slate-100 dark:border-slate-800">
                             <div className="max-w-2xl mx-auto space-y-4">
                               <div className="flex items-center justify-between">
                                 <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
