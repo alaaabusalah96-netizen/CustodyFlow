@@ -317,18 +317,23 @@ export default function Login({
 
     const isPlatformAdmin = CustodyDB.isPlatformOwner(emailLower);
 
-    // Verify Password (Plain Text, Legacy Hash, or Salted Hash) - Fallback "123456" removed for security
+    // Verify Password (Plain Text, OWASP 10k Stretched Hash, 1k Stretched Hash, Single-Pass Hash, or Old Unsalted Hash)
     const storedPassword = foundUser.password || '';
     const userSalt = foundUser.salt || emailLower;
-    const enteredHashSalted = CustodyDB.hashPassword(password, userSalt);
+    const enteredHashSalted10k = CustodyDB.hashPassword(password, userSalt);
+    const enteredHashSalted1k = CustodyDB.legacyStretchedHashPassword1000(password, userSalt);
+    const enteredHashSinglePass = CustodyDB.legacySinglePassHashPassword(password, userSalt);
     const enteredHashOldSalted = CustodyDB.legacyHashPassword(password, emailLower); // old email-only salt
     const enteredHashLegacy = CustodyDB.legacyHashPassword(password); // old unsalted fallback
     
     const isPlainMatch = storedPassword !== '' && storedPassword === password;
-    const isLegacyHashMatch = storedPassword !== '' && storedPassword === enteredHashLegacy;
+    const isSaltedHash10kMatch = storedPassword !== '' && storedPassword === enteredHashSalted10k;
+    const isSaltedHash1kMatch = storedPassword !== '' && storedPassword === enteredHashSalted1k;
+    const isLegacySinglePassMatch = storedPassword !== '' && storedPassword === enteredHashSinglePass;
     const isOldSaltedMatch = storedPassword !== '' && storedPassword === enteredHashOldSalted;
-    const isSaltedHashMatch = storedPassword !== '' && storedPassword === enteredHashSalted;
-    const isHashMatch = isSaltedHashMatch || isOldSaltedMatch || isLegacyHashMatch;
+    const isLegacyHashMatch = storedPassword !== '' && storedPassword === enteredHashLegacy;
+    
+    const isHashMatch = isSaltedHash10kMatch || isSaltedHash1kMatch || isLegacySinglePassMatch || isOldSaltedMatch || isLegacyHashMatch;
 
     if (storedPassword === '') {
       if (!isPlatformAdmin) {
@@ -340,19 +345,21 @@ export default function Login({
       return;
     }
 
-    // Auto migrate legacy plain-text, old salted, or unsalted hash to secure salted-and-peppered hash
+    // Auto migrate legacy plain-text, old 1k stretched, single-pass, or unsalted hash to OWASP 10k stretched hash
     const needsMigration = (storedPassword !== '' && isPlainMatch) || 
+                          (storedPassword !== '' && isSaltedHash1kMatch) ||
+                          (storedPassword !== '' && isLegacySinglePassMatch) ||
                           (storedPassword !== '' && isLegacyHashMatch) ||
                           (storedPassword !== '' && isOldSaltedMatch);
     if (needsMigration) {
       const updatedUsers = users.map(u => {
         if (u.id === foundUser.id) {
-          return { ...u, password: enteredHashSalted };
+          return { ...u, password: enteredHashSalted10k };
         }
         return u;
       });
       CustodyDB.saveUsers(updatedUsers);
-      foundUser.password = enteredHashSalted;
+      foundUser.password = enteredHashSalted10k;
     }
 
     // Migrate user document ID to Firebase Auth UID to enforce multi-tenancy rules
@@ -370,7 +377,7 @@ export default function Login({
         // Save under new Firebase uid
         const updatedUsers = currentUsers.map(u => {
           if (u.id === legacyUser.id) {
-            return { ...u, id: firebaseUser.uid, password: enteredHashSalted };
+            return { ...u, id: firebaseUser.uid, password: enteredHashSalted10k };
           }
           return u;
         });
@@ -387,7 +394,7 @@ export default function Login({
           if (u.email.toLowerCase().trim() === emailLower) {
             return { 
               ...u, 
-              password: enteredHashSalted, 
+              password: enteredHashSalted10k, 
               is_active: true,
               security_pin: '1234'
             };
@@ -395,7 +402,7 @@ export default function Login({
           return u;
         });
         CustodyDB.saveUsers(updatedUsers);
-        foundUser.password = enteredHashSalted;
+        foundUser.password = enteredHashSalted10k;
         foundUser.security_pin = '1234';
       }
 

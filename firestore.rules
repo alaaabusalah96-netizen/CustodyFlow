@@ -175,7 +175,24 @@ service cloud.firestore {
       allow write: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
     }
 
-    // --- Users ---
+    // --- User Credentials (Private Authentication Vault - Strict Zero-Trust) ---
+    match /user_credentials/{id} {
+      // STRICT SECURITY RULE: Only the user themselves (id == request.auth.uid) OR SystemAdmin can READ their password hash & salt.
+      // Coworkers and company managers CANNOT read another user's password hash or salt under any circumstances!
+      allow read: if isLoggedIn() && (
+        id == request.auth.uid || 
+        isSystemAdmin() || 
+        (resource != null && resource.data.email != null && resource.data.email.lower() == request.auth.token.email.lower())
+      );
+      allow create, update: if isLoggedIn() && (
+        id == request.auth.uid || 
+        isSystemAdmin() || 
+        (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') && (resource == null || resource.data.company_id == getCompanyId()) && (request.resource == null || request.resource.data.company_id == getCompanyId()))
+      );
+      allow delete: if isLoggedIn() && (id == request.auth.uid || isSystemAdmin());
+    }
+
+    // --- Users Directory Profiles ---
     match /users/{id} {
       allow read: if isLoggedIn() && (id == request.auth.uid || isSystemAdmin() || (resource != null && resource.data.company_id == getCompanyId()));
       allow create: if isLoggedIn() && (id == request.auth.uid || isSystemAdmin() || (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') && request.resource.data.company_id == getCompanyId()));

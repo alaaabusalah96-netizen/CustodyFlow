@@ -176,9 +176,23 @@ export class UsersModule {
 
     StorageEngine.setStored('users', enriched);
 
-    // Strictly write only the targeted modified documents to prevent multi-tenant permission rejections
+    // Strictly write only sanitized user profiles to 'users' and private credentials to 'user_credentials'
     changedUsers.forEach(u => {
-      syncWriteWithOfflineFallback('users', u.id, u);
+      // 1. Write public profile to 'users' collection WITHOUT password or salt
+      const { password, salt, ...publicUser } = u;
+      syncWriteWithOfflineFallback('users', u.id, publicUser);
+
+      // 2. Write private authentication credentials to restricted 'user_credentials' vault
+      if (password && password !== 'REDACTED') {
+        syncWriteWithOfflineFallback('user_credentials', u.id, {
+          id: u.id,
+          company_id: u.company_id,
+          email: u.email,
+          password: password,
+          salt: salt,
+          updated_at: new Date().toISOString()
+        });
+      }
     });
 
     const user = UsersModule.getActiveUser();

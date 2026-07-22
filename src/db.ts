@@ -43,7 +43,7 @@ import {
 
 import { LogsModule } from './db/logs';
 import { UsersModule } from './db/users';
-import { hashPassword, legacyHashPassword } from './lib/hash';
+import { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000 } from './lib/hash';
 import { CompaniesModule } from './db/companies';
 import { StationsModule } from './db/stations';
 import { NotificationsModule } from './db/notifications';
@@ -53,11 +53,19 @@ import { ConfigurationEngine } from './lib/enterprise/configuration';
 import { TenantSettings } from './types/enterprise';
 import { db } from './firebase';
 
-export { hashPassword, legacyHashPassword, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings, ConfigurationEngine, type TenantSettings };
+export { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings, ConfigurationEngine, type TenantSettings };
 
 export class CustodyDB {
   static hashPassword(password: string, salt: string = ''): string {
     return hashPassword(password, salt);
+  }
+
+  static legacyStretchedHashPassword1000(password: string, salt: string = ''): string {
+    return legacyStretchedHashPassword1000(password, salt);
+  }
+
+  static legacySinglePassHashPassword(password: string, salt: string = ''): string {
+    return legacySinglePassHashPassword(password, salt);
   }
 
   static legacyHashPassword(password: string, salt: string = ''): string {

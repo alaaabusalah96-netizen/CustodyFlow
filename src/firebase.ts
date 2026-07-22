@@ -238,14 +238,23 @@ export async function seedDatabaseIfEmpty(defaults: {
         batch.set(doc(db, 'categories', c.id), c);
       });
 
-      // Seed users (with salted hashed passwords)
+      // Seed users (sanitized directory profile in 'users', credentials in 'user_credentials')
       defaults.users.forEach(u => {
         let pwd = u.password || '';
         const salt = u.salt || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : u.email);
         if (pwd && !/^[0-9a-f]{64}$/i.test(pwd)) {
           pwd = hashPassword(pwd, salt);
         }
-        batch.set(doc(db, 'users', u.id), { ...u, salt, password: pwd });
+        const { password, salt: _s, ...publicUser } = u;
+        batch.set(doc(db, 'users', u.id), publicUser);
+        batch.set(doc(db, 'user_credentials', u.id), {
+          id: u.id,
+          company_id: u.company_id,
+          email: u.email,
+          password: pwd,
+          salt: salt,
+          updated_at: new Date().toISOString()
+        });
       });
 
       // Seed logs
@@ -397,19 +406,29 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
   });
   activeUnsubscribes.push(unsubStations);
 
-  // 6. Sync Users (Scoped to current company)
+  // 6. Sync Users (Directory profiles scoped to company)
   const qUsers = activeUser.role === 'SystemAdmin'
     ? query(collection(db, 'users'), limit(200))
     : query(collection(db, 'users'), where('company_id', '==', companyId));
   const unsubUsers = onSnapshot(qUsers, (snapshot) => {
     const data: AppUser[] = [];
-    snapshot.forEach(doc => {
-      const u = doc.data() as AppUser;
-      // Redact coworker password hashes to prevent reading coworker hashes (SEC-05)
-      if (u.id !== activeUser.id && activeUser.role !== 'SystemAdmin') {
-        if (u.password) {
-          u.password = 'REDACTED';
-        }
+    const localUsersStr = localStorage.getItem('custody_users');
+    let localUsersMap: Record<string, AppUser> = {};
+    if (localUsersStr) {
+      try {
+        const parsed = JSON.parse(localUsersStr) as AppUser[];
+        parsed.forEach(lu => { localUsersMap[lu.id] = lu; });
+      } catch (e) {}
+    }
+
+    snapshot.forEach(docSnap => {
+      const u = docSnap.data() as AppUser;
+      const cached = localUsersMap[u.id];
+      // Root 'users' documents in Firestore do not hold password/salt credentials.
+      // Maintain local credentials strictly for the active user's offline session.
+      if (cached && cached.password && u.id === activeUser.id) {
+        u.password = cached.password;
+        u.salt = cached.salt;
       }
       data.push(u);
     });
