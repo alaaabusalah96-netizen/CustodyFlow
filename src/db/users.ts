@@ -1,6 +1,7 @@
 import { AppUser, UserRole, UserPermissions, SystemPermission, SystemRole, SignupRequest } from '../types';
 import { dbSetDoc, dbDeleteDoc } from '../firebase';
 import { StorageEngine } from './storage';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_USERS, DEFAULT_PERMISSIONS, DEFAULT_ROLES } from './defaults';
 import { LogsModule } from './logs';
 import { hashPassword } from '../lib/hash';
@@ -177,7 +178,7 @@ export class UsersModule {
 
     // Strictly write only the targeted modified documents to prevent multi-tenant permission rejections
     changedUsers.forEach(u => {
-      dbSetDoc('users', u.id, u);
+      syncWriteWithOfflineFallback('users', u.id, u);
     });
 
     const user = UsersModule.getActiveUser();

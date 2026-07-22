@@ -310,7 +310,7 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
         setEditingTxNo('');
       } else {
         // Add transaction via CustodyDB manager
-        const res = CustodyDB.addTransaction({
+        const res = await CustodyDB.addTransaction({
           date,
           station_id: stationId,
           description: combinedDescription,

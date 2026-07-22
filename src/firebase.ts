@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore';
 import { AppUser, ExpenseCategory, Transaction, ActivityLog, CustodyConfig, Region, Station, Company, Expense, CashVoucher, TransactionHistory, Notification, AuditLog, SystemPermission, SystemRole, DeletedTransaction, SignupRequest } from './types';
 import { hashPassword } from './lib/hash';
+import { OfflineQueueEngine } from './db/offlineQueue';
 
 const firebaseConfig = {
   apiKey: "AIzaSyA2I_2GIEfQhawBL2KhXyxD6CwTLJR-jFw",
@@ -437,16 +438,28 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
 
   // 7. Sync Transactions with limit (Smart Cache: 150 items max)
   const isStationAdmin = activeUser.role === 'StationAdmin';
+  const isSystemAdminAll = activeUser.role === 'SystemAdmin' && (!companyId || companyId === 'all');
   const qTransactions = isStationAdmin && activeUser.station_id
     ? query(collection(db, 'transactions'), where('company_id', '==', companyId), where('station_id', '==', activeUser.station_id), limit(150))
+    : isSystemAdminAll
+    ? query(collection(db, 'transactions'), limit(150))
     : query(collection(db, 'transactions'), where('company_id', '==', companyId), limit(150));
   const unsubTransactions = onSnapshot(qTransactions, (snapshot) => {
     const data: Transaction[] = [];
     snapshot.forEach(doc => {
       data.push(doc.data() as Transaction);
     });
+
+    // Merge any locally queued offline transactions that haven't reached Firestore yet
+    const pendingOffline = OfflineQueueEngine.getQueue().filter(q => q.collectionName === 'transactions' && q.action === 'set');
+    pendingOffline.forEach(item => {
+      if (item.data && !data.some(t => t.id === item.docId)) {
+        data.push(item.data);
+      }
+    });
+
     // Sort in-memory to prevent requiring composite indices in Firestore
-    data.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    data.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
     updateLocalAndNotify('transactions', data);
   }, (error) => {
     handleFirestoreError(error, OperationType.GET, 'transactions');
@@ -569,6 +582,26 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
     handleFirestoreError(error, OperationType.GET, 'company_sequences');
   });
   activeUnsubscribes.push(unsubSequences);
+
+  // 15.1. Sync Journal Entries
+  const qJournal = query(collection(db, 'journal_entries'), where('company_id', '==', companyId), limit(200));
+  const unsubJournal = onSnapshot(qJournal, (snapshot) => {
+    const data: any[] = [];
+    snapshot.forEach(doc => {
+      data.push(doc.data());
+    });
+    // Merge pending offline journal entries if any
+    const pendingOffline = OfflineQueueEngine.getQueue().filter(q => q.collectionName === 'journal_entries' && q.action === 'set');
+    pendingOffline.forEach(item => {
+      if (item.data && !data.some(j => j.id === item.docId)) {
+        data.push(item.data);
+      }
+    });
+    updateLocalAndNotify('journal_entries', data);
+  }, (error) => {
+    handleFirestoreError(error, OperationType.GET, 'journal_entries');
+  });
+  activeUnsubscribes.push(unsubJournal);
 
   // 16. Sync Signup Requests
   if (activeUser.role === 'SystemAdmin' || activeUser.role === 'Admin') {

@@ -91,7 +91,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
   });
 
   describe('0.1 & 0.2: Transaction Category, Validation, and Safe Return Signatures', () => {
-    it('should fallback to cat-6 if category_id is missing during creation', () => {
+    it('should fallback to cat-6 if category_id is missing during creation', async () => {
       // Mock active user
       const mockUser = DEFAULT_USERS[0]; // SystemAdmin
       StorageEngine.setStored('active_user', mockUser);
@@ -107,18 +107,18 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
         date: new Date().toISOString()
       };
 
-      const result = TransactionsCreateModule.addTransaction(txPayload as any);
+      const result = await TransactionsCreateModule.addTransaction(txPayload as any);
       expect(result.success).toBe(true);
       expect(result.data?.category_id).toBe('cat-6');
     });
 
-    it('should return { success: false, errors: [...] } instead of throwing when validation fails', () => {
+    it('should return { success: false, errors: [...] } instead of throwing when validation fails', async () => {
       const invalidTx = {
         amount: -50, // Invalid negative amount
         description: '', // Missing description
       };
 
-      const result = TransactionsCreateModule.addTransaction(invalidTx as any);
+      const result = await TransactionsCreateModule.addTransaction(invalidTx as any);
       expect(result.success).toBe(false);
       expect(result.errors).toBeDefined();
       expect(result.errors?.length).toBeGreaterThan(0);

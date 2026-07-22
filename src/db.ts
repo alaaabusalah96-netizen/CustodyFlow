@@ -347,7 +347,7 @@ export class CustodyDB {
     TransactionsModule.saveTransactions(transactions);
   }
 
-  static addTransaction(data: Omit<Transaction, 'id' | 'transaction_no' | 'status' | 'created_at' | 'updated_at' | 'created_by'> & { status?: TransactionStatus }): { success: boolean; errors?: string[]; data?: Transaction } {
+  static async addTransaction(data: Omit<Transaction, 'id' | 'transaction_no' | 'status' | 'created_at' | 'updated_at' | 'created_by'> & { status?: TransactionStatus }): Promise<{ success: boolean; errors?: string[]; data?: Transaction }> {
     return TransactionsModule.addTransaction(data);
   }
 

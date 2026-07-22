@@ -7,6 +7,7 @@ import { createBaseMetadata } from './metadata';
 import { GLAccount, JournalEntry, LedgerLine, AccountType } from '../../types/accounting';
 import { StorageEngine } from '../../db/storage';
 import { dbSetDoc, db } from '../../firebase';
+import { syncWriteWithOfflineFallback } from '../../db/offlineQueue';
 
 /**
  * Enterprise Accounting & Double-Entry Ledger Engine
@@ -92,7 +93,9 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
 
   static saveJournalEntries(list: JournalEntry[]): void {
     StorageEngine.setStored('journal_entries', list);
-    list.forEach(je => dbSetDoc('journal_entries', je.id, je));
+    list.forEach(je => {
+      syncWriteWithOfflineFallback('journal_entries', je.id, je);
+    });
   }
 
   /**

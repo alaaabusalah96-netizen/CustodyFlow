@@ -12,6 +12,7 @@ import { ValidationEngine } from './validation';
 import { DEFAULT_TRANSACTIONS } from './defaults';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 import { CustodyDB } from '../db';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 
 export class TransactionsUpdateModule {
   static async updateTransaction(id: string, updates: Partial<Transaction>): Promise<{ success: boolean; errors?: string[] }> {
@@ -155,16 +156,16 @@ export class TransactionsUpdateModule {
             StorageEngine.setStored('CashVouchers', finalVouchers);
 
             if (updatedVoucher.expense_ids.length === 0) {
-              dbDeleteDoc('CashVouchers', associatedVoucher.id);
+              await dbDeleteDoc('CashVouchers', associatedVoucher.id);
             } else {
-              dbSetDoc('CashVouchers', associatedVoucher.id, updatedVoucher);
+              await syncWriteWithOfflineFallback('CashVouchers', associatedVoucher.id, updatedVoucher);
             }
           }
         }
 
         transactions[idx] = updated;
         StorageEngine.setStored('transactions', transactions);
-        dbSetDoc('transactions', id, updated);
+        await syncWriteWithOfflineFallback('transactions', id, updated);
 
         if (updates.status && updates.status !== old.status) {
           let action = 'Status Updated';

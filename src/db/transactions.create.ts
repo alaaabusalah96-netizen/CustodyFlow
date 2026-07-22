@@ -7,9 +7,10 @@ import { CompaniesModule } from './companies';
 import { TransactionsHistoryModule } from './transactions.history';
 import { ValidationEngine } from './validation';
 import { DEFAULT_TRANSACTIONS } from './defaults';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 
 export class TransactionsCreateModule {
-  static addTransaction(data: Omit<Transaction, 'id' | 'transaction_no' | 'status' | 'created_at' | 'updated_at' | 'created_by'> & { status?: TransactionStatus }): { success: boolean; errors?: string[]; data?: Transaction } {
+  static async addTransaction(data: Omit<Transaction, 'id' | 'transaction_no' | 'status' | 'created_at' | 'updated_at' | 'created_by'> & { status?: TransactionStatus }): Promise<{ success: boolean; errors?: string[]; data?: Transaction }> {
     try {
       const transactions = StorageEngine.getStored<Transaction[]>('transactions', DEFAULT_TRANSACTIONS);
       const user = UsersModule.getActiveUser();
@@ -57,7 +58,8 @@ export class TransactionsCreateModule {
       transactions.push(newTx);
       StorageEngine.setStored('transactions', transactions);
 
-      dbSetDoc('transactions', newTx.id, newTx);
+      // Await Firestore write with offline fallback
+      await syncWriteWithOfflineFallback('transactions', newTx.id, newTx);
 
       TransactionsHistoryModule.addTransactionHistory({
         id: `txh-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,

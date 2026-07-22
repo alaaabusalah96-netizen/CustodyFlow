@@ -1,6 +1,7 @@
 import { CashVoucher } from '../types';
 import { StorageEngine } from './storage';
 import { dbSetDoc, dbDeleteDoc, db } from '../firebase';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_EXPENSES, DEFAULT_VOUCHERS } from './defaults';
 import { LogsModule } from './logs';
 import { doc, getDoc, runTransaction, deleteDoc } from 'firebase/firestore';
@@ -174,7 +175,7 @@ export class TransactionsVoucherModule {
         } else {
           finalNo = defaultStart;
         }
-        dbSetDoc('company_sequences', companyId, { 
+        syncWriteWithOfflineFallback('company_sequences', companyId, { 
           id: companyId, 
           company_id: companyId, 
           last_cash_voucher_no: finalNo 
@@ -182,7 +183,7 @@ export class TransactionsVoucherModule {
       } catch (err) {
         console.error("Simple get/set fallback failed too, using local fallback:", err);
         finalNo = fallbackNext;
-        dbSetDoc('company_sequences', companyId, { 
+        syncWriteWithOfflineFallback('company_sequences', companyId, { 
           id: companyId, 
           company_id: companyId, 
           last_cash_voucher_no: finalNo 
@@ -251,7 +252,7 @@ export class TransactionsVoucherModule {
         const lastNo = currentVal !== undefined ? currentVal : (defaultStart - 1);
         finalNo = lastNo + 1;
       }
-      dbSetDoc('company_sequences', companyId, { id: companyId, company_id: companyId, [field]: finalNo });
+      syncWriteWithOfflineFallback('company_sequences', companyId, { id: companyId, company_id: companyId, [field]: finalNo });
       return finalNo;
     }
   }

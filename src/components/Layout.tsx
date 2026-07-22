@@ -34,6 +34,7 @@ import {
 import { CustodyDB, ModulesModule } from '../db';
 import { translations, Language, Theme, AppUser } from '../types';
 import kemitLogo from '../assets/images/kemit_logo_1784280480891.jpg';
+import { OfflineSyncIndicator } from './OfflineSyncIndicator';
 
 interface LayoutProps {
   currentTab: string;
@@ -381,6 +382,10 @@ export default function Layout({
               : 'm-0'
           }`}
         >
+          <div className="mb-4">
+            <OfflineSyncIndicator language={language} />
+          </div>
+
           {/* Support Session Impersonation Banner */}
           {activeUser?.impersonator && (
             <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-600 via-rose-600 to-amber-600 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 border border-rose-500">
