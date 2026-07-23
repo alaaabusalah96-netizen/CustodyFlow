@@ -245,7 +245,7 @@ export default function Stations({
     setUsers(CustodyDB.getUsers());
   };
 
-  const handleSaveRegionManager = (regionId: string, companyId: string, email: string, pass: string) => {
+  const handleSaveRegionManager = async (regionId: string, companyId: string, email: string, pass: string) => {
     if (!email || !pass) return;
     const usersList = CustodyDB.getUsers();
     const existingManager = usersList.find(u => u.region_id === regionId && u.role === 'RegionalManager');
@@ -262,7 +262,7 @@ export default function Stations({
         }
         return u;
       });
-      CustodyDB.saveUsers(updatedUsers);
+      await CustodyDB.saveUsers(updatedUsers);
     } else {
       const newManager: AppUser = {
         id: `user-rm-${regionId}-${Date.now()}`,
@@ -293,13 +293,13 @@ export default function Stations({
           settle_voucher: true
         }
       };
-      CustodyDB.saveUsers([...usersList, newManager]);
+      await CustodyDB.saveUsers([...usersList, newManager]);
     }
     showToast(isRtl ? 'تم حفظ بيانات مدير القطاع بنجاح!' : 'Regional Manager credentials saved successfully!');
     refreshData();
   };
 
-  const handleSaveStationAdmin = (stationId: string, regionId: string | undefined, companyId: string, email: string, pass: string) => {
+  const handleSaveStationAdmin = async (stationId: string, regionId: string | undefined, companyId: string, email: string, pass: string) => {
     if (!email || !pass) return;
     const usersList = CustodyDB.getUsers();
     const existingAdmin = usersList.find(u => u.station_id === stationId && u.role === 'StationAdmin');
@@ -316,7 +316,7 @@ export default function Stations({
         }
         return u;
       });
-      CustodyDB.saveUsers(updatedUsers);
+      await CustodyDB.saveUsers(updatedUsers);
     } else {
       const newAdmin: AppUser = {
         id: `user-sa-${stationId}-${Date.now()}`,
@@ -348,7 +348,7 @@ export default function Stations({
           settle_voucher: false
         }
       };
-      CustodyDB.saveUsers([...usersList, newAdmin]);
+      await CustodyDB.saveUsers([...usersList, newAdmin]);
     }
     showToast(isRtl ? 'تم حفظ بيانات مسؤول الفرع بنجاح!' : 'Branch Admin credentials saved successfully!');
     refreshData();

@@ -604,7 +604,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
     }
   };
 
-  const handleSaveCompanyAdmin = (companyId: string, email: string, pass: string, permissions?: UserPermissions) => {
+  const handleSaveCompanyAdmin = async (companyId: string, email: string, pass: string, permissions?: UserPermissions) => {
     if (!email || !pass) return;
     const usersList = CustodyDB.getUsers();
     const existingAdmin = usersList.find(u => u.company_id === companyId && u.role === 'Admin');
@@ -622,7 +622,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         }
         return u;
       });
-      CustodyDB.saveUsers(updatedUsers);
+      await CustodyDB.saveUsers(updatedUsers);
     } else {
       const newAdmin: AppUser = {
         id: `user-admin-${companyId}-${Date.now()}`,
@@ -634,13 +634,13 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         password: pass.trim(),
         permissions: permissions || CustodyDB.enrichUserPermissions('Admin')
       };
-      CustodyDB.saveUsers([...usersList, newAdmin]);
+      await CustodyDB.saveUsers([...usersList, newAdmin]);
     }
     showStructToast(isRtl ? 'تم حفظ بيانات أدمن الشركة بنجاح!' : 'Company Admin credentials saved successfully!');
     handleRefreshData();
   };
 
-  const handleSaveRegionManager = (regionId: string, companyId: string, email: string, pass: string, permissions?: UserPermissions) => {
+  const handleSaveRegionManager = async (regionId: string, companyId: string, email: string, pass: string, permissions?: UserPermissions) => {
     if (!email || !pass) return;
     const usersList = CustodyDB.getUsers();
     const existingManager = usersList.find(u => u.region_id === regionId && u.role === 'RegionalManager');
@@ -658,7 +658,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         }
         return u;
       });
-      CustodyDB.saveUsers(updatedUsers);
+      await CustodyDB.saveUsers(updatedUsers);
     } else {
       const newManager: AppUser = {
         id: `user-rm-${regionId}-${Date.now()}`,
@@ -671,13 +671,13 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         password: pass.trim(),
         permissions: permissions || CustodyDB.enrichUserPermissions('RegionalManager')
       };
-      CustodyDB.saveUsers([...usersList, newManager]);
+      await CustodyDB.saveUsers([...usersList, newManager]);
     }
     showStructToast(isRtl ? 'تم حفظ بيانات مدير القطاع بنجاح!' : 'Regional Manager credentials saved successfully!');
     handleRefreshData();
   };
 
-  const handleSaveStationAdmin = (stationId: string, regionId: string | undefined, companyId: string, email: string, pass: string, permissions?: UserPermissions) => {
+  const handleSaveStationAdmin = async (stationId: string, regionId: string | undefined, companyId: string, email: string, pass: string, permissions?: UserPermissions) => {
     if (!email || !pass) return;
     const usersList = CustodyDB.getUsers();
     const existingAdmin = usersList.find(u => u.station_id === stationId && u.role === 'StationAdmin');
@@ -695,7 +695,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         }
         return u;
       });
-      CustodyDB.saveUsers(updatedUsers);
+      await CustodyDB.saveUsers(updatedUsers);
     } else {
       const newAdmin: AppUser = {
         id: `user-sa-${stationId}-${Date.now()}`,
@@ -709,7 +709,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         password: pass.trim(),
         permissions: permissions || CustodyDB.enrichUserPermissions('StationAdmin')
       };
-      CustodyDB.saveUsers([...usersList, newAdmin]);
+      await CustodyDB.saveUsers([...usersList, newAdmin]);
     }
     showStructToast(isRtl ? 'تم حفظ بيانات مسؤول الفرع بنجاح!' : 'Branch Admin credentials saved successfully!');
     handleRefreshData();
@@ -749,7 +749,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
   };
 
   // 4. Reset Password
-  const handleResetPassword = (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUserForReset || !newPlainPassword.trim()) return;
     
@@ -758,7 +758,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
       return;
     }
 
-    CustodyDB.resetUserPassword(selectedUserForReset.id, newPlainPassword);
+    await CustodyDB.resetUserPassword(selectedUserForReset.id, newPlainPassword);
     setResetSuccessMessage(isRtl ? `🎉 تم تعيين كلمة المرور بنجاح للمدير: ${selectedUserForReset.full_name}` : `🎉 Password successfully reset for: ${selectedUserForReset.full_name}`);
     setNewPlainPassword('');
     setTimeout(() => {

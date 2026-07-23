@@ -191,8 +191,8 @@ export class CustodyDB {
     UsersModule.exitImpersonation();
   }
 
-  static resetUserPassword(userId: string, newPasswordPlain: string): void {
-    UsersModule.resetUserPassword(userId, newPasswordPlain);
+  static async resetUserPassword(userId: string, newPasswordPlain: string): Promise<void> {
+    return UsersModule.resetUserPassword(userId, newPasswordPlain);
   }
 
   static getPermissions(): SystemPermission[] {

@@ -159,7 +159,7 @@ export default function Settings({ language, theme }: SettingsProps) {
     setTimeout(() => setToastMessage(''), 4000);
   };
 
-  const handleUpdateAdminPasswordDirectly = (e: React.FormEvent) => {
+  const handleUpdateAdminPasswordDirectly = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminSecurityError('');
     setAdminSecuritySuccess('');
@@ -194,7 +194,7 @@ export default function Settings({ language, theme }: SettingsProps) {
       return u;
     });
 
-    CustodyDB.saveUsers(updated);
+    await CustodyDB.saveUsers(updated);
     setAdminSecuritySuccess(isRtl ? '✅ تم تحديث كلمة مرور أدمن المنصة وحفظها بنجاح!' : '✅ Platform Admin password updated successfully.');
     setCurrentAdminPassword('');
     setNewAdminPassword('');
@@ -217,7 +217,7 @@ export default function Settings({ language, theme }: SettingsProps) {
     }, 1200);
   };
 
-  const handleVerifyAdminEmailCode = (e: React.FormEvent) => {
+  const handleVerifyAdminEmailCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminSecurityError('');
     setAdminSecuritySuccess('');
@@ -241,7 +241,7 @@ export default function Settings({ language, theme }: SettingsProps) {
       return u;
     });
 
-    CustodyDB.saveUsers(updated);
+    await CustodyDB.saveUsers(updated);
     setAdminEmailResetStep(3);
     setAdminSecuritySuccess(isRtl ? '🎉 تم تحديث كلمة مرور أدمن المنصة بنجاح عبر البريد الإلكتروني!' : '🎉 Password successfully updated via email code!');
     setNewAdminPassword('');
@@ -338,7 +338,7 @@ export default function Settings({ language, theme }: SettingsProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    fileReader.onload = (event) => {
+    fileReader.onload = async (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
         
@@ -353,7 +353,7 @@ export default function Settings({ language, theme }: SettingsProps) {
         if (parsed.regions) CustodyDB.saveRegions(parsed.regions);
         if (parsed.stations) CustodyDB.saveStations(parsed.stations);
         if (parsed.categories) CustodyDB.saveCategories(parsed.categories);
-        if (parsed.users) CustodyDB.saveUsers(parsed.users);
+        if (parsed.users) await CustodyDB.saveUsers(parsed.users);
         if (parsed.transactions) CustodyDB.saveTransactions(parsed.transactions);
 
         // Reload page states
@@ -466,7 +466,7 @@ export default function Settings({ language, theme }: SettingsProps) {
   };
 
   // --- USERS ACTIONS ---
-  const handleAddUser = (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (currentUser.role !== 'SystemAdmin') {
       alert(isRtl ? '⚠️ هذه الصلاحية حصرية لأدمن المنصة فقط!' : '⚠️ This privilege is exclusive to Platform Admins.');
@@ -502,7 +502,7 @@ export default function Settings({ language, theme }: SettingsProps) {
     };
 
     const allUsers = CustodyDB.getUsers();
-    CustodyDB.saveUsers([...allUsers, newUser]);
+    await CustodyDB.saveUsers([...allUsers, newUser]);
     setUsers(CustodyDB.getScopedUsers());
 
     setNewUserName('');
@@ -539,7 +539,7 @@ export default function Settings({ language, theme }: SettingsProps) {
     }
   };
 
-  const handleSaveEditUser = (id: string) => {
+  const handleSaveEditUser = async (id: string) => {
     if (currentUser.role !== 'SystemAdmin') {
       alert(isRtl ? '⚠️ هذه الصلاحية حصرية لأدمن المنصة فقط!' : '⚠️ This privilege is exclusive to Platform Admins.');
       return;
@@ -561,13 +561,13 @@ export default function Settings({ language, theme }: SettingsProps) {
       return u;
     });
 
-    CustodyDB.saveUsers(updatedUsers);
+    await CustodyDB.saveUsers(updatedUsers);
     setUsers(CustodyDB.getScopedUsers());
     setEditingUserId(null);
     triggerToast(isRtl ? 'تم تحديث أدوار وصلاحيات الموظف بنجاح.' : 'User permissions successfully updated.');
   };
 
-  const handleDeleteUser = (id: string) => {
+  const handleDeleteUser = async (id: string) => {
     if (currentUser.role !== 'SystemAdmin') {
       alert(isRtl ? '⚠️ هذه الصلاحية حصرية لأدمن المنصة فقط!' : '⚠️ This privilege is exclusive to Platform Admins.');
       return;
@@ -579,7 +579,7 @@ export default function Settings({ language, theme }: SettingsProps) {
     if (!confirm(isRtl ? 'حذف حساب هذا الموظف وسحب الصلاحيات؟' : 'Permanently remove this user?')) return;
 
     const allUsers = CustodyDB.getUsers().filter(u => u.id !== id);
-    CustodyDB.saveUsers(allUsers);
+    await CustodyDB.saveUsers(allUsers);
     setUsers(CustodyDB.getScopedUsers());
     triggerToast(isRtl ? 'تم حذف حساب الموظف.' : 'User deleted.');
   };
@@ -1112,7 +1112,7 @@ export default function Settings({ language, theme }: SettingsProps) {
                         {/* Action buttons */}
                         <div className="flex gap-2 justify-end mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               // Perform activation
                               if (pendingUser.role === 'StationAdmin' && !mapping.stationId) {
                                 alert(isRtl ? 'يرجى اختيار المحطة التابعة لشركة الموظف أولاً.' : 'Please choose the station for this company employee first.');
@@ -1143,7 +1143,7 @@ export default function Settings({ language, theme }: SettingsProps) {
                                 return u;
                               });
 
-                              CustodyDB.saveUsers(updatedDbUsers);
+                              await CustodyDB.saveUsers(updatedDbUsers);
                               setUsers(CustodyDB.getScopedUsers());
                               triggerToast(isRtl ? `تم تفعيل حساب الموظف ${pendingUser.full_name} بنجاح.` : `User account for ${pendingUser.full_name} successfully activated.`);
                             }}
@@ -1152,10 +1152,10 @@ export default function Settings({ language, theme }: SettingsProps) {
                             {isRtl ? 'الموافقة والتفعيل' : 'Approve & Activate'}
                           </button>
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               if (!confirm(isRtl ? 'هل أنت متأكد من رفض وحذف طلب هذا التسجيل؟' : 'Are you sure you want to reject and delete this request?')) return;
                               const allDbUsers = CustodyDB.getUsers().filter(u => u.id !== pendingUser.id);
-                              CustodyDB.saveUsers(allDbUsers);
+                              await CustodyDB.saveUsers(allDbUsers);
                               setUsers(CustodyDB.getScopedUsers());
                               triggerToast(isRtl ? 'تم رفض وحذف الطلب المعلق.' : 'Pending request rejected and deleted.');
                             }}

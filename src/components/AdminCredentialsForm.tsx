@@ -114,7 +114,7 @@ export default function AdminCredentialsForm({
     setIsEditing(false);
   };
 
-  const handleApprove = (req: SignupRequest) => {
+  const handleApprove = async (req: SignupRequest) => {
     const usersList = CustodyDB.getUsers();
     const newUser: AppUser = {
       id: `user-approved-${req.role.toLowerCase()}-${Date.now()}`,
@@ -129,7 +129,7 @@ export default function AdminCredentialsForm({
       permissions: CustodyDB.enrichUserPermissions(req.role)
     };
 
-    CustodyDB.saveUsers([...usersList, newUser]);
+    await CustodyDB.saveUsers([...usersList, newUser]);
     CustodyDB.deleteSignupRequest(req.id);
     CustodyDB.logAudit('APPROVE_SIGNUP_REQUEST', `Approved signup for ${req.full_name} (${req.email}) as ${req.role}`);
 

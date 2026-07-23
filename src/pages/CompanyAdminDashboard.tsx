@@ -123,7 +123,7 @@ function AdminCredentialsForm({
     setIsEditing(false);
   };
 
-  const handleApprove = (req: SignupRequest) => {
+  const handleApprove = async (req: SignupRequest) => {
     const usersList = CustodyDB.getUsers();
     const newUser: AppUser = {
       id: `user-approved-${req.role.toLowerCase()}-${Date.now()}`,
@@ -138,7 +138,7 @@ function AdminCredentialsForm({
       permissions: CustodyDB.enrichUserPermissions(req.role)
     };
 
-    CustodyDB.saveUsers([...usersList, newUser]);
+    await CustodyDB.saveUsers([...usersList, newUser]);
     CustodyDB.deleteSignupRequest(req.id);
     CustodyDB.logAudit('APPROVE_SIGNUP_REQUEST', `Approved signup for ${req.full_name} (${req.email}) as ${req.role}`);
 
@@ -602,7 +602,7 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
   };
 
   // Directory managers
-  const handleSaveRegionManager = (regionId: string, email: string, pass: string, permissions?: UserPermissions) => {
+  const handleSaveRegionManager = async (regionId: string, email: string, pass: string, permissions?: UserPermissions) => {
     if (!email || !pass) return;
     const usersList = CustodyDB.getUsers();
     const existingManager = usersList.find(u => u.region_id === regionId && u.role === 'RegionalManager');
@@ -620,7 +620,7 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
         }
         return u;
       });
-      CustodyDB.saveUsers(updatedUsers);
+      await CustodyDB.saveUsers(updatedUsers);
     } else {
       const newManager: AppUser = {
         id: `user-rm-${regionId}-${Date.now()}`,
@@ -633,13 +633,13 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
         password: pass.trim(),
         permissions: permissions || CustodyDB.enrichUserPermissions('RegionalManager')
       };
-      CustodyDB.saveUsers([...usersList, newManager]);
+      await CustodyDB.saveUsers([...usersList, newManager]);
     }
     showStructToast(isRtl ? 'تم حفظ بيانات مدير المنطقة بنجاح!' : 'Regional Manager credentials saved successfully!');
     loadData();
   };
 
-  const handleSaveStationAdmin = (stationId: string, regionId: string | undefined, email: string, pass: string, permissions?: UserPermissions) => {
+  const handleSaveStationAdmin = async (stationId: string, regionId: string | undefined, email: string, pass: string, permissions?: UserPermissions) => {
     if (!email || !pass) return;
     const usersList = CustodyDB.getUsers();
     const existingAdmin = usersList.find(u => u.station_id === stationId && u.role === 'StationAdmin');
@@ -657,7 +657,7 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
         }
         return u;
       });
-      CustodyDB.saveUsers(updatedUsers);
+      await CustodyDB.saveUsers(updatedUsers);
     } else {
       const newAdmin: AppUser = {
         id: `user-sa-${stationId}-${Date.now()}`,
@@ -671,7 +671,7 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
         password: pass.trim(),
         permissions: permissions || CustodyDB.enrichUserPermissions('StationAdmin')
       };
-      CustodyDB.saveUsers([...usersList, newAdmin]);
+      await CustodyDB.saveUsers([...usersList, newAdmin]);
     }
     showStructToast(isRtl ? 'تم حفظ بيانات مدير الفرع بنجاح!' : 'Branch Admin credentials saved successfully!');
     loadData();

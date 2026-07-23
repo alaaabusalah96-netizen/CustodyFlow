@@ -123,7 +123,7 @@ function AdminCredentialsForm({
     setIsEditing(false);
   };
 
-  const handleApprove = (req: SignupRequest) => {
+  const handleApprove = async (req: SignupRequest) => {
     const usersList = CustodyDB.getUsers();
     const newUser: AppUser = {
       id: `user-approved-${req.role.toLowerCase()}-${Date.now()}`,
@@ -138,7 +138,7 @@ function AdminCredentialsForm({
       permissions: CustodyDB.enrichUserPermissions(req.role)
     };
 
-    CustodyDB.saveUsers([...usersList, newUser]);
+    await CustodyDB.saveUsers([...usersList, newUser]);
     CustodyDB.deleteSignupRequest(req.id);
     CustodyDB.logAudit('APPROVE_SIGNUP_REQUEST', `Approved signup for ${req.full_name} (${req.email}) as ${req.role}`);
 
@@ -616,7 +616,7 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
   };
 
   // Directory manager for stations inside my region
-  const handleSaveStationAdmin = (stationId: string, email: string, pass: string, permissions?: UserPermissions) => {
+  const handleSaveStationAdmin = async (stationId: string, email: string, pass: string, permissions?: UserPermissions) => {
     if (!email || !pass) return;
     const usersList = CustodyDB.getUsers();
     const existingAdmin = usersList.find(u => u.station_id === stationId && u.role === 'StationAdmin');
@@ -634,7 +634,7 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
         }
         return u;
       });
-      CustodyDB.saveUsers(updatedUsers);
+      await CustodyDB.saveUsers(updatedUsers);
     } else {
       const newAdmin: AppUser = {
         id: `user-sa-${stationId}-${Date.now()}`,
@@ -648,7 +648,7 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
         password: pass.trim(),
         permissions: permissions || CustodyDB.enrichUserPermissions('StationAdmin')
       };
-      CustodyDB.saveUsers([...usersList, newAdmin]);
+      await CustodyDB.saveUsers([...usersList, newAdmin]);
     }
     showStructToast(isRtl ? 'تم حفظ بيانات مدير الفرع بنجاح!' : 'Branch Admin credentials saved successfully!');
     loadData();

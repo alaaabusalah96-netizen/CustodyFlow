@@ -79,9 +79,9 @@ export class UsersModule {
     });
 
     if (changed) {
-      setTimeout(() => {
+      setTimeout(async () => {
         try {
-          UsersModule.saveUsers(updated);
+          await UsersModule.saveUsers(updated);
         } catch (e) {
           console.error('Error auto-promoting user in database:', e);
         }
@@ -296,7 +296,7 @@ export class UsersModule {
     }
   }
 
-  static resetUserPassword(userId: string, newPasswordPlain: string): void {
+  static async resetUserPassword(userId: string, newPasswordPlain: string): Promise<void> {
     const users = UsersModule.getUsers();
     const idx = users.findIndex(u => u.id === userId);
     if (idx !== -1) {
@@ -304,7 +304,7 @@ export class UsersModule {
       const salt = targetUser.salt || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : targetUser.email);
       const hashed = hashPassword(newPasswordPlain, salt);
       users[idx] = { ...users[idx], salt, password: hashed };
-      UsersModule.saveUsers(users);
+      await UsersModule.saveUsers(users);
       
       const activeUser = UsersModule.getActiveUser();
       const superAdmin = activeUser?.impersonator || activeUser;

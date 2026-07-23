@@ -173,7 +173,7 @@ export default function App() {
 
   // Monitor Firebase auth state to ensure session validity and multi-tenancy sync
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       const stored = localStorage.getItem('custody_active_user');
       let currentLocalUser: AppUser | null = null;
       try {
@@ -199,7 +199,7 @@ export default function App() {
             // Synchronize ID if needed to enforce rules
             if (matchedUser.id !== firebaseUser.uid) {
               matchedUser.id = firebaseUser.uid;
-              CustodyDB.saveUsers(users.map(u => u.email.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim() ? { ...u, id: firebaseUser.uid } : u));
+              await CustodyDB.saveUsers(users.map(u => u.email.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim() ? { ...u, id: firebaseUser.uid } : u));
             }
             CustodyDB.setActiveUser(matchedUser);
             setActiveUser(matchedUser);

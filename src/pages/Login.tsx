@@ -220,7 +220,7 @@ export default function Login({
           return u;
         });
 
-        CustodyDB.saveUsers(updatedUsers);
+        await CustodyDB.saveUsers(updatedUsers);
 
         // Save success state and reset
         setIsResetMode(false);
@@ -358,7 +358,7 @@ export default function Login({
         }
         return u;
       });
-      CustodyDB.saveUsers(updatedUsers);
+      await CustodyDB.saveUsers(updatedUsers);
       foundUser.password = enteredHashSalted10k;
     }
 
@@ -381,7 +381,7 @@ export default function Login({
           }
           return u;
         });
-        CustodyDB.saveUsers(updatedUsers);
+        await CustodyDB.saveUsers(updatedUsers);
         foundUser.id = firebaseUser.uid;
       }
     }
@@ -401,7 +401,7 @@ export default function Login({
           }
           return u;
         });
-        CustodyDB.saveUsers(updatedUsers);
+        await CustodyDB.saveUsers(updatedUsers);
         foundUser.password = enteredHashSalted10k;
         foundUser.security_pin = '1234';
       }
@@ -480,7 +480,7 @@ export default function Login({
           }
           return u;
         });
-        CustodyDB.saveUsers(updatedUsers);
+        await CustodyDB.saveUsers(updatedUsers);
 
         const finalUser = { 
           ...adminLoginUser, 
@@ -500,7 +500,7 @@ export default function Login({
     }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -542,7 +542,7 @@ export default function Login({
         password: password
       };
 
-      CustodyDB.saveUsers([...users, newUser]);
+      await CustodyDB.saveUsers([...users, newUser]);
       setSuccess(isRtl ? 'تم تفعيل حساب أدمن المنصة تلقائياً! يرجى تسجيل الدخول الآن.' : 'Platform Admin activated automatically! Please sign in.');
     } else {
       if (selectedRole !== 'Admin' && !selectedRegionId) {
