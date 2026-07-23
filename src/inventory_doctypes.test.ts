@@ -44,11 +44,27 @@ const localStorageMock = (() => {
 Object.defineProperty(global, 'localStorage', { value: localStorageMock });
 
 import { InventoryModule } from './db/inventory';
+import { StorageEngine } from './db/storage';
 
 describe('Inventory Document Types: Receipt vs Addition', () => {
   let warehouseId: string;
 
   beforeEach(() => {
+    localStorageMock.clear();
+    StorageEngine.cache = {};
+    const mockUser = {
+      id: 'admin-1',
+      full_name: 'Test Admin',
+      email: 'admin@example.com',
+      role: 'SystemAdmin',
+      company_id: 'comp-1',
+      is_active: true
+    };
+    localStorageMock.setItem('custody_active_user', JSON.stringify(mockUser));
+    localStorageMock.setItem('custody_selected_company_id', 'comp-1');
+    StorageEngine.cache['active_user'] = mockUser;
+    StorageEngine.cache['selected_company_id'] = 'comp-1';
+
     const warehouses = InventoryModule.getWarehouses();
     if (warehouses.length > 0) {
       warehouseId = warehouses[0].id;
@@ -86,7 +102,8 @@ describe('Inventory Document Types: Receipt vs Addition', () => {
     expect(newDoc.doc_type).toBe('Receipt');
 
     // Transition to Posted
-    await InventoryModule.triggerLifecycleTransition(newDoc.id, 'Submit');
+    const sRes1 = await InventoryModule.triggerLifecycleTransition(newDoc.id, 'Submit');
+    const aRes1 = await InventoryModule.triggerLifecycleTransition(newDoc.id, 'Approve');
 
     // Verify stock increased
     const updatedStock = InventoryModule.getProductStock(prod.id, warehouseId);
@@ -122,6 +139,7 @@ describe('Inventory Document Types: Receipt vs Addition', () => {
 
     // Transition to Posted
     await InventoryModule.triggerLifecycleTransition(newDoc.id, 'Submit');
+    await InventoryModule.triggerLifecycleTransition(newDoc.id, 'Approve');
 
     // Verify stock increased
     const updatedStock = InventoryModule.getProductStock(prod.id, warehouseId);

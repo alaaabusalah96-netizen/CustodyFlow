@@ -56,6 +56,8 @@ export interface AppUser {
   impersonator?: AppUser;
   tenantId?: string;
   organizationId?: string;
+  org_unit_id?: string;
+  assigned_org_unit_ids?: string[];
 }
 
 export interface Region {

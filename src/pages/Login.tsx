@@ -294,6 +294,42 @@ export default function Login({
 
     const emailLower = email.toLowerCase().trim();
 
+    // Feature Flag for Phase 1 Server-side Authentication Remediation (Rollback Protection)
+    const USE_SERVER_AUTH = true;
+
+    if (USE_SERVER_AUTH) {
+      try {
+        const authRes = await fetch('/api/auth/verify-credentials', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailLower, password })
+        });
+        const authData = await authRes.json();
+
+        if (!authData.success) {
+          setError(authData.message || (isRtl ? 'كلمة المرور غير صحيحة.' : 'Incorrect password.'));
+          return;
+        }
+
+        let authenticatedUser = authData.user as AppUser;
+
+        // Sync with Firebase Authentication (Chicken-and-Egg solution)
+        const firebaseUser = password ? await syncWithFirebaseAuth(emailLower, password) : null;
+        if (firebaseUser) {
+          authenticatedUser = { ...authenticatedUser, id: firebaseUser.uid };
+        }
+
+        // Upsert sanitized user profile to local state and activate session
+        CustodyDB.upsertLocalUser(authenticatedUser);
+        CustodyDB.setActiveUser(authenticatedUser);
+        onLoginSuccess(authenticatedUser);
+        return;
+      } catch (serverAuthErr) {
+        console.warn('Server-side authentication endpoint error, proceeding with local fallback:', serverAuthErr);
+      }
+    }
+
+    // --- Legacy Client-side Fallback Verification (Rollback Path) ---
     // Sync with Firebase Authentication first (Chicken-and-Egg solution)
     const firebaseUser = password ? await syncWithFirebaseAuth(emailLower, password) : null;
 

@@ -15,11 +15,20 @@ import {
   deleteDoc 
 } from "firebase/firestore";
 import admin from "firebase-admin";
-import { getFirestore as getFirestoreAdmin } from "firebase-admin/firestore";
+import { getFirestore as getFirestoreAdmin, FieldValue } from "firebase-admin/firestore";
 import nodemailer from "nodemailer";
 import rateLimit from "express-rate-limit";
+import crypto from "crypto";
 import { runTenantMigrationUp, runTenantMigrationDown } from "./src/migrations/tenantMigration";
-import { hashPassword } from "./src/lib/hash";
+import { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000 } from "./src/lib/hash";
+
+const SERVER_PEPPER = process.env.APP_PEPPER || "CustodyFlowSecureSystemPepper2026!KeyDerivationV2";
+
+function hashPasswordPBKDF2_210k(password: string, salt: string): string {
+  if (!password) return '';
+  const combinedSalt = salt ? `${salt.toLowerCase().trim()}_${SERVER_PEPPER}` : SERVER_PEPPER;
+  return crypto.pbkdf2Sync(password, combinedSalt, 210000, 64, 'sha256').toString('hex');
+}
 
 const firebaseConfig = {
   projectId: "custodyflow",
@@ -194,6 +203,158 @@ async function startServer() {
         message: `Rollback failed: ${err.message}`,
         details: {}
       });
+    }
+  });
+
+  // API Route - Server-side Credential Verification (Zero-Trust PBKDF2 210k)
+  app.post("/api/auth/verify-credentials", otpRateLimiter, async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({ success: false, message: "يرجى إدخال البريد الإلكتروني وكلمة المرور." });
+      }
+
+      const emailLower = email.toLowerCase().trim();
+
+      // 1. Fetch user document from 'users' collection using Admin SDK
+      const usersSnapshot = await adminDb.collection("users").where("email", "==", emailLower).get();
+      if (usersSnapshot.empty) {
+        return res.status(400).json({ success: false, message: "البريد الإلكتروني غير مسجل بالنظام." });
+      }
+
+      const userDoc = usersSnapshot.docs[0];
+      const userData = userDoc.data();
+      const userId = userDoc.id;
+
+      if (userData.is_active === false) {
+        return res.status(400).json({ success: false, message: "هذا الحساب معطل حالياً. يرجى التواصل مع المسؤول." });
+      }
+
+      // 2. Fetch private credentials from 'user_credentials' vault using Admin SDK
+      const credDoc = await adminDb.collection("user_credentials").doc(userId).get();
+      let storedPasswordHash = '';
+      let salt = userData.salt || emailLower;
+      let kdf = 'legacy';
+
+      if (credDoc.exists) {
+        const credData = credDoc.data();
+        storedPasswordHash = credData?.passwordHash || credData?.password || '';
+        salt = credData?.salt || salt;
+        kdf = credData?.kdf || 'legacy';
+      } else {
+        // Fallback to legacy fields directly on user document
+        storedPasswordHash = userData.password || '';
+      }
+
+      const isPlatformAdmin = emailLower === 'alaaabusalah96@gmail.com' || emailLower === 'alaabusalah96@gmail.com';
+
+      if (!storedPasswordHash) {
+        if (!isPlatformAdmin) {
+          return res.status(400).json({ success: false, message: "لم يتم تعيين كلمة مرور لهذا الحساب بعد." });
+        }
+      }
+
+      // 3. Perform Password Comparisons across KDF iterations
+      const pbkdf2Hash = hashPasswordPBKDF2_210k(password, salt);
+      const hash10k = hashPassword(password, salt);
+      const hash1k = legacyStretchedHashPassword1000(password, salt);
+      const hashSinglePass = legacySinglePassHashPassword(password, salt);
+      const hashOldEmailSalt = legacyHashPassword(password, emailLower);
+      const hashLegacyUnsalted = legacyHashPassword(password);
+
+      const isPBKDF2Match = storedPasswordHash !== '' && storedPasswordHash === pbkdf2Hash;
+      const is10kMatch = storedPasswordHash !== '' && storedPasswordHash === hash10k;
+      const is1kMatch = storedPasswordHash !== '' && storedPasswordHash === hash1k;
+      const isSinglePassMatch = storedPasswordHash !== '' && storedPasswordHash === hashSinglePass;
+      const isOldEmailSaltMatch = storedPasswordHash !== '' && storedPasswordHash === hashOldEmailSalt;
+      const isLegacyUnsaltedMatch = storedPasswordHash !== '' && storedPasswordHash === hashLegacyUnsalted;
+      const isPlainMatch = storedPasswordHash !== '' && storedPasswordHash === password;
+
+      const isMatched = isPBKDF2Match || is10kMatch || is1kMatch || isSinglePassMatch || isOldEmailSaltMatch || isLegacyUnsaltedMatch || isPlainMatch;
+
+      if (storedPasswordHash && !isMatched) {
+        return res.status(400).json({ success: false, message: "كلمة المرور غير صحيحة." });
+      }
+
+      // 4. Auto-upgrade credential to PBKDF2 210,000 iterations in user_credentials vault
+      if (!credDoc.exists || kdf !== 'sha256_pbkdf2_210k' || !isPBKDF2Match) {
+        const newSalt = salt || crypto.randomUUID();
+        const newPbkdf2Hash = hashPasswordPBKDF2_210k(password, newSalt);
+
+        await adminDb.collection("user_credentials").doc(userId).set({
+          id: userId,
+          company_id: userData.company_id || 'comp-1',
+          email: emailLower,
+          passwordHash: newPbkdf2Hash,
+          salt: newSalt,
+          kdf: 'sha256_pbkdf2_210k',
+          updated_at: new Date().toISOString()
+        }, { merge: true });
+
+        // Strip password & salt from public user document in 'users' collection
+        if (userData.password !== undefined || userData.salt !== undefined) {
+          try {
+            await adminDb.collection("users").doc(userId).update({
+              password: FieldValue.delete(),
+              salt: FieldValue.delete()
+            });
+          } catch (e) {
+            console.warn("Could not delete plaintext password field from user doc:", e);
+          }
+        }
+      }
+
+      // Sanitize user object returned to client
+      const { password: _, salt: __, ...publicUser } = userData;
+      publicUser.id = userId;
+
+      return res.json({
+        success: true,
+        user: publicUser
+      });
+    } catch (err: any) {
+      console.error("Error in verify-credentials endpoint:", err);
+      return res.status(500).json({ success: false, message: "حدث خطأ أثناء الاتصال بالسيرفر للمصادقة." });
+    }
+  });
+
+  // API Route - Server-side Save User Credentials (PBKDF2 210k)
+  app.post("/api/auth/save-credentials", async (req, res) => {
+    try {
+      const { userId, companyId, email, password, salt } = req.body;
+      if (!userId || !password) {
+        return res.status(400).json({ success: false, message: "معلمات غير كافية لحفظ الاعتمادات." });
+      }
+
+      const emailLower = (email || '').toLowerCase().trim();
+      const userSalt = salt || crypto.randomUUID();
+      const newPbkdf2Hash = hashPasswordPBKDF2_210k(password, userSalt);
+
+      // Save strictly to user_credentials collection using Admin SDK
+      await adminDb.collection("user_credentials").doc(userId).set({
+        id: userId,
+        company_id: companyId || 'comp-1',
+        email: emailLower,
+        passwordHash: newPbkdf2Hash,
+        salt: userSalt,
+        kdf: 'sha256_pbkdf2_210k',
+        updated_at: new Date().toISOString()
+      }, { merge: true });
+
+      // Clean password/salt from public 'users' collection
+      const userRef = adminDb.collection("users").doc(userId);
+      const userDoc = await userRef.get();
+      if (userDoc.exists) {
+        await userRef.update({
+          password: FieldValue.delete(),
+          salt: FieldValue.delete()
+        });
+      }
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("Error in save-credentials endpoint:", err);
+      return res.status(500).json({ success: false, message: "حدث خطأ أثناء حفظ الاعتمادات." });
     }
   });
 

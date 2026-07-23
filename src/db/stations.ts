@@ -5,6 +5,7 @@ import { DEFAULT_REGIONS, DEFAULT_STATIONS } from './defaults';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
 import { CompaniesModule } from './companies';
+import { OrganizationScopeEngine } from './organizationScopeEngine';
 
 export class StationsModule {
   // Regions
@@ -24,6 +25,11 @@ export class StationsModule {
 
     const userCompanyId = user.company_id;
     let filtered = regions.filter(r => r.company_id === userCompanyId);
+
+    // Organization Scope evaluation with tree inheritance
+    if (user.org_unit_id || (user.assigned_org_unit_ids && user.assigned_org_unit_ids.length > 0)) {
+      return OrganizationScopeEngine.filterByOrganizationScope(filtered, user);
+    }
 
     if (user.role === 'RegionalManager') {
       if (user.region_id) {
@@ -103,6 +109,11 @@ export class StationsModule {
 
     const userCompanyId = user.company_id;
     let filtered = stations.filter(s => s.company_id === userCompanyId);
+
+    // Organization Scope evaluation with tree inheritance
+    if (user.org_unit_id || (user.assigned_org_unit_ids && user.assigned_org_unit_ids.length > 0)) {
+      return OrganizationScopeEngine.filterByOrganizationScope(filtered, user);
+    }
 
     if (user.role === 'RegionalManager') {
       if (user.region_id) {

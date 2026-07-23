@@ -23,6 +23,10 @@ export class StorageEngine {
       return this.cache[key];
     }
     try {
+      if (typeof localStorage === 'undefined') {
+        this.cache[key] = defaultValue;
+        return defaultValue;
+      }
       const data = localStorage.getItem(`custody_${key}`);
       const parsed = data ? JSON.parse(data) : defaultValue;
       this.cache[key] = parsed;
@@ -35,7 +39,9 @@ export class StorageEngine {
   static setStored<T>(key: string, value: T): void {
     this.cache[key] = value;
     try {
-      localStorage.setItem(`custody_${key}`, JSON.stringify(value));
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(`custody_${key}`, JSON.stringify(value));
+      }
       if (typeof window !== 'undefined') {
         setTimeout(() => {
           window.dispatchEvent(new Event('custody_db_updated'));

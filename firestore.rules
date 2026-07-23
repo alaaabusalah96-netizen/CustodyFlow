@@ -57,6 +57,69 @@ service cloud.firestore {
       allow write: if isSystemAdmin() || (isLoggedIn() && id == getCompanyId() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin'));
     }
 
+    // --- Dynamic Organization Engine (Phase 2) ---
+    match /organization_unit_types/{id} {
+      allow read: if isLoggedIn();
+      allow write: if isSystemAdmin() || (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin'));
+    }
+
+    match /organization_units/{id} {
+      allow read: if isLoggedIn() && (
+        isSystemAdmin() ||
+        resource == null ||
+        resource.data.companyId == getCompanyId() ||
+        resource.data.company_id == getCompanyId()
+      );
+      allow write: if isSystemAdmin() || (
+        isLoggedIn() &&
+        (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
+        (request.resource == null || request.resource.data.companyId == getCompanyId() || request.resource.data.company_id == getCompanyId())
+      );
+    }
+
+    match /organization_paths/{id} {
+      allow read: if isLoggedIn() && (
+        isSystemAdmin() ||
+        resource == null ||
+        resource.data.companyId == getCompanyId()
+      );
+      allow write: if isSystemAdmin() || (
+        isLoggedIn() &&
+        (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
+        (request.resource == null || request.resource.data.companyId == getCompanyId())
+      );
+    }
+
+    // --- Organization Templates (Phase 3) ---
+    match /organization_templates/{id} {
+      allow read: if isLoggedIn();
+      allow write: if isSystemAdmin() || (
+        isLoggedIn() &&
+        (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
+        (request.resource == null || request.resource.data.companyId == null || request.resource.data.companyId == getCompanyId())
+      );
+    }
+
+    // --- Warehouse Types (Phase 5) ---
+    match /warehouse_types/{id} {
+      allow read: if isLoggedIn();
+      allow write: if isSystemAdmin() || (
+        isLoggedIn() &&
+        (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
+        (request.resource == null || request.resource.data.companyId == null || request.resource.data.companyId == getCompanyId())
+      );
+    }
+
+    // --- Warehouse Templates (Phase 6) ---
+    match /warehouse_templates/{id} {
+      allow read: if isLoggedIn();
+      allow write: if isSystemAdmin() || (
+        isLoggedIn() &&
+        (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
+        (request.resource == null || request.resource.data.companyId == null || request.resource.data.companyId == getCompanyId())
+      );
+    }
+
     // --- Transactions (Custody Transactions) ---
     match /transactions/{id} {
       allow read: if isSameCompanyRead(resource.data);
@@ -177,19 +240,10 @@ service cloud.firestore {
 
     // --- User Credentials (Private Authentication Vault - Strict Zero-Trust) ---
     match /user_credentials/{id} {
-      // STRICT SECURITY RULE: Only the user themselves (id == request.auth.uid) OR SystemAdmin can READ their password hash & salt.
-      // Coworkers and company managers CANNOT read another user's password hash or salt under any circumstances!
-      allow read: if isLoggedIn() && (
-        id == request.auth.uid || 
-        isSystemAdmin() || 
-        (resource != null && resource.data.email != null && resource.data.email.lower() == request.auth.token.email.lower())
-      );
-      allow create, update: if isLoggedIn() && (
-        id == request.auth.uid || 
-        isSystemAdmin() || 
-        (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') && (resource == null || resource.data.company_id == getCompanyId()) && (request.resource == null || request.resource.data.company_id == getCompanyId()))
-      );
-      allow delete: if isLoggedIn() && (id == request.auth.uid || isSystemAdmin());
+      // STRICT ZERO-TRUST SECURITY RULE:
+      // Direct client SDK read and write access is DENIED for all client requests.
+      // Credentials may ONLY be read or updated server-side via Firebase Admin SDK / Cloud Functions.
+      allow read, write: if false;
     }
 
     // --- Users Directory Profiles ---

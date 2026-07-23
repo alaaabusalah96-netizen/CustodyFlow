@@ -137,6 +137,8 @@ export interface PermissionContext {
   role: string;
   tenantId: string;
   organizationId: string;
+  org_unit_id?: string;
+  assigned_org_unit_ids?: string[];
   userOverrides?: UserOverride[];
   temporaryOverrides?: TemporaryOverride[];
   currentTime?: string;     // ISO-8601 string to check against (defaults to now)

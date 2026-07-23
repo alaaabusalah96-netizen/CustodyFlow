@@ -94,7 +94,14 @@ export class UsersModule {
     if (StorageEngine.cache['active_user'] !== undefined) {
       return StorageEngine.cache['active_user'];
     }
-    const userStr = localStorage.getItem('custody_active_user');
+    let userStr: string | null = null;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        userStr = localStorage.getItem('custody_active_user');
+      }
+    } catch {
+      userStr = null;
+    }
     if (!userStr) {
       StorageEngine.cache['active_user'] = null;
       return null;
@@ -110,7 +117,13 @@ export class UsersModule {
           is_platform_owner: true,
           permissions: UsersModule.enrichUserPermissions('SystemAdmin')
         };
-        localStorage.setItem('custody_active_user', JSON.stringify(updated));
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('custody_active_user', JSON.stringify(updated));
+          }
+        } catch {
+          // ignore quota error in tests
+        }
         StorageEngine.cache['active_user'] = updated;
         return updated;
       }
@@ -182,16 +195,33 @@ export class UsersModule {
       const { password, salt, ...publicUser } = u;
       await syncWriteWithOfflineFallback('users', u.id, publicUser);
 
-      // 2. Write private authentication credentials to restricted 'user_credentials' vault
+      // 2. Write private authentication credentials to restricted 'user_credentials' vault via Server Admin API
       if (password && password !== 'REDACTED') {
-        await syncWriteWithOfflineFallback('user_credentials', u.id, {
-          id: u.id,
-          company_id: u.company_id,
-          email: u.email,
-          password: password,
-          salt: salt,
-          updated_at: new Date().toISOString()
-        });
+        if (typeof window !== 'undefined' && window.location) {
+          try {
+            await fetch('/api/auth/save-credentials', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: u.id,
+                companyId: u.company_id,
+                email: u.email,
+                password: password,
+                salt: salt
+              })
+            });
+          } catch (apiErr) {
+            console.warn('Server save-credentials API failed, falling back to local queue:', apiErr);
+            await syncWriteWithOfflineFallback('user_credentials', u.id, {
+              id: u.id,
+              company_id: u.company_id,
+              email: u.email,
+              password: password,
+              salt: salt,
+              updated_at: new Date().toISOString()
+            });
+          }
+        }
       }
     }
 

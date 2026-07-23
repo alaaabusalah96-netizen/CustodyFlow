@@ -14,6 +14,18 @@ export type InventoryDocType =
 
 export type InventoryDocStatus = 'Draft' | 'Pending' | 'Approved' | 'Posted' | 'Rejected' | 'Cancelled' | 'Dispatched';
 
+export interface WarehouseType {
+  id: string;
+  code: string;           // MAIN, SUB, PRODUCTION, RAW_MATERIAL, FINISHED_GOODS, RETURNS, DAMAGED, TRANSIT, SPARE_PARTS, CUSTOM
+  nameAr: string;
+  nameEn: string;
+  descriptionAr?: string;
+  descriptionEn?: string;
+  companyId?: string | null;
+  isPredefined: boolean;
+  isActive: boolean;
+}
+
 export interface Warehouse {
   id: string;
   name: string;
@@ -25,6 +37,64 @@ export interface Warehouse {
   max_capacity_qty?: number;            // Maximum total item units allowed (optional)
   max_capacity_volume?: number;         // Maximum volume allowed in m³ (optional)
   is_capacity_enforced?: boolean;       // Enable physical limit validation on postings
+
+  // Phase 5: Hierarchical & Enterprise Organization Links
+  parent_id?: string | null;            // Parent warehouse ID
+  type_id?: string;                     // ID of the WarehouseType
+  type_code?: string;                   // 'MAIN' | 'SUB' | 'PRODUCTION' | 'RAW_MATERIAL' | 'FINISHED_GOODS' | 'RETURNS' | 'DAMAGED' | 'TRANSIT' | 'SPARE_PARTS' | string
+  org_unit_id?: string | null;          // Linked Organization Unit ID (from Phase 2/3/4)
+  path?: string;                        // Materialized path, e.g. '/wh-main/wh-sub1'
+  level?: number;                       // Hierarchy depth level (0 for root)
+  metadata?: Record<string, any>;       // Custom attributes & metadata
+}
+
+export interface WarehouseTreeNode extends Warehouse {
+  typeNameAr?: string;
+  typeNameEn?: string;
+  children: WarehouseTreeNode[];
+}
+
+export interface WarehouseHierarchyValidationResult {
+  isValid: boolean;
+  totalWarehouses: number;
+  maxDepth: number;
+  orphanIds: string[];
+  cycleIds: string[];
+  errors: string[];
+}
+
+// Phase 6: Dynamic Warehouse Templates
+export interface WarehouseTemplateNode {
+  codeSuffix: string;
+  nameAr: string;
+  nameEn: string;
+  typeCode: string;                   // 'MAIN' | 'SUB' | 'PRODUCTION' | 'RAW_MATERIAL' | 'FINISHED_GOODS' | 'RETURNS' | 'DAMAGED' | 'TRANSIT' | 'SPARE_PARTS' | string
+  receivingApprovalWorkflow?: boolean;
+  maxCapacityQty?: number;
+  children?: WarehouseTemplateNode[];
+}
+
+export interface WarehouseTemplate {
+  id: string;
+  code: string;                       // 'FACTORY' | 'TRADING' | 'RETAIL' | 'RESTAURANT' | 'POULTRY' | 'CUSTOM' | string
+  nameAr: string;
+  nameEn: string;
+  descriptionAr: string;
+  descriptionEn: string;
+  isPredefined: boolean;
+  companyId?: string | null;
+  isActive: boolean;
+  nodes: WarehouseTemplateNode[];
+}
+
+export interface InstantiateWarehouseTemplateParams {
+  templateId: string;
+  companyId: string;
+  orgUnitId?: string | null;
+  namePrefixAr?: string;
+  namePrefixEn?: string;
+  codePrefix?: string;
+  parentWarehouseId?: string | null;
 }
 
 export interface Product {

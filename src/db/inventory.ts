@@ -172,8 +172,8 @@ const DEFAULT_MOVEMENTS: StockMovement[] = [
 
 export class InventoryModule {
   // Warehouses
-  static getWarehouses(): Warehouse[] {
-    const companyId = CompaniesModule.getSelectedCompanyId();
+  static getWarehouses(targetCompanyId?: string): Warehouse[] {
+    const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
     let list = StorageEngine.getStored<Warehouse[]>('warehouses', DEFAULT_WAREHOUSES);
     const companyWarehouses = list.filter(w => w.company_id === companyId);
     
@@ -248,9 +248,9 @@ export class InventoryModule {
     return companyWarehouses;
   }
 
-  static saveWarehouses(list: Warehouse[]): void {
+  static saveWarehouses(list: Warehouse[], targetCompanyId?: string): void {
     const all = StorageEngine.getStored<Warehouse[]>('warehouses', DEFAULT_WAREHOUSES);
-    const companyId = CompaniesModule.getSelectedCompanyId();
+    const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(w => w.company_id !== companyId);
     const combined = [...filteredOut, ...list];
     StorageEngine.setStored('warehouses', combined);
@@ -1118,8 +1118,8 @@ export class InventoryModule {
     const updatedMetadata = updateBaseMetadata(document, user.id);
     const updatedDoc: InventoryDocument = {
       ...document,
-      status: nextStatus,
-      ...updatedMetadata
+      ...updatedMetadata,
+      status: nextStatus
     };
 
     // Validate capacities and simple overdrafts before executing transitions that generate stock records
