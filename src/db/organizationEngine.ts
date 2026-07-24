@@ -229,6 +229,48 @@ export class OrganizationEngine {
 
   // --- Organization Units ---
 
+  static getOrganizationUnits(companyId?: string): OrganizationUnit[] {
+    return OrganizationEngine.getUnits(companyId);
+  }
+
+  static addOrganizationUnit(params: {
+    companyId: string;
+    parentId?: string | null;
+    typeId?: string;
+    typeCode?: string;
+    code: string;
+    name?: string;
+    nameAr: string;
+    nameEn: string;
+    metadata?: Record<string, any>;
+    isActive?: boolean;
+  }): OrganizationUnit {
+    const unitTypes = OrganizationEngine.getUnitTypes(params.companyId);
+    let effectiveTypeId = params.typeId;
+
+    if (!effectiveTypeId && params.typeCode) {
+      const matched = unitTypes.find(t => t.code.toUpperCase() === params.typeCode!.toUpperCase());
+      effectiveTypeId = matched ? matched.id : 'out-unit';
+    }
+
+    return OrganizationEngine.addUnit({
+      companyId: params.companyId,
+      parentId: params.parentId,
+      typeId: effectiveTypeId || 'out-unit',
+      code: params.code,
+      name: params.nameAr || params.name || params.nameEn || params.code,
+      nameAr: params.nameAr,
+      nameEn: params.nameEn,
+      metadata: params.metadata,
+      isActive: params.isActive,
+    });
+  }
+
+  static getDescendantUnits(rootUnitId: string, companyId?: string): OrganizationUnit[] {
+    const subtree = OrganizationEngine.getUnitSubtree(rootUnitId);
+    return subtree.filter(u => u.id !== rootUnitId);
+  }
+
   static getUnits(companyId?: string): OrganizationUnit[] {
     const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
     if (!companyId) return units;

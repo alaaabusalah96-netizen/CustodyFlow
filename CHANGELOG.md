@@ -106,5 +106,29 @@ Implemented Phase 6 Dynamic Warehouse Templates supporting industry-tailored war
 **Test & Validation Result:**
 Pass - 58/58 tests passing across 6 test suites (`npm test`). Server build compiled cleanly (`compile_applet`). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
 
+---
+
+## Phase 7: Permission Scope Engine
+**Date/Time:** 2026-07-24 07:25:00 UTC
+**Files Changed:**
+- `src/types.ts`
+- `src/types/enterprise.ts`
+- `src/db/organizationScopeEngine.ts`
+- `src/db/organizationEngine.ts`
+- `src/db/stations.ts`
+- `src/permission_scope.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+Implemented Phase 7 Permission Scope Engine replacing fixed Region Scope with dynamic, tree-inheriting Organization Scope. Extended `AppUser` and `PermissionContext` with `org_unit_id` and `assigned_org_unit_ids`. Created `OrganizationScopeEngine` in `src/db/organizationScopeEngine.ts` providing:
+1. `getAccessibleOrgUnitIds()`: Calculates all accessible organization unit IDs with automatic tree inheritance down the organization hierarchy (assigning a user to a parent unit like a Region or Sector grants automatic access to all child branches, stations, and departments via path matching and tree descendants).
+2. `isOrgUnitInScope()` & `isTargetInUserScope()`: Evaluates scope access for records linked to `org_unit_id`, `region_id`, or `station_id` with backward compatibility fallback for legacy structures.
+3. `filterByOrganizationScope()`: Filters query result arrays according to user organization scope.
+4. `hasScopedPermission()`: Integrates enterprise RBAC permission checks with tree organization scope.
+Added `OrganizationEngine` compatibility aliases (`getOrganizationUnits`, `addOrganizationUnit`, `getDescendantUnits`). Integrated Organization Scope checks into `StationsModule`. Created comprehensive unit test suite in `src/permission_scope.test.ts`.
+
+**Test & Validation Result:**
+Pass - 62/62 tests passing across 7 test suites (`npm test`). Applet build succeeded cleanly (`compile_applet`). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
 
 

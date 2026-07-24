@@ -14,7 +14,7 @@ import {
   getDocs, 
   deleteDoc 
 } from "firebase/firestore";
-import admin from "firebase-admin";
+import { initializeApp as initializeAdminApp, getApps as getAdminApps, cert as adminCert, App as AdminApp } from "firebase-admin/app";
 import { getFirestore as getFirestoreAdmin, FieldValue } from "firebase-admin/firestore";
 import nodemailer from "nodemailer";
 import rateLimit from "express-rate-limit";
@@ -46,9 +46,62 @@ const db = isSandboxProject
   : getFirestore(firebaseApp);
 
 // Initialize Firebase Admin SDK
-const adminApp = admin.initializeApp({
-  projectId: firebaseConfig.projectId
-}, "admin-server-app");
+function getAdminApp(): AdminApp {
+  const existingApps = getAdminApps();
+  if (existingApps.length > 0 && existingApps[0]) {
+    return existingApps[0];
+  }
+
+  const rawServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (rawServiceAccount) {
+    try {
+      let cleaned = rawServiceAccount.trim();
+      if ((cleaned.startsWith("'") && cleaned.endsWith("'")) || (cleaned.startsWith('"') && cleaned.endsWith('"'))) {
+        cleaned = cleaned.slice(1, -1).trim();
+      }
+      if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) {
+        try {
+          const decoded = Buffer.from(cleaned, 'base64').toString('utf-8').trim();
+          if (decoded.startsWith('{')) {
+            cleaned = decoded;
+          }
+        } catch (_) {
+          // Keep cleaned as is if base64 decode fails
+        }
+      }
+      const serviceAccount = JSON.parse(cleaned);
+      if (serviceAccount && typeof serviceAccount === 'object') {
+        if (typeof serviceAccount.private_key === 'string') {
+          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+        }
+        return initializeAdminApp({
+          credential: adminCert(serviceAccount)
+        });
+      }
+    } catch (err) {
+      console.error("Error initializing Firebase Admin with FIREBASE_SERVICE_ACCOUNT:", err);
+    }
+  }
+
+  const appsAfter = getAdminApps();
+  if (appsAfter.length > 0 && appsAfter[0]) {
+    return appsAfter[0];
+  }
+
+  try {
+    return initializeAdminApp({
+      projectId: firebaseConfig.projectId
+    });
+  } catch (err) {
+    const finalApps = getAdminApps();
+    if (finalApps.length > 0 && finalApps[0]) {
+      return finalApps[0];
+    }
+    throw err;
+  }
+}
+
+const adminApp = getAdminApp();
 const adminDb = isSandboxProject
   ? getFirestoreAdmin(adminApp, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe")
   : getFirestoreAdmin(adminApp);
@@ -159,6 +212,9 @@ async function sendOtpEmail(email: string, otp: string, isLogin: boolean = false
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Trust first proxy in Cloud Run / Nginx container environment for rate limiter IP resolution
+  app.set("trust proxy", 1);
 
   app.use(express.json());
 

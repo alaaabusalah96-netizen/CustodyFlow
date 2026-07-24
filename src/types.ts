@@ -19,24 +19,24 @@ export interface Company {
 }
 
 export interface UserPermissions {
-  create_expense: boolean;
+  create_expense?: boolean;
   edit_expense?: boolean;
-  delete_expense: boolean;
+  delete_expense?: boolean;
   create_voucher?: boolean;
   approve_voucher?: boolean;
   reject_voucher?: boolean;
   create_custody?: boolean;
   edit_custody?: boolean;
   replace_custody?: boolean;
-  view_reports: boolean;
+  view_reports?: boolean;
   manage_users?: boolean;
   manage_companies?: boolean;
   manage_regions?: boolean;
   manage_stations?: boolean;
   manage_roles?: boolean;
-  manage_settings: boolean;
+  manage_settings?: boolean;
   // Backward compatibility
-  settle_voucher: boolean;
+  settle_voucher?: boolean;
 }
 
 export interface AppUser {
