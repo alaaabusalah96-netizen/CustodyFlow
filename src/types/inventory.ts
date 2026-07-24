@@ -140,7 +140,11 @@ export interface InventoryDocument extends BaseMetadata {
   company_id?: string;
   source_warehouse_id?: string; // From warehouse
   dest_entity_id?: string;       // To warehouse, branch, station, supplier, customer, etc.
-  dest_entity_type?: 'warehouse' | 'branch' | 'station' | 'supplier' | 'customer' | 'scrap' | 'adjustment';
+  dest_entity_type?: 'warehouse' | 'branch' | 'station' | 'supplier' | 'customer' | 'scrap' | 'adjustment' | 'org_unit';
+  org_unit_id?: string | null;   // Linked Source Organization Unit ID (Phase 12)
+  dest_org_unit_id?: string | null; // Linked Destination Organization Unit ID (Phase 12)
+  region_id?: string | null;    // Legacy Region ID
+  station_id?: string | null;   // Legacy Station ID
   receipt_source_type?: 'supplier' | 'transfer'; // For Receipt doc: Supplier vs Internal Transfer
   receipt_transfer_entity_id?: string;
   supplier_name?: string;
@@ -164,6 +168,9 @@ export interface StockMovement {
   doc_type: InventoryDocType;
   product_id: string;
   warehouse_id: string;
+  org_unit_id?: string | null; // Linked Organization Unit ID (Phase 12)
+  region_id?: string | null;   // Legacy Region ID
+  station_id?: string | null;  // Legacy Station ID
   qty_change: number; // Positive for IN, Negative for OUT
   type: 'IN' | 'OUT';
   current_balance_after: number;
@@ -181,6 +188,7 @@ export interface InventoryReportFilter {
   startDate?: string;
   endDate?: string;
   warehouseId?: string;
+  orgUnitId?: string;
   productId?: string;
   docType?: InventoryDocType;
 }
@@ -189,6 +197,10 @@ export interface InventoryLedgerEntry {
   id: string;
   company_id: string;
   warehouse_id: string;
+  org_unit_id?: string | null;   // Linked Organization Unit ID (Phase 12)
+  cost_center_id?: string | null; // Derived Cost Center ID (Phase 12)
+  region_id?: string | null;     // Legacy Region ID
+  station_id?: string | null;    // Legacy Station ID
   product_id: string;
   transaction_type: string; // e.g. Receipt, Issue, Transfer, etc.
   reference_document_id: string; // doc_id

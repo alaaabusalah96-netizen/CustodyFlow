@@ -4,10 +4,12 @@ import { BusinessEngineContract, EngineExecutionResult } from './warehouse_contr
 import { SequenceEngine } from './sequence';
 import { AuditLogEngine } from './audit';
 import { createBaseMetadata } from './metadata';
-import { GLAccount, JournalEntry, LedgerLine, AccountType } from '../../types/accounting';
+import { GLAccount, JournalEntry, LedgerLine, AccountType, AccountingDimensions, JournalEntryFilterOptions } from '../../types/accounting';
 import { StorageEngine } from '../../db/storage';
 import { dbSetDoc, db } from '../../firebase';
 import { syncWriteWithOfflineFallback } from '../../db/offlineQueue';
+import { WarehouseHierarchyEngine } from '../../db/warehouseHierarchyEngine';
+import { CostCenterEngine } from '../../db/costCenterEngine';
 
 /**
  * Enterprise Accounting & Double-Entry Ledger Engine
@@ -99,7 +101,71 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
   }
 
   /**
-   * Helper to trigger automated double-entry postings for standard operations.
+   * Helper to resolve and standardize accounting dimensions (Org Unit, Warehouse, Project, Cost Center)
+   */
+  static resolveDimensions(
+    companyId: string,
+    provided?: AccountingDimensions,
+    lineSpecific?: AccountingDimensions
+  ): AccountingDimensions {
+    const merged = { ...provided, ...lineSpecific };
+
+    let orgUnitId = merged.orgUnitId || merged.org_unit_id;
+    let warehouseId = merged.warehouseId || merged.warehouse_id;
+    const projectId = merged.projectId || merged.project_id;
+    let costCenterId = merged.costCenterId || merged.cost_center_id;
+
+    // 1. Auto-derive Org Unit from Warehouse if missing
+    if (!orgUnitId && warehouseId) {
+      try {
+        const whs = WarehouseHierarchyEngine.getWarehouses(companyId);
+        const targetWh = whs.find(w => w.id === warehouseId);
+        if (targetWh?.org_unit_id) {
+          orgUnitId = targetWh.org_unit_id;
+        }
+      } catch {
+        // Safe fallback if warehouse lookup fails
+      }
+    }
+
+    // 2. Auto-derive Cost Center from Org Unit if missing
+    if (!costCenterId && orgUnitId) {
+      try {
+        const cc = CostCenterEngine.resolveCostCenterForOrgUnit(orgUnitId, companyId);
+        if (cc) {
+          costCenterId = cc.id;
+        }
+      } catch {
+        // Safe fallback
+      }
+    }
+
+    // 3. Auto-derive Org Unit from Cost Center if missing
+    if (!orgUnitId && costCenterId) {
+      try {
+        const cc = CostCenterEngine.getCostCenter(costCenterId);
+        if (cc?.org_unit_id) {
+          orgUnitId = cc.org_unit_id;
+        }
+      } catch {
+        // Safe fallback
+      }
+    }
+
+    return {
+      org_unit_id: orgUnitId,
+      orgUnitId: orgUnitId,
+      warehouse_id: warehouseId,
+      warehouseId: warehouseId,
+      project_id: projectId,
+      projectId: projectId,
+      cost_center_id: costCenterId,
+      costCenterId: costCenterId
+    };
+  }
+
+  /**
+   * Helper to trigger automated double-entry postings for standard operations with full organization awareness.
    */
   static async postOperationalDoubleEntry(
     companyId: string,
@@ -107,9 +173,22 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     sourceRef: string,
     statementAr: string,
     statementEn: string,
-    lines: { accountCode: string; debit: number; credit: number; notes?: string }[]
+    lines: { 
+      accountCode: string; 
+      debit: number; 
+      credit: number; 
+      notes?: string;
+      orgUnitId?: string;
+      org_unit_id?: string;
+      warehouseId?: string;
+      warehouse_id?: string;
+      projectId?: string;
+      project_id?: string;
+      costCenterId?: string;
+      cost_center_id?: string;
+    }[],
+    dimensions?: AccountingDimensions
   ): Promise<JournalEntry> {
-    const engine = new AccountingBusinessEngine();
     const accounts = AccountingBusinessEngine.getAccounts(companyId);
 
     // Validate non-negative values (BUG-05)
@@ -119,10 +198,16 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
       }
     }
 
-    // Form complete Ledger Lines
+    // Resolve header-level dimensions
+    const headerDims = AccountingBusinessEngine.resolveDimensions(companyId, dimensions);
+
+    // Form complete Ledger Lines with line-level & header-level dimension fallbacks
     const ledgerLines: LedgerLine[] = lines.map(ln => {
       const acc = accounts.find(a => a.code === ln.accountCode);
       if (!acc) throw new Error(`GL Account code ${ln.accountCode} not found in corporate COA.`);
+      
+      const lineDims = AccountingBusinessEngine.resolveDimensions(companyId, headerDims, ln);
+
       return {
         accountId: acc.id,
         accountCode: acc.code,
@@ -130,7 +215,8 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
         accountNameEn: acc.nameEn,
         debit: ln.debit,
         credit: ln.credit,
-        notes: ln.notes
+        notes: ln.notes,
+        ...lineDims
       };
     });
 
@@ -162,7 +248,8 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
       lines: ledgerLines,
       totalDebit,
       totalCredit,
-      metadata: createBaseMetadata(companyId, operatorId)
+      metadata: createBaseMetadata(companyId, operatorId),
+      ...headerDims
     };
 
     // Commit Journal Entry
@@ -192,6 +279,49 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     AccountingBusinessEngine.saveAccounts(companyId, updatedAccounts);
 
     return je;
+  }
+
+  /**
+   * Filters journal entries dynamically across company, org unit, warehouse, project, cost center, and date range.
+   */
+  static getJournalEntriesFiltered(options: JournalEntryFilterOptions): JournalEntry[] {
+    const all = AccountingBusinessEngine.getJournalEntries(options.companyId);
+
+    return all.filter(je => {
+      if (options.sourceType && je.sourceType !== options.sourceType) return false;
+      if (options.startDate && je.date < options.startDate) return false;
+      if (options.endDate && je.date > options.endDate) return false;
+
+      // Filter by Org Unit (matches header or line)
+      if (options.orgUnitId) {
+        const matchesHeader = je.orgUnitId === options.orgUnitId || je.org_unit_id === options.orgUnitId;
+        const matchesLine = je.lines.some(l => l.orgUnitId === options.orgUnitId || l.org_unit_id === options.orgUnitId);
+        if (!matchesHeader && !matchesLine) return false;
+      }
+
+      // Filter by Warehouse (matches header or line)
+      if (options.warehouseId) {
+        const matchesHeader = je.warehouseId === options.warehouseId || je.warehouse_id === options.warehouseId;
+        const matchesLine = je.lines.some(l => l.warehouseId === options.warehouseId || l.warehouse_id === options.warehouseId);
+        if (!matchesHeader && !matchesLine) return false;
+      }
+
+      // Filter by Project (matches header or line)
+      if (options.projectId) {
+        const matchesHeader = je.projectId === options.projectId || je.project_id === options.projectId;
+        const matchesLine = je.lines.some(l => l.projectId === options.projectId || l.project_id === options.projectId);
+        if (!matchesHeader && !matchesLine) return false;
+      }
+
+      // Filter by Cost Center (matches header or line)
+      if (options.costCenterId) {
+        const matchesHeader = je.costCenterId === options.costCenterId || je.cost_center_id === options.costCenterId;
+        const matchesLine = je.lines.some(l => l.costCenterId === options.costCenterId || l.cost_center_id === options.costCenterId);
+        if (!matchesHeader && !matchesLine) return false;
+      }
+
+      return true;
+    });
   }
 
   // --- central event processor ---
@@ -231,7 +361,7 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
         }
 
         case 'JOURNAL_ENTRY_POSTED': {
-          const { statementAr, statementEn, lines, sourceRef } = event.payload;
+          const { statementAr, statementEn, lines, sourceRef, dimensions, orgUnitId, warehouseId, projectId, costCenterId } = event.payload;
           const companyId = event.tenantId;
 
           const je = await AccountingBusinessEngine.postOperationalDoubleEntry(
@@ -240,7 +370,8 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
             sourceRef,
             statementAr,
             statementEn,
-            lines
+            lines,
+            dimensions || { orgUnitId, warehouseId, projectId, costCenterId }
           );
 
           return {

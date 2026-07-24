@@ -125,10 +125,106 @@ Implemented Phase 7 Permission Scope Engine replacing fixed Region Scope with dy
 2. `isOrgUnitInScope()` & `isTargetInUserScope()`: Evaluates scope access for records linked to `org_unit_id`, `region_id`, or `station_id` with backward compatibility fallback for legacy structures.
 3. `filterByOrganizationScope()`: Filters query result arrays according to user organization scope.
 4. `hasScopedPermission()`: Integrates enterprise RBAC permission checks with tree organization scope.
-Added `OrganizationEngine` compatibility aliases (`getOrganizationUnits`, `addOrganizationUnit`, `getDescendantUnits`). Integrated Organization Scope checks into `StationsModule`. Created comprehensive unit test suite in `src/permission_scope.test.ts`.
+5. Added `OrganizationEngine` compatibility aliases (`getOrganizationUnits`, `addOrganizationUnit`, `getDescendantUnits`). Integrated Organization Scope checks into `StationsModule`. Created comprehensive unit test suite in `src/permission_scope.test.ts`.
 
 **Test & Validation Result:**
 Pass - 62/62 tests passing across 7 test suites (`npm test`). Applet build succeeded cleanly (`compile_applet`). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Phase 8: Approval Engine
+**Date/Time:** 2026-07-24 07:56:00 UTC
+**Files Changed:**
+- `src/types/approval.ts` (Created)
+- `src/db/approvalEngine.ts` (Created)
+- `src/approval_engine.test.ts` (Created)
+- `src/lib/enterprise/purchasing_engine.ts`
+- `firestore.rules`
+- `CHANGELOG.md`
+
+**Summary:**
+Implemented Phase 8 Approval Engine centralizing workflow definitions and document authorization across the enterprise:
+1. **Core Data Structures:** Defined `ApprovalWorkflowDefinition`, `ApprovalStepDefinition`, `ApprovalInstance`, and `ApprovalStepResult` interfaces supporting role-based and user-specific approvers, min/max document amounts, step-level auto-approvals, and complete audit history.
+2. **ApprovalEngine Singleton Service:** Implemented workflow creation, active instance evaluation, sequential step advancement (`approveStep`), step rejection (`rejectStep`), and user pending approval list querying (`getPendingApprovalsForUser`).
+3. **Pre-seeded Enterprise Workflows:** Created `createDefaultWorkflows()` auto-generating standard 1-step and 3-step high-value purchase request workflows and expense claim workflows.
+4. **Integration with Purchasing Engine:** Integrated `ApprovalEngine` into `PurchasingBusinessEngine` (`PR_SUBMITTED` & `PR_APPROVED` handlers), dynamically instantiating multi-stage approvals and updating PR status while retaining backward compatibility threshold fallbacks.
+5. **Security & Rules:** Added Firestore security rules for `/approval_workflows/{id}` and `/approval_instances/{id}` collections.
+6. **Unit & Integration Testing:** Created full test suite in `src/approval_engine.test.ts`.
+
+**Test & Validation Result:**
+Pass - 69/69 tests passing across 8 test suites (`npm test`). Applet build succeeded cleanly (`compile_applet`). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Phase 9: Document Number Engine
+**Date/Time:** 2026-07-24 08:02:00 UTC
+**Files Changed:**
+- `src/types/documentNumber.ts` (Created)
+- `src/db/documentNumberEngine.ts` (Created)
+- `src/document_number_engine.test.ts` (Created)
+- `firestore.rules`
+- `CHANGELOG.md`
+
+**Summary:**
+Implemented Phase 9 Document Number Engine enabling independent, configurable sequence numbering across all enterprise organization units and document types:
+1. **Core Data Structures:** Created `DocumentNumberConfig`, `GenerateNumberParams`, and `GenerateNumberResult` supporting independent numbering per company or organization unit (`org_unit_id`), customizable document prefixes, pattern templates (`{PREFIX}-{ORG_CODE}-{YEAR}-{SEQ:5}`), reset frequencies, and manual start numbers.
+2. **DocumentNumberEngine Singleton Service:** Implemented configuration management (`saveConfig`, `getConfig`, `getConfigs`), pre-seeded default configurations (`createDefaultConfigs`) for all core document types (Invoices, Receipts, PO, PR, Transfers, Inventory, Assets, HR, Custody, Vouchers, Expenses, Journal Entries), and pattern-based sequence generation (`generateNextNumber`).
+3. **Template Token Engine:** Supports token parsing for `{PREFIX}`, `{ORG_CODE}`, `{YEAR}`, `{YY}`, `{MONTH}`, `{SEQ}`, `{SEQ:N}` (custom padding), and `{SUFFIX}`.
+4. **Org-Unit Fallback Hierarchy:** Automatically checks for Org Unit-specific configuration first, then seamlessly falls back to company-wide configurations and default templates if unconfigured.
+5. **Security Rules:** Added Firestore security rules for `/document_number_configs/{id}` collection.
+6. **Unit & Integration Testing:** Created comprehensive test suite in `src/document_number_engine.test.ts`.
+
+**Test & Validation Result:**
+Pass - 75/75 tests passing across 9 test suites (`npm test`). Applet build succeeded cleanly (`compile_applet`). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Phase 10: Accounting Integration
+**Date/Time:** 2026-07-24 08:08:00 UTC
+**Files Changed:**
+- `src/types/accounting.ts`
+- `src/lib/enterprise/accounting_engine.ts`
+- `src/db/warehouseHierarchyEngine.ts`
+- `src/accounting_integration.test.ts` (Created)
+- `CHANGELOG.md`
+
+**Summary:**
+Implemented Phase 10 Accounting Integration enabling organization-aware automated double-entry postings:
+1. **Dimension Data Types:** Extended `LedgerLine`, `JournalEntry`, and `AccountingDimensions` interfaces in `src/types/accounting.ts` to include `org_unit_id` / `orgUnitId`, `warehouse_id` / `warehouseId`, `project_id` / `projectId`, and `cost_center_id` / `costCenterId`.
+2. **Dimension Resolution Engine (`resolveDimensions`):** Implemented automatic resolution of missing dimensions in `AccountingBusinessEngine`, such as auto-deriving `org_unit_id` from warehouse hierarchy if `warehouseId` is provided.
+3. **Dimension-Aware Journal Entry Posting (`postOperationalDoubleEntry`):** Updated `postOperationalDoubleEntry` to accept header-level dimensions and line-specific dimension overrides, stamping dimensional tags on `JournalEntry` headers and individual `LedgerLine` items without exposing ERP accounting complexity to end users.
+4. **Multi-Dimensional Query Engine (`getJournalEntriesFiltered`):** Created filtering capabilities across company, organization unit, warehouse, project, cost center, date range, and source type.
+5. **Event Processing Integration:** Enhanced `JOURNAL_ENTRY_POSTED` event handler in `processEvent` to consume and propagate dimensional parameters from event payloads.
+6. **Backward Compatibility & Validation:** Preserved 100% backward compatibility for entries without dimensions and verified via comprehensive unit tests in `src/accounting_integration.test.ts`.
+
+**Test & Validation Result:**
+Pass - 80/80 tests passing across 10 test suites (`npm test`). Applet build succeeded cleanly (`compile_applet`). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Phase 11: Cost Center Engine
+**Date/Time:** 2026-07-24 08:16:00 UTC
+**Files Changed:**
+- `src/types/accounting.ts`
+- `src/db/costCenterEngine.ts` (Created)
+- `src/lib/enterprise/accounting_engine.ts`
+- `firestore.rules`
+- `src/cost_center_engine.test.ts` (Created)
+- `CHANGELOG.md`
+
+**Summary:**
+Implemented Phase 11 Dynamic Cost Center Engine establishing automated, dynamic linkages between Cost Centers and Organization Units:
+1. **Cost Center Types:** Added `CostCenterCategory` and `CostCenter` interface in `src/types/accounting.ts` with support for `org_unit_id`, `parent_id`, categories (`OPERATIONAL`, `REVENUE`, `EXPENSE`, `OVERHEAD`, `PROJECT`), and budget allocation.
+2. **Cost Center Engine (`CostCenterEngine`):** Built singleton service in `src/db/costCenterEngine.ts` providing CRUD management, local storage persistence, Firestore synchronization, hierarchical tree generation (`buildCostCenterTree`), subtree querying (`getCostCenterSubtree`), and automatic 1-to-1 dynamic linking with Organization Units (`autoCreateOrLinkCostCenterForOrgUnit` & `resolveCostCenterForOrgUnit`).
+3. **Accounting Dimension Integration:** Extended `AccountingBusinessEngine.resolveDimensions` in `src/lib/enterprise/accounting_engine.ts` to bidirectionally auto-derive `costCenterId` from `orgUnitId` (and `orgUnitId` from `costCenterId`) whenever journal entries are posted.
+4. **Firestore Security Rules:** Added security rules for `/cost_centers/{id}` supporting company-scoped access and accounting role permissions.
+5. **Unit & Integration Testing:** Created comprehensive unit tests in `src/cost_center_engine.test.ts` verifying CRUD operations, automatic Org Unit linking, double-entry dimension auto-population, and hierarchical tree query methods.
+
+**Test & Validation Result:**
+Pass - 85/85 tests passing across 11 test suites (`npm test`). Applet build succeeded cleanly (`compile_applet`). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+
+
 
 
 

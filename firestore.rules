@@ -120,6 +120,61 @@ service cloud.firestore {
       );
     }
 
+    // --- Dynamic Cost Centers (Phase 11) ---
+    match /cost_centers/{id} {
+      allow read: if isLoggedIn() && (
+        isSystemAdmin() ||
+        resource == null ||
+        resource.data.company_id == getCompanyId() ||
+        resource.data.companyId == getCompanyId()
+      );
+      allow write: if isSystemAdmin() || (
+        isLoggedIn() &&
+        (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Accountant') &&
+        (request.resource == null || request.resource.data.company_id == getCompanyId() || request.resource.data.companyId == getCompanyId())
+      );
+    }
+
+    // --- Approval Workflows & Instances (Phase 8) ---
+    match /approval_workflows/{id} {
+      allow read: if isLoggedIn() && (
+        isSystemAdmin() ||
+        resource == null ||
+        resource.data.company_id == getCompanyId()
+      );
+      allow write: if isSystemAdmin() || (
+        isLoggedIn() &&
+        (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
+        (request.resource == null || request.resource.data.company_id == getCompanyId())
+      );
+    }
+
+    match /approval_instances/{id} {
+      allow read: if isLoggedIn() && (
+        isSystemAdmin() ||
+        resource == null ||
+        resource.data.company_id == getCompanyId()
+      );
+      allow write: if isLoggedIn() && (
+        isSystemAdmin() ||
+        (request.resource == null || request.resource.data.company_id == getCompanyId())
+      );
+    }
+
+    // --- Document Number Configurations (Phase 9) ---
+    match /document_number_configs/{id} {
+      allow read: if isLoggedIn() && (
+        isSystemAdmin() ||
+        resource == null ||
+        resource.data.company_id == getCompanyId()
+      );
+      allow write: if isSystemAdmin() || (
+        isLoggedIn() &&
+        (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
+        (request.resource == null || request.resource.data.company_id == getCompanyId())
+      );
+    }
+
     // --- Transactions (Custody Transactions) ---
     match /transactions/{id} {
       allow read: if isSameCompanyRead(resource.data);

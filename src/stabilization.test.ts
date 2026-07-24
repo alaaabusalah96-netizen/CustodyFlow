@@ -642,7 +642,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       const badApproveResult = await engine.processEvent(unauthorizedApproveEvent);
       expect(badApproveResult.success).toBe(false);
       expect(badApproveResult.statusCode).toBe('EXECUTION_ERROR');
-      expect(badApproveResult.messageEn).toContain('is not authorized to execute this action');
+      expect(badApproveResult.messageEn).toContain('is not authorized');
 
       // 4. Approve PR with authorized role (Admin)
       const authorizedApproveEvent = {

@@ -12,6 +12,7 @@ import { InventoryModule } from '../../db/inventory';
 import { AccountingBusinessEngine } from './accounting_engine';
 import { InventoryDocument } from '../../types/inventory';
 import { CashVoucher } from '../../types';
+import { ApprovalEngine } from '../../db/approvalEngine';
 
 const DEFAULT_WORKFLOW_CONFIG: PurchasingWorkflowConfig = {
   companyId: 'comp-1',
@@ -347,6 +348,19 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
           // 2. Create the document
           const totalAmount = items.reduce((sum: number, it: any) => sum + (it.qty * it.estimatedPrice), 0);
+          
+          // Evaluate & Start dynamic Approval Engine Workflow
+          const approvalEval = ApprovalEngine.evaluateAndStartWorkflow({
+            companyId,
+            documentType: 'PURCHASE_REQUEST',
+            documentId: '',
+            amount: totalAmount,
+            requesterId,
+            requesterName
+          });
+
+          const initialStatus: PRStatus = approvalEval.isAutoApproved ? 'APPROVED' : 'PENDING_APPROVAL';
+
           const pr: PurchaseRequest = {
             id: `pr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
             company_id: companyId,
@@ -357,10 +371,14 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
             date: new Date().toISOString().split('T')[0],
             items,
             totalAmount,
-            status: 'PENDING_APPROVAL',
+            status: initialStatus,
             notes,
             metadata: createBaseMetadata(companyId, requesterId)
           };
+
+          if (approvalEval.instance) {
+            approvalEval.instance.documentId = pr.id;
+          }
 
           const allPRs = StorageEngine.getStored<PurchaseRequest[]>('purchase_requests', []);
           allPRs.push(pr);
@@ -379,7 +397,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
         }
 
         case 'PR_APPROVED': {
-          const { prId, version } = event.payload;
+          const { prId, version, comments } = event.payload;
           const allPRs = StorageEngine.getStored<PurchaseRequest[]>('purchase_requests', []);
           const idx = allPRs.findIndex(pr => pr.id === prId);
           if (idx === -1) throw new Error('Purchase Request not found');
@@ -389,21 +407,39 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
             throw new Error('⚠️ عذراً، تم تعديل هذا الطلب بواسطة مستخدم آخر. يرجى تحديث الصفحة والمحاولة مجدداً. / This Purchase Request has been modified by another user. Please refresh and try again.');
           }
 
-          // Dynamic Amount Threshold Authorization Check based on Config!
-          const prAmount = allPRs[idx].totalAmount;
-          const requiredThreshold = config.prApprovalThresholds.find(t => prAmount <= t.maxAmount) || config.prApprovalThresholds[config.prApprovalThresholds.length - 1];
-          if (requiredThreshold && !requiredThreshold.requiredRoles.includes(event.user_role)) {
-            throw new Error(`⚠️ يتطلب اعتماد هذا الطلب (مبلغ ${prAmount.toLocaleString()} ج.م) صلاحية أعلى: ${requiredThreshold.labelAr}`);
+          // Check if dynamic Approval Engine Instance exists for this PR
+          const activeApprovalInstance = ApprovalEngine.getInstanceByDocumentId(prId);
+          let isFinalApproval = true;
+
+          if (activeApprovalInstance) {
+            const stepResult = ApprovalEngine.approveStep({
+              instanceId: activeApprovalInstance.id,
+              actor: { id: event.user_id, name: event.user_role, role: event.user_role },
+              comments
+            });
+            isFinalApproval = stepResult.isFinalApproval;
+          } else {
+            // Fallback Threshold Authorization Check based on Config
+            const prAmount = allPRs[idx].totalAmount;
+            const requiredThreshold = config.prApprovalThresholds.find(t => prAmount <= t.maxAmount) || config.prApprovalThresholds[config.prApprovalThresholds.length - 1];
+            if (requiredThreshold && !requiredThreshold.requiredRoles.includes(event.user_role)) {
+              throw new Error(`⚠️ يتطلب اعتماد هذا الطلب (مبلغ ${prAmount.toLocaleString()} ج.م) صلاحية أعلى: ${requiredThreshold.labelAr}`);
+            }
+
+            // FSM Transition Check (BUG-10)
+            const fsm = new DocumentLifecycleEngine(prFsmConfig);
+            const clearance = await fsm.canTransition(allPRs[idx].status, 'APPROVE', event.user_role, allPRs[idx]);
+            if (!clearance.can) {
+              throw new Error(`Lifecycle check failed: ${clearance.reasonEn}`);
+            }
           }
 
-          // FSM Transition Check (BUG-10)
-          const fsm = new DocumentLifecycleEngine(prFsmConfig);
-          const clearance = await fsm.canTransition(allPRs[idx].status, 'APPROVE', event.user_role, allPRs[idx]);
-          if (!clearance.can) {
-            throw new Error(`Lifecycle check failed: ${clearance.reasonEn}`);
+          if (isFinalApproval) {
+            allPRs[idx].status = 'APPROVED';
+          } else {
+            allPRs[idx].status = 'PENDING_APPROVAL';
           }
 
-          allPRs[idx].status = 'APPROVED';
           allPRs[idx].metadata = updateBaseMetadata(allPRs[idx].metadata, event.user_id);
           PurchasingBusinessEngine.savePurchaseRequests(allPRs);
 

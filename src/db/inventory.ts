@@ -10,6 +10,8 @@ import { CompaniesModule } from './companies';
 import { createBaseMetadata, updateBaseMetadata, createEventEnvelope } from '../lib/enterprise/metadata';
 import { AuditLogEngine } from '../lib/enterprise/audit';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
+import { CostCenterEngine } from './costCenterEngine';
+import { OrganizationEngine } from './organizationEngine';
 
 // Default seeded warehouses
 const DEFAULT_WAREHOUSES: Warehouse[] = [
@@ -848,6 +850,7 @@ export class InventoryModule {
     const companyId = CompaniesModule.getSelectedCompanyId() || 'comp-1';
     const currentStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
     const current_balance_after = currentStock + qtyChange;
+    const orgUnitId = InventoryModule.resolveWarehouseOrgUnit(warehouseId, companyId);
     const movement: StockMovement = {
       id: `m-adj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       doc_id: 'direct-adjust',
@@ -855,6 +858,7 @@ export class InventoryModule {
       doc_type: docType,
       product_id: productId,
       warehouse_id: warehouseId,
+      org_unit_id: orgUnitId,
       bin_id: binId,
       qty_change: qtyChange,
       type: qtyChange >= 0 ? 'IN' : 'OUT',
@@ -867,6 +871,89 @@ export class InventoryModule {
     const allMovements = InventoryModule.getStockMovements();
     allMovements.push(movement);
     InventoryModule.saveStockMovements(allMovements);
+  }
+
+  /**
+   * Resolves the linked Organization Unit ID for a warehouse.
+   */
+  public static resolveWarehouseOrgUnit(warehouseId?: string, companyId?: string): string | null {
+    if (!warehouseId) return null;
+    const warehouses = InventoryModule.getWarehouses();
+    const wh = warehouses.find(w => w.id === warehouseId);
+    if (!wh) return null;
+    if (wh.org_unit_id) return wh.org_unit_id;
+    if (wh.parent_id) {
+      return InventoryModule.resolveWarehouseOrgUnit(wh.parent_id, companyId);
+    }
+    return null;
+  }
+
+  /**
+   * Gets warehouses linked to a specific Organization Unit (and optionally its sub-units).
+   */
+  public static getWarehousesByOrgUnit(
+    companyId: string, 
+    orgUnitId: string, 
+    includeSubUnits: boolean = true
+  ): Warehouse[] {
+    const warehouses = InventoryModule.getWarehouses().filter(w => (w.company_id || 'comp-1') === companyId);
+    let targetOrgUnitIds = [orgUnitId];
+    if (includeSubUnits) {
+      const descendants = OrganizationEngine.getDescendantUnits(orgUnitId, companyId);
+      targetOrgUnitIds.push(...descendants.map(d => d.id));
+    }
+    const targetSet = new Set(targetOrgUnitIds);
+    return warehouses.filter(w => {
+      const resolvedOrgUnit = InventoryModule.resolveWarehouseOrgUnit(w.id, companyId);
+      return resolvedOrgUnit ? targetSet.has(resolvedOrgUnit) : false;
+    });
+  }
+
+  /**
+   * Computes stock across all warehouses linked to an Organization Unit (and optionally its sub-units).
+   */
+  public static getOrgUnitStock(
+    companyId: string, 
+    orgUnitId: string, 
+    productId?: string, 
+    includeSubUnits: boolean = true
+  ): number {
+    const orgWarehouses = InventoryModule.getWarehousesByOrgUnit(companyId, orgUnitId, includeSubUnits);
+    const whIds = new Set(orgWarehouses.map(w => w.id));
+    if (whIds.size === 0) return 0;
+
+    const movements = InventoryModule.getStockMovements().filter(m => (m.company_id || 'comp-1') === companyId && whIds.has(m.warehouse_id));
+    if (productId) {
+      return movements
+        .filter(m => m.product_id === productId)
+        .reduce((sum, m) => sum + m.qty_change, 0);
+    }
+    return movements.reduce((sum, m) => sum + m.qty_change, 0);
+  }
+
+  /**
+   * Gets stock movements filtered by Organization Unit tree.
+   */
+  public static getOrgUnitStockMovements(
+    companyId: string, 
+    orgUnitId: string, 
+    includeSubUnits: boolean = true
+  ): StockMovement[] {
+    const orgWarehouses = InventoryModule.getWarehousesByOrgUnit(companyId, orgUnitId, includeSubUnits);
+    const whIds = new Set(orgWarehouses.map(w => w.id));
+    
+    let targetOrgUnitIds = [orgUnitId];
+    if (includeSubUnits) {
+      const descendants = OrganizationEngine.getDescendantUnits(orgUnitId, companyId);
+      targetOrgUnitIds.push(...descendants.map(d => d.id));
+    }
+    const targetSet = new Set(targetOrgUnitIds);
+
+    return InventoryModule.getStockMovements().filter(m => {
+      if ((m.company_id || 'comp-1') !== companyId) return false;
+      if (m.org_unit_id && targetSet.has(m.org_unit_id)) return true;
+      return whIds.has(m.warehouse_id);
+    });
   }
 
   /**
@@ -894,15 +981,25 @@ export class InventoryModule {
       docNo = `${prefix}-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
 
-    // 2. Prepare metadata
+    // 2. Resolve Organization Units
+    const sourceOrgUnit = docData.org_unit_id || InventoryModule.resolveWarehouseOrgUnit(docData.source_warehouse_id, companyId);
+    let destOrgUnit = docData.dest_org_unit_id || null;
+    if (!destOrgUnit && docData.dest_entity_id) {
+      if (docData.dest_entity_type === 'org_unit') {
+        destOrgUnit = docData.dest_entity_id;
+      } else if (docData.dest_entity_type === 'warehouse') {
+        destOrgUnit = InventoryModule.resolveWarehouseOrgUnit(docData.dest_entity_id, companyId);
+      }
+    }
+
+    // 3. Prepare metadata
     const metadata = createBaseMetadata(companyId, operatorId);
 
-    // 3. Draft initial status
-    // If the warehouse does NOT use Receiving Approval Workflow AND (Receipt or Return), auto-approve directly!
-    // Or if the user submitted and warehouse is direct, we can skip Draft and go to Posted.
-    // For now, let's start with 'Draft' so user can review/submit.
+    // 4. Draft initial status
     const newDoc: InventoryDocument = {
       ...docData,
+      org_unit_id: sourceOrgUnit,
+      dest_org_unit_id: destOrgUnit,
       ...metadata,
       id: `inv-doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       doc_no: docNo,
@@ -1278,6 +1375,12 @@ export class InventoryModule {
       const prod = products.find(p => p.id === item.product_id);
       const unit_cost = item.last_purchase_price || prod?.last_purchase_price || 0;
 
+      const sourceOrgUnitId = doc.org_unit_id || InventoryModule.resolveWarehouseOrgUnit(doc.source_warehouse_id, doc.tenantId);
+      const sourceCostCenterId = sourceOrgUnitId ? CostCenterEngine.resolveCostCenterForOrgUnit(sourceOrgUnitId, doc.tenantId)?.id || null : null;
+
+      const destOrgUnitId = doc.dest_org_unit_id || (doc.dest_entity_type === 'warehouse' ? InventoryModule.resolveWarehouseOrgUnit(doc.dest_entity_id, doc.tenantId) : doc.dest_entity_type === 'org_unit' ? doc.dest_entity_id : null);
+      const destCostCenterId = destOrgUnitId ? CostCenterEngine.resolveCostCenterForOrgUnit(destOrgUnitId, doc.tenantId)?.id || null : null;
+
       // 1. Create movement for source warehouse
       if (sourceQtyChange !== 0) {
         const allocations = item.bin_allocations || [];
@@ -1295,6 +1398,7 @@ export class InventoryModule {
               doc_type: doc.doc_type,
               product_id: item.product_id,
               warehouse_id: doc.source_warehouse_id,
+              org_unit_id: sourceOrgUnitId,
               qty_change: signedAllocQty,
               type: signedAllocQty > 0 ? 'IN' : 'OUT',
               current_balance_after: newBalanceAfter,
@@ -1313,6 +1417,8 @@ export class InventoryModule {
               id: `led-${Date.now()}-${item.product_id}-source-bin-${alloc.bin_id}-${Math.floor(Math.random() * 1000)}`,
               company_id: doc.tenantId,
               warehouse_id: doc.source_warehouse_id,
+              org_unit_id: sourceOrgUnitId,
+              cost_center_id: sourceCostCenterId,
               product_id: item.product_id,
               transaction_type: isTransferType ? `${doc.doc_type} - Dispatched (Bin)` : `${doc.doc_type} (Bin)`,
               reference_document_id: doc.id,
@@ -1345,6 +1451,7 @@ export class InventoryModule {
             doc_type: doc.doc_type,
             product_id: item.product_id,
             warehouse_id: doc.source_warehouse_id,
+            org_unit_id: sourceOrgUnitId,
             qty_change: sourceQtyChange,
             type: sourceQtyChange > 0 ? 'IN' : 'OUT',
             current_balance_after: newBalanceAfter,
@@ -1362,6 +1469,8 @@ export class InventoryModule {
             id: `led-${Date.now()}-${item.product_id}-source-${Math.floor(Math.random() * 1000)}`,
             company_id: doc.tenantId,
             warehouse_id: doc.source_warehouse_id,
+            org_unit_id: sourceOrgUnitId,
+            cost_center_id: sourceCostCenterId,
             product_id: item.product_id,
             transaction_type: isTransferType ? `${doc.doc_type} - Dispatched` : doc.doc_type,
             reference_document_id: doc.id,
@@ -1402,6 +1511,7 @@ export class InventoryModule {
               doc_type: doc.doc_type,
               product_id: item.product_id,
               warehouse_id: doc.dest_entity_id,
+              org_unit_id: destOrgUnitId,
               qty_change: alloc.qty,
               type: 'IN',
               current_balance_after: newBalanceAfter,
@@ -1421,6 +1531,8 @@ export class InventoryModule {
               id: `led-${Date.now()}-${item.product_id}-target-bin-${alloc.bin_id}-${Math.floor(Math.random() * 1000)}`,
               company_id: doc.tenantId,
               warehouse_id: doc.dest_entity_id,
+              org_unit_id: destOrgUnitId,
+              cost_center_id: destCostCenterId,
               product_id: item.product_id,
               transaction_type: `${doc.doc_type} - Received (Bin)`,
               reference_document_id: doc.id,
@@ -1451,6 +1563,7 @@ export class InventoryModule {
             doc_type: doc.doc_type,
             product_id: item.product_id,
             warehouse_id: doc.dest_entity_id,
+            org_unit_id: destOrgUnitId,
             qty_change: targetQtyChange,
             type: 'IN',
             current_balance_after: targetCurrentStock + targetQtyChange,
@@ -1468,6 +1581,8 @@ export class InventoryModule {
             id: `led-${Date.now()}-${item.product_id}-target-${Math.floor(Math.random() * 1000)}`,
             company_id: doc.tenantId,
             warehouse_id: doc.dest_entity_id,
+            org_unit_id: destOrgUnitId,
+            cost_center_id: destCostCenterId,
             product_id: item.product_id,
             transaction_type: `${doc.doc_type} - Received`,
             reference_document_id: doc.id,
@@ -1622,6 +1737,9 @@ export class InventoryModule {
           return;
       }
 
+      const resolvedOrgUnit = doc.org_unit_id || InventoryModule.resolveWarehouseOrgUnit(doc.source_warehouse_id, companyId);
+      const resolvedCostCenter = resolvedOrgUnit ? CostCenterEngine.resolveCostCenterForOrgUnit(resolvedOrgUnit, companyId)?.id : undefined;
+
       if (lines.length > 0) {
         await AccountingBusinessEngine.postOperationalDoubleEntry(
           companyId,
@@ -1629,7 +1747,12 @@ export class InventoryModule {
           `INV #${doc.doc_no}`,
           statementAr,
           statementEn,
-          lines
+          lines,
+          {
+            orgUnitId: resolvedOrgUnit || undefined,
+            warehouseId: doc.source_warehouse_id,
+            costCenterId: resolvedCostCenter
+          }
         );
       }
     } catch (err) {

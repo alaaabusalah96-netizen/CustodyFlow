@@ -22,6 +22,25 @@ export interface LedgerLine {
   debit: number;  // مدين
   credit: number; // دائن
   notes?: string;
+  org_unit_id?: string;
+  orgUnitId?: string;
+  warehouse_id?: string;
+  warehouseId?: string;
+  project_id?: string;
+  projectId?: string;
+  cost_center_id?: string;
+  costCenterId?: string;
+}
+
+export interface AccountingDimensions {
+  org_unit_id?: string;
+  orgUnitId?: string;
+  warehouse_id?: string;
+  warehouseId?: string;
+  project_id?: string;
+  projectId?: string;
+  cost_center_id?: string;
+  costCenterId?: string;
 }
 
 export interface JournalEntry {
@@ -37,4 +56,42 @@ export interface JournalEntry {
   totalDebit: number;
   totalCredit: number;
   metadata: BaseMetadata;
+  org_unit_id?: string;
+  orgUnitId?: string;
+  warehouse_id?: string;
+  warehouseId?: string;
+  project_id?: string;
+  projectId?: string;
+  cost_center_id?: string;
+  costCenterId?: string;
+}
+
+export interface JournalEntryFilterOptions {
+  companyId: string;
+  orgUnitId?: string;
+  warehouseId?: string;
+  projectId?: string;
+  costCenterId?: string;
+  startDate?: string;
+  endDate?: string;
+  sourceType?: 'OPERATIONAL' | 'MANUAL';
+}
+
+export type CostCenterCategory = 'OPERATIONAL' | 'REVENUE' | 'EXPENSE' | 'OVERHEAD' | 'PROJECT';
+
+export interface CostCenter {
+  id: string;
+  company_id: string;
+  code: string; // e.g., "CC-1001"
+  nameAr: string;
+  nameEn: string;
+  org_unit_id?: string; // Linkage to Organization Unit
+  orgUnitId?: string;
+  parent_id?: string; // Parent cost center ID
+  parentId?: string;
+  category?: CostCenterCategory;
+  budget?: number; // Allocated budget
+  isActive: boolean;
+  notes?: string;
+  metadata?: BaseMetadata;
 }

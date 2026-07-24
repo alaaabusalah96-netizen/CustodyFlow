@@ -285,6 +285,10 @@ export class WarehouseHierarchyEngine {
 
   // --- Hierarchy Query Navigation ---
 
+  static getWarehouses(companyId?: string): Warehouse[] {
+    return InventoryModule.getWarehouses(companyId);
+  }
+
   static getWarehouseChildren(parentId: string, companyId?: string): Warehouse[] {
     const warehouses = InventoryModule.getWarehouses(companyId);
     return warehouses.filter(w => w.parent_id === parentId && (!companyId || w.company_id === companyId));
