@@ -792,15 +792,15 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
   const companyAdmins = useMemo(() => {
     return users.filter(u => 
       u.role === 'Admin' && 
-      (u.full_name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()))
+      ((u.full_name || '').toLowerCase().includes(userSearch.toLowerCase()) || (u.email || '').toLowerCase().includes(userSearch.toLowerCase()))
     );
   }, [users, userSearch]);
 
   const supportUsersList = useMemo(() => {
     return users.filter(u => 
       u.role !== 'SystemAdmin' && (
-        u.full_name.toLowerCase().includes(supportUserSearch.toLowerCase()) ||
-        u.email.toLowerCase().includes(supportUserSearch.toLowerCase()) ||
+        (u.full_name || '').toLowerCase().includes(supportUserSearch.toLowerCase()) ||
+        (u.email || '').toLowerCase().includes(supportUserSearch.toLowerCase()) ||
         (u.role || '').toLowerCase().includes(supportUserSearch.toLowerCase())
       )
     );

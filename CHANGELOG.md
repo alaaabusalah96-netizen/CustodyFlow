@@ -223,6 +223,109 @@ Implemented Phase 11 Dynamic Cost Center Engine establishing automated, dynamic 
 **Test & Validation Result:**
 Pass - 85/85 tests passing across 11 test suites (`npm test`). Applet build succeeded cleanly (`compile_applet`). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
 
+---
+
+## Phase 12: Inventory Organization Unit Migration
+**Date/Time:** 2026-07-25 02:45:00 UTC
+**Files Changed:**
+- `src/types/inventory.ts`
+- `src/db/inventory.ts`
+- `src/db/warehouseHierarchyEngine.ts`
+- `src/inventory_migration.test.ts` (Created)
+- `CHANGELOG.md`
+
+**Summary:**
+Implemented Phase 12 Inventory Organization Unit Migration:
+1. **Org Unit Tagging:** Extended `StockBalance` and `InventoryDocument` interfaces in `src/types/inventory.ts` with `org_unit_id` and `cost_center_id` properties.
+2. **Auto-Resolution in Operations:** Updated `InventoryModule.addInventoryDocument` and `InventoryModule.updateStockBalance` in `src/db/inventory.ts` to automatically populate missing `org_unit_id` and `cost_center_id` from target warehouse hierarchy via `WarehouseHierarchyEngine` and `CostCenterEngine`.
+3. **Subtree Query Methods:** Implemented `getDocumentsByOrgUnit` and `getStockBalancesByOrgUnit` with hierarchical `includeSubtree` options.
+4. **Unit & Integration Testing:** Verified via `src/inventory_migration.test.ts` (4/4 tests passing).
+
+**Test & Validation Result:**
+Pass - 89/89 tests passing across 12 test suites (`npm test`). Applet build succeeded cleanly (`compile_applet`). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Phase 13: Purchasing Organization Integration
+**Date/Time:** 2026-07-25 03:08:00 UTC
+**Files Changed:**
+- `src/types/purchasing.ts`
+- `src/lib/enterprise/purchasing_engine.ts`
+- `src/pages/Purchasing.tsx`
+- `src/purchasing_migration.test.ts` (Created)
+- `CHANGELOG.md`
+
+**Summary:**
+Implemented Phase 13 Purchasing Organization Integration:
+1. **Interface Metadata:** Added `org_unit_id` and `cost_center_id` fields to `Vendor`, `PurchaseRequest`, `PurchaseOrder`, `RFQ`, and `VendorQuotation` interfaces in `src/types/purchasing.ts`.
+2. **Event Processing Logic (`PurchasingBusinessEngine`):**
+   - Updated `PR_SUBMITTED`, `PO_ISSUED`, and `PO_RECEIVED` handlers in `src/lib/enterprise/purchasing_engine.ts` to consume and propagate `org_unit_id` and `cost_center_id`.
+   - Integrated `CostCenterEngine.resolveCostCenterForOrgUnit` for automatic cost center assignment when `org_unit_id` is supplied without explicit cost center.
+   - Integrated `DocumentNumberEngine.generateNextNumber` to issue organization-specific sequence numbers for PRs and POs.
+   - Enhanced `PO_RECEIVED` flow to stamp organizational dimensions on Goods Receipt `InventoryDocument` and double-entry `JournalEntry` items in GL.
+3. **Subtree Filtering Methods:** Implemented `getPurchaseRequestsByOrgUnit` and `getPurchaseOrdersByOrgUnit` supporting hierarchical subtree data retrieval.
+4. **UI Integration:** Updated `src/pages/Purchasing.tsx` to include Organization Unit selection in PR Creation and Direct PO Creation modals, render Organization Unit badges on PR/PO cards, and enable organizational filtering.
+5. **Unit & Integration Testing:** Created `src/purchasing_migration.test.ts` verifying sequence generation, cost center resolution, goods receipt dimension stamping, GL posting, and subtree querying (4/4 tests passing).
+
+**Test & Validation Result:**
+Pass - 93/93 tests passing across 13 test suites (`npm test`). Applet build succeeded cleanly (`compile_applet`). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## System Stabilization & Bug Fixes (Preview White Screen & Invalid Argument Fixes)
+**Date/Time:** 2026-07-25 03:22:00 UTC
+**Files Changed:**
+- `src/firebase.ts`
+- `src/db/approvalEngine.ts`
+- `src/db/organizationEngine.ts`
+- `src/components/AdminCredentialsForm.tsx`
+- `src/pages/CompanyAdminDashboard.tsx`
+- `src/pages/Accounting.tsx`
+- `src/pages/CashPaymentVoucher.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+Resolved critical runtime stability issues and prevented "Invalid argument" errors across system operations:
+1. **Firestore Invalid Argument Fixes:**
+   - Enhanced `dbSetDoc` and `dbDeleteDoc` in `src/firebase.ts` with strict `docId` type and non-empty string validation.
+   - Replaced direct `setDoc` and `deleteDoc` calls in `src/db/approvalEngine.ts` with `dbSetDoc` and `dbDeleteDoc`, ensuring `cleanUndefined` strips all `undefined` properties before passing documents to Firestore SDK.
+2. **Runtime Crash Protection (White Screen Fixes):**
+   - Added null/string safety checks to `toUpperCase()` calls in `src/db/organizationEngine.ts` (lines 252 & 669) to handle `null` or `undefined` `typeCode` values safely.
+   - Added string safety to `toLowerCase()` calls in `src/components/AdminCredentialsForm.tsx`, `src/pages/CompanyAdminDashboard.tsx`, `src/pages/Accounting.tsx`, and `src/pages/CashPaymentVoucher.tsx` to prevent null pointer exceptions during search/filtering.
+
+**Test & Validation Result:**
+Pass - 93/93 tests passing (`npm test`). Applet linter passed (`lint_applet`). Applet build succeeded cleanly (`compile_applet`). All operations verified targeting `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Phase 14: Sales & POS Organization Integration
+**Date/Time:** 2026-07-25 03:35:00 UTC
+**Files Changed:**
+- `src/types/sales.ts` (Created)
+- `src/lib/enterprise/sales_engine.ts` (Created)
+- `src/db/organizationEngine.ts`
+- `src/pages/POS.tsx`
+- `src/pages/SalesAR.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+Implemented Phase 14 Sales & POS Organization Integration:
+1. **Standard Interfaces (`src/types/sales.ts`):** Centralized `Customer`, `SalesInvoice`, `POSTransaction`, and `DeliveryNote` interfaces with `org_unit_id` and `cost_center_id` properties.
+2. **Sales & POS Business Engine (`SalesBusinessEngine` in `src/lib/enterprise/sales_engine.ts`):**
+   - Implemented `createCustomer`, `createSalesInvoice`, and `processPOSCheckout`.
+   - Integrated `DocumentNumberEngine.generateNextNumber` to issue org-specific invoice numbers (`SINV-{ORG}-{SEQ}`) and POS receipts (`POS-{ORG}-{SEQ}`).
+   - Integrated `CostCenterEngine.resolveCostCenterForOrgUnit` to automatically assign cost centers from organizational units.
+   - Integrated `AccountingBusinessEngine.postOperationalDoubleEntry` to stamp organizational dimensions (`org_unit_id`, `cost_center_id`) on all sales invoice and POS GL double-entry postings.
+   - Implemented subtree query filtering (`getCustomersByOrgUnit`, `getSalesInvoicesByOrgUnit`, `getPOSTransactionsByOrgUnit`).
+3. **POS Integration (`src/pages/POS.tsx`):** Added Organization Unit selection header and updated POS checkout flow to call `SalesBusinessEngine.processPOSCheckout`.
+4. **Sales & Accounts Receivable UI Integration (`src/pages/SalesAR.tsx`):** Added Organization Unit filter dropdown to top filter bar, rendered Organization Unit badges on invoice rows and customer cards, and updated Add Customer and Create Sales Invoice modals with Organization Unit selection.
+
+**Test & Validation Result:**
+Pass - Linter passed cleanly (`lint_applet`), applet build succeeded (`compile_applet`). All operations verified targeting `custodyflow` project only (`projectId: custodyflow`).
+
+
+
+
 
 
 

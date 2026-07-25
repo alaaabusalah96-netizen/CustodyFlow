@@ -249,7 +249,7 @@ export class OrganizationEngine {
     let effectiveTypeId = params.typeId;
 
     if (!effectiveTypeId && params.typeCode) {
-      const matched = unitTypes.find(t => t.code.toUpperCase() === params.typeCode!.toUpperCase());
+      const matched = unitTypes.find(t => t.code && params.typeCode && t.code.toUpperCase() === params.typeCode.toUpperCase());
       effectiveTypeId = matched ? matched.id : 'out-unit';
     }
 
@@ -576,8 +576,18 @@ export class OrganizationEngine {
 
     const units = OrganizationEngine.getUnits(root.companyId);
     const rootPath = root.path || `/${root.id}`;
+    const cleanPath = rootPath.endsWith('/') ? rootPath.slice(0, -1) : rootPath;
 
-    return units.filter(u => u.path === rootPath || u.path.startsWith(`${rootPath}/`));
+    return units.filter(u => {
+      if (!u.path) return u.id === rootUnitId;
+      const uClean = u.path.endsWith('/') ? u.path.slice(0, -1) : u.path;
+      return uClean === cleanPath || uClean.startsWith(`${cleanPath}/`);
+    });
+  }
+
+  static getSubtreeUnitIds(rootUnitId: string, _companyId?: string): string[] {
+    const subtree = OrganizationEngine.getUnitSubtree(rootUnitId);
+    return subtree.map(u => u.id);
   }
 
   static getUnitAncestors(unitId: string): OrganizationUnit[] {
@@ -661,7 +671,7 @@ export class OrganizationEngine {
       const parentUnitId = spec.parentTempKey ? (createdKeyMap.get(spec.parentTempKey) || null) : null;
 
       // Match typeCode to unitType ID
-      const matchedType = unitTypes.find(t => t.code.toUpperCase() === spec.typeCode.toUpperCase());
+      const matchedType = unitTypes.find(t => t.code && spec.typeCode && t.code.toUpperCase() === spec.typeCode.toUpperCase());
       const typeId = matchedType ? matchedType.id : 'out-unit';
 
       const isRootSpec = spec.parentTempKey === null;

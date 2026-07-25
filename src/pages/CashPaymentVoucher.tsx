@@ -438,10 +438,10 @@ export default function CashPaymentVoucher({
     // Text search matches sequence number, description, notes, or amount
     const matchesSearch = 
       searchTerm.trim() === '' ||
-      tx.transaction_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tx.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (tx.transaction_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (tx.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (tx.notes && tx.notes.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      String(tx.amount).includes(searchTerm);
+      String(tx.amount || '').includes(searchTerm);
 
     // Company Filter
     const matchesCompany = 
@@ -742,8 +742,8 @@ export default function CashPaymentVoucher({
   const filteredVouchers = vouchersList.filter(vc => {
     return (
       voucherSearch.trim() === '' ||
-      vc.voucher_no.toLowerCase().includes(voucherSearch.toLowerCase()) ||
-      vc.recipient_name.toLowerCase().includes(voucherSearch.toLowerCase()) ||
+      (vc.voucher_no || '').toLowerCase().includes(voucherSearch.toLowerCase()) ||
+      (vc.recipient_name || '').toLowerCase().includes(voucherSearch.toLowerCase()) ||
       (vc.approved_by && vc.approved_by.toLowerCase().includes(voucherSearch.toLowerCase()))
     );
   });

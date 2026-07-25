@@ -194,12 +194,12 @@ export default function App() {
 
         if (!currentLocalUser || currentLocalUser.email?.toLowerCase().trim() !== firebaseUser.email?.toLowerCase().trim()) {
           const users = CustodyDB.getUsers();
-          const matchedUser = users.find(u => u.email.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim());
+          const matchedUser = users.find(u => u.email?.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim());
           if (matchedUser) {
             // Synchronize ID if needed to enforce rules
             if (matchedUser.id !== firebaseUser.uid) {
               matchedUser.id = firebaseUser.uid;
-              await CustodyDB.saveUsers(users.map(u => u.email.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim() ? { ...u, id: firebaseUser.uid } : u));
+              await CustodyDB.saveUsers(users.map(u => (u.email?.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim()) ? { ...u, id: firebaseUser.uid } : u));
             }
             CustodyDB.setActiveUser(matchedUser);
             setActiveUser(matchedUser);

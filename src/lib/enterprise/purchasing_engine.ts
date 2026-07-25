@@ -13,6 +13,9 @@ import { AccountingBusinessEngine } from './accounting_engine';
 import { InventoryDocument } from '../../types/inventory';
 import { CashVoucher } from '../../types';
 import { ApprovalEngine } from '../../db/approvalEngine';
+import { DocumentNumberEngine } from '../../db/documentNumberEngine';
+import { CostCenterEngine } from '../../db/costCenterEngine';
+import { OrganizationEngine } from '../../db/organizationEngine';
 
 const DEFAULT_WORKFLOW_CONFIG: PurchasingWorkflowConfig = {
   companyId: 'comp-1',
@@ -182,9 +185,35 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
     return list.filter(pr => pr.company_id === companyId);
   }
 
+  static getPurchaseRequestsByOrgUnit(companyId: string, orgUnitId: string, includeSubtree = true): PurchaseRequest[] {
+    const all = PurchasingBusinessEngine.getPurchaseRequests(companyId);
+    if (!orgUnitId) return all;
+
+    if (!includeSubtree) {
+      return all.filter(pr => pr.org_unit_id === orgUnitId);
+    }
+
+    const descendants = OrganizationEngine.getDescendantUnits(orgUnitId, companyId);
+    const validUnitIds = new Set([orgUnitId, ...descendants.map(u => u.id)]);
+    return all.filter(pr => pr.org_unit_id && validUnitIds.has(pr.org_unit_id));
+  }
+
   static getPurchaseOrders(companyId: string): PurchaseOrder[] {
     const list = StorageEngine.getStored<PurchaseOrder[]>('purchase_orders', []);
     return list.filter(po => po.company_id === companyId);
+  }
+
+  static getPurchaseOrdersByOrgUnit(companyId: string, orgUnitId: string, includeSubtree = true): PurchaseOrder[] {
+    const all = PurchasingBusinessEngine.getPurchaseOrders(companyId);
+    if (!orgUnitId) return all;
+
+    if (!includeSubtree) {
+      return all.filter(po => po.org_unit_id === orgUnitId);
+    }
+
+    const descendants = OrganizationEngine.getDescendantUnits(orgUnitId, companyId);
+    const validUnitIds = new Set([orgUnitId, ...descendants.map(u => u.id)]);
+    return all.filter(po => po.org_unit_id && validUnitIds.has(po.org_unit_id));
   }
 
   static savePurchaseRequests(list: PurchaseRequest[]): void {
@@ -330,7 +359,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
       switch (event.eventType) {
         case 'PR_SUBMITTED': {
-          const { requesterId, requesterName, items, notes, department } = event.payload;
+          const { requesterId, requesterName, items, notes, department, org_unit_id, orgUnitId, cost_center_id, costCenterId } = event.payload;
 
           // Check Creation Permission for PR (BUG-10)
           const allowedCreatorRoles = ['Admin', 'RegionalManager', 'SystemAdmin', 'StationAdmin'];
@@ -338,13 +367,31 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
             throw new Error(`User role (${event.user_role}) is not authorized to submit a Purchase Request`);
           }
 
-          // 1. Generate sequence using configured prefix
-          const prNumber = await SequenceEngine.generateNextSequence(
-            dbInstance,
-            companyId,
-            'last_purchase_request_no',
-            { prefix: config.prPrefix || 'PR', padding: 4, includeYear: true }
-          );
+          const targetOrgUnit = org_unit_id || orgUnitId || undefined;
+          let targetCostCenter = cost_center_id || costCenterId || undefined;
+
+          if (targetOrgUnit && !targetCostCenter) {
+            const cc = CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
+            if (cc) targetCostCenter = cc.id;
+          }
+
+          // 1. Generate sequence using DocumentNumberEngine or fallback
+          let prNumber: string;
+          try {
+            const docNumRes = DocumentNumberEngine.generateNextNumber({
+              companyId,
+              documentType: 'PR',
+              orgUnitId: targetOrgUnit
+            });
+            prNumber = docNumRes.documentNumber;
+          } catch {
+            prNumber = await SequenceEngine.generateNextSequence(
+              dbInstance,
+              companyId,
+              'last_purchase_request_no',
+              { prefix: config.prPrefix || 'PR', padding: 4, includeYear: true }
+            );
+          }
 
           // 2. Create the document
           const totalAmount = items.reduce((sum: number, it: any) => sum + (it.qty * it.estimatedPrice), 0);
@@ -364,6 +411,8 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           const pr: PurchaseRequest = {
             id: `pr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
             company_id: companyId,
+            org_unit_id: targetOrgUnit,
+            cost_center_id: targetCostCenter,
             prNumber,
             requesterId,
             requesterName,
@@ -531,7 +580,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
         }
 
         case 'PO_ISSUED': {
-          const { prId, vendorId, items, notes, deliveryWarehouseId } = event.payload;
+          const { prId, vendorId, items, notes, deliveryWarehouseId, org_unit_id, orgUnitId, cost_center_id, costCenterId } = event.payload;
 
           // Check Creation Permission for PO (BUG-10)
           const allowedIssuerRoles = ['Admin', 'RegionalManager', 'SystemAdmin'];
@@ -544,26 +593,51 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           const vendor = vendors.find(v => v.id === vendorId);
           if (!vendor) throw new Error('Vendor not found');
 
-          // Generate PO Sequence
-          const poNumber = await SequenceEngine.generateNextSequence(
-            dbInstance,
-            companyId,
-            'last_purchase_order_no',
-            { prefix: config.poPrefix || 'PO', padding: 4, includeYear: true }
-          );
-
           let prNum: string | undefined;
+          let prOrgUnit: string | undefined;
+          let prCostCenter: string | undefined;
           if (prId) {
             const allPRs = StorageEngine.getStored<PurchaseRequest[]>('purchase_requests', []);
             const prIdx = allPRs.findIndex(pr => pr.id === prId);
             if (prIdx !== -1) {
               prNum = allPRs[prIdx].prNumber;
+              prOrgUnit = allPRs[prIdx].org_unit_id;
+              prCostCenter = allPRs[prIdx].cost_center_id;
             }
+          }
+
+          const resolvedWhOrgUnit = deliveryWarehouseId ? InventoryModule.resolveWarehouseOrgUnit(deliveryWarehouseId, companyId) : undefined;
+          const targetOrgUnit = org_unit_id || orgUnitId || resolvedWhOrgUnit || prOrgUnit || undefined;
+          let targetCostCenter = cost_center_id || costCenterId || prCostCenter || undefined;
+
+          if (targetOrgUnit && !targetCostCenter) {
+            const cc = CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
+            if (cc) targetCostCenter = cc.id;
+          }
+
+          // Generate PO Sequence using DocumentNumberEngine or fallback SequenceEngine
+          let poNumber: string;
+          try {
+            const docNumRes = DocumentNumberEngine.generateNextNumber({
+              companyId,
+              documentType: 'PO',
+              orgUnitId: targetOrgUnit
+            });
+            poNumber = docNumRes.documentNumber;
+          } catch {
+            poNumber = await SequenceEngine.generateNextSequence(
+              dbInstance,
+              companyId,
+              'last_purchase_order_no',
+              { prefix: config.poPrefix || 'PO', padding: 4, includeYear: true }
+            );
           }
 
           const po: PurchaseOrder = {
             id: `po-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
             company_id: companyId,
+            org_unit_id: targetOrgUnit,
+            cost_center_id: targetCostCenter,
             poNumber,
             prId,
             prNumber: prNum,
@@ -626,6 +700,14 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           const targetWh = whs.find(w => w.id === warehouseId);
           if (!targetWh) throw new Error('Target delivery warehouse not found');
 
+          const resolvedWhOrgUnit = InventoryModule.resolveWarehouseOrgUnit(warehouseId, companyId);
+          const targetOrgUnit = allPOs[idx].org_unit_id || resolvedWhOrgUnit || undefined;
+          let targetCostCenter = allPOs[idx].cost_center_id || undefined;
+          if (targetOrgUnit && !targetCostCenter) {
+            const cc = CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
+            if (cc) targetCostCenter = cc.id;
+          }
+
           // Inject products directly into inventory via InventoryModule
           allPOs[idx].items.forEach(item => {
             InventoryModule.adjustStock(
@@ -655,6 +737,8 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
               date: new Date().toISOString().split('T')[0],
               dest_entity_type: 'warehouse',
               dest_entity_id: warehouseId,
+              org_unit_id: targetOrgUnit,
+              cost_center_id: targetCostCenter,
               receipt_source_type: 'supplier',
               supplier_name: allPOs[idx].vendorName,
               ref_no: allPOs[idx].poNumber,
@@ -698,9 +782,14 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
               statementAr,
               statementEn,
               [
-                { accountCode: '120101', debit: amount, credit: 0, notes: `Debit: Warehouse Stock Inventory` },
-                { accountCode: '210101', debit: 0, credit: amount, notes: `Credit: Accounts Payable (${allPOs[idx].vendorName})` }
-              ]
+                { accountCode: '120101', debit: amount, credit: 0, notes: `Debit: Warehouse Stock Inventory`, orgUnitId: targetOrgUnit, costCenterId: targetCostCenter, warehouseId },
+                { accountCode: '210101', debit: 0, credit: amount, notes: `Credit: Accounts Payable (${allPOs[idx].vendorName})`, orgUnitId: targetOrgUnit, costCenterId: targetCostCenter }
+              ],
+              {
+                orgUnitId: targetOrgUnit,
+                warehouseId,
+                costCenterId: targetCostCenter
+              }
             );
           } catch (err) {
             console.error('Automated double-entry posting preparation for PO failed:', err);

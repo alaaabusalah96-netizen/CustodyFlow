@@ -6,6 +6,8 @@ export type POStatus = 'DRAFT' | 'ISSUED' | 'RECEIVED' | 'CANCELLED';
 export interface Vendor {
   id: string;
   company_id: string;
+  org_unit_id?: string;
+  cost_center_id?: string;
   nameAr: string;
   nameEn: string;
   code: string; // e.g., "VND-1001"
@@ -29,6 +31,8 @@ export interface PRItem {
 export interface PurchaseRequest {
   id: string;
   company_id: string;
+  org_unit_id?: string;
+  cost_center_id?: string;
   prNumber: string; // e.g., "PR-2026-0001"
   requesterId: string;
   requesterName: string;
@@ -54,6 +58,8 @@ export interface POItem {
 export interface PurchaseOrder {
   id: string;
   company_id: string;
+  org_unit_id?: string;
+  cost_center_id?: string;
   poNumber: string; // e.g., "PO-2026-0001"
   prId?: string; // Optional reference to source PR
   prNumber?: string;
@@ -73,6 +79,8 @@ export type RFQStatus = 'DRAFT' | 'SENT' | 'COMPLETED' | 'CANCELLED';
 export interface RFQ {
   id: string;
   company_id: string;
+  org_unit_id?: string;
+  cost_center_id?: string;
   rfqNumber: string;
   prId?: string;
   prNumber?: string;
@@ -88,6 +96,8 @@ export interface RFQ {
 export interface VendorQuotation {
   id: string;
   company_id: string;
+  org_unit_id?: string;
+  cost_center_id?: string;
   rfqId: string;
   rfqNumber: string;
   vendorId: string;

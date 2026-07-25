@@ -111,7 +111,7 @@ export default function Login({
     }
 
     const users = CustodyDB.getUsers();
-    const foundAdmin = users.find(u => u.email.toLowerCase().trim() === targetEmail);
+    const foundAdmin = users.find(u => u.email?.toLowerCase().trim() === targetEmail);
 
     if (!foundAdmin) {
       setError(isRtl ? '⚠️ تعذر تنفيذ الطلب.' : '⚠️ The request could not be processed.');
@@ -344,7 +344,7 @@ export default function Login({
     }
 
     const users = CustodyDB.getUsers();
-    const foundUser = users.find(u => u.email.toLowerCase().trim() === emailLower);
+    const foundUser = users.find(u => u.email?.toLowerCase().trim() === emailLower);
 
     if (!foundUser) {
       setError(isRtl ? 'البريد الإلكتروني غير مسجل بالنظام.' : 'Email address not found in system.');
@@ -401,7 +401,7 @@ export default function Login({
     // Migrate user document ID to Firebase Auth UID to enforce multi-tenancy rules
     if (firebaseUser) {
       const currentUsers = CustodyDB.getUsers();
-      const legacyUser = currentUsers.find(u => u.email.toLowerCase().trim() === emailLower && u.id !== firebaseUser.uid);
+      const legacyUser = currentUsers.find(u => u.email?.toLowerCase().trim() === emailLower && u.id !== firebaseUser.uid);
       if (legacyUser) {
         // Delete legacy doc from Firestore
         try {
@@ -427,7 +427,7 @@ export default function Login({
       if (storedPassword === '') {
         const currentUsers = CustodyDB.getUsers();
         const updatedUsers = currentUsers.map(u => {
-          if (u.email.toLowerCase().trim() === emailLower) {
+          if (u.email?.toLowerCase().trim() === emailLower) {
             return { 
               ...u, 
               password: enteredHashSalted10k, 
@@ -506,7 +506,7 @@ export default function Login({
         }
 
         const updatedUsers = users.map(u => {
-          if (u.id === adminLoginUser.id || (firebaseUser && u.email.toLowerCase().trim() === adminLoginUser.email.toLowerCase().trim())) {
+          if (u.id === adminLoginUser.id || (firebaseUser && u.email?.toLowerCase().trim() === adminLoginUser.email?.toLowerCase().trim())) {
             return { 
               ...u, 
               id: targetId,
@@ -554,14 +554,14 @@ export default function Login({
     }
 
     const users = CustodyDB.getUsers();
-    const exists = users.some(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
+    const exists = users.some(u => u.email?.toLowerCase().trim() === email.toLowerCase().trim());
     if (exists) {
       setError(isRtl ? 'البريد الإلكتروني مسجل بالفعل بالنظام.' : 'Email is already registered.');
       return;
     }
 
     const pendingRequests = CustodyDB.getSignupRequests();
-    const requestExists = pendingRequests.some(r => r.email.toLowerCase().trim() === email.toLowerCase().trim() && r.status === 'Pending');
+    const requestExists = pendingRequests.some(r => r.email?.toLowerCase().trim() === email.toLowerCase().trim() && r.status === 'Pending');
     if (requestExists) {
       setError(isRtl ? 'البريد الإلكتروني لديه طلب تسجيل معلق بالفعل.' : 'Email already has a pending registration request.');
       return;

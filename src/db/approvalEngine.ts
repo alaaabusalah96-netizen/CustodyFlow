@@ -6,7 +6,8 @@ import {
   ApprovalDocumentType
 } from '../types/approval';
 import { StorageEngine } from './storage';
-import { Firestore, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { dbSetDoc, dbDeleteDoc } from '../firebase';
+import { Firestore } from 'firebase/firestore';
 
 export class ApprovalEngine {
   private static STORAGE_KEY_WORKFLOWS = 'approval_workflows';
@@ -64,9 +65,7 @@ export class ApprovalEngine {
     StorageEngine.setStored(this.STORAGE_KEY_WORKFLOWS, all);
 
     if (this.dbInstance) {
-      setDoc(doc(this.dbInstance, 'approval_workflows', workflow.id), workflow).catch(err => {
-        console.warn('Error syncing approval workflow to Firestore:', err);
-      });
+      dbSetDoc('approval_workflows', workflow.id, workflow);
     }
 
     return workflow;
@@ -80,9 +79,7 @@ export class ApprovalEngine {
     StorageEngine.setStored(this.STORAGE_KEY_WORKFLOWS, updated);
 
     if (this.dbInstance) {
-      deleteDoc(doc(this.dbInstance, 'approval_workflows', id)).catch(err => {
-        console.warn('Error deleting approval workflow from Firestore:', err);
-      });
+      dbDeleteDoc('approval_workflows', id);
     }
 
     return true;
@@ -175,9 +172,7 @@ export class ApprovalEngine {
     StorageEngine.setStored(this.STORAGE_KEY_INSTANCES, instances);
 
     if (this.dbInstance) {
-      setDoc(doc(this.dbInstance, 'approval_instances', instance.id), instance).catch(err => {
-        console.warn('Error syncing approval instance to Firestore:', err);
-      });
+      dbSetDoc('approval_instances', instance.id, instance);
     }
 
     return { instance, isAutoApproved: false };
@@ -279,9 +274,7 @@ export class ApprovalEngine {
     StorageEngine.setStored(this.STORAGE_KEY_INSTANCES, instances);
 
     if (this.dbInstance) {
-      setDoc(doc(this.dbInstance, 'approval_instances', instance.id), instance).catch(err => {
-        console.warn('Error updating approval instance in Firestore:', err);
-      });
+      dbSetDoc('approval_instances', instance.id, instance);
     }
 
     return { instance, isFinalApproval: isFinal };
@@ -323,9 +316,7 @@ export class ApprovalEngine {
     StorageEngine.setStored(this.STORAGE_KEY_INSTANCES, instances);
 
     if (this.dbInstance) {
-      setDoc(doc(this.dbInstance, 'approval_instances', instance.id), instance).catch(err => {
-        console.warn('Error rejecting approval instance in Firestore:', err);
-      });
+      dbSetDoc('approval_instances', instance.id, instance);
     }
 
     return instance;

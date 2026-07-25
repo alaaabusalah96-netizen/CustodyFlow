@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Briefcase, Plus, Calculator, Check, X, FileText, 
-  Search, Users, Landmark, Coins, Heart, AlertCircle, Calendar, Edit2, ShieldAlert
+  Search, Users, Landmark, Coins, Heart, AlertCircle, Calendar, Edit2, ShieldAlert, Building2
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { UsersModule } from '../db/users';
@@ -9,36 +9,15 @@ import { CompaniesModule } from '../db/companies';
 import { LogsModule } from '../db/logs';
 import { dbSetDoc } from '../firebase';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
+import { OrganizationEngine } from '../db/organizationEngine';
+import { HRBusinessEngine } from '../lib/enterprise/hr_engine';
+import { Employee, PayrollItem, PayrollRun } from '../types/hr';
+
+export type { Employee, PayrollItem, PayrollRun };
 
 interface HRPayrollProps {
   language: 'ar' | 'en';
   theme: 'light' | 'dark';
-}
-
-export interface Employee {
-  id: string;
-  company_id: string;
-  name: string;
-  code: string;
-  department: 'PRODUCTION' | 'POULTRY_MANAGEMENT' | 'SALES' | 'ACCOUNTING' | 'ADMINISTRATION';
-  jobTitle: string;
-  baseSalary: number;
-  hireDate: string;
-  status: 'ACTIVE' | 'LEAVE' | 'SUSPENDED';
-  createdAt: string;
-}
-
-export interface PayrollItem {
-  employeeId: string;
-  employeeName: string;
-  employeeCode: string;
-  baseSalary: number;
-  allowances: number;
-  deductions: number; // Includes general manual deductions
-  socialInsuranceEmployee: number; // 11% deduction
-  socialInsuranceEmployer: number; // 18.75% paid by employer
-  payrollTax: number; // Progressive tax
-  netSalary: number;
 }
 
 export default function HRPayroll({ language, theme }: HRPayrollProps) {
@@ -51,6 +30,11 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [deptFilter, setDeptFilter] = useState('ALL');
   const [activeTab, setActiveTab] = useState<'employees' | 'payroll'>('employees');
+
+  // Organization Engine State
+  const [orgUnits, setOrgUnits] = useState<any[]>([]);
+  const [selectedOrgUnitFilter, setSelectedOrgUnitFilter] = useState<string>('ALL');
+  const [formOrgUnitId, setFormOrgUnitId] = useState<string>('');
 
   // Modals
   const [showAddEmployee, setShowAddEmployee] = useState(false);
@@ -77,10 +61,12 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
 
   // Load Employees
   const loadEmployees = () => {
-    const allEmployees = StorageEngine.getStored<Employee[]>('employees_payroll_items', []);
-    const companyEmployees = allEmployees.filter(e => e.company_id === companyId);
+    const units = OrganizationEngine.getUnits(companyId);
+    setOrgUnits(units);
 
-    if (companyEmployees.length === 0) {
+    const companyEmployees = HRBusinessEngine.getEmployeesByOrgUnit(companyId, selectedOrgUnitFilter);
+
+    if (companyEmployees.length === 0 && selectedOrgUnitFilter === 'ALL') {
       // Seed default employees
       const defaultEmployees: Employee[] = [
         {
@@ -120,7 +106,7 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
           createdAt: new Date().toISOString()
         }
       ];
-      StorageEngine.setStored('employees_payroll_items', [...allEmployees, ...defaultEmployees]);
+      StorageEngine.setStored('employees_payroll_items', defaultEmployees);
       setEmployees(defaultEmployees);
     } else {
       setEmployees(companyEmployees);
@@ -132,7 +118,7 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
     const onUpdate = () => loadEmployees();
     window.addEventListener('custody_db_updated', onUpdate);
     return () => window.removeEventListener('custody_db_updated', onUpdate);
-  }, [companyId]);
+  }, [companyId, selectedOrgUnitFilter]);
 
   // Calculations
   const totalBasePay = employees.reduce((sum, e) => sum + e.baseSalary, 0);
@@ -140,7 +126,7 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
   const averageSalary = employees.length > 0 ? (totalBasePay / employees.length) : 0;
 
   // Submit Employee
-  const handleAddEmployee = (e: React.FormEvent) => {
+  const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!empForm.name || !empForm.jobTitle) {
       showToast('error', isRtl ? 'يرجى ملء جميع الحقول المطلوبة' : 'Please fill all required fields');
@@ -151,36 +137,34 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
       return;
     }
 
-    const allEmployees = StorageEngine.getStored<Employee[]>('employees_payroll_items', []);
-    const nextCodeNo = 201 + allEmployees.filter(emp => emp.company_id === companyId).length;
-    const newEmp: Employee = {
-      id: `emp-${Date.now()}`,
-      company_id: companyId,
-      name: empForm.name,
-      code: `EMP-${empForm.department}-${nextCodeNo}`,
-      department: empForm.department,
-      jobTitle: empForm.jobTitle,
-      baseSalary: Number(empForm.baseSalary),
-      hireDate: empForm.hireDate,
-      status: empForm.status,
-      createdAt: new Date().toISOString()
-    };
+    try {
+      const newEmp = await HRBusinessEngine.createEmployee(companyId, {
+        name: empForm.name,
+        department: empForm.department,
+        jobTitle: empForm.jobTitle,
+        baseSalary: Number(empForm.baseSalary),
+        hireDate: empForm.hireDate,
+        status: empForm.status,
+        org_unit_id: formOrgUnitId || activeUser?.org_unit_id
+      });
 
-    StorageEngine.setStored('employees_payroll_items', [...allEmployees, newEmp]);
-    dbSetDoc('employees_payroll_items', newEmp.id, newEmp);
+      // Logs
+      LogsModule.addLog(
+        activeUser?.id || 'system',
+        activeUser?.full_name || 'System',
+        isRtl ? 'تعيين موظف جديد' : 'Hired New Employee',
+        `Registered employee ${newEmp.name} under department ${newEmp.department} with base salary ${newEmp.baseSalary.toLocaleString()} EGP`
+      );
 
-    // Logs
-    LogsModule.addLog(
-      activeUser?.id || 'system',
-      activeUser?.full_name || 'System',
-      isRtl ? 'تعيين موظف جديد' : 'Hired New Employee',
-      `Registered employee ${newEmp.name} under department ${newEmp.department} with base salary ${newEmp.baseSalary.toLocaleString()} EGP`
-    );
-
-    showToast('success', isRtl ? 'تم تسجيل بيانات الموظف بنجاح' : 'Employee registered successfully');
-    setEmpForm({ name: '', department: 'PRODUCTION', jobTitle: '', baseSalary: 0, hireDate: new Date().toISOString().split('T')[0], status: 'ACTIVE' });
-    setShowAddEmployee(false);
-    loadEmployees();
+      showToast('success', isRtl ? 'تم تسجيل بيانات الموظف بنجاح' : 'Employee registered successfully');
+      setEmpForm({ name: '', department: 'PRODUCTION', jobTitle: '', baseSalary: 0, hireDate: new Date().toISOString().split('T')[0], status: 'ACTIVE' });
+      setFormOrgUnitId('');
+      setShowAddEmployee(false);
+      loadEmployees();
+    } catch (err) {
+      console.error('Create employee error:', err);
+      showToast('error', isRtl ? 'حدث خطأ أثناء تسجيل بيانات الموظف' : 'Error registering employee');
+    }
   };
 
   // Helper to calculate official Egyptian social insurance and tax deductions
@@ -252,7 +236,7 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
   };
 
   // Post Settle Payroll Sheet
-  const handlePostPayroll = () => {
+  const handlePostPayroll = async () => {
     if (payrollSheet.length === 0) return;
 
     const totalGross = payrollSheet.reduce((sum, item) => sum + item.baseSalary + item.allowances, 0);
@@ -261,64 +245,41 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
     const totalTax = payrollSheet.reduce((sum, item) => sum + item.payrollTax, 0);
     const totalNet = payrollSheet.reduce((sum, item) => sum + item.netSalary, 0);
 
-    const allPayrollRuns = StorageEngine.getStored<any[]>('payroll_processed_runs', []);
-    const payrollRecord = {
-      id: `payrun-${Date.now()}`,
-      company_id: companyId,
-      period: payrollPeriod,
-      items: payrollSheet,
-      totalPayout: totalNet,
-      totalGross,
-      totalEmployeeIns,
-      totalEmployerIns,
-      totalTax,
-      processedBy: activeUser?.full_name || 'HR Manager',
-      timestamp: new Date().toISOString()
-    };
-
-    StorageEngine.setStored('payroll_processed_runs', [...allPayrollRuns, payrollRecord]);
-    dbSetDoc('payroll_processed_runs', payrollRecord.id, payrollRecord);
-
-    // Post Accounting Double-Entry (General Ledger Integration!)
     try {
-      const statementAr = `قيد استحقاق رواتب الموظفين لشهر ${payrollPeriod} - متضمن التأمينات والضرائب`;
-      const statementEn = `Payroll accrual for period ${payrollPeriod} - including social security and taxes`;
-
-      AccountingBusinessEngine.postOperationalDoubleEntry(
+      await HRBusinessEngine.processPayrollRun(
         companyId,
         activeUser?.id || 'system',
-        `PAY-${payrollPeriod}`,
-        statementAr,
-        statementEn,
-        [
-          // Debit: Salaries Expense (510601) - Gross amount
-          { accountCode: '510601', debit: totalGross, credit: 0, notes: isRtl ? `رواتب أساسية وبدلات` : `Base Salaries & Allowances` },
-          // Debit: Employer Insurance Expense (510701)
-          { accountCode: '510701', debit: totalEmployerIns, credit: 0, notes: isRtl ? `حصة الشركة في التأمينات` : `Employer Social Security Share` },
-          // Credit: Social Insurance Payable (210401) - both employee & employer share
-          { accountCode: '210401', debit: 0, credit: totalEmployeeIns + totalEmployerIns, notes: isRtl ? `مستحقات هيئة التأمينات الاجتماعية` : `Social Insurance Authority Payable` },
-          // Credit: Payroll Taxes Payable (210501) - Income tax deducted
-          { accountCode: '210501', debit: 0, credit: totalTax, notes: isRtl ? `مستحقات مصلحة الضرائب (ضريبة كسب العمل)` : `Payroll Income Tax Payable` },
-          // Credit: Bank account (110201) - Net salary payout
-          { accountCode: '110201', debit: 0, credit: totalNet, notes: isRtl ? `صافي الرواتب المنصرفة للبنوك` : `Net Salaries Disbursed via Bank` }
-        ]
-      ).catch(e => console.error('Payroll General Ledger posting failed', e));
-    } catch (glError) {
-      console.error('GL post for payroll failed', glError);
+        activeUser?.full_name || 'HR Manager',
+        {
+          period: payrollPeriod,
+          sheet: payrollSheet,
+          totalPayout: totalNet,
+          totalGross,
+          totalEmployeeIns,
+          totalEmployerIns,
+          totalTax,
+          org_unit_id: formOrgUnitId || activeUser?.org_unit_id
+        }
+      );
+
+      // Audit Log and log double-entry transaction
+      LogsModule.addLog(
+        activeUser?.id || 'system',
+        activeUser?.full_name || 'System',
+        isRtl ? 'ترحيل مسير رواتب الموظفين' : 'Post HR Monthly Payroll',
+        `Processed payroll run for period ${payrollPeriod}. Total Payout: ${totalNet.toLocaleString()} EGP`
+      );
+
+      showToast('success', isRtl ? 'تم ترحيل وصرف مسير الرواتب الشهري للموظفين بنجاح وتوليد قيد اليومية الآلي' : 'Monthly payroll processed and posted successfully with automated GL ledger entries');
+      setIsPayrollGenerated(false);
+      setPayrollSheet([]);
+      setFormOrgUnitId('');
+      setShowProcessPayroll(false);
+      loadEmployees();
+    } catch (err) {
+      console.error('Post payroll error:', err);
+      showToast('error', isRtl ? 'حدث خطأ أثناء ترحيل مسير الرواتب' : 'Error processing payroll run');
     }
-
-    // Audit Log and log double-entry transaction
-    LogsModule.addLog(
-      activeUser?.id || 'system',
-      activeUser?.full_name || 'System',
-      isRtl ? 'ترحيل مسير رواتب الموظفين' : 'Post HR Monthly Payroll',
-      `Processed payroll run for period ${payrollPeriod}. Total Payout: ${totalNet.toLocaleString()} EGP`
-    );
-
-    showToast('success', isRtl ? 'تم ترحيل وصرف مسير الرواتب الشهري للموظفين بنجاح وتوليد قيد اليومية الآلي' : 'Monthly payroll processed and posted successfully with automated GL ledger entries');
-    setIsPayrollGenerated(false);
-    setPayrollSheet([]);
-    setShowProcessPayroll(false);
   };
 
   // Filters

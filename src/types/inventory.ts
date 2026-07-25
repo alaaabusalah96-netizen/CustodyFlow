@@ -143,6 +143,7 @@ export interface InventoryDocument extends BaseMetadata {
   dest_entity_type?: 'warehouse' | 'branch' | 'station' | 'supplier' | 'customer' | 'scrap' | 'adjustment' | 'org_unit';
   org_unit_id?: string | null;   // Linked Source Organization Unit ID (Phase 12)
   dest_org_unit_id?: string | null; // Linked Destination Organization Unit ID (Phase 12)
+  cost_center_id?: string | null; // Linked Cost Center ID (Phase 12 & 13)
   region_id?: string | null;    // Legacy Region ID
   station_id?: string | null;   // Legacy Station ID
   receipt_source_type?: 'supplier' | 'transfer'; // For Receipt doc: Supplier vs Internal Transfer

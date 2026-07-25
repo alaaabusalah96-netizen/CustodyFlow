@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, Plus, FileText, Check, X, TrendingUp, Coins, 
   Search, Building, Phone, Mail, MapPin, Receipt, 
-  Calendar, CreditCard, ArrowDownRight, DollarSign, Percent, Printer, ShieldAlert
+  Calendar, CreditCard, ArrowDownRight, DollarSign, Percent, Printer, ShieldAlert, Building2
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { InventoryModule } from '../db/inventory';
@@ -12,59 +12,15 @@ import { LogsModule } from '../db/logs';
 import { dbSetDoc } from '../firebase';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 import { createEventEnvelope } from '../lib/enterprise/metadata';
+import { OrganizationEngine } from '../db/organizationEngine';
+import { SalesBusinessEngine } from '../lib/enterprise/sales_engine';
+import { Customer, SalesInvoice, SalesInvoiceItem } from '../types/sales';
+
+export type { Customer, SalesInvoice, SalesInvoiceItem };
 
 interface SalesARProps {
   language: 'ar' | 'en';
   theme: 'light' | 'dark';
-}
-
-export interface Customer {
-  id: string;
-  company_id: string;
-  nameAr: string;
-  nameEn: string;
-  code: string;
-  phone: string;
-  email: string;
-  taxNo: string;
-  address: string;
-  balance: number; // Receivable balance
-  createdAt: string;
-}
-
-export interface SalesInvoiceItem {
-  id: string;
-  productId: string;
-  productName: string;
-  productCode: string;
-  unit: string;
-  qty: number;
-  unitPrice: number;
-  taxRate: number; // e.g. 0.14 for 14%
-  taxAmount: number;
-  total: number;
-}
-
-export interface SalesInvoice {
-  id: string;
-  company_id: string;
-  invoiceNo: string;
-  customerId: string;
-  customerName: string;
-  items: SalesInvoiceItem[];
-  subtotal: number;
-  taxAmount: number;
-  discountAmount: number;
-  netAmount: number;
-  status: 'PAID' | 'UNPAID' | 'PARTIALLY_PAID';
-  date: string;
-  dueDate: string;
-  notes: string;
-  createdAt: string;
-  etaStatus?: 'DRAFT' | 'SUBMITTED' | 'ACCEPTED' | 'REJECTED';
-  etaUuid?: string;
-  etaSubmissionPayload?: any;
-  isSigned?: boolean;
 }
 
 export default function SalesAR({ language, theme }: SalesARProps) {
@@ -83,6 +39,11 @@ export default function SalesAR({ language, theme }: SalesARProps) {
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  // Organization Engine State
+  const [orgUnits, setOrgUnits] = useState<any[]>([]);
+  const [selectedOrgUnitFilter, setSelectedOrgUnitFilter] = useState<string>('ALL');
+  const [formOrgUnitId, setFormOrgUnitId] = useState<string>('');
 
   // Modals
   const [showAddCustomer, setShowAddCustomer] = useState(false);
@@ -123,16 +84,15 @@ export default function SalesAR({ language, theme }: SalesARProps) {
 
   // Load Initial Data
   const loadData = () => {
-    const allCustomers = StorageEngine.getStored<Customer[]>('customers', []);
-    const companyCustomers = allCustomers.filter(c => c.company_id === companyId);
+    const units = OrganizationEngine.getUnits(companyId);
+    setOrgUnits(units);
 
-    const allInvoices = StorageEngine.getStored<SalesInvoice[]>('sales_invoices', []);
-    const companyInvoices = allInvoices.filter(i => i.company_id === companyId);
-
+    const companyCustomers = SalesBusinessEngine.getCustomersByOrgUnit(companyId, selectedOrgUnitFilter);
+    const companyInvoices = SalesBusinessEngine.getSalesInvoicesByOrgUnit(companyId, selectedOrgUnitFilter);
     const inventoryProducts = InventoryModule.getProducts() || [];
 
     // Seed default customers if empty to avoid blank screen
-    if (companyCustomers.length === 0) {
+    if (companyCustomers.length === 0 && selectedOrgUnitFilter === 'ALL') {
       const defaultCustomers: Customer[] = [
         {
           id: 'cust-1',
@@ -161,7 +121,7 @@ export default function SalesAR({ language, theme }: SalesARProps) {
           createdAt: new Date().toISOString()
         }
       ];
-      StorageEngine.setStored('customers', [...allCustomers, ...defaultCustomers]);
+      StorageEngine.setStored('customers', defaultCustomers);
       setCustomers(defaultCustomers);
     } else {
       setCustomers(companyCustomers);
@@ -177,7 +137,7 @@ export default function SalesAR({ language, theme }: SalesARProps) {
     const onUpdate = () => loadData();
     window.addEventListener('custody_db_updated', onUpdate);
     return () => window.removeEventListener('custody_db_updated', onUpdate);
-  }, [companyId]);
+  }, [companyId, selectedOrgUnitFilter]);
 
   // Calculations
   const totalSales = invoices.reduce((sum, inv) => sum + inv.netAmount, 0);
@@ -185,31 +145,23 @@ export default function SalesAR({ language, theme }: SalesARProps) {
   const paidSales = invoices.filter(i => i.status === 'PAID').reduce((sum, inv) => sum + inv.netAmount, 0);
 
   // 1. Add Customer
-  const handleAddCustomer = (e: React.FormEvent) => {
+  const handleAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerForm.nameAr || !customerForm.nameEn) {
       showToast('error', isRtl ? 'يرجى ملء اسم العميل باللغتين العربي والانجليزي' : 'Please fill customer name in both languages');
       return;
     }
 
-    const allCustomers = StorageEngine.getStored<Customer[]>('customers', []);
-    const newCustomer: Customer = {
-      id: `cust-${Date.now()}`,
-      company_id: companyId,
+    const newCustomer = await SalesBusinessEngine.createCustomer(companyId, {
       nameAr: customerForm.nameAr,
       nameEn: customerForm.nameEn,
-      code: `CUST-${1001 + allCustomers.filter(c => c.company_id === companyId).length}`,
       phone: customerForm.phone,
       email: customerForm.email,
       taxNo: customerForm.taxNo,
       address: customerForm.address,
-      balance: Number(customerForm.openingBalance) || 0,
-      createdAt: new Date().toISOString()
-    };
-
-    const updated = [...allCustomers, newCustomer];
-    StorageEngine.setStored('customers', updated);
-    dbSetDoc('customers', newCustomer.id, newCustomer);
+      openingBalance: customerForm.openingBalance,
+      org_unit_id: formOrgUnitId || activeUser?.org_unit_id
+    });
 
     // Audit Log
     LogsModule.addLog(
@@ -221,6 +173,7 @@ export default function SalesAR({ language, theme }: SalesARProps) {
 
     showToast('success', isRtl ? 'تم إضافة العميل بنجاح' : 'Customer added successfully');
     setCustomerForm({ nameAr: '', nameEn: '', phone: '', email: '', taxNo: '', address: '', openingBalance: 0 });
+    setFormOrgUnitId('');
     setShowAddCustomer(false);
     loadData();
   };
@@ -264,7 +217,7 @@ export default function SalesAR({ language, theme }: SalesARProps) {
   };
 
   // 3. Submit Sales Invoice
-  const handleCreateSalesInvoice = (e: React.FormEvent) => {
+  const handleCreateSalesInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCustomerId) {
       showToast('error', isRtl ? 'يرجى تحديد العميل' : 'Please select a customer');
@@ -283,92 +236,46 @@ export default function SalesAR({ language, theme }: SalesARProps) {
     const taxAmount = invoiceItems.reduce((sum, item) => sum + item.taxAmount, 0);
     const netAmount = subtotal + taxAmount - Number(discountValue);
 
-    const allInvoices = StorageEngine.getStored<SalesInvoice[]>('sales_invoices', []);
-    const invoiceDate = new Date().toISOString().split('T')[0];
-    const dueDateObj = new Date();
-    dueDateObj.setDate(dueDateObj.getDate() + dueDateOffset);
-    const dueDateStr = dueDateObj.toISOString().split('T')[0];
-
-    const newInvoice: SalesInvoice = {
-      id: `inv-${Date.now()}`,
-      company_id: companyId,
-      invoiceNo: `SINV-${10001 + allInvoices.filter(i => i.company_id === companyId).length}`,
-      customerId: customerObj.id,
-      customerName: isRtl ? customerObj.nameAr : customerObj.nameEn,
-      items: invoiceItems,
-      subtotal,
-      taxAmount,
-      discountAmount: Number(discountValue) || 0,
-      netAmount,
-      status: 'UNPAID',
-      date: invoiceDate,
-      dueDate: dueDateStr,
-      notes: invoiceNotes,
-      createdAt: new Date().toISOString()
-    };
-
-    // Save Invoice
-    StorageEngine.setStored('sales_invoices', [...allInvoices, newInvoice]);
-    dbSetDoc('sales_invoices', newInvoice.id, newInvoice);
-
-    // Update Customer Balance
-    const allCustomers = StorageEngine.getStored<Customer[]>('customers', []);
-    const updatedCustomers = allCustomers.map(c => {
-      if (c.id === customerObj.id) {
-        return { ...c, balance: c.balance + netAmount };
-      }
-      return c;
-    });
-    StorageEngine.setStored('customers', updatedCustomers);
-    dbSetDoc('customers', customerObj.id, { ...customerObj, balance: customerObj.balance + netAmount });
-
-    // Decrement stock from warehouse (Integration!)
-    const warehouses = InventoryModule.getWarehouses();
-    const activeWh = warehouses[0]?.id;
-    if (activeWh) {
-      invoiceItems.forEach(item => {
-        InventoryModule.adjustStock(activeWh, item.productId, -item.qty, 'Issue', activeUser?.id || 'system');
-      });
-    }
-
-    // Post Accounting Double-Entry (General Ledger Integration)
     try {
-      AccountingBusinessEngine.postOperationalDoubleEntry(
+      const newInvoice = await SalesBusinessEngine.createSalesInvoice(
         companyId,
         activeUser?.id || 'system',
-        newInvoice.invoiceNo,
-        `فاتورة مبيعات رقم ${newInvoice.invoiceNo} للعميل ${customerObj.nameAr}`,
-        `Sales invoice ${newInvoice.invoiceNo} for customer ${customerObj.nameEn}`,
-        [
-          // Debit Accounts Receivable (110301)
-          { accountCode: '110301', debit: netAmount, credit: 0, notes: isRtl ? `مستحق على ${customerObj.nameAr}` : `Receivable from ${customerObj.nameEn}` },
-          // Credit VAT Payable (210201) if VAT exists
-          ...(taxAmount > 0 ? [{ accountCode: '210201', debit: 0, credit: taxAmount, notes: isRtl ? `ضريبة القيمة المضافة 14%` : `14% VAT` }] : []),
-          // Credit Sales & Services Revenue (410101)
-          { accountCode: '410101', debit: 0, credit: subtotal - (Number(discountValue) || 0), notes: isRtl ? `إيراد مبيعات السلع والخدمات` : `Sales revenue` }
-        ]
-      ).catch(e => console.error('Double Entry Posting failed', e));
-    } catch (glError) {
-      console.error('GL post failed', glError);
+        {
+          customerId: customerObj.id,
+          customerName: isRtl ? customerObj.nameAr : customerObj.nameEn,
+          items: invoiceItems,
+          subtotal,
+          taxAmount,
+          discountAmount: Number(discountValue) || 0,
+          netAmount,
+          dueDateOffset,
+          notes: invoiceNotes,
+          org_unit_id: formOrgUnitId || customerObj.org_unit_id || activeUser?.org_unit_id
+        }
+      );
+
+      // Audit Log
+      LogsModule.addLog(
+        activeUser?.id || 'system',
+        activeUser?.full_name || 'System',
+        isRtl ? 'إصدار فاتورة مبيعات' : 'Issue Sales Invoice',
+        `Issued Sales Invoice ${newInvoice.invoiceNo} for Customer ${customerObj.nameEn}. Total: ${netAmount.toLocaleString()} EGP`
+      );
+
+      showToast('success', isRtl ? 'تم إصدار فاتورة المبيعات وتحديث رصيد العميل بنجاح' : 'Sales invoice issued and customer balance updated');
+      
+      // Clear State
+      setSelectedCustomerId('');
+      setInvoiceItems([]);
+      setDiscountValue(0);
+      setInvoiceNotes('');
+      setFormOrgUnitId('');
+      setShowCreateInvoice(false);
+      loadData();
+    } catch (err) {
+      console.error('Invoice creation error:', err);
+      showToast('error', isRtl ? 'حدث خطأ أثناء إصدار الفاتورة' : 'Error issuing sales invoice');
     }
-
-    // Audit Log
-    LogsModule.addLog(
-      activeUser?.id || 'system',
-      activeUser?.full_name || 'System',
-      isRtl ? 'إصدار فاتورة مبيعات' : 'Issue Sales Invoice',
-      `Issued Sales Invoice ${newInvoice.invoiceNo} for Customer ${customerObj.nameEn}. Total: ${netAmount.toLocaleString()} EGP`
-    );
-
-    showToast('success', isRtl ? 'تم إصدار فاتورة المبيعات وتحديث رصيد العميل بنجاح' : 'Sales invoice issued and customer balance updated');
-    
-    // Clear State
-    setSelectedCustomerId('');
-    setInvoiceItems([]);
-    setDiscountValue(0);
-    setInvoiceNotes('');
-    setShowCreateInvoice(false);
-    loadData();
   };
 
   // 4. Record Customer Payment Collection
@@ -713,6 +620,26 @@ export default function SalesAR({ language, theme }: SalesARProps) {
             </div>
 
             <div className="flex items-center gap-2">
+              {orgUnits.length > 0 && (
+                <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <select
+                    value={selectedOrgUnitFilter}
+                    onChange={(e) => setSelectedOrgUnitFilter(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
+                  >
+                    <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                      {isRtl ? 'جميع الوحدات التنظيمية' : 'All Org Units'}
+                    </option>
+                    {orgUnits.map((u) => (
+                      <option key={u.id} value={u.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                        {isRtl ? (u.nameAr || u.name) : (u.nameEn || u.name)} ({u.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -733,6 +660,7 @@ export default function SalesAR({ language, theme }: SalesARProps) {
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800 text-[10px] font-mono text-slate-400 uppercase tracking-wider">
                     <th className="p-3">{isRtl ? 'رقم الفاتورة' : 'Invoice No'}</th>
+                    <th className="p-3">{isRtl ? 'الوحدة التنظيمية' : 'Org Unit'}</th>
                     <th className="p-3">{isRtl ? 'العميل' : 'Customer'}</th>
                     <th className="p-3">{isRtl ? 'تاريخ الإصدار' : 'Issue Date'}</th>
                     <th className="p-3">{isRtl ? 'تاريخ الاستحقاق' : 'Due Date'}</th>
@@ -744,41 +672,49 @@ export default function SalesAR({ language, theme }: SalesARProps) {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs text-slate-700 dark:text-slate-200">
                   {filteredInvoices.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-slate-400 font-medium">
+                      <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">
                         {isRtl ? 'لا يوجد فواتير مبيعات مطابقة للبحث' : 'No sales invoices matching search criteria'}
                       </td>
                     </tr>
                   ) : (
-                    filteredInvoices.map((inv) => (
-                      <tr key={inv.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/30">
-                        <td className="p-3 font-mono font-bold text-emerald-600">{inv.invoiceNo}</td>
-                        <td className="p-3 font-semibold">{inv.customerName}</td>
-                        <td className="p-3 text-slate-500 font-mono">{inv.date}</td>
-                        <td className="p-3 text-slate-500 font-mono">{inv.dueDate}</td>
-                        <td className="p-3 text-right font-mono font-extrabold">{inv.netAmount.toLocaleString()} EGP</td>
-                        <td className="p-3 text-center">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            inv.status === 'PAID'
-                              ? 'bg-emerald-500/10 text-emerald-600'
-                              : inv.status === 'PARTIALLY_PAID'
-                                ? 'bg-amber-500/10 text-amber-600'
-                                : 'bg-rose-500/10 text-rose-600'
-                          }`}>
-                            {inv.status === 'PAID' ? (isRtl ? 'مدفوعة' : 'Paid') : 
-                             inv.status === 'PARTIALLY_PAID' ? (isRtl ? 'دفعة جزئية' : 'Partial') : 
-                             (isRtl ? 'غير مدفوعة' : 'Unpaid')}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          <button
-                            onClick={() => setViewInvoice(inv)}
-                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold rounded-lg transition-all cursor-pointer"
-                          >
-                            {isRtl ? 'عرض وتفاصيل' : 'View Detail'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    filteredInvoices.map((inv) => {
+                      const unitObj = orgUnits.find(u => u.id === inv.org_unit_id);
+                      return (
+                        <tr key={inv.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/30">
+                          <td className="p-3 font-mono font-bold text-emerald-600">{inv.invoiceNo}</td>
+                          <td className="p-3">
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40">
+                              {unitObj ? (isRtl ? (unitObj.nameAr || unitObj.name) : (unitObj.nameEn || unitObj.name)) : (isRtl ? 'المركز الرئيسي' : 'HQ')}
+                            </span>
+                          </td>
+                          <td className="p-3 font-semibold">{inv.customerName}</td>
+                          <td className="p-3 text-slate-500 font-mono">{inv.date}</td>
+                          <td className="p-3 text-slate-500 font-mono">{inv.dueDate}</td>
+                          <td className="p-3 text-right font-mono font-extrabold">{inv.netAmount.toLocaleString()} EGP</td>
+                          <td className="p-3 text-center">
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              inv.status === 'PAID'
+                                ? 'bg-emerald-500/10 text-emerald-600'
+                                : inv.status === 'PARTIALLY_PAID'
+                                  ? 'bg-amber-500/10 text-amber-600'
+                                  : 'bg-rose-500/10 text-rose-600'
+                            }`}>
+                              {inv.status === 'PAID' ? (isRtl ? 'مدفوعة' : 'Paid') : 
+                               inv.status === 'PARTIALLY_PAID' ? (isRtl ? 'دفعة جزئية' : 'Partial') : 
+                               (isRtl ? 'غير مدفوعة' : 'Unpaid')}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <button
+                              onClick={() => setViewInvoice(inv)}
+                              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold rounded-lg transition-all cursor-pointer"
+                            >
+                              {isRtl ? 'عرض وتفاصيل' : 'View Detail'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -788,56 +724,91 @@ export default function SalesAR({ language, theme }: SalesARProps) {
       )}
 
       {activeTab === 'customers' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {customers.map((c) => (
-            <div key={c.id} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-[9px] font-mono px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-slate-400 font-bold uppercase">{c.code}</span>
-                    <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 mt-1.5">{isRtl ? c.nameAr : c.nameEn}</h3>
-                  </div>
-                  <Building className="h-5 w-5 text-slate-300 dark:text-slate-700" />
-                </div>
-
-                <div className="mt-4 space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center gap-1.5">
-                    <Phone size={13} className="text-slate-400" />
-                    <span className="font-mono">{c.phone || 'N/A'}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Mail size={13} className="text-slate-400" />
-                    <span>{c.email || 'N/A'}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <MapPin size={13} className="text-slate-400" />
-                    <span>{c.address || 'N/A'}</span>
-                  </div>
-                  <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider mt-1 border-t border-slate-100 dark:border-slate-800 pt-1.5">
-                    {isRtl ? 'الرقم الضريبي:' : 'TIN:'} {c.taxNo || 'N/A'}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] uppercase text-slate-400 font-semibold">{isRtl ? 'الرصيد المستحق (المديونية)' : 'Receivable Balance'}</p>
-                  <p className="text-sm font-black text-amber-600 font-mono mt-0.5">{c.balance.toLocaleString()} EGP</p>
-                </div>
-                <button
-                  onClick={() => {
-                    setPaymentCustomerId(c.id);
-                    setPaymentAmount(c.balance);
-                    setShowRecordPayment(true);
-                  }}
-                  disabled={c.balance === 0}
-                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50 disabled:pointer-events-none text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition-all cursor-pointer"
+        <div className="space-y-4">
+          {/* Org Filter for Customers */}
+          {orgUnits.length > 0 && (
+            <div className="flex justify-end">
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                <Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <select
+                  value={selectedOrgUnitFilter}
+                  onChange={(e) => setSelectedOrgUnitFilter(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
                 >
-                  {isRtl ? 'تحصيل دفعة' : 'Collect payment'}
-                </button>
+                  <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                    {isRtl ? 'جميع الوحدات التنظيمية' : 'All Org Units'}
+                  </option>
+                  {orgUnits.map((u) => (
+                    <option key={u.id} value={u.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                      {isRtl ? (u.nameAr || u.name) : (u.nameEn || u.name)} ({u.code})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
-          ))}
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {customers.map((c) => {
+              const unitObj = orgUnits.find(u => u.id === c.org_unit_id);
+              return (
+                <div key={c.id} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] font-mono px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-slate-400 font-bold uppercase">{c.code}</span>
+                          {unitObj && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 rounded border border-emerald-200/50">
+                              {isRtl ? (unitObj.nameAr || unitObj.name) : (unitObj.nameEn || unitObj.name)}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 mt-1.5">{isRtl ? c.nameAr : c.nameEn}</h3>
+                      </div>
+                      <Building className="h-5 w-5 text-slate-300 dark:text-slate-700" />
+                    </div>
+
+                    <div className="mt-4 space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+                      <div className="flex items-center gap-1.5">
+                        <Phone size={13} className="text-slate-400" />
+                        <span className="font-mono">{c.phone || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Mail size={13} className="text-slate-400" />
+                        <span>{c.email || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <MapPin size={13} className="text-slate-400" />
+                        <span>{c.address || 'N/A'}</span>
+                      </div>
+                      <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider mt-1 border-t border-slate-100 dark:border-slate-800 pt-1.5">
+                        {isRtl ? 'الرقم الضريبي:' : 'TIN:'} {c.taxNo || 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase text-slate-400 font-semibold">{isRtl ? 'الرصيد المستحق (المديونية)' : 'Receivable Balance'}</p>
+                      <p className="text-sm font-black text-amber-600 font-mono mt-0.5">{c.balance.toLocaleString()} EGP</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setPaymentCustomerId(c.id);
+                        setPaymentAmount(c.balance);
+                        setShowRecordPayment(true);
+                      }}
+                      disabled={c.balance === 0}
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50 disabled:pointer-events-none text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition-all cursor-pointer"
+                    >
+                      {isRtl ? 'تحصيل دفعة' : 'Collect payment'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -857,6 +828,24 @@ export default function SalesAR({ language, theme }: SalesARProps) {
             </h3>
 
             <form onSubmit={handleAddCustomer} className="space-y-4">
+              {orgUnits.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'الوحدة التنظيمية (الفرع/القطاع)' : 'Organizational Unit'}</label>
+                  <select
+                    value={formOrgUnitId}
+                    onChange={(e) => setFormOrgUnitId(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">{isRtl ? '-- المركز الرئيسي (الافتراضي) --' : '-- Main HQ (Default) --'}</option>
+                    {orgUnits.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {isRtl ? (u.nameAr || u.name) : (u.nameEn || u.name)} ({u.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'الاسم بالكامل (عربي) *' : 'Full Name (Arabic) *'}</label>
@@ -1074,6 +1063,24 @@ export default function SalesAR({ language, theme }: SalesARProps) {
             </h3>
 
             <form onSubmit={handleCreateSalesInvoice} className="space-y-4">
+              {orgUnits.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'الوحدة التنظيمية المصدرة للفاتورة' : 'Issuing Organizational Unit'}</label>
+                  <select
+                    value={formOrgUnitId}
+                    onChange={(e) => setFormOrgUnitId(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">{isRtl ? '-- المركز الرئيسي (أو من العميل) --' : '-- Main HQ (or from Customer) --'}</option>
+                    {orgUnits.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {isRtl ? (u.nameAr || u.name) : (u.nameEn || u.name)} ({u.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'العميل المستفيد *' : 'Customer *'}</label>

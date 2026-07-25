@@ -149,11 +149,15 @@ export default function Accounting({ language, theme }: AccountingProps) {
   // Filter journal entries
   const filteredEntries = entries.filter(je => {
     const s = searchTerm.toLowerCase();
+    const entryNum = (je.entryNumber || '').toLowerCase();
+    const stmtAr = (je.statementAr || '').toLowerCase();
+    const stmtEn = (je.statementEn || '').toLowerCase();
+    const srcRef = (je.sourceReference || '').toLowerCase();
     return (
-      je.entryNumber.toLowerCase().includes(s) ||
-      (je.statementAr && je.statementAr.toLowerCase().includes(s)) ||
-      (je.statementEn && je.statementEn.toLowerCase().includes(s)) ||
-      (je.sourceReference && je.sourceReference.toLowerCase().includes(s))
+      entryNum.includes(s) ||
+      stmtAr.includes(s) ||
+      stmtEn.includes(s) ||
+      srcRef.includes(s)
     );
   });
 

@@ -817,6 +817,10 @@ function cleanUndefined(obj: any): any {
 
 // Sync changes back to Firebase when writing locally
 export async function dbSetDoc(collectionName: string, docId: string, data: any) {
+  if (!docId || typeof docId !== 'string') {
+    console.error(`dbSetDoc invalid docId provided for collection ${collectionName}:`, docId);
+    return;
+  }
   try {
     const cleanData = cleanUndefined(data);
     await setDoc(doc(db, collectionName, docId), cleanData);
@@ -827,6 +831,10 @@ export async function dbSetDoc(collectionName: string, docId: string, data: any)
 }
 
 export async function dbDeleteDoc(collectionName: string, docId: string) {
+  if (!docId || typeof docId !== 'string') {
+    console.error(`dbDeleteDoc invalid docId provided for collection ${collectionName}:`, docId);
+    return;
+  }
   try {
     await deleteDoc(doc(db, collectionName, docId));
   } catch (error) {
@@ -836,6 +844,7 @@ export async function dbDeleteDoc(collectionName: string, docId: string) {
 }
 
 export async function dbFetchUserByEmail(email: string): Promise<AppUser | null> {
+  if (!email || typeof email !== 'string') return null;
   try {
     const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase().trim()), limit(1));
     const snap = await getDocs(q);

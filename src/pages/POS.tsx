@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, Minus, Trash2, ShoppingCart, Tag, CreditCard, 
-  Smartphone, Monitor, Sparkles, Receipt, X, Check, Search, Printer
+  Smartphone, Monitor, Sparkles, Receipt, X, Check, Search, Printer, Building2
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { InventoryModule } from '../db/inventory';
@@ -9,6 +9,8 @@ import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
 import { LogsModule } from '../db/logs';
 import { dbSetDoc } from '../firebase';
+import { OrganizationEngine } from '../db/organizationEngine';
+import { SalesBusinessEngine } from '../lib/enterprise/sales_engine';
 
 interface POSProps {
   language: 'ar' | 'en';
@@ -36,6 +38,10 @@ export default function POS({ language, theme }: POSProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Organization Engine State
+  const [orgUnits, setOrgUnits] = useState<any[]>([]);
+  const [selectedOrgUnitId, setSelectedOrgUnitId] = useState<string>('');
+
   // Modals & Receipts
   const [completedSale, setCompletedSale] = useState<any | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'WALLET'>('CASH');
@@ -53,6 +59,12 @@ export default function POS({ language, theme }: POSProps) {
   const loadProducts = () => {
     const prd = InventoryModule.getProducts() || [];
     setProducts(prd);
+
+    const units = OrganizationEngine.getUnits(companyId);
+    setOrgUnits(units);
+    if (!selectedOrgUnitId && units.length > 0) {
+      setSelectedOrgUnitId(activeUser?.org_unit_id || units[0].id);
+    }
   };
 
   useEffect(() => {
@@ -133,47 +145,38 @@ export default function POS({ language, theme }: POSProps) {
   const grandTotal = subtotal + vatAmount;
 
   // Finalize Sale
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cart.length === 0) return;
 
-    // Deduct quantity from warehouse in local state (Integration!)
-    const warehouses = InventoryModule.getWarehouses();
-    const activeWh = warehouses[0]?.id;
-    if (activeWh) {
-      cart.forEach(item => {
-        InventoryModule.adjustStock(activeWh, item.productId, -item.qty, 'Issue', activeUser?.id || 'system');
-      });
+    try {
+      const saleRecord = await SalesBusinessEngine.processPOSCheckout(
+        companyId,
+        activeUser?.id || 'system',
+        activeUser?.full_name || 'Cashier',
+        {
+          items: cart,
+          subtotal,
+          vatAmount,
+          grandTotal,
+          paymentMethod,
+          org_unit_id: selectedOrgUnitId || activeUser?.org_unit_id
+        }
+      );
+
+      // Audit and Log
+      LogsModule.addLog(
+        activeUser?.id || 'system',
+        activeUser?.full_name || 'System',
+        isRtl ? 'إجراء عملية بيع POS' : 'POS Checkout Processed',
+        `Processed POS sale ${saleRecord.receiptNo} using ${paymentMethod}. Total: ${grandTotal.toLocaleString()} EGP`
+      );
+
+      setCompletedSale(saleRecord);
+      setCart([]);
+      loadProducts(); // Reload to see updated quantities
+    } catch (err) {
+      console.error('POS Checkout failed:', err);
     }
-
-    // Create POS Transaction
-    const allPOSSales = StorageEngine.getStored<any[]>('pos_transactions', []);
-    const saleRecord = {
-      id: `pos-${Date.now()}`,
-      company_id: companyId,
-      receiptNo: `POS-${10001 + allPOSSales.length}`,
-      items: cart,
-      subtotal,
-      vatAmount,
-      grandTotal,
-      paymentMethod,
-      cashier: activeUser?.full_name || 'Cashier',
-      timestamp: new Date().toISOString()
-    };
-
-    StorageEngine.setStored('pos_transactions', [...allPOSSales, saleRecord]);
-    dbSetDoc('pos_transactions', saleRecord.id, saleRecord);
-
-    // Audit and Log
-    LogsModule.addLog(
-      activeUser?.id || 'system',
-      activeUser?.full_name || 'System',
-      isRtl ? 'إجراء عملية بيع POS' : 'POS Checkout Processed',
-      `Processed POS sale ${saleRecord.receiptNo} using ${paymentMethod}. Total: ${grandTotal.toLocaleString()} EGP`
-    );
-
-    setCompletedSale(saleRecord);
-    setCart([]);
-    loadProducts(); // Reload to see updated quantities
   };
 
   // Filter products by category & search query
@@ -202,15 +205,35 @@ export default function POS({ language, theme }: POSProps) {
               <span>{isRtl ? 'كاشير نقاط البيع السريع (POS)' : 'Retail Point of Sale Terminal'}</span>
             </h1>
           </div>
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder={isRtl ? 'ابحث عن صنف بالاسم أو الكود...' : 'Search item or barcode...'}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
-            />
+
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            {orgUnits.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                <Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <select
+                  value={selectedOrgUnitId}
+                  onChange={(e) => setSelectedOrgUnitId(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
+                >
+                  {orgUnits.map((u) => (
+                    <option key={u.id} value={u.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                      {isRtl ? (u.nameAr || u.name) : (u.nameEn || u.name)} ({u.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="relative w-full sm:w-48">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder={isRtl ? 'ابحث عن صنف بالاسم أو الكود...' : 'Search item or barcode...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
           </div>
         </div>
 

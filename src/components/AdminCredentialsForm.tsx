@@ -84,7 +84,7 @@ export default function AdminCredentialsForm({
     setPassword(initialPassword);
     let currentPerms = getDefaultPermissions();
     if (initialEmail) {
-      const u = CustodyDB.getUsers().find(user => user.email.toLowerCase() === initialEmail.toLowerCase());
+      const u = CustodyDB.getUsers().find(user => user.email?.toLowerCase() === initialEmail.toLowerCase());
       if (u?.permissions) {
         currentPerms = { ...u.permissions };
       }
@@ -117,7 +117,7 @@ export default function AdminCredentialsForm({
   const handleApprove = async (req: SignupRequest) => {
     const usersList = CustodyDB.getUsers();
     const newUser: AppUser = {
-      id: `user-approved-${req.role.toLowerCase()}-${Date.now()}`,
+      id: `user-approved-${(req.role || 'user').toLowerCase()}-${Date.now()}`,
       email: req.email,
       full_name: req.full_name,
       role: req.role,
@@ -404,7 +404,7 @@ export default function AdminCredentialsForm({
                 onClick={() => {
                   setEmail(initialEmail);
                   setPassword(initialPassword);
-                  const u = CustodyDB.getUsers().find(user => user.email.toLowerCase() === initialEmail.toLowerCase());
+                  const u = CustodyDB.getUsers().find(user => user.email?.toLowerCase() === (initialEmail || '').toLowerCase());
                   if (u?.permissions) {
                     setPermissions({ ...u.permissions });
                   }

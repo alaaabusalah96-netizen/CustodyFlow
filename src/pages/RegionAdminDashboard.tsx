@@ -94,7 +94,7 @@ function AdminCredentialsForm({
     setPassword(initialPassword);
     let currentPerms = getDefaultPermissions();
     if (initialEmail) {
-      const u = CustodyDB.getUsers().find(user => user.email.toLowerCase() === initialEmail.toLowerCase());
+      const u = CustodyDB.getUsers().find(user => user.email?.toLowerCase() === initialEmail.toLowerCase());
       if (u?.permissions) {
         currentPerms = { ...u.permissions };
       }
@@ -413,7 +413,7 @@ function AdminCredentialsForm({
                 onClick={() => {
                   setEmail(initialEmail);
                   setPassword(initialPassword);
-                  const u = CustodyDB.getUsers().find(user => user.email.toLowerCase() === initialEmail.toLowerCase());
+                  const u = CustodyDB.getUsers().find(user => user.email?.toLowerCase() === initialEmail.toLowerCase());
                   if (u?.permissions) {
                     setPermissions({ ...u.permissions });
                   }

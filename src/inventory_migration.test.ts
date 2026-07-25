@@ -22,10 +22,18 @@ describe('Phase 12: Inventory Organization Unit Migration & Integration Tests', 
     } as any;
 
     StorageEngine.clearCache();
+    StorageEngine.cache['active_user'] = {
+      id: 'admin-p12',
+      email: 'admin@p12.com',
+      full_name: 'Phase 12 Admin',
+      role: 'SystemAdmin',
+      company_id: companyId,
+      is_active: true
+    } as any;
 
     // 1. Setup Company
     CompaniesModule.saveCompanies([
-      { id: companyId, nameAr: 'شركة المرحلة 12 الاختيارية', nameEn: 'Phase 12 Test Co', code: 'P12' }
+      { id: companyId, name: 'Phase 12 Test Co' } as any
     ]);
     CompaniesModule.setSelectedCompanyId(companyId);
 
@@ -39,43 +47,46 @@ describe('Phase 12: Inventory Organization Unit Migration & Integration Tests', 
         companyId,
         typeId: 'type-hq',
         code: 'ORG-HQ',
+        name: 'Headquarters',
         nameAr: 'المقاطعة المركزية',
         nameEn: 'Headquarters',
         parentId: null,
         path: '/org-hq/',
         level: 1,
-        status: 'Active',
+        isActive: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      },
+      } as any,
       {
         id: 'org-north',
         companyId,
         typeId: 'type-sector',
         code: 'ORG-NORTH',
+        name: 'North Sector',
         nameAr: 'قطاع الشمال',
         nameEn: 'North Sector',
         parentId: 'org-hq',
         path: '/org-hq/org-north/',
         level: 2,
-        status: 'Active',
+        isActive: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      },
+      } as any,
       {
         id: 'org-alex',
         companyId,
         typeId: 'type-branch',
         code: 'ORG-ALEX',
+        name: 'Alexandria Branch',
         nameAr: 'فرع الإسكندرية',
         nameEn: 'Alexandria Branch',
         parentId: 'org-north',
         path: '/org-hq/org-north/org-alex/',
         level: 3,
-        status: 'Active',
+        isActive: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      }
+      } as any
     ];
     OrganizationEngine.saveUnits(units);
 
@@ -85,11 +96,10 @@ describe('Phase 12: Inventory Organization Unit Migration & Integration Tests', 
         id: 'cc-alex',
         company_id: companyId,
         code: 'CC-ALEX-01',
-        name_ar: 'مركز تكلفة الإسكندرية',
-        name_en: 'Alex Cost Center',
-        org_unit_id: 'org-alex',
-        status: 'Active'
-      }
+        nameAr: 'مركز تكلفة الإسكندرية',
+        nameEn: 'Alex Cost Center',
+        org_unit_id: 'org-alex'
+      } as any
     ]);
 
     // 4. Setup Warehouses linked to Org Units
@@ -100,7 +110,8 @@ describe('Phase 12: Inventory Organization Unit Migration & Integration Tests', 
         code: 'WH-HQ',
         is_active: true,
         company_id: companyId,
-        org_unit_id: 'org-hq'
+        org_unit_id: 'org-hq',
+        receiving_approval_workflow: false
       },
       {
         id: 'wh-alex',
@@ -108,7 +119,8 @@ describe('Phase 12: Inventory Organization Unit Migration & Integration Tests', 
         code: 'WH-ALEX',
         is_active: true,
         company_id: companyId,
-        org_unit_id: 'org-alex'
+        org_unit_id: 'org-alex',
+        receiving_approval_workflow: false
       }
     ];
     InventoryModule.saveWarehouses(warehouses);
@@ -124,7 +136,7 @@ describe('Phase 12: Inventory Organization Unit Migration & Integration Tests', 
         last_purchase_price: 500,
         company_id: companyId,
         is_active: true
-      }
+      } as any
     ];
     InventoryModule.saveProducts(products);
   });
@@ -149,7 +161,7 @@ describe('Phase 12: Inventory Organization Unit Migration & Integration Tests', 
 
   it('should auto-populate org_unit_id and derived cost_center_id when creating inventory documents & movements', async () => {
     // Create stock receipt for Alex Warehouse
-    const docData = {
+    const docData: any = {
       doc_type: 'Receipt' as const,
       source_warehouse_id: 'wh-alex',
       date: '2026-07-24',
@@ -157,7 +169,7 @@ describe('Phase 12: Inventory Organization Unit Migration & Integration Tests', 
       supplier_name: 'Shell Supplier',
       statement: 'Direct Receipt to Alex Warehouse',
       items: [
-        { product_id: 'prod-item-1', qty: 100, last_purchase_price: 500 }
+        { product_id: 'prod-item-1', product_code: 'PRD-OIL-01', product_name: 'Engine Oil 5W30', unit: 'Bottle', qty: 100, last_purchase_price: 500 }
       ]
     };
 

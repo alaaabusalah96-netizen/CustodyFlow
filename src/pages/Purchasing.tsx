@@ -10,12 +10,14 @@ import { PurchasingBusinessEngine } from '../lib/enterprise/purchasing_engine';
 import { InventoryModule } from '../db/inventory';
 import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
+import { OrganizationEngine } from '../db/organizationEngine';
 import { CustodyDB } from '../db';
 import { 
   PurchaseRequest, PurchaseOrder, Vendor, PRItem, POItem, 
   RFQ, VendorQuotation, PurchasingWorkflowConfig, VendorAPStatementItem 
 } from '../types/purchasing';
 import { Product, Warehouse } from '../types/inventory';
+import { OrganizationUnit } from '../types/organization';
 import { createEventEnvelope } from '../lib/enterprise/metadata';
 
 interface PurchasingProps {
@@ -39,6 +41,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
   const [quotations, setQuotations] = useState<VendorQuotation[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [orgUnits, setOrgUnits] = useState<OrganizationUnit[]>([]);
   const [workflowConfig, setWorkflowConfig] = useState<PurchasingWorkflowConfig>(
     PurchasingBusinessEngine.getWorkflowConfig(companyId)
   );
@@ -60,6 +63,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
   // PR Form
   const [prNotes, setPrNotes] = useState('');
   const [prDepartment, setPrDepartment] = useState('');
+  const [prOrgUnitId, setPrOrgUnitId] = useState<string>('');
   const [prItems, setPrItems] = useState<PRItem[]>([]);
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedQty, setSelectedQty] = useState(1);
@@ -79,6 +83,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
 
   // Direct PO Form
   const [directPoVendorId, setDirectPoVendorId] = useState('');
+  const [directPoOrgUnitId, setDirectPoOrgUnitId] = useState<string>('');
   const [directPoNotes, setDirectPoNotes] = useState('');
   const [directPoItems, setDirectPoItems] = useState<POItem[]>([]);
 
@@ -87,6 +92,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterOrgUnitId, setFilterOrgUnitId] = useState<string>('');
 
   // Printing State
   const [printPR, setPrintPR] = useState<PurchaseRequest | null>(null);
@@ -103,6 +109,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
     const q = PurchasingBusinessEngine.getQuotations(companyId);
     const prd = InventoryModule.getProducts();
     const wh = InventoryModule.getWarehouses();
+    const units = OrganizationEngine.getUnits(companyId);
     const cfg = PurchasingBusinessEngine.getWorkflowConfig(companyId);
 
     setVendors(v);
@@ -112,6 +119,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
     setQuotations(q);
     setProducts(prd);
     setWarehouses(wh);
+    setOrgUnits(units);
     setWorkflowConfig(cfg);
 
     if (wh.length > 0 && !receiveWarehouseId) {
@@ -200,6 +208,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
         requesterId: activeUser?.id || 'system',
         requesterName: activeUser?.full_name || 'System',
         department: prDepartment,
+        org_unit_id: prOrgUnitId || undefined,
         items: prItems,
         notes: prNotes
       }
@@ -211,6 +220,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
       setPrItems([]);
       setPrNotes('');
       setPrDepartment('');
+      setPrOrgUnitId('');
       setShowCreatePR(false);
       loadAllData();
     } else {
@@ -438,6 +448,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
       userRole: activeUser?.role as any || 'System',
       payload: {
         vendorId: directPoVendorId,
+        org_unit_id: directPoOrgUnitId || undefined,
         items: directPoItems,
         notes: directPoNotes,
         deliveryWarehouseId: warehouses[0]?.id
@@ -450,6 +461,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
       setShowDirectPO(false);
       setDirectPoItems([]);
       setDirectPoNotes('');
+      setDirectPoOrgUnitId('');
       loadAllData();
     } else {
       triggerFeedback('error', isRtl ? result.messageAr : result.messageEn);
@@ -660,9 +672,15 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
                              (isRtl ? 'قيد الاعتماد' : 'Pending Approval')}
                           </span>
                         </div>
-                        <p className="text-xs text-slate-500">
-                          {isRtl ? `طالب الطلب: ${pr.requesterName}` : `Requested by: ${pr.requesterName}`}
-                          {pr.department && ` | ${pr.department}`}
+                        <p className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap mt-0.5">
+                          <span>{isRtl ? `طالب الطلب: ${pr.requesterName}` : `Requested by: ${pr.requesterName}`}</span>
+                          {pr.department && <span>| {pr.department}</span>}
+                          {pr.org_unit_id && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                              <Building2 className="h-3 w-3" />
+                              {orgUnits.find(u => u.id === pr.org_unit_id)?.nameAr || orgUnits.find(u => u.id === pr.org_unit_id)?.name}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -950,9 +968,15 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
                              (isRtl ? 'صادر / قيد التوريد' : 'Issued / Pending Delivery')}
                           </span>
                         </div>
-                        <p className="text-xs text-slate-500">
-                          {isRtl ? `المورد: ${po.vendorName}` : `Vendor: ${po.vendorName}`}
-                          {po.prNumber && ` | ${isRtl ? 'مرجع الطلب:' : 'PR:'} ${po.prNumber}`}
+                        <p className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap mt-0.5">
+                          <span>{isRtl ? `المورد: ${po.vendorName}` : `Vendor: ${po.vendorName}`}</span>
+                          {po.prNumber && <span>| {isRtl ? 'مرجع الطلب:' : 'PR:'} {po.prNumber}</span>}
+                          {po.org_unit_id && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                              <Building2 className="h-3 w-3" />
+                              {orgUnits.find(u => u.id === po.org_unit_id)?.nameAr || orgUnits.find(u => u.id === po.org_unit_id)?.name}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -1436,7 +1460,22 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
             </div>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    {isRtl ? 'الوحدة التنظيمية / الفرع' : 'Organization Unit'}
+                  </label>
+                  <select
+                    value={prOrgUnitId}
+                    onChange={e => setPrOrgUnitId(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-bold"
+                  >
+                    <option value="">{isRtl ? '-- اختيار الفرع/الوحدة --' : '-- Select Unit --'}</option>
+                    {orgUnits.map(u => (
+                      <option key={u.id} value={u.id}>{isRtl ? u.nameAr || u.name : u.nameEn || u.name} ({u.code})</option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     {isRtl ? 'القسم / الإدارة الطالبة' : 'Department'}
@@ -1730,6 +1769,185 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
 
       {/* ========================================================================= */}
       {/* MODAL: RECEIVE PO STOCK */}
+      {/* ========================================================================= */}
+      {/* MODAL: DIRECT PO */}
+      {/* ========================================================================= */}
+      {showDirectPO && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-extrabold text-slate-900 dark:text-slate-100">
+                {isRtl ? 'إصدار امر شراء مباشر (Direct PO)' : 'Issue Direct Purchase Order (PO)'}
+              </h3>
+              <button onClick={() => setShowDirectPO(false)} className="p-1 text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    {isRtl ? 'اختر المورد' : 'Select Vendor'}
+                  </label>
+                  <select
+                    value={directPoVendorId}
+                    onChange={e => setDirectPoVendorId(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-bold"
+                  >
+                    <option value="">{isRtl ? '-- اختيار المورد --' : '-- Select Vendor --'}</option>
+                    {vendors.map(v => (
+                      <option key={v.id} value={v.id}>{v.nameAr} ({v.code})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    {isRtl ? 'الوحدة التنظيمية / الفرع' : 'Organization Unit'}
+                  </label>
+                  <select
+                    value={directPoOrgUnitId}
+                    onChange={e => setDirectPoOrgUnitId(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-bold"
+                  >
+                    <option value="">{isRtl ? '-- اختيار الفرع/الوحدة --' : '-- Select Unit --'}</option>
+                    {orgUnits.map(u => (
+                      <option key={u.id} value={u.id}>{isRtl ? u.nameAr || u.name : u.nameEn || u.name} ({u.code})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {isRtl ? 'ملاحظات وشروط الأمر' : 'PO Notes'}
+                </label>
+                <input
+                  type="text"
+                  value={directPoNotes}
+                  onChange={e => setDirectPoNotes(e.target.value)}
+                  placeholder={isRtl ? 'ملاحظات الشراء والتوريد المباشر' : 'Direct PO notes'}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs"
+                />
+              </div>
+
+              {/* Add Item Builder for PO */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                  {isRtl ? 'إضافة صنف لأمر الشراء:' : 'Add Item to PO:'}
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                  <div className="sm:col-span-2">
+                    <select
+                      value={selectedProductId}
+                      onChange={e => {
+                        setSelectedProductId(e.target.value);
+                        const p = products.find(prod => prod.id === e.target.value);
+                        if (p) setSelectedEstPrice(p.last_purchase_price || 0);
+                      }}
+                      className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-bold"
+                    >
+                      <option value="">{isRtl ? '-- اختر الصنف --' : '-- Select Product --'}</option>
+                      {products.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      min={1}
+                      value={selectedQty}
+                      onChange={e => setSelectedQty(Number(e.target.value))}
+                      placeholder={isRtl ? 'الكمية' : 'Qty'}
+                      className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!selectedProductId) return;
+                        const p = products.find(prod => prod.id === selectedProductId);
+                        if (!p) return;
+                        const newItem: POItem = {
+                          productId: p.id,
+                          productCode: p.code,
+                          productName: p.name,
+                          unit: p.unit,
+                          qty: selectedQty,
+                          unitPrice: selectedEstPrice || p.last_purchase_price || 100,
+                          totalPrice: (selectedQty) * (selectedEstPrice || p.last_purchase_price || 100)
+                        };
+                        setDirectPoItems([...directPoItems, newItem]);
+                        setSelectedProductId('');
+                        setSelectedQty(1);
+                      }}
+                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold"
+                    >
+                      {isRtl ? 'إضافة للصنف' : 'Add Item'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Items List */}
+              {directPoItems.length > 0 && (
+                <div className="border rounded-xl border-slate-200 dark:border-slate-800 overflow-hidden text-xs">
+                  <table className="w-full text-right">
+                    <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">
+                      <tr>
+                        <th className="p-2">{isRtl ? 'الصنف' : 'Product'}</th>
+                        <th className="p-2 text-center">{isRtl ? 'الكمية' : 'Qty'}</th>
+                        <th className="p-2 text-center">{isRtl ? 'سعر الوحدة' : 'Unit Price'}</th>
+                        <th className="p-2 text-center">{isRtl ? 'الإجمالي' : 'Total'}</th>
+                        <th className="p-2 text-center"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {directPoItems.map((it, idx) => (
+                        <tr key={idx}>
+                          <td className="p-2 font-bold">{it.productName}</td>
+                          <td className="p-2 text-center">{it.qty} {it.unit}</td>
+                          <td className="p-2 text-center">{it.unitPrice}</td>
+                          <td className="p-2 text-center font-extrabold">{it.totalPrice}</td>
+                          <td className="p-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setDirectPoItems(directPoItems.filter((_, i) => i !== idx))}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowDirectPO(false)}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 rounded-xl text-xs font-bold"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateDirectPO}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md"
+                >
+                  {isRtl ? 'إصدار أمر الشراء' : 'Issue PO'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {showReceivePO && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">

@@ -412,7 +412,7 @@ export default function AuditLogView({ language, theme }: AuditLogProps) {
                       </td>
                       <td className="py-3 px-3">
                         {(() => {
-                          const logUser = usersList.find(u => u.id === log.user_id || u.full_name === log.user_name || u.email.toLowerCase() === log.user_name.toLowerCase());
+                          const logUser = usersList.find(u => u.id === log.user_id || u.full_name === log.user_name || (u.email && log.user_name && u.email.toLowerCase() === log.user_name.toLowerCase()));
                           let affiliationStr = '';
                           if (logUser) {
                             const comp = companiesList.find(c => c.id === logUser.company_id);

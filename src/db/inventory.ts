@@ -878,12 +878,13 @@ export class InventoryModule {
    */
   public static resolveWarehouseOrgUnit(warehouseId?: string, companyId?: string): string | null {
     if (!warehouseId) return null;
-    const warehouses = InventoryModule.getWarehouses();
+    const targetCompanyId = companyId || CompaniesModule.getSelectedCompanyId();
+    const warehouses = InventoryModule.getWarehouses(targetCompanyId);
     const wh = warehouses.find(w => w.id === warehouseId);
     if (!wh) return null;
     if (wh.org_unit_id) return wh.org_unit_id;
     if (wh.parent_id) {
-      return InventoryModule.resolveWarehouseOrgUnit(wh.parent_id, companyId);
+      return InventoryModule.resolveWarehouseOrgUnit(wh.parent_id, targetCompanyId);
     }
     return null;
   }
@@ -896,7 +897,7 @@ export class InventoryModule {
     orgUnitId: string, 
     includeSubUnits: boolean = true
   ): Warehouse[] {
-    const warehouses = InventoryModule.getWarehouses().filter(w => (w.company_id || 'comp-1') === companyId);
+    const warehouses = InventoryModule.getWarehouses(companyId);
     let targetOrgUnitIds = [orgUnitId];
     if (includeSubUnits) {
       const descendants = OrganizationEngine.getDescendantUnits(orgUnitId, companyId);
@@ -962,7 +963,7 @@ export class InventoryModule {
   static async addInventoryDocument(
     docData: Omit<InventoryDocument, keyof import('../types/enterprise').BaseMetadata | 'id' | 'status' | 'doc_no'>
   ): Promise<InventoryDocument> {
-    const companyId = CompaniesModule.getSelectedCompanyId();
+    const companyId = (docData as any).tenantId || CompaniesModule.getSelectedCompanyId();
     const user = UsersModule.getActiveUser();
     const operatorId = user?.id || 'system';
 
@@ -1085,6 +1086,17 @@ export class InventoryModule {
       console.error('Error deleting inventory document:', err);
       return { success: false, errors: [err.message || 'Failed to delete inventory document.'] };
     }
+  }
+
+  static async processDocumentStage(docId: string, stage: InventoryDocStatus, userId: string = 'system'): Promise<void> {
+    const documents = InventoryModule.getInventoryDocuments();
+    const doc = documents.find(d => d.id === docId);
+    if (!doc) return;
+
+    doc.status = stage;
+    InventoryModule.saveInventoryDocuments(documents);
+    InventoryModule.generateStockMovementsForDoc(doc, userId, stage === 'Dispatched' ? 'Dispatched' : 'Posted');
+    await InventoryModule.postAccountingEntryForDoc(doc, userId);
   }
 
   /**

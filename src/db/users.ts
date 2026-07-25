@@ -7,8 +7,8 @@ import { LogsModule } from './logs';
 import { hashPassword } from '../lib/hash';
 
 export class UsersModule {
-  static isPlatformOwner(email?: string): boolean {
-    if (!email) return false;
+  static isPlatformOwner(email?: string | null): boolean {
+    if (!email || typeof email !== 'string') return false;
     const cleaned = email.toLowerCase().trim();
     return cleaned === 'alaaabusalah96@gmail.com';
   }
