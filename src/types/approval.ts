@@ -4,7 +4,22 @@ export type ApprovalDocumentType =
   | 'CASH_VOUCHER' 
   | 'INVENTORY_VOUCHER' 
   | 'EXPENSE' 
+  | 'SALES_INVOICE'
+  | 'PAYROLL_RUN'
+  | 'FIXED_ASSET_DISPOSAL'
   | 'GENERAL';
+
+export const DOCUMENT_TYPE_LABELS: Record<string, { ar: string; en: string }> = {
+  PURCHASE_REQUEST: { ar: 'طلب شراء احتياجات', en: 'Purchase Request' },
+  PURCHASE_ORDER: { ar: 'أمر توريد / شراء', en: 'Purchase Order' },
+  CASH_VOUCHER: { ar: 'سند صرف نقدية / عهدة', en: 'Cash Payment Voucher' },
+  INVENTORY_VOUCHER: { ar: 'إذن إضافة / تحويل مخزني', en: 'Inventory Movement Voucher' },
+  EXPENSE: { ar: 'مطالبة / تسوية مصروفات', en: 'Expense Claim' },
+  SALES_INVOICE: { ar: 'فاتورة مبيعات آجلة', en: 'Credit Sales Invoice' },
+  PAYROLL_RUN: { ar: 'مسير راتب ومستحقات', en: 'Payroll Run' },
+  FIXED_ASSET_DISPOSAL: { ar: 'طلب تكهين / استبعاد أصل', en: 'Fixed Asset Disposal' },
+  GENERAL: { ar: 'مستند عام / طلب عادي', en: 'General Document' }
+};
 
 export type ApproverType = 'ROLE' | 'SPECIFIC_USER' | 'DEPARTMENT_HEAD' | 'ORG_UNIT_MANAGER';
 

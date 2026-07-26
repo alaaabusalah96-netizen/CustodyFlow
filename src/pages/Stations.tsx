@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { CustodyDB } from '../db';
 import { translations, Language, Theme, Station, Region, Company, AppUser } from '../types';
+import OrganizationTreeManager from '../components/OrganizationTreeManager';
 
 function AdminCredentialsForm({ 
   initialEmail, 
@@ -655,6 +656,14 @@ export default function Stations({
 
       {isStructureOpen ? (
         <div className="space-y-6 mt-4 animate-fade-in" id="stations-structure-tree">
+          {/* Dynamic Organization Tree Manager */}
+          <OrganizationTreeManager
+            companyId={selectedCompanyId}
+            isRtl={isRtl}
+            theme={theme}
+            onStructureChange={loadData}
+          />
+
           {/* Structure builder title banner */}
           <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
             theme === 'dark' ? 'bg-indigo-950/15 border-indigo-900/40 text-indigo-200' : 'bg-indigo-50/50 border-indigo-100 text-indigo-700'
