@@ -294,53 +294,43 @@ export default function Login({
 
     const emailLower = email.toLowerCase().trim();
 
-    // Feature Flag for Phase 1 Server-side Authentication Remediation (Rollback Protection)
-    const USE_SERVER_AUTH = true;
+    // Primary Path: Server-side Authentication
+    try {
+      const authRes = await fetch('/api/auth/verify-credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailLower, password })
+      });
+      const authData = await authRes.json();
 
-    if (USE_SERVER_AUTH) {
-      try {
-        const authRes = await fetch('/api/auth/verify-credentials', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: emailLower, password })
-        });
-        const authData = await authRes.json();
-
-        if (!authData.success) {
-          setError(authData.message || (isRtl ? 'كلمة المرور غير صحيحة.' : 'Incorrect password.'));
-          return;
-        }
-
+      if (authData.success && authData.user) {
         let authenticatedUser = authData.user as AppUser;
 
-        // Sync with Firebase Authentication (Chicken-and-Egg solution)
+        // Sync with Firebase Authentication
         const firebaseUser = password ? await syncWithFirebaseAuth(emailLower, password) : null;
         if (firebaseUser) {
           authenticatedUser = { ...authenticatedUser, id: firebaseUser.uid };
         }
 
-        // Upsert sanitized user profile to local state and activate session
         CustodyDB.upsertLocalUser(authenticatedUser);
         CustodyDB.setActiveUser(authenticatedUser);
         onLoginSuccess(authenticatedUser);
         return;
-      } catch (serverAuthErr) {
-        console.warn('Server-side authentication endpoint error, proceeding with local fallback:', serverAuthErr);
       }
+    } catch (serverAuthErr) {
+      console.warn('Server-side authentication service unavailable:', serverAuthErr);
     }
 
-    // --- Legacy Client-side Fallback Verification (Rollback Path) ---
-    // Sync with Firebase Authentication first (Chicken-and-Egg solution)
+    // Direct Local Secure Hash Verification Path (strictly hashed, no plain-text comparisons)
     const firebaseUser = password ? await syncWithFirebaseAuth(emailLower, password) : null;
 
-    // Now, after authentication, fetch user from Firestore securely
     try {
       const remoteUser = await CustodyDB.fetchUserByEmail(emailLower);
       if (remoteUser) {
         CustodyDB.upsertLocalUser(remoteUser);
       }
     } catch (err) {
-      console.warn('Failed to fetch user from Firestore during login:', err);
+      console.warn('Failed to fetch user profile during login:', err);
     }
 
     const users = CustodyDB.getUsers();
@@ -353,16 +343,15 @@ export default function Login({
 
     const isPlatformAdmin = CustodyDB.isPlatformOwner(emailLower);
 
-    // Verify Password (Plain Text, OWASP 10k Stretched Hash, 1k Stretched Hash, Single-Pass Hash, or Old Unsalted Hash)
+    // Verify Password using OWASP Stretched Key Derivation Hash
     const storedPassword = foundUser.password || '';
     const userSalt = foundUser.salt || emailLower;
     const enteredHashSalted10k = CustodyDB.hashPassword(password, userSalt);
     const enteredHashSalted1k = CustodyDB.legacyStretchedHashPassword1000(password, userSalt);
     const enteredHashSinglePass = CustodyDB.legacySinglePassHashPassword(password, userSalt);
-    const enteredHashOldSalted = CustodyDB.legacyHashPassword(password, emailLower); // old email-only salt
-    const enteredHashLegacy = CustodyDB.legacyHashPassword(password); // old unsalted fallback
+    const enteredHashOldSalted = CustodyDB.legacyHashPassword(password, emailLower);
+    const enteredHashLegacy = CustodyDB.legacyHashPassword(password);
     
-    const isPlainMatch = storedPassword !== '' && storedPassword === password;
     const isSaltedHash10kMatch = storedPassword !== '' && storedPassword === enteredHashSalted10k;
     const isSaltedHash1kMatch = storedPassword !== '' && storedPassword === enteredHashSalted1k;
     const isLegacySinglePassMatch = storedPassword !== '' && storedPassword === enteredHashSinglePass;
@@ -376,14 +365,13 @@ export default function Login({
         setError(isRtl ? 'لم يتم تعيين كلمة مرور لهذا الحساب بعد. يرجى التواصل مع المسؤول لتفعيل حسابك.' : 'No password has been set for this account yet. Please contact the administrator.');
         return;
       }
-    } else if (!isPlainMatch && !isHashMatch) {
+    } else if (!isHashMatch) {
       setError(isRtl ? 'كلمة المرور غير صحيحة.' : 'Incorrect password.');
       return;
     }
 
-    // Auto migrate legacy plain-text, old 1k stretched, single-pass, or unsalted hash to OWASP 10k stretched hash
-    const needsMigration = (storedPassword !== '' && isPlainMatch) || 
-                          (storedPassword !== '' && isSaltedHash1kMatch) ||
+    // Auto migrate legacy hash formats to standard OWASP 10k stretched hash
+    const needsMigration = (storedPassword !== '' && isSaltedHash1kMatch) || 
                           (storedPassword !== '' && isLegacySinglePassMatch) ||
                           (storedPassword !== '' && isLegacyHashMatch) ||
                           (storedPassword !== '' && isOldSaltedMatch);

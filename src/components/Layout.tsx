@@ -29,7 +29,8 @@ import {
   Users as UsersIcon,
   Laptop as AssetIcon,
   Receipt as PosIcon,
-  DollarSign as SalesIcon
+  DollarSign as SalesIcon,
+  Truck as FleetIcon
 } from 'lucide-react';
 import { CustodyDB, ModulesModule } from '../db';
 import { translations, Language, Theme, AppUser } from '../types';
@@ -99,6 +100,7 @@ export default function Layout({
     { id: 'pos', label: isRtl ? 'نقاط البيع السريع (POS)' : 'Point of Sale (POS)', icon: PosIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
     { id: 'crm', label: isRtl ? 'علاقات العملاء CRM' : 'Customer Relations (CRM)', icon: UsersIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
     { id: 'fixed_assets', label: isRtl ? 'الأصول الثابتة والاستهلاكات' : 'Fixed Assets & Depreciation', icon: AssetIcon, roleAllowed: ['SystemAdmin', 'Admin'] },
+    { id: 'fleet', label: isRtl ? 'إدارة الأسطول والحركة' : 'Fleet & Transportation', icon: FleetIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager'] },
     { id: 'hr_payroll', label: isRtl ? 'الموارد البشرية والرواتب' : 'HR & Payroll Ledger', icon: Briefcase, roleAllowed: ['SystemAdmin', 'Admin'] },
     { id: 'reports', label: t.reports, icon: FileText, permission: 'view_reports' },
     { id: 'search', label: t.search, icon: SearchIcon },

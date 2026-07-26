@@ -31,6 +31,7 @@ import SalesAR from './pages/SalesAR';
 import POS from './pages/POS';
 import CRM from './pages/CRM';
 import FixedAssets from './pages/FixedAssets';
+import FleetManagement from './pages/FleetManagement';
 import HRPayroll from './pages/HRPayroll';
 
 export default function App() {
@@ -450,6 +451,13 @@ export default function App() {
       case 'fixed_assets':
         return (
           <FixedAssets
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'fleet':
+        return (
+          <FleetManagement
             language={language}
             theme={theme}
           />

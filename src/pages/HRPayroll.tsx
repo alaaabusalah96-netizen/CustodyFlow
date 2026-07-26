@@ -402,6 +402,20 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
             </div>
 
             <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1">
+                <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                <select
+                  value={selectedOrgUnitFilter}
+                  onChange={(e) => setSelectedOrgUnitFilter(e.target.value)}
+                  className="bg-transparent text-xs text-slate-800 dark:text-slate-100 focus:outline-none"
+                >
+                  <option value="ALL">{isRtl ? 'جميع الهياكل التنظيمية' : 'All Org Units'}</option>
+                  {orgUnits.map((u) => (
+                    <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <select
                 value={deptFilter}
                 onChange={(e) => setDeptFilter(e.target.value)}
@@ -434,6 +448,12 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
                   </div>
 
                   <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-2">{e.jobTitle} | {e.department}</p>
+                  {e.org_unit_id && (
+                    <div className="mt-1 flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">
+                      <Building2 className="h-3 w-3" />
+                      <span>{orgUnits.find(u => u.id === e.org_unit_id)?.name || e.org_unit_id}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs font-medium">
@@ -475,6 +495,20 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
             </h3>
 
             <form onSubmit={handleAddEmployee} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'الوحدة التنظيمية / الفرع / القسم' : 'Organization Unit / Branch'}</label>
+                <select
+                  value={formOrgUnitId}
+                  onChange={(e) => setFormOrgUnitId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="">{isRtl ? '-- افتراضي (حسب صلاحية المستخدم) --' : '-- Default (User Scope) --'}</option>
+                  {orgUnits.map((u) => (
+                    <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'الاسم بالكامل للموظف *' : 'Employee Full Name *'}</label>
                 <input

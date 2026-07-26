@@ -371,8 +371,8 @@ export class CustodyDB {
     return TransactionsModule.restoreTransaction(id);
   }
 
-  static getReconciliation(stationId?: string, regionId?: string) {
-    return TransactionsModule.getReconciliation(stationId, regionId);
+  static getReconciliation(stationId?: string, regionId?: string, orgUnitId?: string) {
+    return TransactionsModule.getReconciliation(stationId, regionId, orgUnitId);
   }
 
   static getStationDeductedCustody(stationId: string): number {

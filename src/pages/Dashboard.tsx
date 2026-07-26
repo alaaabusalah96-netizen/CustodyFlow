@@ -27,6 +27,7 @@ import {
   Layers
 } from 'lucide-react';
 import { CustodyDB } from '../db';
+import { OrganizationEngine } from '../db/organizationEngine';
 import { translations, Language, Theme, Transaction, Station } from '../types';
 import { 
   BarChart, 
@@ -63,8 +64,9 @@ export default function Dashboard({
   // Multi-Company and Hierarchy Selection State
   const [companies, setCompanies] = useState(() => CustodyDB.getCompanies());
   const [selectedCompanyId, setSelectedCompanyId] = useState(() => CustodyDB.getSelectedCompanyId());
+  const [orgUnits, setOrgUnits] = useState<any[]>([]);
   const [selectedSection, setSelectedSection] = useState<{
-    type: 'all' | 'region' | 'station';
+    type: 'all' | 'org_unit' | 'region' | 'station';
     id: string;
     name: string;
   }>({
@@ -72,6 +74,23 @@ export default function Dashboard({
     id: 'all',
     name: isRtl ? 'جميع أقسام وفروع الشركة' : 'All Company Sections'
   });
+
+  useEffect(() => {
+    const units = OrganizationEngine.getUnits(selectedCompanyId);
+    setOrgUnits(units);
+
+    // If user belongs to a specific org unit and no section is manually chosen yet, default to user's org unit
+    if (user && user.org_unit_id && selectedSection.type === 'all') {
+      const u = units.find(unit => unit.id === user.org_unit_id);
+      if (u) {
+        setSelectedSection({
+          type: 'org_unit',
+          id: u.id,
+          name: isRtl ? `وحدة تنظيمية: ${u.nameAr || u.name}` : `Org Unit: ${u.nameEn || u.name}`
+        });
+      }
+    }
+  }, [selectedCompanyId]);
 
   // Local state for instant reactivity
   const [metrics, setMetrics] = useState(() => CustodyDB.getReconciliation());
@@ -100,13 +119,17 @@ export default function Dashboard({
     // Dynamically retrieve metrics according to selected section
     const stId = selectedSection.type === 'station' ? selectedSection.id : undefined;
     const regId = selectedSection.type === 'region' ? selectedSection.id : undefined;
-    setMetrics(CustodyDB.getReconciliation(stId, regId));
+    const orgUnitId = selectedSection.type === 'org_unit' ? selectedSection.id : undefined;
+    setMetrics(CustodyDB.getReconciliation(stId, regId, orgUnitId));
 
     // Retrieve scoped transactions of the active company
     const scopedTxs = CustodyDB.getScopedTransactions();
     
     // Filter transactions by selected section
-    if (selectedSection.type === 'station') {
+    if (selectedSection.type === 'org_unit') {
+      const validOrgUnitIds = new Set(OrganizationEngine.getSubtreeUnitIds(selectedSection.id, selectedCompanyId));
+      setAllTransactions(scopedTxs.filter(t => (t.org_unit_id && validOrgUnitIds.has(t.org_unit_id)) || ((t as any).orgUnitId && validOrgUnitIds.has((t as any).orgUnitId))));
+    } else if (selectedSection.type === 'station') {
       setAllTransactions(scopedTxs.filter(t => t.station_id === selectedSection.id));
     } else if (selectedSection.type === 'region') {
       // Find stations belonging to selected region or empty/none in company context
@@ -144,9 +167,18 @@ export default function Dashboard({
       });
     } else {
       const parts = val.split(':');
-      const type = parts[0] as 'region' | 'station';
+      const type = parts[0] as 'org_unit' | 'region' | 'station';
       const id = parts[1];
-      if (type === 'region') {
+      if (type === 'org_unit') {
+        const u = OrganizationEngine.getUnitById(id);
+        if (u) {
+          setSelectedSection({
+            type: 'org_unit',
+            id: u.id,
+            name: isRtl ? `وحدة تنظيمية: ${u.nameAr || u.name}` : `Org Unit: ${u.nameEn || u.name}`
+          });
+        }
+      } else if (type === 'region') {
         const r = CustodyDB.getScopedRegions().find(reg => reg.id === id);
         if (r) {
           setSelectedSection({
@@ -434,8 +466,8 @@ export default function Dashboard({
         </div>
       )}
 
-      {/* Platform Admin Central Control Portal */}
-      {isSystemAdmin && (
+      {/* Administrative Structure Control Portal */}
+      {(isSystemAdmin || isAdmin || isManager) && (
         <div className={`p-5 rounded-2xl border ${
           theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
         }`}>
@@ -480,6 +512,15 @@ export default function Dashboard({
                   className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-200 min-w-[200px] cursor-pointer"
                 >
                   <option value="all">{isRtl ? 'جميع أقسام وفروع الشركة' : 'All Company Sections'}</option>
+                  {orgUnits.length > 0 && (
+                    <optgroup label={isRtl ? 'وحدات الهيكل التنظيمي (القطاعات / الفروع / المحطات / المزارع)' : 'Organization Units'}>
+                      {orgUnits.map(u => (
+                        <option key={u.id} value={`org_unit:${u.id}`}>
+                          {u.code} - {isRtl ? u.nameAr || u.name : u.nameEn || u.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                   <optgroup label={isRtl ? 'القطاعات والمناطق الإقليمية' : 'Regional Sectors'}>
                     {CustodyDB.getScopedRegions().map(r => (
                       <option key={r.id} value={`region:${r.id}`}>

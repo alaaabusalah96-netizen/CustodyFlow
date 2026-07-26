@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CustodyDB } from '../db';
+import { CompaniesModule } from '../db/companies';
+import { OrganizationEngine } from '../db/organizationEngine';
+import { WarehouseHierarchyEngine } from '../db/warehouseHierarchyEngine';
+import { CostCenterEngine } from '../db/costCenterEngine';
+import { EnterpriseReportEngine } from '../lib/enterprise/report_engine';
 import { translations, Language, Theme, Transaction, Station } from '../types';
 import { 
   FileText, 
@@ -11,7 +16,11 @@ import {
   RefreshCw,
   TrendingDown,
   Info,
-  Building
+  Building,
+  Building2,
+  Warehouse as WarehouseIcon,
+  PieChart,
+  FolderGit2
 } from 'lucide-react';
 
 interface ReportsProps {
@@ -26,8 +35,26 @@ export default function Reports({ language, theme }: ReportsProps) {
   const isRtl = language === 'ar';
 
   const activeUser = CustodyDB.getActiveUser();
+  const selectedCompanyId = CompaniesModule.getSelectedCompanyId() || 'comp-default';
   const allStations = CustodyDB.getScopedStations();
   
+  // Organization Engine & Enterprise Dimensions
+  const [orgUnits, setOrgUnits] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [costCenters, setCostCenters] = useState<any[]>([]);
+
+  // Selected Filter Dimensions
+  const [selectedOrgUnit, setSelectedOrgUnit] = useState<string>('ALL');
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>('ALL');
+  const [selectedCostCenter, setSelectedCostCenter] = useState<string>('ALL');
+  const [selectedProject, setSelectedProject] = useState<string>('ALL');
+
+  useEffect(() => {
+    setOrgUnits(OrganizationEngine.getUnits(selectedCompanyId));
+    setWarehouses(WarehouseHierarchyEngine.getWarehouses(selectedCompanyId));
+    setCostCenters(CostCenterEngine.getCostCenters(selectedCompanyId));
+  }, [selectedCompanyId]);
+
   // Scope stations based on user role
   let allowedStations: Station[] = [];
   if (activeUser) {
@@ -58,45 +85,48 @@ export default function Reports({ language, theme }: ReportsProps) {
 
   // Load initial filtered list on mount/load
   const getInitialFilteredList = () => {
-    let list = CustodyDB.getScopedTransactions();
-    const allowedIds = allowedStations.map(s => s.id);
-    
-    // Scoped transactions
-    list = list.filter(tx => tx.station_id && allowedIds.includes(tx.station_id));
-    return list;
+    return EnterpriseReportEngine.getCustodyReport({
+      companyId: selectedCompanyId,
+      orgUnitId: selectedOrgUnit,
+      warehouseId: selectedWarehouse,
+      costCenterId: selectedCostCenter,
+      projectId: selectedProject,
+      startDate,
+      endDate
+    });
   };
 
   const [reportData, setReportData] = useState<Transaction[]>(() => getInitialFilteredList());
   const [hasGenerated, setHasGenerated] = useState(true);
   const [reportsLimit, setReportsLimit] = useState(15);
 
-  // Generate Report Handler
+  // Generate Report Handler with Dynamic 6-Dimensional Filtering
   const handleGenerate = () => {
-    let list = CustodyDB.getScopedTransactions();
+    let list = EnterpriseReportEngine.getCustodyReport({
+      companyId: selectedCompanyId,
+      orgUnitId: selectedOrgUnit,
+      warehouseId: selectedWarehouse,
+      costCenterId: selectedCostCenter,
+      projectId: selectedProject,
+      startDate,
+      endDate
+    });
+
     const allowedIds = allowedStations.map(s => s.id);
 
-    // 1. Filter by allowed stations based on scope
-    if (selectedStation === 'all') {
-      list = list.filter(tx => tx.station_id && allowedIds.includes(tx.station_id));
-    } else {
+    // Filter by allowed stations based on scope
+    if (selectedStation !== 'all') {
       list = list.filter(tx => tx.station_id === selectedStation);
+    } else if (allowedIds.length > 0) {
+      list = list.filter(tx => !tx.station_id || allowedIds.includes(tx.station_id));
     }
 
-    // 2. Filter by status depending on report type
+    // Filter by status depending on report type
     if (reportType === 'pending') {
       list = list.filter(tx => tx.status === 'Pending');
     } else if (reportType === 'settled') {
       list = list.filter(tx => tx.status === 'Under Settlement' || tx.status === 'Settled');
     }
-
-    // 3. Filter by Date range
-    list = list.filter(tx => {
-      const txDate = tx.date; // YYYY-MM-DD
-      return txDate >= startDate && txDate <= endDate;
-    });
-
-    // Sort by Date descending
-    list.sort((a, b) => b.date.localeCompare(a.date));
 
     setReportData(list);
     setHasGenerated(true);
@@ -188,11 +218,71 @@ export default function Reports({ language, theme }: ReportsProps) {
         <div className="flex items-center gap-2 mb-4 border-b pb-2.5 border-slate-100 dark:border-slate-800">
           <Filter size={16} className="text-emerald-500" />
           <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            {isRtl ? 'تصفية وخيارات التقارير' : 'Report Filters & Parameters'}
+            {isRtl ? 'تصفية وخيارات التقارير الحركية والمالية' : 'Dynamic Report Filters & Parameters'}
           </h3>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Organization Unit Filter */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+              <Building2 className="h-3 w-3 text-indigo-500" />
+              <span>{isRtl ? 'الهيكل التنظيمي / الفرع / القطاع' : 'Organization Unit'}</span>
+            </label>
+            <select
+              value={selectedOrgUnit}
+              onChange={(e) => setSelectedOrgUnit(e.target.value)}
+              className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <option value="ALL">{isRtl ? 'جميع الهياكل التنظيمية (شامل الفروع)' : 'All Organization Units'}</option>
+              {orgUnits.map((u) => (
+                <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Warehouse Filter */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+              <WarehouseIcon className="h-3 w-3 text-amber-500" />
+              <span>{isRtl ? 'المستودع / المخزن' : 'Warehouse'}</span>
+            </label>
+            <select
+              value={selectedWarehouse}
+              onChange={(e) => setSelectedWarehouse(e.target.value)}
+              className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <option value="ALL">{isRtl ? 'جميع المستودعات والمخازن' : 'All Warehouses'}</option>
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Cost Center Filter */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+              <PieChart className="h-3 w-3 text-emerald-500" />
+              <span>{isRtl ? 'مركز التكلفة / البند' : 'Cost Center'}</span>
+            </label>
+            <select
+              value={selectedCostCenter}
+              onChange={(e) => setSelectedCostCenter(e.target.value)}
+              className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <option value="ALL">{isRtl ? 'جميع مراكز التكلفة' : 'All Cost Centers'}</option>
+              {costCenters.map((c) => (
+                <option key={c.id} value={c.id}>{c.code} - {c.name}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Station Selection Dropdown (Only shown to Admin and Regional Manager) */}
           {activeUser && (activeUser.role === 'Admin' || activeUser.role === 'SystemAdmin' || activeUser.role === 'RegionalManager') && (
             <div>

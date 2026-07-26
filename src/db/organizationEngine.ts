@@ -3,6 +3,8 @@ import { StorageEngine } from './storage';
 import { dbSetDoc, dbDeleteDoc } from '../firebase';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
+import { CompaniesModule } from './companies';
+import { StationsModule } from './stations';
 
 // Default system-wide organization unit types
 export const DEFAULT_ORGANIZATION_UNIT_TYPES: OrganizationUnitType[] = [
@@ -271,10 +273,177 @@ export class OrganizationEngine {
     return subtree.filter(u => u.id !== rootUnitId);
   }
 
+  /**
+   * Automatically migrates legacy Company -> Region -> Station structure into the Organization Tree without data loss.
+   * Ensures idempotency: existing organization units will be reused.
+   */
+  static autoMigrateLegacyStructure(targetCompanyId?: string): { migratedUnitsCount: number; updatedUsersCount: number } {
+    const existingUnits = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+    const existingUnitIds = new Set(existingUnits.map(u => u.id));
+
+    const companies = CompaniesModule.getCompanies();
+    const filterCompanies = targetCompanyId ? companies.filter(c => c.id === targetCompanyId) : companies;
+
+    const regions = StationsModule.getRegions();
+    const stations = StationsModule.getStations();
+
+    let migratedUnitsCount = 0;
+
+    for (const company of filterCompanies) {
+      // 1. Ensure Company Root Organization Unit
+      const companyUnitId = `org-unit-company-${company.id}`;
+      let companyUnit = existingUnits.find(u => u.id === companyUnitId || (u.companyId === company.id && u.typeId === 'out-company'));
+      
+      if (!companyUnit) {
+        companyUnit = {
+          id: companyUnitId,
+          companyId: company.id,
+          parentId: null,
+          typeId: 'out-company',
+          code: company.code || company.id.toUpperCase(),
+          name: company.name,
+          nameAr: company.name,
+          nameEn: company.name,
+          path: `/${companyUnitId}`,
+          level: 0,
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          metadata: { legacyCompanyId: company.id }
+        };
+        existingUnits.push(companyUnit);
+        existingUnitIds.add(companyUnit.id);
+        migratedUnitsCount++;
+      }
+
+      // 2. Ensure Region Organization Units
+      const compRegions = regions.filter(r => r.company_id === company.id);
+      for (const reg of compRegions) {
+        const regionUnitId = `org-unit-region-${reg.id}`;
+        let regionUnit = existingUnits.find(u => u.id === regionUnitId || (u.metadata && u.metadata.legacyRegionId === reg.id));
+
+        if (!regionUnit) {
+          regionUnit = {
+            id: regionUnitId,
+            companyId: company.id,
+            parentId: companyUnit.id,
+            typeId: 'out-region',
+            code: reg.code || `REG-${reg.id}`,
+            name: reg.name,
+            nameAr: reg.name,
+            nameEn: reg.name,
+            path: `${companyUnit.path}/${regionUnitId}`,
+            level: 1,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            metadata: { legacyRegionId: reg.id }
+          };
+          existingUnits.push(regionUnit);
+          existingUnitIds.add(regionUnit.id);
+          migratedUnitsCount++;
+        }
+
+        // Link region to org unit if missing
+        if (!reg.org_unit_id) {
+          reg.org_unit_id = regionUnit.id;
+        }
+      }
+
+      // 3. Ensure Station Organization Units
+      const compStations = stations.filter(s => s.company_id === company.id);
+      for (const stn of compStations) {
+        const stationUnitId = `org-unit-station-${stn.id}`;
+        let stationUnit = existingUnits.find(u => u.id === stationUnitId || (u.metadata && u.metadata.legacyStationId === stn.id));
+
+        if (!stationUnit) {
+          let parentUnitId = companyUnit.id;
+          if (stn.region_id) {
+            const parentRegUnit = existingUnits.find(u => u.id === `org-unit-region-${stn.region_id}` || (u.metadata && u.metadata.legacyRegionId === stn.region_id));
+            if (parentRegUnit) {
+              parentUnitId = parentRegUnit.id;
+            }
+          }
+
+          const parentUnit = existingUnits.find(u => u.id === parentUnitId);
+          const parentPath = parentUnit?.path || `/${companyUnit.id}`;
+          const parentLevel = parentUnit?.level ?? 0;
+
+          stationUnit = {
+            id: stationUnitId,
+            companyId: company.id,
+            parentId: parentUnitId,
+            typeId: 'out-station',
+            code: stn.station_code || `STN-${stn.id}`,
+            name: stn.station_name,
+            nameAr: stn.station_name,
+            nameEn: stn.station_name,
+            path: `${parentPath}/${stationUnitId}`,
+            level: parentLevel + 1,
+            isActive: stn.is_active !== false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            metadata: { legacyStationId: stn.id, custodyAmount: stn.custody_amount }
+          };
+          existingUnits.push(stationUnit);
+          existingUnitIds.add(stationUnit.id);
+          migratedUnitsCount++;
+        }
+
+        // Link station to org unit if missing
+        if (!stn.org_unit_id) {
+          stn.org_unit_id = stationUnit.id;
+        }
+      }
+    }
+
+    // Save updated units
+    if (migratedUnitsCount > 0) {
+      OrganizationEngine.saveUnits(existingUnits);
+      StationsModule.saveRegions(regions);
+      StationsModule.saveStations(stations);
+    }
+
+    // 4. Backfill AppUsers' org_unit_id
+    const users = UsersModule.getUsers();
+    let updatedUsersCount = 0;
+
+    users.forEach(u => {
+      if (!u.org_unit_id) {
+        if (u.station_id) {
+          u.org_unit_id = `org-unit-station-${u.station_id}`;
+          updatedUsersCount++;
+        } else if (u.region_id) {
+          u.org_unit_id = `org-unit-region-${u.region_id}`;
+          updatedUsersCount++;
+        }
+      }
+    });
+
+    if (updatedUsersCount > 0) {
+      UsersModule.saveUsers(users);
+    }
+
+    return { migratedUnitsCount, updatedUsersCount };
+  }
+
   static getUnits(companyId?: string): OrganizationUnit[] {
-    const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+    let units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+    if (units.length === 0) {
+      OrganizationEngine.autoMigrateLegacyStructure();
+      units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+    }
+
     if (!companyId) return units;
-    return units.filter(u => (u.companyId || u.company_id) === companyId);
+
+    let filtered = units.filter(u => (u.companyId || u.company_id) === companyId);
+    if (filtered.length === 0) {
+      OrganizationEngine.autoMigrateLegacyStructure(companyId);
+      units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+      filtered = units.filter(u => (u.companyId || u.company_id) === companyId);
+    }
+
+    return filtered;
   }
 
   static getUnitById(id: string): OrganizationUnit | null {
@@ -409,6 +578,49 @@ export class OrganizationEngine {
     paths.push(newPathObj);
     OrganizationEngine.savePaths(paths);
 
+    // Reverse compatibility sync: if type is region or station, ensure legacy record exists
+    try {
+      if (params.typeId === 'out-region' || (params.metadata && params.metadata.legacyRegionId)) {
+        const regId = (params.metadata && params.metadata.legacyRegionId) || unitId.replace('org-unit-region-', '');
+        const regions = StationsModule.getRegions();
+        if (!regions.some(r => r.id === regId)) {
+          regions.push({
+            id: regId,
+            name: params.name,
+            code: params.code,
+            company_id: params.companyId,
+            org_unit_id: unitId
+          });
+          StationsModule.saveRegions(regions);
+        }
+      } else if (params.typeId === 'out-station' || (params.metadata && params.metadata.legacyStationId)) {
+        const stnId = (params.metadata && params.metadata.legacyStationId) || unitId.replace('org-unit-station-', '');
+        const stations = StationsModule.getStations();
+        if (!stations.some(s => s.id === stnId)) {
+          let legacyRegId: string | undefined = undefined;
+          if (params.parentId) {
+            const parentUnit = units.find(u => u.id === params.parentId);
+            if (parentUnit && (parentUnit.typeId === 'out-region' || parentUnit.metadata?.legacyRegionId)) {
+              legacyRegId = parentUnit.metadata?.legacyRegionId || parentUnit.id.replace('org-unit-region-', '');
+            }
+          }
+          stations.push({
+            id: stnId,
+            station_name: params.name,
+            station_code: params.code,
+            custody_amount: params.metadata?.custodyAmount || 0,
+            is_active: params.isActive ?? true,
+            region_id: legacyRegId,
+            company_id: params.companyId,
+            org_unit_id: unitId
+          });
+          StationsModule.saveStations(stations);
+        }
+      }
+    } catch (err) {
+      console.warn('Reverse compatibility sync failed in addUnit:', err);
+    }
+
     const activeUser = UsersModule.getActiveUser();
     LogsModule.addLog(
       activeUser?.id || 'system',
@@ -484,6 +696,41 @@ export class OrganizationEngine {
       OrganizationEngine.savePaths(paths);
     }
 
+    // Reverse compatibility sync
+    try {
+      if (updatedUnit.typeId === 'out-region' || updatedUnit.metadata?.legacyRegionId) {
+        const regId = updatedUnit.metadata?.legacyRegionId || updatedUnit.id.replace('org-unit-region-', '');
+        const regions = StationsModule.getRegions();
+        const rIdx = regions.findIndex(r => r.id === regId);
+        if (rIdx !== -1) {
+          regions[rIdx] = {
+            ...regions[rIdx],
+            name: updatedUnit.name || updatedUnit.nameAr || regions[rIdx].name,
+            code: updatedUnit.code || regions[rIdx].code,
+            company_id: updatedUnit.companyId || regions[rIdx].company_id
+          };
+          StationsModule.saveRegions(regions);
+        }
+      } else if (updatedUnit.typeId === 'out-station' || updatedUnit.metadata?.legacyStationId) {
+        const stnId = updatedUnit.metadata?.legacyStationId || updatedUnit.id.replace('org-unit-station-', '');
+        const stations = StationsModule.getStations();
+        const sIdx = stations.findIndex(s => s.id === stnId);
+        if (sIdx !== -1) {
+          stations[sIdx] = {
+            ...stations[sIdx],
+            station_name: updatedUnit.name || updatedUnit.nameAr || stations[sIdx].station_name,
+            station_code: updatedUnit.code || stations[sIdx].station_code,
+            is_active: updatedUnit.isActive ?? stations[sIdx].is_active,
+            custody_amount: updatedUnit.metadata?.custodyAmount !== undefined ? updatedUnit.metadata.custodyAmount : stations[sIdx].custody_amount,
+            company_id: updatedUnit.companyId || stations[sIdx].company_id
+          };
+          StationsModule.saveStations(stations);
+        }
+      }
+    } catch (err) {
+      console.warn('Reverse compatibility sync failed in updateUnit:', err);
+    }
+
     const activeUser = UsersModule.getActiveUser();
     LogsModule.addLog(
       activeUser?.id || 'system',
@@ -551,6 +798,23 @@ export class OrganizationEngine {
 
     dbDeleteDoc('organization_units', id);
     dbDeleteDoc('organization_paths', id);
+
+    // Reverse compatibility sync
+    try {
+      if (target.typeId === 'out-region' || target.metadata?.legacyRegionId) {
+        const regId = target.metadata?.legacyRegionId || target.id.replace('org-unit-region-', '');
+        const regions = StationsModule.getRegions().filter(r => r.id !== regId);
+        StationsModule.saveRegions(regions);
+        dbDeleteDoc('regions', regId);
+      } else if (target.typeId === 'out-station' || target.metadata?.legacyStationId) {
+        const stnId = target.metadata?.legacyStationId || target.id.replace('org-unit-station-', '');
+        const stations = StationsModule.getStations().filter(s => s.id !== stnId);
+        StationsModule.saveStations(stations);
+        dbDeleteDoc('stations', stnId);
+      }
+    } catch (err) {
+      console.warn('Reverse compatibility sync failed in deleteUnit:', err);
+    }
 
     const activeUser = UsersModule.getActiveUser();
     LogsModule.addLog(

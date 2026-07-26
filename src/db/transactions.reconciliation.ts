@@ -2,10 +2,11 @@ import { CompaniesModule } from './companies';
 import { StationsModule } from './stations';
 import { StorageEngine } from './storage';
 import { UsersModule } from './users';
+import { OrganizationEngine } from './organizationEngine';
 import { DEFAULT_TRANSACTIONS } from './defaults';
 
 export class TransactionsReconciliationModule {
-  static getReconciliation(stationId?: string, regionId?: string) {
+  static getReconciliation(stationId?: string, regionId?: string, orgUnitId?: string) {
     const targetCompanyId = CompaniesModule.getSelectedCompanyId();
     const stations = StationsModule.getStations().filter(s => s.company_id === targetCompanyId);
     const transactions = StorageEngine.getStored<any[]>('transactions', DEFAULT_TRANSACTIONS).filter(t => t.company_id === targetCompanyId);
@@ -14,7 +15,37 @@ export class TransactionsReconciliationModule {
     let targetStationIds: string[] = [];
     let custodyValue = 0;
 
-    if (stationId) {
+    if (orgUnitId && orgUnitId !== 'ALL' && orgUnitId !== 'all') {
+      const validOrgUnitIds = new Set(OrganizationEngine.getSubtreeUnitIds(orgUnitId, targetCompanyId));
+      const orgStations = stations.filter(s => s.org_unit_id && validOrgUnitIds.has(s.org_unit_id));
+      targetStationIds = orgStations.map(s => s.id);
+      custodyValue = orgStations.reduce((sum, s) => sum + s.custody_amount, 0);
+
+      // If no station is directly linked to the org unit, check if any transactions are linked directly
+      const orgTxs = transactions.filter(t => (t.org_unit_id && validOrgUnitIds.has(t.org_unit_id)) || (t.station_id && targetStationIds.includes(t.station_id)));
+      
+      const pendingTotal = orgTxs.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
+      const underSettlementTotal = orgTxs.filter(t => t.status === 'Under Settlement').reduce((sum, t) => sum + t.amount, 0);
+      const settledTotal = orgTxs.filter(t => t.status === 'Settled').reduce((sum, t) => sum + t.amount, 0);
+
+      const cashAvailable = custodyValue - underSettlementTotal - pendingTotal;
+
+      const pendingCount = orgTxs.filter(t => t.status === 'Pending').length;
+      const underSettlementCount = orgTxs.filter(t => t.status === 'Under Settlement').length;
+      const settledCount = orgTxs.filter(t => t.status === 'Settled').length;
+
+      return {
+        custodyValue,
+        originalCustodyValue: custodyValue + settledTotal,
+        cashAvailable,
+        pendingTotal,
+        underSettlementTotal,
+        settledTotal,
+        pendingCount,
+        underSettlementCount,
+        settledCount
+      };
+    } else if (stationId) {
       targetStationIds = [stationId];
       const st = stations.find(s => s.id === stationId);
       custodyValue = st ? st.custody_amount : 0;

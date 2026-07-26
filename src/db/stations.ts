@@ -6,6 +6,8 @@ import { UsersModule } from './users';
 import { LogsModule } from './logs';
 import { CompaniesModule } from './companies';
 import { OrganizationScopeEngine } from './organizationScopeEngine';
+import { OrganizationEngine } from './organizationEngine';
+import { OrganizationUnit } from '../types/organization';
 
 export class StationsModule {
   // Regions
@@ -60,14 +62,39 @@ export class StationsModule {
   static addRegion(name: string, code?: string, companyId?: string): Region {
     const regions = StationsModule.getRegions();
     const compId = companyId || CompaniesModule.getSelectedCompanyId();
+    const regId = `reg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const orgUnitId = `org-unit-region-${regId}`;
+
     const newReg: Region = {
-      id: `reg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
+      id: regId,
       name,
       code: code || '',
-      company_id: compId
+      company_id: compId,
+      org_unit_id: orgUnitId
     };
     regions.push(newReg);
     StationsModule.saveRegions(regions);
+
+    // Compatibility sync: mirror creation into Organization Engine
+    try {
+      const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+      const parentUnit = units.find(u => u.id === `org-unit-company-${compId}` || (u.companyId === compId && u.typeId === 'out-company'));
+
+      OrganizationEngine.addUnit({
+        companyId: compId,
+        parentId: parentUnit?.id || null,
+        typeId: 'out-region',
+        code: code || `REG-${regId}`,
+        name: name,
+        nameAr: name,
+        nameEn: name,
+        metadata: { legacyRegionId: regId },
+        isActive: true
+      });
+    } catch (err) {
+      console.warn('Region compatibility sync to OrganizationUnit failed:', err);
+    }
+
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Add Region', `Created region: ${name}`);
     return newReg;
@@ -79,6 +106,23 @@ export class StationsModule {
     if (idx !== -1) {
       regions[idx] = { ...regions[idx], ...updates };
       StationsModule.saveRegions(regions);
+
+      // Compatibility sync: update corresponding OrganizationUnit
+      try {
+        const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+        const matchedUnit = units.find(u => u.id === `org-unit-region-${id}` || (u.metadata && u.metadata.legacyRegionId === id));
+        if (matchedUnit) {
+          OrganizationEngine.updateUnit(matchedUnit.id, {
+            name: updates.name || matchedUnit.name,
+            nameAr: updates.name || matchedUnit.nameAr,
+            nameEn: updates.name || matchedUnit.nameEn,
+            code: updates.code !== undefined ? updates.code : matchedUnit.code
+          });
+        }
+      } catch (err) {
+        console.warn('Region compatibility sync update failed:', err);
+      }
+
       const user = UsersModule.getActiveUser();
       LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Region', `Modified region: ${regions[idx].name}`);
     }
@@ -88,6 +132,18 @@ export class StationsModule {
     const regions = StationsModule.getRegions().filter(r => r.id !== id);
     StationsModule.saveRegions(regions);
     dbDeleteDoc('regions', id);
+
+    // Compatibility sync: delete corresponding OrganizationUnit
+    try {
+      const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+      const matchedUnit = units.find(u => u.id === `org-unit-region-${id}` || (u.metadata && u.metadata.legacyRegionId === id));
+      if (matchedUnit) {
+        OrganizationEngine.deleteUnit(matchedUnit.id);
+      }
+    } catch (err) {
+      console.warn('Region compatibility sync delete failed:', err);
+    }
+
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Delete Region', `Deleted region ID: ${id}`);
   }
@@ -140,17 +196,46 @@ export class StationsModule {
   static addStation(name: string, code: string, custodyAmount: number, regionId?: string, companyId?: string): Station {
     const stations = StationsModule.getStations();
     const compId = companyId || CompaniesModule.getSelectedCompanyId();
+    const stnId = `stn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const orgUnitId = `org-unit-station-${stnId}`;
+
     const newStn: Station = {
-      id: `stn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
+      id: stnId,
       station_name: name,
       station_code: code,
       custody_amount: custodyAmount,
       is_active: true,
       region_id: regionId || undefined,
-      company_id: compId
+      company_id: compId,
+      org_unit_id: orgUnitId
     };
     stations.push(newStn);
     StationsModule.saveStations(stations);
+
+    // Compatibility sync: mirror creation into Organization Engine
+    try {
+      let parentUnitId = `org-unit-company-${compId}`;
+      if (regionId) {
+        const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+        const regUnit = units.find(u => u.id === `org-unit-region-${regionId}` || (u.metadata && u.metadata.legacyRegionId === regionId));
+        if (regUnit) parentUnitId = regUnit.id;
+      }
+
+      OrganizationEngine.addUnit({
+        companyId: compId,
+        parentId: parentUnitId,
+        typeId: 'out-station',
+        code: code || `STN-${stnId}`,
+        name: name,
+        nameAr: name,
+        nameEn: name,
+        metadata: { legacyStationId: stnId, custodyAmount },
+        isActive: true
+      });
+    } catch (err) {
+      console.warn('Station compatibility sync to OrganizationUnit failed:', err);
+    }
+
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Add Station', `Created station: ${name} with custody ${custodyAmount} EGP`);
     LogsModule.logAudit('CREATE_STATION', `Created station ${name} (${code}) with custody ${custodyAmount} EGP.`, {
@@ -167,6 +252,26 @@ export class StationsModule {
       const after = { ...stations[idx], ...updates };
       stations[idx] = after;
       StationsModule.saveStations(stations);
+
+      // Compatibility sync: update corresponding OrganizationUnit
+      try {
+        const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+        const matchedUnit = units.find(u => u.id === `org-unit-station-${id}` || (u.metadata && u.metadata.legacyStationId === id));
+        if (matchedUnit) {
+          OrganizationEngine.updateUnit(matchedUnit.id, {
+            name: updates.station_name || matchedUnit.name,
+            nameAr: updates.station_name || matchedUnit.nameAr,
+            nameEn: updates.station_name || matchedUnit.nameEn,
+            code: updates.station_code !== undefined ? updates.station_code : matchedUnit.code,
+            metadata: {
+              ...matchedUnit.metadata,
+              custodyAmount: updates.custody_amount !== undefined ? updates.custody_amount : matchedUnit.metadata?.custodyAmount
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('Station compatibility sync update failed:', err);
+      }
 
       // If custody_amount changed, propagate difference to company's custody_value
       if (updates.custody_amount !== undefined && updates.custody_amount !== before.custody_amount) {
@@ -199,6 +304,18 @@ export class StationsModule {
     const stations = StationsModule.getStations().filter(s => s.id !== id);
     StationsModule.saveStations(stations);
     dbDeleteDoc('stations', id);
+
+    // Compatibility sync: delete corresponding OrganizationUnit
+    try {
+      const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+      const matchedUnit = units.find(u => u.id === `org-unit-station-${id}` || (u.metadata && u.metadata.legacyStationId === id));
+      if (matchedUnit) {
+        OrganizationEngine.deleteUnit(matchedUnit.id);
+      }
+    } catch (err) {
+      console.warn('Station compatibility sync delete failed:', err);
+    }
+
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Delete Station', `Deleted station ID: ${id}`);
     if (before) {

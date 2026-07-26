@@ -141,8 +141,8 @@ export class TransactionsModule {
   }
 
   // Reconciliation & Custody Metrics
-  static getReconciliation(stationId?: string, regionId?: string) {
-    return TransactionsReconciliationModule.getReconciliation(stationId, regionId);
+  static getReconciliation(stationId?: string, regionId?: string, orgUnitId?: string) {
+    return TransactionsReconciliationModule.getReconciliation(stationId, regionId, orgUnitId);
   }
 
   static getStationDeductedCustody(stationId: string): number {

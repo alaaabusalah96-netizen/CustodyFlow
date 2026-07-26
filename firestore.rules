@@ -25,11 +25,39 @@ service cloud.firestore {
     }
 
     function getCompanyId() {
-      return userDocExists() ? getUserData().company_id : "";
+      return userDocExists() ? (
+        ("company_id" in getUserData()) ? getUserData().company_id : (
+          ("companyId" in getUserData()) ? getUserData().companyId : ""
+        )
+      ) : "";
     }
 
     function getUserRole() {
       return userDocExists() ? getUserData().role : "";
+    }
+
+    function getUserOrgUnitId() {
+      return userDocExists() ? (
+        ("org_unit_id" in getUserData()) ? getUserData().org_unit_id : (
+          ("orgUnitId" in getUserData()) ? getUserData().orgUnitId : ""
+        )
+      ) : "";
+    }
+
+    function getDocCompanyId(data) {
+      return data == null ? "" : (
+        ("company_id" in data) ? data.company_id : (
+          ("companyId" in data) ? data.companyId : ""
+        )
+      );
+    }
+
+    function getDocOrgUnitId(data) {
+      return data == null ? "" : (
+        ("org_unit_id" in data) ? data.org_unit_id : (
+          ("orgUnitId" in data) ? data.orgUnitId : ""
+        )
+      );
     }
 
     function isSameCompanyRead(resourceData) {
@@ -37,7 +65,7 @@ service cloud.firestore {
         isLoggedIn() && 
         getCompanyId() != "" && 
         resourceData != null && 
-        resourceData.company_id == getCompanyId()
+        (getDocCompanyId(resourceData) == getCompanyId() || getDocCompanyId(resourceData) == "")
       );
     }
 
@@ -46,8 +74,34 @@ service cloud.firestore {
         isLoggedIn() &&
         getCompanyId() != "" &&
         requestData != null &&
-        requestData.company_id == getCompanyId() &&
-        (resourceData == null || resourceData.company_id == getCompanyId())
+        (getDocCompanyId(requestData) == getCompanyId() || getDocCompanyId(requestData) == "") &&
+        (resourceData == null || getDocCompanyId(resourceData) == getCompanyId() || getDocCompanyId(resourceData) == "")
+      );
+    }
+
+    function isOrgScopedRead(resourceData) {
+      return isSameCompanyRead(resourceData) && (
+        isSystemAdmin() ||
+        getUserRole() == 'Admin' ||
+        getUserRole() == 'SystemAdmin' ||
+        getUserOrgUnitId() == "" ||
+        resourceData == null ||
+        getDocOrgUnitId(resourceData) == "" ||
+        getDocOrgUnitId(resourceData) == getUserOrgUnitId() ||
+        (userDocExists() && ("station_id" in getUserData()) && ("station_id" in resourceData) && resourceData.station_id == getUserData().station_id) ||
+        (userDocExists() && ("region_id" in getUserData()) && ("region_id" in resourceData) && resourceData.region_id == getUserData().region_id)
+      );
+    }
+
+    function isOrgScopedWrite(requestData, resourceData) {
+      return isSameCompanyWrite(requestData, resourceData) && (
+        isSystemAdmin() ||
+        getUserRole() == 'Admin' ||
+        getUserRole() == 'SystemAdmin' ||
+        getUserOrgUnitId() == "" ||
+        requestData == null ||
+        getDocOrgUnitId(requestData) == "" ||
+        getDocOrgUnitId(requestData) == getUserOrgUnitId()
       );
     }
 
@@ -177,9 +231,9 @@ service cloud.firestore {
 
     // --- Transactions (Custody Transactions) ---
     match /transactions/{id} {
-      allow read: if isSameCompanyRead(resource.data);
-      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data);
-      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+      allow read: if isOrgScopedRead(resource.data);
+      allow create, update: if isOrgScopedWrite(request.resource.data, resource.data);
+      allow delete: if isOrgScopedWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
     }
 
     // --- GL Accounts (Chart of Accounts) ---
@@ -190,8 +244,8 @@ service cloud.firestore {
 
     // --- Journal Entries (Immutable Accounting Entries) ---
     match /journal_entries/{id} {
-      allow read: if isSameCompanyRead(resource.data);
-      allow create: if isSameCompanyWrite(request.resource.data, null) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Accountant');
+      allow read: if isOrgScopedRead(resource.data);
+      allow create: if isOrgScopedWrite(request.resource.data, null) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Accountant');
       allow update, delete: if false; // Journal entries are immutable
     }
 
@@ -204,21 +258,21 @@ service cloud.firestore {
 
     // --- CashVouchers (CamelCase) ---
     match /CashVouchers/{id} {
-      allow read: if isSameCompanyRead(resource.data);
-      allow write: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow read: if isOrgScopedRead(resource.data);
+      allow write: if isOrgScopedWrite(request.resource.data, resource.data);
     }
 
     // --- Expenses (CamelCase) ---
     match /Expenses/{id} {
-      allow read: if isSameCompanyRead(resource.data);
-      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Accountant');
-      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+      allow read: if isOrgScopedRead(resource.data);
+      allow create, update: if isOrgScopedWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Accountant');
+      allow delete: if isOrgScopedWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
     }
 
     // --- TransactionHistory ---
     match /TransactionHistory/{id} {
-      allow read: if isSameCompanyRead(resource.data);
-      allow write: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow read: if isOrgScopedRead(resource.data);
+      allow write: if isOrgScopedWrite(request.resource.data, resource.data);
     }
 
     // --- deleted_transactions ---

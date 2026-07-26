@@ -3,6 +3,7 @@ export type UserRole = 'SystemAdmin' | 'Admin' | 'RegionalManager' | 'StationAdm
 export interface Company {
   id: string;
   name: string;
+  code?: string;
   custody_value?: number;
   is_active?: boolean;
   subscription_status?: 'active' | 'suspended' | 'trial' | 'expired';
@@ -10,6 +11,7 @@ export interface Company {
   subscription_plan?: 'Basic' | 'Professional' | 'Enterprise';
   tenantId?: string;
   organizationId?: string;
+  org_unit_id?: string;
   modules?: Record<string, any>;
   group_id?: string;
   status_merge?: 'ACTIVE' | 'MERGED';
@@ -65,6 +67,7 @@ export interface Region {
   name: string;
   code?: string;
   company_id?: string;
+  org_unit_id?: string;
   tenantId?: string;
   organizationId?: string;
 }
@@ -77,6 +80,7 @@ export interface Station {
   custody_amount: number;
   is_active: boolean;
   company_id?: string;
+  org_unit_id?: string;
   tenantId?: string;
   organizationId?: string;
 }
@@ -125,6 +129,7 @@ export interface Transaction {
   updated_at: string;
   station_id?: string; // Every transaction belongs to ONE station
   company_id?: string;
+  org_unit_id?: string;
   attachments?: Attachment[];
   tenantId?: string;
   organizationId?: string;

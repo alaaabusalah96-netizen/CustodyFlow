@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Laptop, Plus, Calculator, Check, X, FileText, 
   Search, ShieldAlert, Calendar, Percent, Landmark, 
-  TrendingDown, TrendingUp, HelpCircle
+  TrendingDown, TrendingUp, HelpCircle, Building2
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { UsersModule } from '../db/users';
@@ -10,24 +10,15 @@ import { CompaniesModule } from '../db/companies';
 import { LogsModule } from '../db/logs';
 import { dbSetDoc } from '../firebase';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
+import { OrganizationEngine } from '../db/organizationEngine';
+import { AssetBusinessEngine } from '../lib/enterprise/asset_engine';
+import { FixedAsset, DepreciationRunLog } from '../types/asset';
+
+export type { FixedAsset, DepreciationRunLog };
 
 interface FixedAssetsProps {
   language: 'ar' | 'en';
   theme: 'light' | 'dark';
-}
-
-export interface FixedAsset {
-  id: string;
-  company_id: string;
-  name: string;
-  code: string;
-  category: 'BUILDINGS' | 'VEHICLES' | 'MACHINERY' | 'EQUIPMENT' | 'COMPUTERS' | 'FURNITURE';
-  purchaseDate: string;
-  originalCost: number;
-  depreciationRate: number; // e.g. 0.10 for 10%
-  accumulatedDepreciation: number;
-  netBookValue: number;
-  createdAt: string;
 }
 
 export default function FixedAssets({ language, theme }: FixedAssetsProps) {
@@ -39,6 +30,11 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
   const [assets, setAssets] = useState<FixedAsset[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+
+  // Organization Engine State
+  const [orgUnits, setOrgUnits] = useState<any[]>([]);
+  const [selectedOrgUnitFilter, setSelectedOrgUnitFilter] = useState<string>('ALL');
+  const [formOrgUnitId, setFormOrgUnitId] = useState<string>('');
 
   // Modals
   const [showAddAsset, setShowAddAsset] = useState(false);
@@ -53,7 +49,7 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
   // Depreciation Run Preview
   const [depreciationDate, setDepreciationDate] = useState(new Date().toISOString().split('T')[0]);
   const [isCalculated, setIsCalculated] = useState(false);
-  const [runLogs, setRunLogs] = useState<{ assetName: string; code: string; expense: number }[]>([]);
+  const [runLogs, setRunLogs] = useState<DepreciationRunLog[]>([]);
 
   // Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -65,10 +61,12 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
 
   // Load Assets
   const loadAssets = () => {
-    const allAssets = StorageEngine.getStored<FixedAsset[]>('fixed_assets_items', []);
-    const companyAssets = allAssets.filter(a => a.company_id === companyId);
+    const units = OrganizationEngine.getUnits(companyId);
+    setOrgUnits(units);
 
-    if (companyAssets.length === 0) {
+    const companyAssets = AssetBusinessEngine.getAssetsByOrgUnit(companyId, selectedOrgUnitFilter);
+
+    if (companyAssets.length === 0 && selectedOrgUnitFilter === 'ALL') {
       // Seed default assets
       const defaultAssets: FixedAsset[] = [
         {
@@ -98,7 +96,7 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
           createdAt: new Date().toISOString()
         }
       ];
-      StorageEngine.setStored('fixed_assets_items', [...allAssets, ...defaultAssets]);
+      StorageEngine.setStored('fixed_assets_items', defaultAssets);
       setAssets(defaultAssets);
     } else {
       setAssets(companyAssets);
@@ -110,7 +108,7 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
     const onUpdate = () => loadAssets();
     window.addEventListener('custody_db_updated', onUpdate);
     return () => window.removeEventListener('custody_db_updated', onUpdate);
-  }, [companyId]);
+  }, [companyId, selectedOrgUnitFilter]);
 
   // Calculations
   const totalCost = assets.reduce((sum, a) => sum + a.originalCost, 0);
@@ -118,7 +116,7 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
   const totalBookValue = assets.reduce((sum, a) => sum + a.netBookValue, 0);
 
   // Submit Asset
-  const handleAddAsset = (e: React.FormEvent) => {
+  const handleAddAsset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assetForm.name) {
       showToast('error', isRtl ? 'يرجى إدخال اسم الأصل الثابت' : 'Please input asset name');
@@ -129,120 +127,74 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
       return;
     }
 
-    const allAssets = StorageEngine.getStored<FixedAsset[]>('fixed_assets_items', []);
-    const nextCodeNo = 3001 + allAssets.filter(a => a.company_id === companyId).length;
-    const newAsset: FixedAsset = {
-      id: `asset-${Date.now()}`,
-      company_id: companyId,
-      name: assetForm.name,
-      code: `AST-${assetForm.category}-${nextCodeNo}`,
-      category: assetForm.category,
-      purchaseDate: assetForm.purchaseDate,
-      originalCost: Number(assetForm.originalCost),
-      depreciationRate: Number(assetForm.depreciationRate) / 100, // percentage e.g. 10 -> 0.1
-      accumulatedDepreciation: 0,
-      netBookValue: Number(assetForm.originalCost),
-      createdAt: new Date().toISOString()
-    };
+    try {
+      const newAsset = await AssetBusinessEngine.createAsset(companyId, {
+        name: assetForm.name,
+        category: assetForm.category,
+        purchaseDate: assetForm.purchaseDate,
+        originalCost: Number(assetForm.originalCost),
+        depreciationRate: Number(assetForm.depreciationRate),
+        org_unit_id: formOrgUnitId || activeUser?.org_unit_id
+      });
 
-    StorageEngine.setStored('fixed_assets_items', [...allAssets, newAsset]);
-    dbSetDoc('fixed_assets_items', newAsset.id, newAsset);
+      // Audit and logs
+      LogsModule.addLog(
+        activeUser?.id || 'system',
+        activeUser?.full_name || 'System',
+        isRtl ? 'إدراج أصل ثابت جديد' : 'Register New Fixed Asset',
+        `Registered asset ${newAsset.name} under code ${newAsset.code} with cost ${newAsset.originalCost.toLocaleString()} EGP`
+      );
 
-    // Audit and logs
-    LogsModule.addLog(
-      activeUser?.id || 'system',
-      activeUser?.full_name || 'System',
-      isRtl ? 'إدراج أصل ثابت جديد' : 'Register New Fixed Asset',
-      `Registered asset ${newAsset.name} under code ${newAsset.code} with cost ${newAsset.originalCost.toLocaleString()} EGP`
-    );
-
-    showToast('success', isRtl ? 'تم تسجيل الأصل الثابت بنجاح' : 'Asset registered successfully');
-    setAssetForm({ name: '', category: 'MACHINERY', purchaseDate: new Date().toISOString().split('T')[0], originalCost: 0, depreciationRate: 10 });
-    setShowAddAsset(false);
-    loadAssets();
+      showToast('success', isRtl ? 'تم تسجيل الأصل الثابت بنجاح' : 'Asset registered successfully');
+      setAssetForm({ name: '', category: 'MACHINERY', purchaseDate: new Date().toISOString().split('T')[0], originalCost: 0, depreciationRate: 10 });
+      setFormOrgUnitId('');
+      setShowAddAsset(false);
+      loadAssets();
+    } catch (err) {
+      console.error('Create asset error:', err);
+      showToast('error', isRtl ? 'حدث خطأ أثناء تسجيل الأصل الثابت' : 'Error registering asset');
+    }
   };
 
   // Run Depreciation Pre-calculation (Monthly Straight Line)
   const handleCalculateDepreciation = () => {
-    // We assume 1 month of depreciation = (Cost * Rate) / 12
-    const logItems = assets.map(a => {
-      const exp = (a.originalCost * a.depreciationRate) / 12;
-      return {
-        assetName: a.name,
-        code: a.code,
-        expense: Math.min(exp, a.netBookValue) // cannot depreciate below book value of 0
-      };
-    }).filter(log => log.expense > 0);
-
+    const logItems = AssetBusinessEngine.calculateMonthlyDepreciation(assets);
     setRunLogs(logItems);
     setIsCalculated(true);
   };
 
   // Post Depreciation Run to database ledger
-  const handlePostDepreciationRun = () => {
+  const handlePostDepreciationRun = async () => {
     if (runLogs.length === 0) return;
 
-    const allAssets = StorageEngine.getStored<FixedAsset[]>('fixed_assets_items', []);
-    const updated = allAssets.map(a => {
-      const log = runLogs.find(rl => rl.code === a.code);
-      if (log) {
-        const newAccum = a.accumulatedDepreciation + log.expense;
-        const newBook = Math.max(0, a.originalCost - newAccum);
-        return {
-          ...a,
-          accumulatedDepreciation: newAccum,
-          netBookValue: newBook
-        };
-      }
-      return a;
-    });
-
-    StorageEngine.setStored('fixed_assets_items', updated);
-    
-    // Sync to firebase
-    updated.forEach(item => {
-      if (item.company_id === companyId) {
-        dbSetDoc('fixed_assets_items', item.id, item);
-      }
-    });
-
-    // Audit and logs
-    const totalExp = runLogs.reduce((sum, rl) => sum + rl.expense, 0);
-
-    // Post Accounting Double-Entry (General Ledger Integration)
     try {
-      const statementAr = `قيد استهلاك الأصول الثابتة الشهري للفترة المنتهية في ${depreciationDate}`;
-      const statementEn = `Monthly fixed assets depreciation run for period ending ${depreciationDate}`;
+      const totalExp = runLogs.reduce((sum, rl) => sum + rl.expense, 0);
 
-      AccountingBusinessEngine.postOperationalDoubleEntry(
+      await AssetBusinessEngine.postDepreciationRun(
         companyId,
         activeUser?.id || 'system',
-        `DEP-${Date.now()}`,
-        statementAr,
-        statementEn,
-        [
-          // Debit Depreciation Expense (510501)
-          { accountCode: '510501', debit: totalExp, credit: 0, notes: isRtl ? `مصروف إهلاك أصول الشركة` : `Company assets depreciation expense` },
-          // Credit Accumulated Depreciation (130201)
-          { accountCode: '130201', debit: 0, credit: totalExp, notes: isRtl ? `إلى حساب مجمع إهلاك الأصول الثابتة` : `Accumulated depreciation reserve` }
-        ]
-      ).catch(e => console.error('Depreciation GL posting failed', e));
-    } catch (glError) {
-      console.error('GL post for asset depreciation failed', glError);
+        depreciationDate,
+        runLogs,
+        formOrgUnitId || activeUser?.org_unit_id
+      );
+
+      LogsModule.addLog(
+        activeUser?.id || 'system',
+        activeUser?.full_name || 'System',
+        isRtl ? 'ترحيل قيود استهلاك الأصول الثابتة' : 'Post Depreciation Journal Entries',
+        `Depreciated fixed assets for month ending ${depreciationDate}. Postings: Debit: Depreciation Expense (${totalExp.toLocaleString()} EGP), Credit: Accumulated Depreciation.`
+      );
+
+      showToast('success', isRtl ? 'تم احتساب واستهلاك الأصول وترحيلها لدفتر اليومية المساعد بنجاح' : 'Depreciation entries posted to auxiliary ledger');
+      setIsCalculated(false);
+      setRunLogs([]);
+      setFormOrgUnitId('');
+      setShowDepreciationRun(false);
+      loadAssets();
+    } catch (err) {
+      console.error('Post depreciation run error:', err);
+      showToast('error', isRtl ? 'حدث خطأ أثناء ترحيل قيد الاستهلاك' : 'Error posting depreciation run');
     }
-
-    LogsModule.addLog(
-      activeUser?.id || 'system',
-      activeUser?.full_name || 'System',
-      isRtl ? 'ترحيل قيود استهلاك الأصول الثابتة' : 'Post Depreciation Journal Entries',
-      `Depreciated fixed assets for month ending ${depreciationDate}. Postings: Debit: Depreciation Expense (${totalExp.toLocaleString()} EGP), Credit: Accumulated Depreciation.`
-    );
-
-    showToast('success', isRtl ? 'تم احتساب واستهلاك الأصول وترحيلها لدفتر اليومية المساعد بنجاح' : 'Depreciation entries posted to auxiliary ledger');
-    setIsCalculated(false);
-    setRunLogs([]);
-    setShowDepreciationRun(false);
-    loadAssets();
   };
 
   // Filters
@@ -345,6 +297,20 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2">
+            <Building2 className="h-3.5 w-3.5 text-slate-400" />
+            <select
+              value={selectedOrgUnitFilter}
+              onChange={(e) => setSelectedOrgUnitFilter(e.target.value)}
+              className="bg-transparent text-xs text-slate-800 dark:text-slate-100 focus:outline-none"
+            >
+              <option value="ALL">{isRtl ? 'جميع الهياكل التنظيمية' : 'All Org Units'}</option>
+              {orgUnits.map((u) => (
+                <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
+              ))}
+            </select>
+          </div>
+
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
@@ -387,7 +353,15 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
                 filteredAssets.map((a) => (
                   <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/30">
                     <td className="p-3 font-mono font-bold text-slate-500">{a.code}</td>
-                    <td className="p-3 font-bold">{a.name}</td>
+                    <td className="p-3">
+                      <div className="font-bold">{a.name}</div>
+                      {a.org_unit_id && (
+                        <div className="mt-0.5 flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">
+                          <Building2 className="h-3 w-3" />
+                          <span>{orgUnits.find(u => u.id === a.org_unit_id)?.name || a.org_unit_id}</span>
+                        </div>
+                      )}
+                    </td>
                     <td className="p-3 font-semibold text-slate-500">{a.category}</td>
                     <td className="p-3 font-mono text-slate-400">{a.purchaseDate}</td>
                     <td className="p-3 text-right font-mono font-extrabold">{a.originalCost.toLocaleString()} EGP</td>
@@ -418,6 +392,20 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
             </h3>
 
             <form onSubmit={handleAddAsset} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'الوحدة التنظيمية / الموقع / الفرع' : 'Organization Unit / Site'}</label>
+                <select
+                  value={formOrgUnitId}
+                  onChange={(e) => setFormOrgUnitId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="">{isRtl ? '-- افتراضي (حسب صلاحية المستخدم) --' : '-- Default (User Scope) --'}</option>
+                  {orgUnits.map((u) => (
+                    <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'مسمى الأصل / الوصف *' : 'Asset Title / Description *'}</label>
                 <input
