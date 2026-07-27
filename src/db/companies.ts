@@ -58,13 +58,17 @@ export class CompaniesModule {
       return user.company_id;
     }
     
-    const saved = localStorage.getItem('custody_selected_company_id');
-    if (saved) return saved;
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('custody_selected_company_id');
+      if (saved) return saved;
+    }
     return 'comp-1';
   }
 
   static setSelectedCompanyId(id: string): void {
-    localStorage.setItem('custody_selected_company_id', id);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('custody_selected_company_id', id);
+    }
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Switch Company', `Viewing focus changed to company ID: ${id}`);
   }

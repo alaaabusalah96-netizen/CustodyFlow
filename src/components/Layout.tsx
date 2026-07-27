@@ -30,7 +30,8 @@ import {
   Laptop as AssetIcon,
   Receipt as PosIcon,
   DollarSign as SalesIcon,
-  Truck as FleetIcon
+  Truck as FleetIcon,
+  Inbox
 } from 'lucide-react';
 import { CustodyDB, ModulesModule } from '../db';
 import { translations, Language, Theme, AppUser } from '../types';
@@ -93,6 +94,7 @@ export default function Layout({
     { id: 'new-expense', label: t.newExpense, icon: PlusCircle, permission: 'create_expense' },
     { id: 'voucher', label: t.cashPaymentVoucher, icon: FileCheck, permission: 'settle_voucher' },
     { id: 'reconciliation', label: isRtl ? 'جرد ومطابقة العهدة' : 'Custody Reconciliation & Inventory', icon: TrendingUp, roleAllowed: ['Admin', 'StationAdmin', 'RegionalManager'] },
+    { id: 'approvals', label: isRtl ? 'صندوق الاعتمادات والموافقات' : 'My Approvals Inbox', icon: Inbox },
     { id: 'inventory', label: isRtl ? 'إدارة المخازن والمستودعات' : 'Inventory & Warehouses', icon: Layers, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
     { id: 'purchasing', label: isRtl ? 'إدارة المشتريات والتموين' : 'Procurement & Supply Chain', icon: ShoppingCart, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager'] },
     { id: 'accounting', label: isRtl ? 'الاستحقاق والقيود المزدوجة' : 'Double-Entry Accounting', icon: BookOpen, roleAllowed: ['SystemAdmin', 'Admin'] },

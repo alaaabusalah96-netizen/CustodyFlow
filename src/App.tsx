@@ -33,6 +33,7 @@ import CRM from './pages/CRM';
 import FixedAssets from './pages/FixedAssets';
 import FleetManagement from './pages/FleetManagement';
 import HRPayroll from './pages/HRPayroll';
+import ApprovalInbox from './components/ApprovalInbox';
 
 export default function App() {
   // Try to load any existing active session, or default to null
@@ -374,6 +375,14 @@ export default function App() {
             theme={theme} 
             onNavigate={setCurrentTab}
             onSelectTransactionForSettle={handleSelectTxForSettle}
+          />
+        );
+      case 'approvals':
+        return (
+          <ApprovalInbox
+            activeUser={activeUser}
+            isRtl={language === 'ar'}
+            theme={theme}
           />
         );
       case 'reports':

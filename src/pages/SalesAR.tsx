@@ -13,6 +13,7 @@ import { dbSetDoc } from '../firebase';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 import { createEventEnvelope } from '../lib/enterprise/metadata';
 import { OrganizationEngine } from '../db/organizationEngine';
+import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
 import { SalesBusinessEngine } from '../lib/enterprise/sales_engine';
 import { Customer, SalesInvoice, SalesInvoiceItem } from '../types/sales';
 
@@ -828,23 +829,18 @@ export default function SalesAR({ language, theme }: SalesARProps) {
             </h3>
 
             <form onSubmit={handleAddCustomer} className="space-y-4">
-              {orgUnits.length > 0 && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'الوحدة التنظيمية (الفرع/القطاع)' : 'Organizational Unit'}</label>
-                  <select
-                    value={formOrgUnitId}
-                    onChange={(e) => setFormOrgUnitId(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="">{isRtl ? '-- المركز الرئيسي (الافتراضي) --' : '-- Main HQ (Default) --'}</option>
-                    {orgUnits.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {isRtl ? (u.nameAr || u.name) : (u.nameEn || u.name)} ({u.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <OrgUnitTreeSelect
+                  label={isRtl ? 'الوحدة التنظيمية (الفرع/القطاع)' : 'Organizational Unit'}
+                  value={formOrgUnitId}
+                  onChange={(id) => setFormOrgUnitId(id)}
+                  placeholder={isRtl ? '-- المركز الرئيسي (الافتراضي) --' : '-- Main HQ (Default) --'}
+                  companyId={companyId}
+                  isRtl={isRtl}
+                  theme={theme}
+                  showInheritanceSummary={false}
+                />
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -1063,23 +1059,18 @@ export default function SalesAR({ language, theme }: SalesARProps) {
             </h3>
 
             <form onSubmit={handleCreateSalesInvoice} className="space-y-4">
-              {orgUnits.length > 0 && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'الوحدة التنظيمية المصدرة للفاتورة' : 'Issuing Organizational Unit'}</label>
-                  <select
-                    value={formOrgUnitId}
-                    onChange={(e) => setFormOrgUnitId(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="">{isRtl ? '-- المركز الرئيسي (أو من العميل) --' : '-- Main HQ (or from Customer) --'}</option>
-                    {orgUnits.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {isRtl ? (u.nameAr || u.name) : (u.nameEn || u.name)} ({u.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <OrgUnitTreeSelect
+                  label={isRtl ? 'الوحدة التنظيمية المصدرة للفاتورة' : 'Issuing Organizational Unit'}
+                  value={formOrgUnitId}
+                  onChange={(id) => setFormOrgUnitId(id)}
+                  placeholder={isRtl ? '-- المركز الرئيسي (أو من العميل) --' : '-- Main HQ (or from Customer) --'}
+                  companyId={companyId}
+                  isRtl={isRtl}
+                  theme={theme}
+                  showInheritanceSummary={false}
+                />
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB, ModulesModule } from '../db';
 import PermissionMatrix from '../components/PermissionMatrix';
+import ApprovalWorkflowManager from '../components/ApprovalWorkflowManager';
+import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
 import { translations, Language, Theme, AppUser, UserRole, Region, Station, UserPermissions } from '../types';
 import { 
   Settings as SettingsIcon, 
@@ -87,7 +89,7 @@ export default function Settings({ language, theme }: SettingsProps) {
   const currentUser = CustodyDB.getActiveUser();
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'matrix'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'matrix' | 'workflows'>('general');
 
   // General Settings State
   const [companyName, setCompanyName] = useState(() => CustodyDB.getConfig().company_name);
@@ -124,6 +126,8 @@ export default function Settings({ language, theme }: SettingsProps) {
   const [newUserRole, setNewUserRole] = useState<UserRole>('StationAdmin');
   const [newUserStationId, setNewUserStationId] = useState('');
   const [newUserRegionId, setNewUserRegionId] = useState('');
+  const [newUserOrgUnitId, setNewUserOrgUnitId] = useState('');
+  const [newUserAssignedOrgUnitIds, setNewUserAssignedOrgUnitIds] = useState<string[]>([]);
 
   // Edit User State
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -131,6 +135,8 @@ export default function Settings({ language, theme }: SettingsProps) {
   const [editUserRole, setEditUserRole] = useState<UserRole>('StationAdmin');
   const [editUserStationId, setEditUserStationId] = useState('');
   const [editUserRegionId, setEditUserRegionId] = useState('');
+  const [editUserOrgUnitId, setEditUserOrgUnitId] = useState('');
+  const [editUserAssignedOrgUnitIds, setEditUserAssignedOrgUnitIds] = useState<string[]>([]);
   const [editUserPermissions, setEditUserPermissions] = useState<UserPermissions>({
     manage_settings: false,
     create_expense: false,
@@ -140,7 +146,7 @@ export default function Settings({ language, theme }: SettingsProps) {
   });
   const [editUserIsDefaultMode, setEditUserIsDefaultMode] = useState<boolean>(true);
 
-  const [pendingMappings, setPendingMappings] = useState<Record<string, { stationId?: string; regionId?: string }>>({});
+  const [pendingMappings, setPendingMappings] = useState<Record<string, { stationId?: string; regionId?: string; orgUnitId?: string }>>({});
 
   const [toastMessage, setToastMessage] = useState('');
 
@@ -497,6 +503,8 @@ export default function Settings({ language, theme }: SettingsProps) {
       company_id: companyId,
       is_active: true,
       password: '123456',
+      org_unit_id: newUserOrgUnitId || undefined,
+      assigned_org_unit_ids: newUserAssignedOrgUnitIds.length > 0 ? newUserAssignedOrgUnitIds : undefined,
       ...(isStationAdmin && newUserStationId ? { station_id: newUserStationId } : {}),
       ...(isRegional && newUserRegionId ? { region_id: newUserRegionId } : {})
     };
@@ -507,6 +515,8 @@ export default function Settings({ language, theme }: SettingsProps) {
 
     setNewUserName('');
     setNewUserEmail('');
+    setNewUserOrgUnitId('');
+    setNewUserAssignedOrgUnitIds([]);
     triggerToast(isRtl ? 'تم إضافة الملف المالي للمستخدم بنجاح.' : 'New user created successfully.');
   };
 
@@ -516,6 +526,8 @@ export default function Settings({ language, theme }: SettingsProps) {
     setEditUserRole(u.role);
     setEditUserStationId(u.station_id || '');
     setEditUserRegionId(u.region_id || '');
+    setEditUserOrgUnitId(u.org_unit_id || '');
+    setEditUserAssignedOrgUnitIds(u.assigned_org_unit_ids || []);
     setEditUserPermissions({ ...u.permissions });
 
     // Check if permissions match default permissions for this role
@@ -554,6 +566,8 @@ export default function Settings({ language, theme }: SettingsProps) {
           full_name: editUserFullName.trim(),
           role: editUserRole,
           permissions: editUserPermissions,
+          org_unit_id: editUserOrgUnitId || undefined,
+          assigned_org_unit_ids: editUserAssignedOrgUnitIds.length > 0 ? editUserAssignedOrgUnitIds : undefined,
           station_id: editUserRole === 'StationAdmin' ? editUserStationId || undefined : undefined,
           region_id: editUserRole === 'RegionalManager' ? editUserRegionId || undefined : undefined
         };
@@ -633,6 +647,16 @@ export default function Settings({ language, theme }: SettingsProps) {
           }`}
         >
           {isRtl ? '🛡️ مصفوفة الصلاحيات (Matrix)' : '🛡️ Permission Matrix'}
+        </button>
+        <button
+          onClick={() => setActiveTab('workflows')}
+          className={`px-4 py-2 text-xs font-black transition-all border-b-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'workflows'
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-extrabold'
+              : 'border-transparent text-slate-500 hover:text-slate-400'
+          }`}
+        >
+          {isRtl ? '🔄 مسارات وسياسات الاعتماد' : '🔄 Approval Workflows'}
         </button>
       </div>
 
@@ -1049,10 +1073,29 @@ export default function Settings({ language, theme }: SettingsProps) {
 
                           {/* Company Scope Mapping Options */}
                           <div className="space-y-2 mt-2 pt-2 border-t border-dashed border-slate-200 dark:border-slate-700">
+                            <div>
+                              <label className="block text-[10px] font-black text-slate-400 mb-1">
+                                {isRtl ? 'تعيين نطاق الوحدة التنظيمية (الشجرة):' : 'Assign Organization Unit Scope (Tree):'}
+                              </label>
+                              <OrgUnitTreeSelect
+                                companyId={pendingUser.company_id || CustodyDB.getSelectedCompanyId()}
+                                value={mapping.orgUnitId || ''}
+                                onChange={(unitId) => setPendingMappings({
+                                  ...pendingMappings,
+                                  [pendingUser.id]: { ...mapping, orgUnitId: unitId }
+                                })}
+                                mode="single"
+                                isRtl={isRtl}
+                                theme={theme}
+                                showInheritanceSummary={false}
+                                placeholder={isRtl ? 'اختر الوحدة التنظيمية...' : 'Select Organization Unit...'}
+                              />
+                            </div>
+
                             {pendingUser.role === 'StationAdmin' && (
                               <div>
                                 <label className="block text-[10px] font-black text-slate-400 mb-1">
-                                  {isRtl ? 'تعيين لفرع/محطة الشركة:' : 'Assign Company Station:'}
+                                  {isRtl ? 'تعيين لفرع/محطة الشركة (إرث):' : 'Assign Company Station (Legacy):'}
                                 </label>
                                 <select
                                   value={mapping.stationId || ''}
@@ -1063,25 +1106,19 @@ export default function Settings({ language, theme }: SettingsProps) {
                                   className={`w-full px-2.5 py-1.5 rounded-lg border text-xs focus:outline-none ${
                                     theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
                                   }`}
-                                  required
                                 >
                                   <option value="">{isRtl ? '--- اختر المحطة ---' : '--- Choose Station ---'}</option>
                                   {companyStations.map(s => (
                                     <option key={s.id} value={s.id}>{s.station_name} ({s.station_code})</option>
                                   ))}
                                 </select>
-                                {companyStations.length === 0 && (
-                                  <span className="text-[9px] text-rose-500 mt-1 block">
-                                    {isRtl ? '⚠️ لا توجد محطات مسجلة لهذه الشركة بعد!' : '⚠️ No stations registered for this company yet!'}
-                                  </span>
-                                )}
                               </div>
                             )}
 
                             {pendingUser.role === 'RegionalManager' && (
                               <div>
                                 <label className="block text-[10px] font-black text-slate-400 mb-1">
-                                  {isRtl ? 'تعيين لمنطقة الشركة الجغرافية:' : 'Assign Company Region:'}
+                                  {isRtl ? 'تعيين لمنطقة الشركة الجغرافية (إرث):' : 'Assign Company Region (Legacy):'}
                                 </label>
                                 <select
                                   value={mapping.regionId || ''}
@@ -1092,18 +1129,12 @@ export default function Settings({ language, theme }: SettingsProps) {
                                   className={`w-full px-2.5 py-1.5 rounded-lg border text-xs focus:outline-none ${
                                     theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
                                   }`}
-                                  required
                                 >
                                   <option value="">{isRtl ? '--- اختر المنطقة ---' : '--- Choose Region ---'}</option>
                                   {companyRegions.map(r => (
                                     <option key={r.id} value={r.id}>{r.name} ({r.code})</option>
                                   ))}
                                 </select>
-                                {companyRegions.length === 0 && (
-                                  <span className="text-[9px] text-rose-500 mt-1 block">
-                                    {isRtl ? '⚠️ لا توجد مناطق مسجلة لهذه الشركة بعد!' : '⚠️ No regions registered for this company yet!'}
-                                  </span>
-                                )}
                               </div>
                             )}
                           </div>
@@ -1135,6 +1166,7 @@ export default function Settings({ language, theme }: SettingsProps) {
                                   return {
                                     ...u,
                                     is_active: true,
+                                    org_unit_id: mapping.orgUnitId || undefined,
                                     station_id: pendingUser.role === 'StationAdmin' ? mapping.stationId : undefined,
                                     region_id: mappedRegionId || undefined,
                                     permissions: CustodyDB.enrichUserPermissions(u.role)
@@ -1219,6 +1251,23 @@ export default function Settings({ language, theme }: SettingsProps) {
                             />
                           </div>
 
+                          {/* Organization Unit Scope Selection (Phase 4) */}
+                          <div className="space-y-1.5 p-3 rounded-xl bg-slate-100/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+                            <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                              {isRtl ? 'نطاق الصلاحية الإشرافية (شجرة الهيكل التنظيمي):' : 'Supervisory Access Scope (Organization Tree):'}
+                            </label>
+                            <OrgUnitTreeSelect
+                              companyId={CustodyDB.getSelectedCompanyId()}
+                              value={editUserOrgUnitId}
+                              onChange={(unitId) => setEditUserOrgUnitId(unitId)}
+                              mode="single"
+                              isRtl={isRtl}
+                              theme={theme}
+                              showInheritanceSummary={true}
+                              placeholder={isRtl ? 'اختر الوحدة التنظيمية النطاقية للمستخدم...' : 'Select user scope organization unit...'}
+                            />
+                          </div>
+
                           <div className="grid grid-cols-2 gap-2">
                             <div>
                               <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'الدور المالي' : 'Role'}</label>
@@ -1237,7 +1286,7 @@ export default function Settings({ language, theme }: SettingsProps) {
 
                             {editUserRole === 'StationAdmin' && (
                               <div>
-                                <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'ربط بالمحطة' : 'Station Mapping'}</label>
+                                <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'ربط بالمحطة (إرث)' : 'Station Mapping (Legacy)'}</label>
                                 <select
                                   value={editUserStationId}
                                   onChange={(e) => setEditUserStationId(e.target.value)}
@@ -1255,7 +1304,7 @@ export default function Settings({ language, theme }: SettingsProps) {
 
                             {editUserRole === 'RegionalManager' && (
                               <div>
-                                <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'ربط بالمنطقة' : 'Region Mapping'}</label>
+                                <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'ربط بالمنطقة (إرث)' : 'Region Mapping (Legacy)'}</label>
                                 <select
                                   value={editUserRegionId}
                                   onChange={(e) => setEditUserRegionId(e.target.value)}
@@ -1490,17 +1539,33 @@ export default function Settings({ language, theme }: SettingsProps) {
                       </div>
                     </div>
 
-                    {/* Conditional Station selection */}
+                    {/* Organization Unit Scope Selection (Phase 4) */}
+                    <div className="space-y-1">
+                      <label className="block text-slate-400 font-bold mb-1">
+                        {isRtl ? 'تعيين نطاق الصلاحية (شجرة الهيكل التنظيمي):' : 'Assign Authority Scope (Organization Tree):'}
+                      </label>
+                      <OrgUnitTreeSelect
+                        companyId={CustodyDB.getSelectedCompanyId()}
+                        value={newUserOrgUnitId}
+                        onChange={(unitId) => setNewUserOrgUnitId(unitId)}
+                        mode="single"
+                        isRtl={isRtl}
+                        theme={theme}
+                        showInheritanceSummary={true}
+                        placeholder={isRtl ? 'اختر الوحدة التنظيمية النطاقية...' : 'Select Organization Scope Unit...'}
+                      />
+                    </div>
+
+                    {/* Conditional Station selection (Legacy fallback) */}
                     {newUserRole === 'StationAdmin' && (
                       <div>
-                        <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'تعيين إلى فرع / محطة:' : 'Assign to Cash Station:'}</label>
+                        <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'تعيين إلى فرع / محطة (إرث):' : 'Assign to Cash Station (Legacy):'}</label>
                         <select
                           value={newUserStationId}
                           onChange={(e) => setNewUserStationId(e.target.value)}
                           className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
                             theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
                           }`}
-                          required
                         >
                           <option value="">{isRtl ? 'اختر المحطة التابع لها...' : 'Select Station...'}</option>
                           {stations.map(s => (
@@ -1510,17 +1575,16 @@ export default function Settings({ language, theme }: SettingsProps) {
                       </div>
                     )}
 
-                    {/* Conditional Region selection */}
+                    {/* Conditional Region selection (Legacy fallback) */}
                     {newUserRole === 'RegionalManager' && (
                       <div>
-                        <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'تعيين إلى منطقة جغرافية:' : 'Assign to Region Zone:'}</label>
+                        <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'تعيين إلى منطقة جغرافية (إرث):' : 'Assign to Region Zone (Legacy):'}</label>
                         <select
                           value={newUserRegionId}
                           onChange={(e) => setNewUserRegionId(e.target.value)}
                           className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
                             theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
                           }`}
-                          required
                         >
                           <option value="">{isRtl ? 'اختر المنطقة الجغرافية...' : 'Select Region...'}</option>
                           {regions.map(r => (
@@ -1546,6 +1610,14 @@ export default function Settings({ language, theme }: SettingsProps) {
 
       {activeTab === 'matrix' && (
         <PermissionMatrix language={language} theme={theme} />
+      )}
+
+      {activeTab === 'workflows' && (
+        <ApprovalWorkflowManager
+          companyId={currentUser.company_id || 'comp-1'}
+          isRtl={isRtl}
+          theme={theme}
+        />
       )}
     </div>
   );

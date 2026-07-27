@@ -977,6 +977,10 @@ export class OrganizationEngine {
   /**
    * Constructs a nested hierarchical tree structure of unlimited depth for visual rendering & dynamic builders.
    */
+  static getOrganizationTree(companyId: string, rootUnitId?: string | null): OrganizationTreeNode[] {
+    return OrganizationEngine.buildTree(companyId, rootUnitId);
+  }
+
   static buildTree(companyId: string, rootUnitId?: string | null): OrganizationTreeNode[] {
     const units = OrganizationEngine.getUnits(companyId);
     const unitTypes = OrganizationEngine.getUnitTypes(companyId);

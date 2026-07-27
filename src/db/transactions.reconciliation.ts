@@ -62,6 +62,39 @@ export class TransactionsReconciliationModule {
       if (user.role === 'Admin' || user.role === 'SystemAdmin') {
         targetStationIds = stations.map(s => s.id);
         custodyValue = stations.reduce((sum, s) => sum + s.custody_amount, 0);
+      } else if (user.org_unit_id || (user.assigned_org_unit_ids && user.assigned_org_unit_ids.length > 0)) {
+        const primaryUnitId = user.org_unit_id || user.assigned_org_unit_ids![0];
+        const validOrgUnitIds = new Set(OrganizationEngine.getSubtreeUnitIds(primaryUnitId, targetCompanyId));
+        if (user.assigned_org_unit_ids) {
+          user.assigned_org_unit_ids.forEach(id => {
+            OrganizationEngine.getSubtreeUnitIds(id, targetCompanyId).forEach(subId => validOrgUnitIds.add(subId));
+          });
+        }
+        const orgStations = stations.filter(s => s.org_unit_id && validOrgUnitIds.has(s.org_unit_id));
+        targetStationIds = orgStations.map(s => s.id);
+        custodyValue = orgStations.reduce((sum, s) => sum + s.custody_amount, 0);
+
+        const orgTxs = transactions.filter(t => 
+          (t.org_unit_id && validOrgUnitIds.has(t.org_unit_id)) || 
+          (t.station_id && targetStationIds.includes(t.station_id))
+        );
+
+        const pendingTotal = orgTxs.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
+        const underSettlementTotal = orgTxs.filter(t => t.status === 'Under Settlement').reduce((sum, t) => sum + t.amount, 0);
+        const settledTotal = orgTxs.filter(t => t.status === 'Settled').reduce((sum, t) => sum + t.amount, 0);
+        const cashAvailable = custodyValue - underSettlementTotal - pendingTotal;
+
+        return {
+          custodyValue,
+          originalCustodyValue: custodyValue + settledTotal,
+          cashAvailable,
+          pendingTotal,
+          underSettlementTotal,
+          settledTotal,
+          pendingCount: orgTxs.filter(t => t.status === 'Pending').length,
+          underSettlementCount: orgTxs.filter(t => t.status === 'Under Settlement').length,
+          settledCount: orgTxs.filter(t => t.status === 'Settled').length
+        };
       } else if (user.role === 'RegionalManager') {
         const regionStations = stations.filter(s => {
           if (!user.region_id || user.region_id === 'none' || user.region_id === '') {

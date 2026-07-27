@@ -45,7 +45,10 @@ export interface AppUser {
   id: string;
   email: string;
   full_name: string;
+  name?: string;
   role: UserRole;
+  userRoles?: string[];
+  assigned_roles?: string[];
   permissions: UserPermissions;
   station_id?: string;
   region_id?: string;

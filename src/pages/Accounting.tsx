@@ -171,15 +171,15 @@ export default function Accounting({ language, theme }: AccountingProps) {
         <div className="relative z-10 space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-bold">
             <Coins className="h-3 w-3" />
-            {isRtl ? 'نظام الأستاذ العام المزدوج' : 'Double-Entry General Ledger System'}
+            {isRtl ? 'السجلات المالية العامة' : 'General Financial Records'}
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-sans">
-            {isRtl ? 'النظام المحاسبي وقيود اليومية' : 'Accounting & Ledger Engine'}
+            {isRtl ? 'الإدارة المالية والسجلات' : 'Financial Management & Records'}
           </h1>
           <p className="text-xs sm:text-sm text-emerald-100 max-w-xl leading-relaxed font-semibold">
             {isRtl 
-              ? 'تتبع حركات الأصول والخصوم والمصروفات، وتوليد قيود اليومية المزدوجة المتزنة تلقائياً من العمليات التشغيلية.'
-              : 'Enterprise-grade double-entry ledger. Automatic posting from operational movements paired with flexible manual adjustments.'}
+              ? 'تتبع وتوثيق جميع المعاملات المالية، الحركة النقدية، ودليل الحسابات التلقائي لمختلف العمليات التشغيلية.'
+              : 'Track and record all financial transactions, cash movements, and automated account ledgers.'}
           </p>
         </div>
       </div>

@@ -4,6 +4,8 @@ import { CompaniesModule } from '../db/companies';
 import { OrganizationEngine } from '../db/organizationEngine';
 import { WarehouseHierarchyEngine } from '../db/warehouseHierarchyEngine';
 import { CostCenterEngine } from '../db/costCenterEngine';
+import WarehouseTreeSelect from '../components/WarehouseTreeSelect';
+import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
 import { EnterpriseReportEngine } from '../lib/enterprise/report_engine';
 import { translations, Language, Theme, Transaction, Station } from '../types';
 import { 
@@ -44,7 +46,12 @@ export default function Reports({ language, theme }: ReportsProps) {
   const [costCenters, setCostCenters] = useState<any[]>([]);
 
   // Selected Filter Dimensions
-  const [selectedOrgUnit, setSelectedOrgUnit] = useState<string>('ALL');
+  const [selectedOrgUnit, setSelectedOrgUnit] = useState<string>(() => {
+    if (activeUser && activeUser.role !== 'Admin' && activeUser.role !== 'SystemAdmin' && activeUser.org_unit_id) {
+      return activeUser.org_unit_id;
+    }
+    return 'ALL';
+  });
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('ALL');
   const [selectedCostCenter, setSelectedCostCenter] = useState<string>('ALL');
   const [selectedProject, setSelectedProject] = useState<string>('ALL');
@@ -223,44 +230,31 @@ export default function Reports({ language, theme }: ReportsProps) {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Organization Unit Filter */}
+          {/* Organization Unit Tree Filter */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
-              <Building2 className="h-3 w-3 text-indigo-500" />
-              <span>{isRtl ? 'الهيكل التنظيمي / الفرع / القطاع' : 'Organization Unit'}</span>
-            </label>
-            <select
-              value={selectedOrgUnit}
-              onChange={(e) => setSelectedOrgUnit(e.target.value)}
-              className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
-                theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-200'
-              }`}
-            >
-              <option value="ALL">{isRtl ? 'جميع الهياكل التنظيمية (شامل الفروع)' : 'All Organization Units'}</option>
-              {orgUnits.map((u) => (
-                <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
-              ))}
-            </select>
+            <OrgUnitTreeSelect
+              label={isRtl ? 'الهيكل التنظيمي / الفرع / القطاع' : 'Organization Unit'}
+              value={selectedOrgUnit === 'ALL' ? '' : selectedOrgUnit}
+              onChange={(unitId) => setSelectedOrgUnit(unitId || 'ALL')}
+              placeholder={isRtl ? 'جميع الهياكل التنظيمية (شامل الفروع)' : 'All Organization Units'}
+              companyId={selectedCompanyId}
+              isRtl={isRtl}
+              theme={theme}
+              showInheritanceSummary={false}
+            />
           </div>
 
           {/* Warehouse Filter */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
-              <WarehouseIcon className="h-3 w-3 text-amber-500" />
-              <span>{isRtl ? 'المستودع / المخزن' : 'Warehouse'}</span>
-            </label>
-            <select
-              value={selectedWarehouse}
-              onChange={(e) => setSelectedWarehouse(e.target.value)}
-              className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
-                theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-200'
-              }`}
-            >
-              <option value="ALL">{isRtl ? 'جميع المستودعات والمخازن' : 'All Warehouses'}</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
-              ))}
-            </select>
+            <WarehouseTreeSelect
+              label={isRtl ? 'المستودع / المخزن' : 'Warehouse'}
+              value={selectedWarehouse === 'ALL' ? '' : selectedWarehouse}
+              onChange={(whId) => setSelectedWarehouse(whId || 'ALL')}
+              placeholder={isRtl ? 'جميع المستودعات والمخازن' : 'All Warehouses'}
+              companyId={selectedCompanyId}
+              isRtl={isRtl}
+              theme={theme}
+            />
           </div>
 
           {/* Cost Center Filter */}
@@ -281,6 +275,23 @@ export default function Reports({ language, theme }: ReportsProps) {
                 <option key={c.id} value={c.id}>{c.code} - {c.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Project Filter */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+              <FolderGit2 className="h-3 w-3 text-amber-500" />
+              <span>{isRtl ? 'المشروع / الفعالية' : 'Project'}</span>
+            </label>
+            <input
+              type="text"
+              value={selectedProject === 'ALL' ? '' : selectedProject}
+              onChange={(e) => setSelectedProject(e.target.value ? e.target.value : 'ALL')}
+              placeholder={isRtl ? 'تصفية باسم أو كود المشروع...' : 'Filter by project code or name...'}
+              className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-200'
+              }`}
+            />
           </div>
 
           {/* Station Selection Dropdown (Only shown to Admin and Regional Manager) */}

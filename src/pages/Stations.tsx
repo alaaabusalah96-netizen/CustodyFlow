@@ -661,7 +661,7 @@ export default function Stations({
             companyId={selectedCompanyId}
             isRtl={isRtl}
             theme={theme}
-            onStructureChange={loadData}
+            onStructureChange={refreshData}
           />
 
           {/* Structure builder title banner */}

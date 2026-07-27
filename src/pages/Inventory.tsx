@@ -40,6 +40,8 @@ import {
 import { InventoryModule } from '../db/inventory';
 import { CustodyDB } from '../db';
 import InventoryDocumentForm from '../components/InventoryDocumentForm';
+import WarehouseTreeSelect from '../components/WarehouseTreeSelect';
+import WarehouseHierarchyManager from '../components/WarehouseHierarchyManager';
 
 interface InventoryProps {
   language: 'en' | 'ar';
@@ -501,7 +503,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
                       onClick={() => handleTransition(activeDoc.id, 'Approve')}
                       className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-md transition-all active:scale-95 cursor-pointer"
                     >
-                      {isRtl ? 'اعتماد وترحيل المخزون' : 'Approve & Post Stock'}
+                      {isRtl ? 'اعتماد المستند وتحديث المخزون' : 'Approve & Release Stock'}
                     </button>
                     <button
                       onClick={() => handleTransition(activeDoc.id, 'Reject')}
@@ -533,7 +535,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
                       className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs font-black shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
                     >
                       <PackageCheck size={14} />
-                      <span>{isRtl ? 'تأكيد الاستلام والترخيص المالي' : 'Confirm Receipt & Authorize'}</span>
+                      <span>{isRtl ? 'تأكيد الاستلام والاعتماد' : 'Confirm Receipt & Authorize'}</span>
                     </button>
                     <button
                       onClick={() => handleTransition(activeDoc.id, 'Cancel')}
@@ -547,7 +549,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
                 {activeDoc.status === 'Posted' && (
                   <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold bg-emerald-500/5 px-3 py-1.5 rounded-xl border border-emerald-500/20">
                     <CheckCircle2 size={14} />
-                    <span>{isRtl ? 'تم الترحيل النهائي وتحديث المخزن تلقائياً' : 'Posted & Inventory Updated'}</span>
+                    <span>{isRtl ? 'تم الاعتماد النهائي وتحديث المخزن تلقائياً' : 'Approved & Inventory Updated'}</span>
                   </div>
                 )}
                 
@@ -1658,11 +1660,19 @@ export default function Inventory({ language, theme }: InventoryProps) {
       {/* SUB-TAB: WAREHOUSE & BIN SETTINGS */}
       {!isFormOpen && !selectedDocId && activeTab === 'warehouses' && (
         <div className="space-y-6">
+          {/* Warehouse Hierarchy Tree & Template Manager */}
+          <WarehouseHierarchyManager
+            companyId={activeUser?.company_id || 'comp-1'}
+            isRtl={isRtl}
+            theme={theme}
+            onWarehousesUpdated={() => setRefreshKey(prev => prev + 1)}
+          />
+
           {/* Header & Internal Relocation Action */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 rounded-3xl border bg-slate-500/5 dark:bg-slate-800/10">
             <div>
               <h3 className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                {isRtl ? 'بنية المستودعات وتوزيع سعة الحاويات' : 'Warehouse Structures & Bin Capacities'}
+                {isRtl ? 'بنية السعة والتنظيم الداخلي (الحاويات والرفوف)' : 'Storage Capacities & Internal Bins'}
               </h3>
               <p className="text-xs text-slate-500 mt-1">
                 {isRtl 
@@ -1708,22 +1718,17 @@ export default function Inventory({ language, theme }: InventoryProps) {
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 mb-1">{isRtl ? 'المخزن الرئيسي' : 'Warehouse'}</label>
-                  <select
+                  <WarehouseTreeSelect
                     value={relocWhId}
-                    onChange={(e) => {
-                      setRelocWhId(e.target.value);
+                    onChange={(whId) => {
+                      setRelocWhId(whId);
                       setRelocFromBinId('');
                       setRelocToBinId('');
                     }}
-                    className={`w-full px-3 py-1.5 text-xs rounded-xl border focus:outline-none ${
-                      theme === 'dark' ? 'text-slate-200 bg-slate-800 border-slate-700' : 'text-slate-700 bg-white border-slate-200'
-                    }`}
-                  >
-                    <option value="">{isRtl ? '-- اختر المستودع --' : '-- Select Warehouse --'}</option>
-                    {warehouses.map(w => (
-                      <option key={w.id} value={w.id}>{w.name}</option>
-                    ))}
-                  </select>
+                    companyId={activeUser?.company_id || 'comp-1'}
+                    isRtl={isRtl}
+                    theme={theme}
+                  />
                 </div>
 
                 <div>
@@ -2197,8 +2202,8 @@ export default function Inventory({ language, theme }: InventoryProps) {
                       </h2>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
                         {isRtl 
-                          ? 'تخصيص سياسات الصرف، القيد المحاسبي التلقائي، الرصيد السالب، الأرفف والباتشات حسب دورة عمل الشركة دون الحاجة لتعديل برمجي'
-                          : 'Configure valuation, auto-accounting GL posting, negative stock policy, bin & batch enforcement dynamically'}
+                          ? 'تخصيص سياسات الصرف، الربط المالي التلقائي، الرصيد السالب، الأرفف والباتشات حسب دورة عمل الشركة دون الحاجة لتعديل برمجي'
+                          : 'Configure valuation, financial account mapping, negative stock policy, bin & batch enforcement dynamically'}
                       </p>
                     </div>
                   </div>
@@ -2280,7 +2285,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
                         theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-800'
                       }`}
                     >
-                      <option value="STRICT">{isRtl ? '⛔ STRICT - منع الترحيل والصرف نهائياً عند نقص الرصيد (صارم)' : '⛔ STRICT - Strictly block insufficient balance'}</option>
+                      <option value="STRICT">{isRtl ? '⛔ STRICT - منع الصرف نهائياً عند عدم كفاية الرصيد (صارم)' : '⛔ STRICT - Strictly block insufficient balance'}</option>
                       <option value="WARNING">{isRtl ? '⚠️ WARNING - إظهار تحذير لمسؤول الإدخال مع السماح بالمرور' : '⚠️ WARNING - Warn user but allow dispatch'}</option>
                       <option value="ALLOWED">{isRtl ? '✅ ALLOWED - سماح تام ومطلق بالصرف بالسالب' : '✅ ALLOWED - Allow negative balance without restriction'}</option>
                     </select>
@@ -2371,7 +2376,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
                         className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
                       />
                       <label htmlFor="require_app_chk" className="text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
-                        {isRtl ? 'اشتراط موافقة مدير المخازن قبل الترحيل النهائي لسندات الحركة' : 'Require manager approval prior to document posting'}
+                        {isRtl ? 'اشتراط موافقة مدير المخازن قبل الاعتماد النهائي لسندات الحركة' : 'Require manager approval prior to finalizing documents'}
                       </label>
                     </div>
                   </div>
@@ -2383,7 +2388,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
                     <div className="flex items-center gap-2">
                       <FileSpreadsheet size={18} className="text-purple-500" />
                       <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
-                        {isRtl ? '5. الربط القيدي المحاسبي التلقائي (GL Integration Mapping)' : '5. Automated GL Accounting Integration'}
+                        {isRtl ? '5. الربط المالي التلقائي للحسابات (Financial Mapping)' : '5. Automated Financial Mapping'}
                       </h3>
                     </div>
 
@@ -2396,7 +2401,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
                         className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
                       />
                       <label htmlFor="auto_gl_chk" className="text-xs font-bold text-emerald-600 dark:text-emerald-400 cursor-pointer">
-                        {isRtl ? 'تفعيل الترحيل المحاسبي التلقائي' : 'Enable Auto GL Entry Generation'}
+                        {isRtl ? 'تفعيل الربط المالي التلقائي' : 'Enable Automated Financial Sync'}
                       </label>
                     </div>
                   </div>

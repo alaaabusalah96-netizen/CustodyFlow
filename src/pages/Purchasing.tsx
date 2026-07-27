@@ -19,6 +19,9 @@ import {
 import { Product, Warehouse } from '../types/inventory';
 import { OrganizationUnit } from '../types/organization';
 import { createEventEnvelope } from '../lib/enterprise/metadata';
+import ApprovalWorkflowManager from '../components/ApprovalWorkflowManager';
+import WarehouseTreeSelect from '../components/WarehouseTreeSelect';
+import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
 
 interface PurchasingProps {
   language: 'ar' | 'en';
@@ -925,7 +928,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
                 {isRtl ? 'أوامر التوريد والشراء المباشر (PO)' : 'Binding Purchase Orders (PO)'}
               </h2>
               <p className="text-xs text-slate-500">
-                {isRtl ? 'أوامر التوريد الصادرة للموردين واستلام الشحنات وتغذية الأرصدة والقيود المحاسبية' : 'Issued POs, shipment receipts, and automated GL entries'}
+                {isRtl ? 'أوامر التوريد الصادرة للموردين واستلام الشحنات وتغذية الأرصدة والسجلات المالية' : 'Issued POs, shipment receipts, stock updates and financial logs'}
               </p>
             </div>
             {workflowConfig.allowDirectPoWithoutPr && (
@@ -1134,121 +1137,129 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
       {/* TAB 5: WORKFLOW MATRIX & CONFIGURATION */}
       {/* ========================================================================= */}
       {activeTab === 'config' && (
-        <form onSubmit={handleSaveWorkflowConfig} className="space-y-6 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div>
-            <h2 className="text-lg font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Sliders className="h-5 w-5 text-indigo-600" />
-              {isRtl ? 'سياسات واعتمادات دورة المشتريات (No-Code Configuration)' : 'Purchasing Workflow & Approval Matrix'}
-            </h2>
-            <p className="text-xs text-slate-500">
-              {isRtl ? 'تحديد مصفوفات الاعتماد حسب قيمة الشراء والبوادئ المستندية بدون الحاجة لأي تعديل برمجي مستقبلي' : 'Define approval limits and prefixes with zero future code updates needed'}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="space-y-8">
+          <form onSubmit={handleSaveWorkflowConfig} className="space-y-6 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                {isRtl ? 'بادئة طلبات الشراء (PR Prefix)' : 'PR Prefix'}
-              </label>
-              <input
-                type="text"
-                value={workflowConfig.prPrefix}
-                onChange={e => setWorkflowConfig({ ...workflowConfig, prPrefix: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-mono font-bold"
-              />
+              <h2 className="text-lg font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <Sliders className="h-5 w-5 text-indigo-600" />
+                {isRtl ? 'سياسات واعتمادات دورة المشتريات (No-Code Configuration)' : 'Purchasing Workflow & Approval Matrix'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {isRtl ? 'تحديد مصفوفات الاعتماد حسب قيمة الشراء والبوادئ المستندية بدون الحاجة لأي تعديل برمجي مستقبلي' : 'Define approval limits and prefixes with zero future code updates needed'}
+              </p>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                {isRtl ? 'بادئة أوامر الشراء (PO Prefix)' : 'PO Prefix'}
-              </label>
-              <input
-                type="text"
-                value={workflowConfig.poPrefix}
-                onChange={e => setWorkflowConfig({ ...workflowConfig, poPrefix: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-mono font-bold"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                {isRtl ? 'بادئة عروض الأسعار (RFQ Prefix)' : 'RFQ Prefix'}
-              </label>
-              <input
-                type="text"
-                value={workflowConfig.rfqPrefix}
-                onChange={e => setWorkflowConfig({ ...workflowConfig, rfqPrefix: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-mono font-bold"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                {isRtl ? 'بادئة كود الموردين (Vendor Prefix)' : 'Vendor Prefix'}
-              </label>
-              <input
-                type="text"
-                value={workflowConfig.vendorPrefix}
-                onChange={e => setWorkflowConfig({ ...workflowConfig, vendorPrefix: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-mono font-bold"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-              {isRtl ? 'خيارات التشغيل الآلي للسياسات' : 'Policy Automation Options'}
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {isRtl ? 'بادئة طلبات الشراء (PR Prefix)' : 'PR Prefix'}
+                </label>
                 <input
-                  type="checkbox"
-                  checked={workflowConfig.requirePrApproval}
-                  onChange={e => setWorkflowConfig({ ...workflowConfig, requirePrApproval: e.target.checked })}
-                  className="rounded text-indigo-600 h-4 w-4"
+                  type="text"
+                  value={workflowConfig.prPrefix}
+                  onChange={e => setWorkflowConfig({ ...workflowConfig, prPrefix: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-mono font-bold"
                 />
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  {isRtl ? 'اشتراط الاعتماد لطلبات الشراء قبل تحويلها لأوامر شراء' : 'Require PR approval before PO conversion'}
-                </span>
-              </label>
+              </div>
 
-              <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {isRtl ? 'بادئة أوامر الشراء (PO Prefix)' : 'PO Prefix'}
+                </label>
                 <input
-                  type="checkbox"
-                  checked={workflowConfig.autoCreatePoOnPrApprove}
-                  onChange={e => setWorkflowConfig({ ...workflowConfig, autoCreatePoOnPrApprove: e.target.checked })}
-                  className="rounded text-indigo-600 h-4 w-4"
+                  type="text"
+                  value={workflowConfig.poPrefix}
+                  onChange={e => setWorkflowConfig({ ...workflowConfig, poPrefix: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-mono font-bold"
                 />
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  {isRtl ? 'إنشاء أمر التوريد تلقائياً عند اعتماد طلب الشراء' : 'Auto-issue PO on PR approval'}
-                </span>
-              </label>
+              </div>
 
-              <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {isRtl ? 'بادئة عروض الأسعار (RFQ Prefix)' : 'RFQ Prefix'}
+                </label>
                 <input
-                  type="checkbox"
-                  checked={workflowConfig.allowDirectPoWithoutPr}
-                  onChange={e => setWorkflowConfig({ ...workflowConfig, allowDirectPoWithoutPr: e.target.checked })}
-                  className="rounded text-indigo-600 h-4 w-4"
+                  type="text"
+                  value={workflowConfig.rfqPrefix}
+                  onChange={e => setWorkflowConfig({ ...workflowConfig, rfqPrefix: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-mono font-bold"
                 />
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  {isRtl ? 'السماح بإصدار أمر شراء مباشر بدون طلب شراء سابق' : 'Allow direct PO without PR'}
-                </span>
-              </label>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {isRtl ? 'بادئة كود الموردين (Vendor Prefix)' : 'Vendor Prefix'}
+                </label>
+                <input
+                  type="text"
+                  value={workflowConfig.vendorPrefix}
+                  onChange={e => setWorkflowConfig({ ...workflowConfig, vendorPrefix: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-mono font-bold"
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-            <button
-              type="submit"
-              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-2"
-            >
-              <Check className="h-4 w-4" />
-              {isRtl ? 'حفظ السياسات والاعتمادات' : 'Save Workflow Policies'}
-            </button>
-          </div>
-        </form>
+            <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                {isRtl ? 'خيارات التشغيل الآلي للسياسات' : 'Policy Automation Options'}
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <input
+                    type="checkbox"
+                    checked={workflowConfig.requirePrApproval}
+                    onChange={e => setWorkflowConfig({ ...workflowConfig, requirePrApproval: e.target.checked })}
+                    className="rounded text-indigo-600 h-4 w-4"
+                  />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    {isRtl ? 'اشتراط الاعتماد لطلبات الشراء قبل تحويلها لأوامر شراء' : 'Require PR approval before PO conversion'}
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <input
+                    type="checkbox"
+                    checked={workflowConfig.autoCreatePoOnPrApprove}
+                    onChange={e => setWorkflowConfig({ ...workflowConfig, autoCreatePoOnPrApprove: e.target.checked })}
+                    className="rounded text-indigo-600 h-4 w-4"
+                  />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    {isRtl ? 'إنشاء أمر التوريد تلقائياً عند اعتماد طلب الشراء' : 'Auto-issue PO on PR approval'}
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <input
+                    type="checkbox"
+                    checked={workflowConfig.allowDirectPoWithoutPr}
+                    onChange={e => setWorkflowConfig({ ...workflowConfig, allowDirectPoWithoutPr: e.target.checked })}
+                    className="rounded text-indigo-600 h-4 w-4"
+                  />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    {isRtl ? 'السماح بإصدار أمر شراء مباشر بدون طلب شراء سابق' : 'Allow direct PO without PR'}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <button
+                type="submit"
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-2"
+              >
+                <Check className="h-4 w-4" />
+                {isRtl ? 'حفظ السياسات والاعتمادات' : 'Save Workflow Policies'}
+              </button>
+            </div>
+          </form>
+
+          <ApprovalWorkflowManager
+            companyId={activeUser?.company_id || 'comp-1'}
+            isRtl={isRtl}
+            theme={theme}
+          />
+        </div>
       )}
 
       {/* ========================================================================= */}
@@ -1462,19 +1473,16 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    {isRtl ? 'الوحدة التنظيمية / الفرع' : 'Organization Unit'}
-                  </label>
-                  <select
+                  <OrgUnitTreeSelect
+                    label={isRtl ? 'الوحدة التنظيمية / الفرع' : 'Organization Unit'}
                     value={prOrgUnitId}
-                    onChange={e => setPrOrgUnitId(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-bold"
-                  >
-                    <option value="">{isRtl ? '-- اختيار الفرع/الوحدة --' : '-- Select Unit --'}</option>
-                    {orgUnits.map(u => (
-                      <option key={u.id} value={u.id}>{isRtl ? u.nameAr || u.name : u.nameEn || u.name} ({u.code})</option>
-                    ))}
-                  </select>
+                    onChange={(id) => setPrOrgUnitId(id)}
+                    placeholder={isRtl ? '-- اختيار الفرع/الوحدة --' : '-- Select Unit --'}
+                    companyId={companyId}
+                    isRtl={isRtl}
+                    theme={theme}
+                    showInheritanceSummary={false}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -1802,19 +1810,16 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    {isRtl ? 'الوحدة التنظيمية / الفرع' : 'Organization Unit'}
-                  </label>
-                  <select
+                  <OrgUnitTreeSelect
+                    label={isRtl ? 'الوحدة التنظيمية / الفرع' : 'Organization Unit'}
                     value={directPoOrgUnitId}
-                    onChange={e => setDirectPoOrgUnitId(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-bold"
-                  >
-                    <option value="">{isRtl ? '-- اختيار الفرع/الوحدة --' : '-- Select Unit --'}</option>
-                    {orgUnits.map(u => (
-                      <option key={u.id} value={u.id}>{isRtl ? u.nameAr || u.name : u.nameEn || u.name} ({u.code})</option>
-                    ))}
-                  </select>
+                    onChange={(id) => setDirectPoOrgUnitId(id)}
+                    placeholder={isRtl ? '-- اختيار الفرع/الوحدة --' : '-- Select Unit --'}
+                    companyId={companyId}
+                    isRtl={isRtl}
+                    theme={theme}
+                    showInheritanceSummary={false}
+                  />
                 </div>
               </div>
 
@@ -1963,24 +1968,20 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  {isRtl ? 'تحديد المخزن/المستودع المستلم' : 'Select Destination Warehouse'}
-                </label>
-                <select
+                <WarehouseTreeSelect
+                  label={isRtl ? 'تحديد المخزن/المستودع المستلم' : 'Select Destination Warehouse'}
                   value={receiveWarehouseId}
-                  onChange={e => setReceiveWarehouseId(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-xs font-bold"
-                >
-                  {warehouses.map(w => (
-                    <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
-                  ))}
-                </select>
+                  onChange={whId => setReceiveWarehouseId(whId)}
+                  companyId={companyId}
+                  isRtl={isRtl}
+                  theme={theme}
+                />
               </div>
 
               <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-600 rounded-xl text-xs">
                 {isRtl 
-                  ? 'سيتم إضافة البنود مباشرة إلى أرصدة المستودع المحدد، وتثبيت إذن الاستلام المخزني وترحيل القيود المحاسبية التلقائية.'
-                  : 'Items will be added directly into target warehouse stock, creating a goods receipt document and GL double-entry.'}
+                  ? 'سيتم إضافة البنود مباشرة إلى أرصدة المستودع المحدد، وتثبيت إذن الاستلام المخزني وتحديث السجلات المالية.'
+                  : 'Items will be added directly into target warehouse stock, creating a goods receipt document and updating records.'}
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">

@@ -8,6 +8,7 @@ import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
 import { LogsModule } from '../db/logs';
 import { OrganizationEngine } from '../db/organizationEngine';
+import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
 import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus } from '../types/fleet';
 
@@ -196,7 +197,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         org_unit_id: selectedVehicleForLog.org_unit_id
       });
 
-      showToast('success', isRtl ? 'تم تسجيل الصيانة وتسييل القيد المالي بنجاح' : 'Maintenance logged & GL entry posted');
+      showToast('success', isRtl ? 'تم تسجيل الصيانة بنجاح' : 'Maintenance logged successfully');
       setShowLogMaintenance(false);
       setSelectedVehicleForLog(null);
       loadData();
@@ -220,7 +221,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         org_unit_id: selectedVehicleForLog.org_unit_id
       });
 
-      showToast('success', isRtl ? 'تم تسجيل الوقود وتسييل القيد المالي بنجاح' : 'Fuel logged & GL entry posted');
+      showToast('success', isRtl ? 'تم تسجيل الوقود بنجاح' : 'Fuel logged successfully');
       setShowLogFuel(false);
       setSelectedVehicleForLog(null);
       loadData();
@@ -404,19 +405,16 @@ export default function FleetManagement({ language }: FleetManagementProps) {
 
             <form onSubmit={handleAddVehicle} className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
-                  {isRtl ? 'الوحدة التنظيمية / الفرع / الموقع' : 'Organization Unit / Branch'}
-                </label>
-                <select
+                <OrgUnitTreeSelect
+                  label={isRtl ? 'الوحدة التنظيمية / الفرع / الموقع' : 'Organization Unit / Branch'}
                   value={formOrgUnitId}
-                  onChange={(e) => setFormOrgUnitId(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
-                >
-                  <option value="">{isRtl ? '-- افتراضي (حسب صلاحية المستخدم) --' : '-- Default (User Scope) --'}</option>
-                  {orgUnits.map((u) => (
-                    <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
-                  ))}
-                </select>
+                  onChange={(id) => setFormOrgUnitId(id)}
+                  placeholder={isRtl ? '-- افتراضي (حسب صلاحية المستخدم) --' : '-- Default (User Scope) --'}
+                  companyId={companyId}
+                  isRtl={isRtl}
+                  theme={undefined}
+                  showInheritanceSummary={false}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -585,7 +583,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                   type="submit"
                   className="flex-1 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl"
                 >
-                  {isRtl ? 'حفظ وتسييل القيد' : 'Post Maintenance'}
+                  {isRtl ? 'حفظ واعتماد الصيانة' : 'Save Maintenance'}
                 </button>
               </div>
             </form>
@@ -655,7 +653,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                   type="submit"
                   className="flex-1 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl"
                 >
-                  {isRtl ? 'حفظ وتسييل قيد الوقود' : 'Post Fuel Entry'}
+                  {isRtl ? 'حفظ واعتماد الوقود' : 'Save Fuel Record'}
                 </button>
               </div>
             </form>

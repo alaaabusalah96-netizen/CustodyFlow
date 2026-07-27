@@ -54,7 +54,7 @@ const localLabels = {
     bulkVoucherDate: 'تاريخ السند الموحد',
     bulkSettleSuccess: 'تمت التسوية الجماعية بنجاح وإصدار السند رقم ',
     clearSelection: 'إلغاء التحديد',
-    bulkSettleBtn: 'تأكيد التسوية الجماعية وتوليد القيود',
+    bulkSettleBtn: 'تأكيد التسوية الجماعية وإصدار السندات',
     companyLabel: 'الشركة',
     stationLabel: 'المحطة',
     statusFilter: 'الحالة',
@@ -443,7 +443,7 @@ export default function PendingTransactions({
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             {isRtl 
-              ? 'مصاريف معلقة ومرفوضة بانتظار الاعتماد. تتيح لك التصفية السريعة والتحديد المتعدد لإرفاق القيود وسندات الصرف بشكل جماعي.' 
+              ? 'مصاريف معلقة ومرفوضة بانتظار الاعتماد. تتيح لك التصفية السريعة والتحديد المتعدد لتسوية المصروفات وسندات الصرف بشكل جماعي.' 
               : 'Pending and rejected expenditures awaiting settlement. Features multiple selection and comprehensive advanced filtering.'
             }
           </p>

@@ -10,6 +10,7 @@ import { LogsModule } from '../db/logs';
 import { dbSetDoc } from '../firebase';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 import { OrganizationEngine } from '../db/organizationEngine';
+import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
 import { HRBusinessEngine } from '../lib/enterprise/hr_engine';
 import { Employee, PayrollItem, PayrollRun } from '../types/hr';
 
@@ -266,11 +267,11 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
       LogsModule.addLog(
         activeUser?.id || 'system',
         activeUser?.full_name || 'System',
-        isRtl ? 'ترحيل مسير رواتب الموظفين' : 'Post HR Monthly Payroll',
+        isRtl ? 'اعتماد وصرف مسير رواتب الموظفين' : 'Approve Monthly Payroll',
         `Processed payroll run for period ${payrollPeriod}. Total Payout: ${totalNet.toLocaleString()} EGP`
       );
 
-      showToast('success', isRtl ? 'تم ترحيل وصرف مسير الرواتب الشهري للموظفين بنجاح وتوليد قيد اليومية الآلي' : 'Monthly payroll processed and posted successfully with automated GL ledger entries');
+      showToast('success', isRtl ? 'تم اعتماد وصرف مسير الرواتب الشهري للموظفين بنجاح وتحديث السجلات المالية' : 'Monthly payroll approved and processed successfully');
       setIsPayrollGenerated(false);
       setPayrollSheet([]);
       setFormOrgUnitId('');
@@ -278,7 +279,7 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
       loadEmployees();
     } catch (err) {
       console.error('Post payroll error:', err);
-      showToast('error', isRtl ? 'حدث خطأ أثناء ترحيل مسير الرواتب' : 'Error processing payroll run');
+      showToast('error', isRtl ? 'حدث خطأ أثناء اعتماد مسير الرواتب' : 'Error processing payroll run');
     }
   };
 
@@ -475,7 +476,7 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
       {/* Salary runs history */}
       {activeTab === 'payroll' && (
         <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm text-center text-slate-400 font-medium p-8">
-          {isRtl ? 'لم يتم ترحيل أي رواتب شهرية مطبوعة بعد في الفترة المحاسبية الحالية.' : 'No salary sheets posted yet for the current fiscal period.'}
+          {isRtl ? 'لم يتم اعتماد أو صرف أي كشوف رواتب بعد في الفترة الحالية.' : 'No salary sheets approved yet for the current period.'}
         </div>
       )}
 
@@ -496,17 +497,16 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
 
             <form onSubmit={handleAddEmployee} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'الوحدة التنظيمية / الفرع / القسم' : 'Organization Unit / Branch'}</label>
-                <select
+                <OrgUnitTreeSelect
+                  label={isRtl ? 'الوحدة التنظيمية / الفرع / القسم' : 'Organization Unit / Branch'}
                   value={formOrgUnitId}
-                  onChange={(e) => setFormOrgUnitId(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="">{isRtl ? '-- افتراضي (حسب صلاحية المستخدم) --' : '-- Default (User Scope) --'}</option>
-                  {orgUnits.map((u) => (
-                    <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
-                  ))}
-                </select>
+                  onChange={(id) => setFormOrgUnitId(id)}
+                  placeholder={isRtl ? '-- افتراضي (حسب صلاحية المستخدم) --' : '-- Default (User Scope) --'}
+                  companyId={companyId}
+                  isRtl={isRtl}
+                  theme={theme}
+                  showInheritanceSummary={false}
+                />
               </div>
 
               <div>

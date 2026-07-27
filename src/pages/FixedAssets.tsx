@@ -11,6 +11,7 @@ import { LogsModule } from '../db/logs';
 import { dbSetDoc } from '../firebase';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 import { OrganizationEngine } from '../db/organizationEngine';
+import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
 import { AssetBusinessEngine } from '../lib/enterprise/asset_engine';
 import { FixedAsset, DepreciationRunLog } from '../types/asset';
 
@@ -181,11 +182,11 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
       LogsModule.addLog(
         activeUser?.id || 'system',
         activeUser?.full_name || 'System',
-        isRtl ? 'ترحيل قيود استهلاك الأصول الثابتة' : 'Post Depreciation Journal Entries',
-        `Depreciated fixed assets for month ending ${depreciationDate}. Postings: Debit: Depreciation Expense (${totalExp.toLocaleString()} EGP), Credit: Accumulated Depreciation.`
+        isRtl ? 'احتساب وحفظ استهلاك الأصول الثابتة' : 'Process Asset Depreciation',
+        `Depreciated fixed assets for month ending ${depreciationDate}. Period Total: ${totalExp.toLocaleString()} EGP.`
       );
 
-      showToast('success', isRtl ? 'تم احتساب واستهلاك الأصول وترحيلها لدفتر اليومية المساعد بنجاح' : 'Depreciation entries posted to auxiliary ledger');
+      showToast('success', isRtl ? 'تم احتساب واستهلاك الأصول بنجاح' : 'Depreciation processed successfully');
       setIsCalculated(false);
       setRunLogs([]);
       setFormOrgUnitId('');
@@ -193,7 +194,7 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
       loadAssets();
     } catch (err) {
       console.error('Post depreciation run error:', err);
-      showToast('error', isRtl ? 'حدث خطأ أثناء ترحيل قيد الاستهلاك' : 'Error posting depreciation run');
+      showToast('error', isRtl ? 'حدث خطأ أثناء احتساب الاستهلاك' : 'Error processing depreciation');
     }
   };
 
@@ -227,8 +228,8 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             {isRtl 
-              ? 'سجل الأصول الرأسمالية للشركة، احتساب معدلات الاستهلاك للقسط الثابت، وترحيل القيود المحاسبية التلقائية.' 
-              : 'Fixed capital assets register, straight-line depreciation amortization engine, and bookkeeping.'}
+              ? 'سجل الأصول الرأسمالية للشركة واحتساب وتتبع معدلات الاستهلاك الدوري تلقائياً.' 
+              : 'Fixed capital assets register and straight-line depreciation amortization engine.'}
           </p>
         </div>
 
@@ -393,17 +394,16 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
 
             <form onSubmit={handleAddAsset} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'الوحدة التنظيمية / الموقع / الفرع' : 'Organization Unit / Site'}</label>
-                <select
+                <OrgUnitTreeSelect
+                  label={isRtl ? 'الوحدة التنظيمية / الموقع / الفرع' : 'Organization Unit / Site'}
                   value={formOrgUnitId}
-                  onChange={(e) => setFormOrgUnitId(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="">{isRtl ? '-- افتراضي (حسب صلاحية المستخدم) --' : '-- Default (User Scope) --'}</option>
-                  {orgUnits.map((u) => (
-                    <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
-                  ))}
-                </select>
+                  onChange={(id) => setFormOrgUnitId(id)}
+                  placeholder={isRtl ? '-- افتراضي (حسب صلاحية المستخدم) --' : '-- Default (User Scope) --'}
+                  companyId={companyId}
+                  isRtl={isRtl}
+                  theme={theme}
+                  showInheritanceSummary={false}
+                />
               </div>
 
               <div>
@@ -502,12 +502,12 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
             </button>
             <h3 className="text-md font-black text-slate-800 dark:text-white mb-2 flex items-center gap-2">
               <Calculator className="text-indigo-500 h-5 w-5" />
-              <span>{isRtl ? 'تشغيل واحتساب قيود استهلاك الأصول' : 'Run Depreciation Amortization Engine'}</span>
+              <span>{isRtl ? 'احتساب استهلاك الأصول الدوري' : 'Process Period Asset Depreciation'}</span>
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed mb-4">
               {isRtl 
-                ? 'يقوم محرك الأصول بحساب قيمة الاستهلاك الشهري (القسط الثابت) تلقائياً لجميع الأصول المسجلة تمهيداً لترحيل قيود الاستهلاك للمحاسبة المالية.'
-                : 'Runs monthly straight-line calculations for registered assets. This aggregates depreciation expenses before posting to ledger logs.'}
+                ? 'يقوم النظام بحساب قيمة الاستهلاك الشهري (القسط الثابت) تلقائياً لجميع الأصول المسجلة وتحديث صافي القيمة الدفترية.'
+                : 'Runs monthly straight-line calculations for registered assets and updates net asset value.'}
             </p>
 
             <div className="space-y-4">
@@ -531,7 +531,7 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
 
               {isCalculated && (
                 <div className="space-y-4">
-                  <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">{isRtl ? 'معاينة قيود ترحيل الاستهلاك المتوقعة' : 'Depreciation Postings Preview'}</h4>
+                  <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">{isRtl ? 'معاينة توزيع استهلاك الأصول' : 'Depreciation Summary Preview'}</h4>
                   <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden text-xs max-h-[220px] overflow-y-auto">
                     <table className="w-full">
                       <thead>
@@ -557,13 +557,13 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
                     <ShieldAlert size={16} className="shrink-0 mt-0.5" />
                     <p className="leading-relaxed">
                       {isRtl 
-                        ? 'عند تأكيد الترحيل، سيتم تخفيض قيمة الأصول الدفترية فوراً وتسجيل القيد في قيود الرقابة وسجل المحاسبة العام.'
-                        : 'Posting this run reduces Net Book Value immediately and logs depreciated expenses in general audit ledger.'}
+                        ? 'عند تأكيد الاعتماد، سيتم تحديث وتخفيض قيمة الأصول الدفترية فوراً في سجلات النظام.'
+                        : 'Confirming this step updates asset net values and records the monthly period activity.'}
                     </p>
                   </div>
 
                   <div className="flex justify-between items-center bg-slate-100 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <span className="text-xs font-bold">{isRtl ? 'إجمالي قيد الاستهلاك المالي:' : 'Accumulated Depreciation Run Total:'}</span>
+                    <span className="text-xs font-bold">{isRtl ? 'إجمالي استهلاك الفترة:' : 'Total Period Depreciation:'}</span>
                     <span className="font-mono font-black text-rose-500 text-sm">
                       {runLogs.reduce((sum, rl) => sum + rl.expense, 0).toLocaleString(undefined, {maximumFractionDigits:2})} EGP
                     </span>
@@ -585,7 +585,7 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
                       onClick={handlePostDepreciationRun}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl"
                     >
-                      {isRtl ? 'تأكيد وترحيل القيد للدفتر' : 'Post Depreciation Run'}
+                      {isRtl ? 'تأكيد واعتماد الاستهلاك' : 'Approve Depreciation Run'}
                     </button>
                   </div>
                 </div>

@@ -14,6 +14,7 @@ import { UsersModule } from './users';
 import { LogsModule } from './logs';
 import { CompaniesModule } from './companies';
 import { StationsModule } from './stations';
+import { OrganizationScopeEngine } from './organizationScopeEngine';
 
 // Import submodules
 import { TransactionsCreateModule } from './transactions.create';
@@ -90,30 +91,14 @@ export class TransactionsModule {
       ? CompaniesModule.getSelectedCompanyId() 
       : user.company_id;
       
-    const companyTxs = txs.filter(t => t.company_id === targetCompanyId);
+    const companyTxs = txs.filter(t => (t as any).company_id === targetCompanyId || !(t as any).company_id);
     
     if (user.role === 'SystemAdmin' || user.role === 'Admin') {
       return companyTxs;
     }
     
-    if (user.role === 'RegionalManager') {
-      const stations = StationsModule.getStations();
-      const regionStations = stations.filter(s => {
-        const isSameCompany = s.company_id === targetCompanyId;
-        if (!isSameCompany) return false;
-        if (!user.region_id) return false;
-        return s.region_id === user.region_id;
-      });
-      const targetStationIds = regionStations.map(s => s.id);
-      return companyTxs.filter(t => t.station_id && targetStationIds.includes(t.station_id));
-    }
-    
-    if (user.role === 'StationAdmin') {
-      if (!user.station_id) return [];
-      return companyTxs.filter(t => t.station_id === user.station_id);
-    }
-    
-    return [];
+    // Dynamic permission scope filter based on Organization Units / Regions / Stations
+    return OrganizationScopeEngine.filterByOrganizationScope(companyTxs, user);
   }
 
   static saveTransactions(transactions: Transaction[]): void {

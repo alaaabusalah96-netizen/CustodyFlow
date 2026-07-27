@@ -32,8 +32,11 @@ import {
 } from '../types/inventory';
 import { InventoryModule } from '../db/inventory';
 import { CustodyDB } from '../db';
+import { CompaniesModule } from '../db/companies';
+import { OrganizationEngine } from '../db/organizationEngine';
 import { PurchasingBusinessEngine } from '../lib/enterprise/purchasing_engine';
 import { PurchaseOrder } from '../types/purchasing';
+import WarehouseTreeSelect from './WarehouseTreeSelect';
 import kemitLogo from '../assets/images/kemit_logo_1784280480891.jpg';
 
 interface InventoryDocumentFormProps {
@@ -72,10 +75,12 @@ export default function InventoryDocumentForm({
   const activeUser = CustodyDB.getActiveUser();
 
   // Load basic lists
+  const selectedCompanyId = CompaniesModule.getSelectedCompanyId() || 'comp-default';
   const warehouses = useMemo(() => InventoryModule.getWarehouses(), []);
   const products = useMemo(() => InventoryModule.getProducts(), []);
   const stations = useMemo(() => CustodyDB.getStations(), []);
   const regions = useMemo(() => CustodyDB.getRegions(), []);
+  const orgUnits = useMemo(() => OrganizationEngine.getOrganizationUnits(selectedCompanyId), [selectedCompanyId]);
 
   // Form states
   const [docType, setDocType] = useState<InventoryDocType>(initialDocType);
@@ -438,6 +443,7 @@ export default function InventoryDocumentForm({
 
   // Dynamically resolve target entity list for searchable dropdown
   const destEntityList = useMemo((): DropdownItem[] => {
+    const orgUnitItems = orgUnits.map(u => ({ id: u.id, name: isRtl ? (u.nameAr || u.name) : (u.nameEn || u.name), code: u.code, subText: isRtl ? 'وحدة تنظيمية / فرع' : 'Org Unit' }));
     if (docType === 'Receipt') {
       if (receiptSourceType === 'transfer') {
         const whItems = warehouses
@@ -445,7 +451,7 @@ export default function InventoryDocumentForm({
           .map(w => ({ id: w.id, name: w.name, code: w.code, subText: isRtl ? 'مخزن/فرع محول منه' : 'Source Warehouse' }));
         const branchItems = regions.map(r => ({ id: r.id, name: r.name, code: r.code || r.id, subText: isRtl ? 'فرع محول منه' : 'Source Branch' }));
         const stationItems = stations.map(s => ({ id: s.id, name: s.station_name, code: s.station_code, subText: isRtl ? 'محطة محول منها' : 'Source Station' }));
-        return [...whItems, ...branchItems, ...stationItems];
+        return [...whItems, ...orgUnitItems, ...branchItems, ...stationItems];
       }
       return DEFAULT_SUPPLIERS;
     }
@@ -455,7 +461,8 @@ export default function InventoryDocumentForm({
           .filter(w => w.id !== sourceWarehouseId)
           .map(w => ({ id: w.id, name: w.name, code: w.code, subText: w.location }));
       case 'branch':
-        return regions.map(r => ({ id: r.id, name: r.name, code: r.code || r.id, subText: isRtl ? 'فرع مؤسسة' : 'Company Branch' }));
+        const branchItems = regions.map(r => ({ id: r.id, name: r.name, code: r.code || r.id, subText: isRtl ? 'فرع مؤسسة' : 'Company Branch' }));
+        return [...orgUnitItems, ...branchItems];
       case 'station':
         return stations.map(s => ({ id: s.id, name: s.station_name, code: s.station_code, subText: s.custody_amount.toLocaleString() + ' EGP' }));
       case 'supplier':
@@ -463,7 +470,7 @@ export default function InventoryDocumentForm({
       default:
         return [];
     }
-  }, [docType, receiptSourceType, destEntityType, warehouses, sourceWarehouseId, regions, stations, isRtl]);
+  }, [docType, receiptSourceType, destEntityType, warehouses, sourceWarehouseId, regions, stations, orgUnits, isRtl]);
 
   // Autocomplete suggestions for fields
   const [activeDropdown, setActiveDropdown] = useState<{ type: 'dest' | number; search: string } | null>(null);
@@ -777,30 +784,20 @@ export default function InventoryDocumentForm({
 
           {/* Source Warehouse (المخزن الأساسي) */}
           <div className="w-full">
-            <label className={`block text-xs font-bold mb-1.5 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
-              {docType === 'Damage' 
-                ? (isRtl ? 'مخزن الخردة / الكهنة' : 'Scrap & Obsolete Warehouse') 
-                : (isRtl ? 'المخزن الرئيسي للمستند' : 'Primary Warehouse')}
-            </label>
-            <select
+            <WarehouseTreeSelect
+              label={
+                docType === 'Damage' 
+                  ? (isRtl ? 'مخزن الخردة / الكهنة' : 'Scrap & Obsolete Warehouse') 
+                  : (isRtl ? 'المخزن الرئيسي للمستند' : 'Primary Warehouse')
+              }
               value={sourceWarehouseId}
-              onChange={(e) => handleSourceWarehouseChange(e.target.value)}
-              className={`w-full px-3.5 py-2 text-xs border rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
-                theme === 'dark' ? 'text-slate-100 bg-[#1e293b] border-[#334155]' : 'text-slate-800 bg-white border-slate-200'
-              } ${errors.sourceWarehouseId ? 'border-rose-500' : ''}`}
-            >
-              <option value="">
-                {docType === 'Damage' 
-                  ? (isRtl ? '-- اختر مخزن الخردة/الكهنة --' : '-- Select Scrap Store --') 
-                  : (isRtl ? '-- اختر المخزن --' : '-- Select Warehouse --')}
-              </option>
-              {filteredWarehouses.map(w => (
-                <option key={w.id} value={w.id}>
-                  {w.name} [{w.code}] {w.receiving_approval_workflow ? (isRtl ? '(يتطلب اعتماد)' : '(Requires Approval)') : ''}
-                </option>
-              ))}
-            </select>
-            {errors.sourceWarehouseId && <p className="text-[10px] text-rose-500 font-semibold mt-1 flex items-center gap-1"><AlertCircle size={10} />{errors.sourceWarehouseId}</p>}
+              onChange={(whId) => handleSourceWarehouseChange(whId)}
+              filterTypeCode={docType === 'Damage' ? 'DAMAGED' : undefined}
+              companyId={activeUser?.company_id || 'comp-1'}
+              isRtl={isRtl}
+              theme={theme}
+              error={errors.sourceWarehouseId}
+            />
           </div>
 
           {/* Date Picker */}
