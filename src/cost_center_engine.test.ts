@@ -9,14 +9,17 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
   const operatorId = 'user-cc-op';
 
   beforeEach(() => {
+    if (typeof navigator !== 'undefined') {
+      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true, writable: true });
+    }
     StorageEngine.setStored('cost_centers', []);
     StorageEngine.setStored('organization_units', []);
     StorageEngine.setStored('journal_entries', []);
     StorageEngine.setStored('gl_accounts', []);
   });
 
-  it('should create, retrieve, update, and delete a dynamic cost center', () => {
-    const created = CostCenterEngine.addCostCenter({
+  it('should create, retrieve, update, and delete a dynamic cost center', async () => {
+    const created = await CostCenterEngine.addCostCenter({
       code: 'CC-1001',
       nameAr: 'مركز تكلفة التسويق',
       nameEn: 'Marketing Cost Center',
@@ -32,15 +35,15 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
     const retrieved = CostCenterEngine.getCostCenter(created.id);
     expect(retrieved?.nameEn).toBe('Marketing Cost Center');
 
-    const updated = CostCenterEngine.updateCostCenter(created.id, { budget: 75000 });
+    const updated = await CostCenterEngine.updateCostCenter(created.id, { budget: 75000 });
     expect(updated.budget).toBe(75000);
 
-    const deleted = CostCenterEngine.deleteCostCenter(created.id);
+    const deleted = await CostCenterEngine.deleteCostCenter(created.id);
     expect(deleted).toBe(true);
     expect(CostCenterEngine.getCostCenter(created.id)).toBeUndefined();
   });
 
-  it('should automatically create and link a Cost Center when an Organization Unit is resolved', () => {
+  it('should automatically create and link a Cost Center when an Organization Unit is resolved', async () => {
     // 1. Create an Organization Unit
     const orgUnit = OrganizationEngine.addUnit({
       companyId: companyId,
@@ -52,8 +55,9 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
       isActive: true
     });
 
-    // 2. Resolve cost center for the org unit
-    const linkedCC = CostCenterEngine.resolveCostCenterForOrgUnit(orgUnit.id, companyId);
+    // 2. Auto create & link cost center for the org unit
+    const createdCC = await CostCenterEngine.autoCreateOrLinkCostCenterForOrgUnit(orgUnit);
+    const linkedCC = await CostCenterEngine.resolveCostCenterForOrgUnit(orgUnit.id, companyId);
 
     expect(linkedCC).toBeDefined();
     expect(linkedCC?.org_unit_id).toBe(orgUnit.id);
@@ -61,7 +65,7 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
     expect(linkedCC?.nameAr).toContain('فرع الإسكندرية');
 
     // Calling resolveCostCenterForOrgUnit again should return the exact same cost center instance
-    const secondCallCC = CostCenterEngine.resolveCostCenterForOrgUnit(orgUnit.id, companyId);
+    const secondCallCC = await CostCenterEngine.resolveCostCenterForOrgUnit(orgUnit.id, companyId);
     expect(secondCallCC?.id).toBe(linkedCC?.id);
   });
 
@@ -112,7 +116,7 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
       isActive: true
     });
 
-    const cc = CostCenterEngine.autoCreateOrLinkCostCenterForOrgUnit(orgUnit);
+    const cc = await CostCenterEngine.autoCreateOrLinkCostCenterForOrgUnit(orgUnit);
 
     // Post double entry providing ONLY costCenterId
     const je = await AccountingBusinessEngine.postOperationalDoubleEntry(
@@ -133,8 +137,8 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
     expect(je.org_unit_id).toBe(orgUnit.id);
   });
 
-  it('should build hierarchical Cost Center tree and subtrees correctly', () => {
-    const parent = CostCenterEngine.addCostCenter({
+  it('should build hierarchical Cost Center tree and subtrees correctly', async () => {
+    const parent = await CostCenterEngine.addCostCenter({
       code: 'CC-HQ',
       nameAr: 'المركز الرئيسي',
       nameEn: 'HQ Cost Center',
@@ -142,7 +146,7 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
       isActive: true
     });
 
-    const sub1 = CostCenterEngine.addCostCenter({
+    const sub1 = await CostCenterEngine.addCostCenter({
       code: 'CC-HQ-IT',
       nameAr: 'قسم تكنولوجيا المعلومات',
       nameEn: 'IT Department',
@@ -151,7 +155,7 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
       isActive: true
     });
 
-    const sub2 = CostCenterEngine.addCostCenter({
+    const sub2 = await CostCenterEngine.addCostCenter({
       code: 'CC-HQ-HR',
       nameAr: 'قسم الموارد البشرية',
       nameEn: 'HR Department',

@@ -139,7 +139,7 @@ function AdminCredentialsForm({
     };
 
     await CustodyDB.saveUsers([...usersList, newUser]);
-    CustodyDB.deleteSignupRequest(req.id);
+    await CustodyDB.deleteSignupRequest(req.id);
     CustodyDB.logAudit('APPROVE_SIGNUP_REQUEST', `Approved signup for ${req.full_name} (${req.email}) as ${req.role}`);
 
     alert(isRtl ? 'تم قبول طلب التسجيل وتفعيل الحساب بنجاح!' : 'Signup request approved successfully!');
@@ -149,7 +149,7 @@ function AdminCredentialsForm({
     }
   };
 
-  const handleReject = (req: SignupRequest) => {
+  const handleReject = async (req: SignupRequest) => {
     if (!rejectionReason.trim()) {
       alert(isRtl ? 'يرجى كتابة سبب الرفض' : 'Please provide a rejection reason.');
       return;
@@ -160,7 +160,7 @@ function AdminCredentialsForm({
       status: 'Rejected' as const,
       rejection_reason: rejectionReason.trim()
     };
-    CustodyDB.saveSignupRequest(updated);
+    await CustodyDB.saveSignupRequest(updated);
     CustodyDB.logAudit('REJECT_SIGNUP_REQUEST', `Rejected signup for ${req.full_name} (${req.email}). Reason: ${rejectionReason}`);
 
     alert(isRtl ? 'تم رفض طلب التسجيل بنجاح' : 'Signup request rejected successfully.');

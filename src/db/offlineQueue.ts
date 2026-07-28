@@ -1,5 +1,5 @@
 import { StorageEngine } from './storage';
-import { dbSetDoc } from '../firebase';
+import { dbSetDoc, dbDeleteDoc } from '../firebase';
 
 export interface PendingOfflineItem {
   id: string;
@@ -54,7 +54,9 @@ export async function syncWriteWithOfflineFallback(
   }
 
   try {
-    const writePromise = dbSetDoc(collectionName, docId, data);
+    const writePromise = data === null 
+      ? dbDeleteDoc(collectionName, docId) 
+      : dbSetDoc(collectionName, docId, data);
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Firestore write timeout')), timeoutMs)
     );

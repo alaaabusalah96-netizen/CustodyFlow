@@ -175,19 +175,25 @@ export class TransactionsVoucherModule {
         } else {
           finalNo = defaultStart;
         }
-        syncWriteWithOfflineFallback('company_sequences', companyId, { 
+        const syncRes1 = await syncWriteWithOfflineFallback('company_sequences', companyId, { 
           id: companyId, 
           company_id: companyId, 
           last_cash_voucher_no: finalNo 
         });
+        if (!syncRes1.success) {
+          throw new Error(syncRes1.error || 'يلزم وجود اتصال بالإنترنت لتوليد رقم السند. يرجى إعادة الاتصال والمحاولة مرة أخرى.');
+        }
       } catch (err) {
         console.error("Simple get/set fallback failed too, using local fallback:", err);
         finalNo = fallbackNext;
-        syncWriteWithOfflineFallback('company_sequences', companyId, { 
+        const syncRes2 = await syncWriteWithOfflineFallback('company_sequences', companyId, { 
           id: companyId, 
           company_id: companyId, 
           last_cash_voucher_no: finalNo 
         });
+        if (!syncRes2.success) {
+          throw new Error(syncRes2.error || 'يلزم وجود اتصال بالإنترنت لتوليد رقم السند. يرجى إعادة الاتصال والمحاولة مرة أخرى.');
+        }
       }
     }
 
@@ -252,7 +258,10 @@ export class TransactionsVoucherModule {
         const lastNo = currentVal !== undefined ? currentVal : (defaultStart - 1);
         finalNo = lastNo + 1;
       }
-      syncWriteWithOfflineFallback('company_sequences', companyId, { id: companyId, company_id: companyId, [field]: finalNo });
+      const syncRes3 = await syncWriteWithOfflineFallback('company_sequences', companyId, { id: companyId, company_id: companyId, [field]: finalNo });
+      if (!syncRes3.success) {
+        throw new Error(syncRes3.error || 'يلزم وجود اتصال بالإنترنت لتوليد رقم المستند. يرجى إعادة الاتصال والمحاولة مرة أخرى.');
+      }
       return finalNo;
     }
   }

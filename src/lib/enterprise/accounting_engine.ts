@@ -85,29 +85,39 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     return list.filter(je => je.company_id === companyId);
   }
 
-  static saveAccounts(companyId: string, companyAccounts: GLAccount[]): void {
+  static async saveAccounts(companyId: string, companyAccounts: GLAccount[]): Promise<boolean> {
+    for (const a of companyAccounts) {
+      const syncRes = await syncWriteWithOfflineFallback('gl_accounts', a.id, a);
+      if (!syncRes.success) {
+        throw new Error(syncRes.error || `فشل حفظ الحساب ${a.code} في قاعدة البيانات.`);
+      }
+    }
     const all = StorageEngine.getStored<GLAccount[]>('gl_accounts', []);
     const filteredOut = all.filter(a => a.company_id !== companyId);
     const combined = [...filteredOut, ...companyAccounts];
     StorageEngine.setStored('gl_accounts', combined);
-    companyAccounts.forEach(a => dbSetDoc('gl_accounts', a.id, a));
+    return true;
   }
 
-  static async saveJournalEntries(list: JournalEntry[]): Promise<void> {
-    StorageEngine.setStored('journal_entries', list);
+  static async saveJournalEntries(list: JournalEntry[]): Promise<boolean> {
     for (const je of list) {
-      await syncWriteWithOfflineFallback('journal_entries', je.id, je);
+      const syncRes = await syncWriteWithOfflineFallback('journal_entries', je.id, je);
+      if (!syncRes.success) {
+        throw new Error(syncRes.error || `فشل حفظ قيد اليومية رقم ${je.entryNumber} في قاعدة البيانات.`);
+      }
     }
+    StorageEngine.setStored('journal_entries', list);
+    return true;
   }
 
   /**
    * Helper to resolve and standardize accounting dimensions (Org Unit, Warehouse, Project, Cost Center)
    */
-  static resolveDimensions(
+  static async resolveDimensions(
     companyId: string,
     provided?: AccountingDimensions,
     lineSpecific?: AccountingDimensions
-  ): AccountingDimensions {
+  ): Promise<AccountingDimensions> {
     const merged = { ...provided, ...lineSpecific };
 
     let orgUnitId = merged.orgUnitId || merged.org_unit_id;
@@ -131,7 +141,7 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     // 2. Auto-derive Cost Center from Org Unit if missing
     if (!costCenterId && orgUnitId) {
       try {
-        const cc = CostCenterEngine.resolveCostCenterForOrgUnit(orgUnitId, companyId);
+        const cc = await CostCenterEngine.resolveCostCenterForOrgUnit(orgUnitId, companyId);
         if (cc) {
           costCenterId = cc.id;
         }
@@ -199,14 +209,17 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     }
 
     // Resolve header-level dimensions
-    const headerDims = AccountingBusinessEngine.resolveDimensions(companyId, dimensions);
+    const headerDims = await AccountingBusinessEngine.resolveDimensions(companyId, dimensions);
+
+    // Resolve line-level dimensions
+    const lineDimsList = await Promise.all(lines.map(ln => AccountingBusinessEngine.resolveDimensions(companyId, headerDims, ln)));
 
     // Form complete Ledger Lines with line-level & header-level dimension fallbacks
-    const ledgerLines: LedgerLine[] = lines.map(ln => {
+    const ledgerLines: LedgerLine[] = lines.map((ln, idx) => {
       const acc = accounts.find(a => a.code === ln.accountCode);
       if (!acc) throw new Error(`GL Account code ${ln.accountCode} not found in corporate COA.`);
       
-      const lineDims = AccountingBusinessEngine.resolveDimensions(companyId, headerDims, ln);
+      const lineDims = lineDimsList[idx];
 
       return {
         accountId: acc.id,
@@ -276,7 +289,7 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
       }
       return acc;
     });
-    AccountingBusinessEngine.saveAccounts(companyId, updatedAccounts);
+    await AccountingBusinessEngine.saveAccounts(companyId, updatedAccounts);
 
     return je;
   }

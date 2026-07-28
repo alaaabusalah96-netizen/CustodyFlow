@@ -22,7 +22,10 @@ describe('Phase 13: Purchasing Module Organization Unit Migration & Integration'
   let testWarehouse: Warehouse;
   let testProduct: Product;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    if (typeof navigator !== 'undefined') {
+      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true, writable: true });
+    }
     // Reset local state
     StorageEngine.setStored('organization_units', []);
     StorageEngine.setStored('cost_centers', []);
@@ -64,8 +67,8 @@ describe('Phase 13: Purchasing Module Organization Unit Migration & Integration'
     });
 
     // Auto-create cost centers for org units
-    CostCenterEngine.autoCreateOrLinkCostCenterForOrgUnit(hqUnit);
-    CostCenterEngine.autoCreateOrLinkCostCenterForOrgUnit(cairoUnit);
+    await CostCenterEngine.autoCreateOrLinkCostCenterForOrgUnit(hqUnit);
+    await CostCenterEngine.autoCreateOrLinkCostCenterForOrgUnit(cairoUnit);
 
     // 3. Setup Warehouse linked to Cairo Branch
     testWarehouse = InventoryModule.addWarehouse({
@@ -151,7 +154,7 @@ describe('Phase 13: Purchasing Module Organization Unit Migration & Integration'
     expect(createdPR.org_unit_id).toBe(cairoUnit.id);
     expect(createdPR.cost_center_id).toBeDefined();
 
-    const expectedCostCenter = CostCenterEngine.resolveCostCenterForOrgUnit(cairoUnit.id, companyId);
+    const expectedCostCenter = await CostCenterEngine.resolveCostCenterForOrgUnit(cairoUnit.id, companyId);
     expect(createdPR.cost_center_id).toBe(expectedCostCenter?.id);
     expect(createdPR.prNumber).toContain('PR-CAI');
   });

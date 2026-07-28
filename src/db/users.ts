@@ -187,22 +187,21 @@ export class UsersModule {
       return JSON.stringify(old) !== JSON.stringify(u); // Diff check
     });
 
-    StorageEngine.setStored('users', enriched);
-
     // Strictly write only sanitized user profiles to 'users' and private credentials to 'user_credentials'
     for (const u of changedUsers) {
       // 1. Write public profile to 'users' collection WITHOUT password or salt
       const { password, salt, ...publicUser } = u;
       const userSyncRes = await syncWriteWithOfflineFallback('users', u.id, publicUser);
       if (!userSyncRes.success) {
-        console.warn(`[UsersModule] Could not sync user profile for ${u.id}:`, userSyncRes.error);
+        throw new Error(userSyncRes.error || `فشل حفظ بيانات المستخدم ${u.full_name || u.id} في قاعدة البيانات.`);
       }
 
-      // 2. Write private authentication credentials to restricted 'user_credentials' vault via Server Admin API
+      // 2. Write private authentication credentials to restricted 'user_credentials' vault via Server Admin API or direct sync
       if (password && password !== 'REDACTED') {
+        let credsSaved = false;
         if (typeof window !== 'undefined' && window.location) {
           try {
-            await fetch('/api/auth/save-credentials', {
+            const resp = await fetch('/api/auth/save-credentials', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -213,20 +212,30 @@ export class UsersModule {
                 salt: salt
               })
             });
+            if (resp.ok) {
+              credsSaved = true;
+            }
           } catch (apiErr) {
-            console.warn('Server save-credentials API failed, falling back to local queue:', apiErr);
-            await syncWriteWithOfflineFallback('user_credentials', u.id, {
-              id: u.id,
-              company_id: u.company_id,
-              email: u.email,
-              password: password,
-              salt: salt,
-              updated_at: new Date().toISOString()
-            });
+            // Fallback to direct sync
+          }
+        }
+        if (!credsSaved) {
+          const credsSyncRes = await syncWriteWithOfflineFallback('user_credentials', u.id, {
+            id: u.id,
+            company_id: u.company_id,
+            email: u.email,
+            password: password,
+            salt: salt,
+            updated_at: new Date().toISOString()
+          });
+          if (!credsSyncRes.success) {
+            throw new Error(credsSyncRes.error || `فشل حفظ بيانات اعتماد المستخدم ${u.full_name || u.id} في قاعدة البيانات.`);
           }
         }
       }
     }
+
+    StorageEngine.setStored('users', enriched);
 
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Users', 'Modified user roles and system permission profiles.');
@@ -353,7 +362,11 @@ export class UsersModule {
     return StorageEngine.getStored<SystemPermission[]>('Permissions', DEFAULT_PERMISSIONS);
   }
 
-  static savePermission(permission: SystemPermission): void {
+  static async savePermission(permission: SystemPermission): Promise<void> {
+    const syncRes = await syncWriteWithOfflineFallback('Permissions', permission.id, permission);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || `فشل حفظ الصلاحيات في قاعدة البيانات.`);
+    }
     const permissions = UsersModule.getPermissions();
     const index = permissions.findIndex(p => p.id === permission.id);
     if (index > -1) {
@@ -362,14 +375,17 @@ export class UsersModule {
       permissions.push(permission);
     }
     StorageEngine.setStored('Permissions', permissions);
-    dbSetDoc('Permissions', permission.id, permission);
   }
 
   static getRoles(): SystemRole[] {
     return StorageEngine.getStored<SystemRole[]>('Roles', DEFAULT_ROLES);
   }
 
-  static saveRole(role: SystemRole): void {
+  static async saveRole(role: SystemRole): Promise<void> {
+    const syncRes = await syncWriteWithOfflineFallback('Roles', role.id, role);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || `فشل حفظ الدور في قاعدة البيانات.`);
+    }
     const roles = UsersModule.getRoles();
     const index = roles.findIndex(r => r.id === role.id);
     if (index > -1) {
@@ -378,14 +394,17 @@ export class UsersModule {
       roles.push(role);
     }
     StorageEngine.setStored('Roles', roles);
-    dbSetDoc('Roles', role.id, role);
   }
 
   static getSignupRequests(): SignupRequest[] {
     return StorageEngine.getStored<SignupRequest[]>('signup_requests', []);
   }
 
-  static saveSignupRequest(request: SignupRequest): void {
+  static async saveSignupRequest(request: SignupRequest): Promise<void> {
+    const syncRes = await syncWriteWithOfflineFallback('signup_requests', request.id, request);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || `فشل حفظ طلب التسجيل في قاعدة البيانات.`);
+    }
     const requests = UsersModule.getSignupRequests();
     const index = requests.findIndex(r => r.id === request.id);
     if (index > -1) {
@@ -394,14 +413,16 @@ export class UsersModule {
       requests.unshift(request);
     }
     StorageEngine.setStored('signup_requests', requests);
-    dbSetDoc('signup_requests', request.id, request);
   }
 
-  static deleteSignupRequest(id: string): void {
+  static async deleteSignupRequest(id: string): Promise<void> {
+    const syncRes = await syncWriteWithOfflineFallback('signup_requests', id, null);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || `فشل حذف طلب التسجيل من قاعدة البيانات.`);
+    }
     const requests = UsersModule.getSignupRequests();
     const filtered = requests.filter(r => r.id !== id);
     StorageEngine.setStored('signup_requests', filtered);
-    dbDeleteDoc('signup_requests', id);
   }
 
   static upsertLocalUser(user: AppUser): void {

@@ -371,7 +371,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           let targetCostCenter = cost_center_id || costCenterId || undefined;
 
           if (targetOrgUnit && !targetCostCenter) {
-            const cc = CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
+            const cc = await CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
             if (cc) targetCostCenter = cc.id;
           }
 
@@ -611,7 +611,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           let targetCostCenter = cost_center_id || costCenterId || prCostCenter || undefined;
 
           if (targetOrgUnit && !targetCostCenter) {
-            const cc = CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
+            const cc = await CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
             if (cc) targetCostCenter = cc.id;
           }
 
@@ -704,7 +704,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           const targetOrgUnit = allPOs[idx].org_unit_id || resolvedWhOrgUnit || undefined;
           let targetCostCenter = allPOs[idx].cost_center_id || undefined;
           if (targetOrgUnit && !targetCostCenter) {
-            const cc = CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
+            const cc = await CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
             if (cc) targetCostCenter = cc.id;
           }
 

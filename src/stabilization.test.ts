@@ -42,6 +42,11 @@ if (typeof window === 'undefined') {
     addEventListener: () => {},
   };
 }
+if (typeof global.navigator === 'undefined') {
+  Object.defineProperty(global, 'navigator', { value: { onLine: true, userAgent: 'test' }, configurable: true, writable: true });
+} else {
+  Object.defineProperty(global.navigator, 'onLine', { value: true, configurable: true, writable: true });
+}
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -752,7 +757,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       }
     });
 
-    it('should generate unique user salt using crypto.randomUUID and store it with user (BUG-03)', () => {
+    it('should generate unique user salt using crypto.randomUUID and store it with user (BUG-03)', async () => {
       const newUser: any = {
         id: 'usr-salt-test-1',
         email: 'salt_user@example.com',
@@ -763,7 +768,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       };
 
       StorageEngine.setStored('users', []);
-      UsersModule.saveUsers([newUser]);
+      await UsersModule.saveUsers([newUser]);
 
       const storedUsers = StorageEngine.getStored<any[]>('users', []);
       const saved = storedUsers.find(u => u.id === 'usr-salt-test-1');
@@ -772,6 +777,59 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       expect(saved.salt).not.toBe(saved.email);
       expect(saved.password).not.toBe('MyPassword123!');
       expect(saved.password).toHaveLength(64);
+    });
+
+    it('should reject saveJournalEntries when offline and prevent StorageEngine pollution (Phase 2 Correction)', async () => {
+      const je: any = {
+        id: 'je-phase2-offline-test',
+        company_id: 'comp-1',
+        entryNumber: 'JE-OFF-01',
+        lines: [],
+        totalDebit: 100,
+        totalCredit: 100
+      };
+
+      StorageEngine.setStored('journal_entries', []);
+
+      // Simulate offline state
+      (navigator as any).onLine = false;
+
+      await expect(AccountingBusinessEngine.saveJournalEntries([je])).rejects.toThrow('يلزم وجود اتصال بالإنترنت للحفظ');
+
+      // Verify local storage was NOT polluted
+      const stored = StorageEngine.getStored<any[]>('journal_entries', []);
+      expect(stored.find(item => item.id === 'je-phase2-offline-test')).toBeUndefined();
+
+      // Reset online state
+      (navigator as any).onLine = true;
+    });
+
+    it('should reject saveUsers when offline and prevent StorageEngine pollution (Phase 2 Correction)', async () => {
+      const existingUser: any = {
+        id: 'usr-phase2-existing',
+        email: 'existing@example.com',
+        full_name: 'Existing User',
+        role: 'StationAdmin' as const
+      };
+      StorageEngine.setStored('users', [existingUser]);
+
+      const updatedUser: any = {
+        ...existingUser,
+        full_name: 'Updated Offline Name'
+      };
+
+      // Simulate offline state
+      (navigator as any).onLine = false;
+
+      await expect(UsersModule.saveUsers([updatedUser])).rejects.toThrow('يلزم وجود اتصال بالإنترنت للحفظ');
+
+      // Verify local storage was NOT updated
+      const stored = StorageEngine.getStored<any[]>('users', []);
+      const checkUser = stored.find(u => u.id === 'usr-phase2-existing');
+      expect(checkUser.full_name).toBe('Existing User');
+
+      // Reset online state
+      (navigator as any).onLine = true;
     });
   });
 });

@@ -8,6 +8,7 @@ describe('Phase 10: Accounting Integration Unit & Integration Tests', () => {
   const operatorId = 'user-phase10-op';
 
   beforeEach(() => {
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true, writable: true });
     StorageEngine.setStored('journal_entries', []);
     StorageEngine.setStored('gl_accounts', []);
     StorageEngine.setStored('warehouses', []);

@@ -39,9 +39,9 @@ export class CostCenterEngine {
     StorageEngine.setStored(CostCenterEngine.STORAGE_KEY, centers);
   }
 
-  static addCostCenter(data: Omit<CostCenter, 'id'> & { id?: string }): CostCenter {
+  static async addCostCenter(data: Omit<CostCenter, 'id'> & { id?: string }): Promise<CostCenter> {
     const centers = CostCenterEngine.getCostCenters();
-    const id = data.id || `cc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const id = data.id || `cc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const orgUnitId = data.org_unit_id || data.orgUnitId;
     const parentId = data.parent_id || data.parentId;
 
@@ -58,15 +58,18 @@ export class CostCenterEngine {
       isActive: data.isActive !== undefined ? data.isActive : true
     };
 
+    const syncRes = await syncWriteWithOfflineFallback('cost_centers', id, newCC);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'يلزم وجود اتصال بالإنترنت لحفظ مركز التكلفة. يرجى إعادة الاتصال والمحاولة مرة أخرى.');
+    }
+
     centers.push(newCC);
     CostCenterEngine.saveCostCenters(centers);
-
-    syncWriteWithOfflineFallback('cost_centers', id, newCC).catch(err => console.warn('CC sync failed:', err));
 
     return newCC;
   }
 
-  static updateCostCenter(id: string, updates: Partial<CostCenter>): CostCenter {
+  static async updateCostCenter(id: string, updates: Partial<CostCenter>): Promise<CostCenter> {
     const centers = CostCenterEngine.getCostCenters();
     const idx = centers.findIndex(cc => cc.id === id);
     if (idx === -1) {
@@ -85,22 +88,28 @@ export class CostCenterEngine {
       parentId: parentId
     };
 
+    const syncRes = await syncWriteWithOfflineFallback('cost_centers', id, updated);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'يلزم وجود اتصال بالإنترنت لتحديث مركز التكلفة. يرجى إعادة الاتصال والمحاولة مرة أخرى.');
+    }
+
     centers[idx] = updated;
     CostCenterEngine.saveCostCenters(centers);
-
-    syncWriteWithOfflineFallback('cost_centers', id, updated).catch(err => console.warn('CC sync failed:', err));
 
     return updated;
   }
 
-  static deleteCostCenter(id: string): boolean {
+  static async deleteCostCenter(id: string): Promise<boolean> {
     const centers = CostCenterEngine.getCostCenters();
     const filtered = centers.filter(cc => cc.id !== id);
     if (filtered.length === centers.length) return false;
 
-    CostCenterEngine.saveCostCenters(filtered);
+    const syncRes = await syncWriteWithOfflineFallback('cost_centers', id, null, 4000);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'يلزم وجود اتصال بالإنترنت لحذف مركز التكلفة. يرجى إعادة الاتصال والمحاولة مرة أخرى.');
+    }
 
-    syncWriteWithOfflineFallback('cost_centers', id, null, 4000).catch(err => console.warn('CC sync failed:', err));
+    CostCenterEngine.saveCostCenters(filtered);
 
     return true;
   }
@@ -114,13 +123,13 @@ export class CostCenterEngine {
    * Auto-creates or retrieves a Cost Center linked to an Organization Unit.
    * Ensures 1-to-1 dynamic linking between Org Units and Cost Centers.
    */
-  static autoCreateOrLinkCostCenterForOrgUnit(orgUnit: OrganizationUnit): CostCenter {
+  static async autoCreateOrLinkCostCenterForOrgUnit(orgUnit: OrganizationUnit): Promise<CostCenter> {
     const existing = CostCenterEngine.getCostCentersByOrgUnit(orgUnit.id, orgUnit.companyId);
     if (existing.length > 0) {
       return existing[0];
     }
 
-    return CostCenterEngine.addCostCenter({
+    return await CostCenterEngine.addCostCenter({
       code: `CC-${orgUnit.code}`,
       nameAr: `مركز تكلفة - ${orgUnit.nameAr || orgUnit.name}`,
       nameEn: `Cost Center - ${orgUnit.nameEn || orgUnit.name}`,
@@ -136,7 +145,7 @@ export class CostCenterEngine {
   /**
    * Resolves or auto-generates the Cost Center associated with an Organization Unit ID.
    */
-  static resolveCostCenterForOrgUnit(orgUnitId: string, companyId: string): CostCenter | undefined {
+  static async resolveCostCenterForOrgUnit(orgUnitId: string, companyId: string): Promise<CostCenter | undefined> {
     const existing = CostCenterEngine.getCostCentersByOrgUnit(orgUnitId, companyId);
     if (existing.length > 0) {
       return existing[0];
@@ -145,7 +154,7 @@ export class CostCenterEngine {
     try {
       const unit = OrganizationEngine.getUnitById(orgUnitId);
       if (unit) {
-        return CostCenterEngine.autoCreateOrLinkCostCenterForOrgUnit(unit);
+        return await CostCenterEngine.autoCreateOrLinkCostCenterForOrgUnit(unit);
       }
     } catch {
       // Fallback

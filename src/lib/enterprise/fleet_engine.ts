@@ -45,7 +45,7 @@ export class FleetBusinessEngine {
 
     let targetCostCenter = data.cost_center_id;
     if (!targetCostCenter && targetOrgUnit) {
-      const cc = CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
+      const cc = await CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
       if (cc) targetCostCenter = cc.id;
     }
 
@@ -113,7 +113,7 @@ export class FleetBusinessEngine {
     let targetCostCenter = data.cost_center_id || vehicle?.cost_center_id;
 
     if (!targetCostCenter && targetOrgUnit) {
-      const cc = CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
+      const cc = await CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
       if (cc) targetCostCenter = cc.id;
     }
 
@@ -192,7 +192,7 @@ export class FleetBusinessEngine {
     let targetCostCenter = data.cost_center_id || vehicle?.cost_center_id;
 
     if (!targetCostCenter && targetOrgUnit) {
-      const cc = CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
+      const cc = await CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
       if (cc) targetCostCenter = cc.id;
     }
 

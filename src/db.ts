@@ -199,28 +199,28 @@ export class CustodyDB {
     return UsersModule.getPermissions();
   }
 
-  static savePermission(permission: SystemPermission): void {
-    UsersModule.savePermission(permission);
+  static async savePermission(permission: SystemPermission): Promise<void> {
+    return UsersModule.savePermission(permission);
   }
 
   static getRoles(): SystemRole[] {
     return UsersModule.getRoles();
   }
 
-  static saveRole(role: SystemRole): void {
-    UsersModule.saveRole(role);
+  static async saveRole(role: SystemRole): Promise<void> {
+    return UsersModule.saveRole(role);
   }
 
   static getSignupRequests(): SignupRequest[] {
     return UsersModule.getSignupRequests();
   }
 
-  static saveSignupRequest(request: SignupRequest): void {
-    UsersModule.saveSignupRequest(request);
+  static async saveSignupRequest(request: SignupRequest): Promise<void> {
+    return UsersModule.saveSignupRequest(request);
   }
 
-  static deleteSignupRequest(id: string): void {
-    UsersModule.deleteSignupRequest(id);
+  static async deleteSignupRequest(id: string): Promise<void> {
+    return UsersModule.deleteSignupRequest(id);
   }
 
   // Regions

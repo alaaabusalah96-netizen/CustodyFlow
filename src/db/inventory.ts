@@ -1095,7 +1095,7 @@ export class InventoryModule {
 
     doc.status = stage;
     InventoryModule.saveInventoryDocuments(documents);
-    InventoryModule.generateStockMovementsForDoc(doc, userId, stage === 'Dispatched' ? 'Dispatched' : 'Posted');
+    await InventoryModule.generateStockMovementsForDoc(doc, userId, stage === 'Dispatched' ? 'Dispatched' : 'Posted');
     await InventoryModule.postAccountingEntryForDoc(doc, userId);
   }
 
@@ -1242,7 +1242,7 @@ export class InventoryModule {
     // If nextState is 'Dispatched', we generate dispatch stock movements (source warehouse deduction)
     if (nextStatus === 'Dispatched') {
       try {
-        InventoryModule.generateStockMovementsForDoc(updatedDoc, user.id, 'Dispatched');
+        await InventoryModule.generateStockMovementsForDoc(updatedDoc, user.id, 'Dispatched');
         await InventoryModule.postAccountingEntryForDoc(updatedDoc, user.id);
       } catch (err: any) {
         return {
@@ -1256,7 +1256,7 @@ export class InventoryModule {
     // If nextState is 'Posted', we generate stock movements and update stock!
     if (nextStatus === 'Posted') {
       try {
-        InventoryModule.generateStockMovementsForDoc(updatedDoc, user.id, 'Posted');
+        await InventoryModule.generateStockMovementsForDoc(updatedDoc, user.id, 'Posted');
         await InventoryModule.postAccountingEntryForDoc(updatedDoc, user.id);
       } catch (err: any) {
         return {
@@ -1296,11 +1296,11 @@ export class InventoryModule {
   /**
    * Generates StockMovement records based on the approved document's details.
    */
-  private static generateStockMovementsForDoc(
+  private static async generateStockMovementsForDoc(
     doc: InventoryDocument, 
     operatorId: string, 
     stage: 'Dispatched' | 'Posted' = 'Posted'
-  ): void {
+  ): Promise<void> {
     const movements = InventoryModule.getStockMovements();
     const ledgerEntries = InventoryModule.getInventoryLedger();
     const products = InventoryModule.getProducts();
@@ -1308,7 +1308,7 @@ export class InventoryModule {
     const activeUser = UsersModule.getActiveUser();
     const userName = activeUser?.full_name || 'System';
 
-    doc.items.forEach(item => {
+    for (const item of doc.items) {
       // Find and update product's last_purchase_price if doc is Receipt or Addition
       if ((doc.doc_type === 'Receipt' || doc.doc_type === 'Addition') && item.last_purchase_price) {
         const prodIdx = updatedProductsList.findIndex(p => p.id === item.product_id);
@@ -1388,10 +1388,10 @@ export class InventoryModule {
       const unit_cost = item.last_purchase_price || prod?.last_purchase_price || 0;
 
       const sourceOrgUnitId = doc.org_unit_id || InventoryModule.resolveWarehouseOrgUnit(doc.source_warehouse_id, doc.tenantId);
-      const sourceCostCenterId = sourceOrgUnitId ? CostCenterEngine.resolveCostCenterForOrgUnit(sourceOrgUnitId, doc.tenantId)?.id || null : null;
+      const sourceCostCenterId = sourceOrgUnitId ? (await CostCenterEngine.resolveCostCenterForOrgUnit(sourceOrgUnitId, doc.tenantId))?.id || null : null;
 
       const destOrgUnitId = doc.dest_org_unit_id || (doc.dest_entity_type === 'warehouse' ? InventoryModule.resolveWarehouseOrgUnit(doc.dest_entity_id, doc.tenantId) : doc.dest_entity_type === 'org_unit' ? doc.dest_entity_id : null);
-      const destCostCenterId = destOrgUnitId ? CostCenterEngine.resolveCostCenterForOrgUnit(destOrgUnitId, doc.tenantId)?.id || null : null;
+      const destCostCenterId = destOrgUnitId ? (await CostCenterEngine.resolveCostCenterForOrgUnit(destOrgUnitId, doc.tenantId))?.id || null : null;
 
       // 1. Create movement for source warehouse
       if (sourceQtyChange !== 0) {
@@ -1615,7 +1615,7 @@ export class InventoryModule {
           ledgerEntries.push(ledgerTarget);
         }
       }
-    });
+    }
 
     // Save everything in transaction-like batch
     InventoryModule.saveStockMovements(movements);
@@ -1750,7 +1750,7 @@ export class InventoryModule {
       }
 
       const resolvedOrgUnit = doc.org_unit_id || InventoryModule.resolveWarehouseOrgUnit(doc.source_warehouse_id, companyId);
-      const resolvedCostCenter = resolvedOrgUnit ? CostCenterEngine.resolveCostCenterForOrgUnit(resolvedOrgUnit, companyId)?.id : undefined;
+      const resolvedCostCenter = resolvedOrgUnit ? (await CostCenterEngine.resolveCostCenterForOrgUnit(resolvedOrgUnit, companyId))?.id : undefined;
 
       if (lines.length > 0) {
         await AccountingBusinessEngine.postOperationalDoubleEntry(

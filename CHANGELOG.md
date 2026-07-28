@@ -847,13 +847,44 @@ Executed full system verification across all modified files from Phases 1, 2, an
 **Test & Validation Result:**
 Pass - Complete end-to-end build and linter validation green. All stabilization plan criteria satisfied.
 
+---
 
+## Stabilization Plan Follow-Up Correction - Phase 1: Online Sync Enforcement in CostCenterEngine & TransactionsVoucherModule
+**Date/Time:** 2026-07-28 00:54:00 UTC
+**Files Changed:**
+- `src/db/costCenterEngine.ts`
+- `src/db/transactions.voucher.ts`
+- `src/cost_center_engine.test.ts`
+- `src/purchasing_migration.test.ts`
+- `CHANGELOG.md`
 
+**Summary:**
+Updated all call sites of `syncWriteWithOfflineFallback` in `src/db/costCenterEngine.ts` (`addCostCenter`, `updateCostCenter`, `deleteCostCenter`, `autoCreateOrLinkCostCenterForOrgUnit`) and `src/db/transactions.voucher.ts` (`initializeOrIncrementSequence` and `getNextDocumentNo` fallback branches) to `await` the sync write, evaluate `syncRes.success`, and throw an Error on failure. Verified that on failure or offline status, local state is NOT updated and no unpersisted sequence or cost center result is returned to caller.
 
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors) and `compile_applet` (production build succeeded) both green. Updated unit test suite (`src/cost_center_engine.test.ts` and `src/purchasing_migration.test.ts`) to handle async calls cleanly.
 
+---
 
+## Stabilization Plan Follow-Up Correction - Phase 2: Online Sync Enforcement in Accounting Engine, Inventory, Users & Roles
+**Date/Time:** 2026-07-28 01:06:00 UTC
+**Files Changed:**
+- `src/lib/enterprise/accounting_engine.ts`
+- `src/db/inventory.ts`
+- `src/db/users.ts`
+- `src/db.ts`
+- `src/components/PermissionMatrix.tsx`
+- `src/components/AdminCredentialsForm.tsx`
+- `src/pages/RegionAdminDashboard.tsx`
+- `src/pages/CompanyAdminDashboard.tsx`
+- `src/pages/Login.tsx`
+- `src/accounting_integration.test.ts`
+- `src/permission_scope.test.ts`
+- `src/stabilization.test.ts`
+- `CHANGELOG.md`
 
+**Summary:**
+Converted `AccountingBusinessEngine.saveJournalEntries`, `saveAccounts`, `resolveDimensions`, and `inventory.ts` `generateStockMovementsForDoc` to `async` functions returning promises. Updated `syncWriteWithOfflineFallback` call sites across `accounting_engine.ts`, `inventory.ts`, `users.ts`, `db.ts`, and UI components (`PermissionMatrix`, `AdminCredentialsForm`, `RegionAdminDashboard`, `CompanyAdminDashboard`, `Login`) to `await` sync operations, check `syncRes.success`, and throw explicit errors on write failure or offline status before mutating local storage. Prevented unpersisted data pollution in local storage when offline or on Firestore write failures. Added unit tests verifying `saveJournalEntries` and `saveUsers` reject writes when offline and preserve existing local storage untouched.
 
-
-
-
+**Test & Validation Result:**
+Pass - Full test suite passed completely (15 test files, 104 tests passing in 21.41s). `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).

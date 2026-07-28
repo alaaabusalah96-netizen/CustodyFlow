@@ -591,7 +591,7 @@ export default function Login({
         status: 'Pending'
       };
 
-      CustodyDB.saveSignupRequest(newRequest);
+      await CustodyDB.saveSignupRequest(newRequest);
       setSuccess(isRtl 
         ? 'تم تقديم طلب التسجيل بنجاح! بانتظار موافقة المسؤول لتفعيل الحساب.' 
         : 'Registration request submitted successfully! Pending approval to activate your account.'

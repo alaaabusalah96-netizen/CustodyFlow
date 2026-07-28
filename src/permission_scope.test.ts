@@ -9,6 +9,7 @@ describe('Phase 7: Permission Scope Engine Unit Tests', () => {
   const companyId = 'comp-perm-scope-test';
 
   beforeEach(() => {
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true, writable: true });
     StorageEngine.setStored('organization_units', []);
     StorageEngine.setStored('organization_unit_types', []);
     StorageEngine.setStored('stations', []);

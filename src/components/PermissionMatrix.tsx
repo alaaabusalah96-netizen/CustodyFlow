@@ -176,7 +176,7 @@ export default function PermissionMatrix({ language, theme }: PermissionMatrixPr
     return roles.find(r => r.id === selectedRoleId);
   };
 
-  const handleToggleCell = (screenId: string, actionKey: keyof ScreenPermissionMapping['permissions']) => {
+  const handleToggleCell = async (screenId: string, actionKey: keyof ScreenPermissionMapping['permissions']) => {
     const role = getActiveRole();
     if (!role) return;
 
@@ -194,11 +194,14 @@ export default function PermissionMatrix({ language, theme }: PermissionMatrixPr
 
     // Save
     const updatedRole = { ...role, permissions: currentPermissions };
-    CustodyDB.saveRole(updatedRole);
-    
-    // Refresh local state
-    setRoles(CustodyDB.getRoles());
-    triggerToast(isRtl ? 'تم تحديث الصلاحية فورياً ومزامنتها سحابياً.' : 'Permission synced securely.');
+    try {
+      await CustodyDB.saveRole(updatedRole);
+      // Refresh local state
+      setRoles(CustodyDB.getRoles());
+      triggerToast(isRtl ? 'تم تحديث الصلاحية فورياً ومزامنتها سحابياً.' : 'Permission synced securely.');
+    } catch (err: any) {
+      alert(err.message || 'فشل حفظ الصلاحية');
+    }
   };
 
   // Helper to check if a permission is enabled for the active role
@@ -236,7 +239,7 @@ export default function PermissionMatrix({ language, theme }: PermissionMatrixPr
   });
 
   // Action: Select Row (Check all applicable permissions in this row)
-  const handleSelectRow = (screenId: string) => {
+  const handleSelectRow = async (screenId: string) => {
     const role = getActiveRole();
     if (!role) return;
 
@@ -256,14 +259,18 @@ export default function PermissionMatrix({ language, theme }: PermissionMatrixPr
 
     if (changed) {
       const updatedRole = { ...role, permissions: currentPermissions };
-      CustodyDB.saveRole(updatedRole);
-      setRoles(CustodyDB.getRoles());
-      triggerToast(isRtl ? 'تم تفعيل جميع صلاحيات الصف المحددة.' : 'Row permissions enabled.');
+      try {
+        await CustodyDB.saveRole(updatedRole);
+        setRoles(CustodyDB.getRoles());
+        triggerToast(isRtl ? 'تم تفعيل جميع صلاحيات الصف المحددة.' : 'Row permissions enabled.');
+      } catch (err: any) {
+        alert(err.message || 'فشل حفظ الصلاحية');
+      }
     }
   };
 
   // Action: Select Column (Check this permission across all applicable screens)
-  const handleSelectColumn = (actionKey: keyof ScreenPermissionMapping['permissions']) => {
+  const handleSelectColumn = async (actionKey: keyof ScreenPermissionMapping['permissions']) => {
     const role = getActiveRole();
     if (!role) return;
 
@@ -280,14 +287,18 @@ export default function PermissionMatrix({ language, theme }: PermissionMatrixPr
 
     if (changed) {
       const updatedRole = { ...role, permissions: currentPermissions };
-      CustodyDB.saveRole(updatedRole);
-      setRoles(CustodyDB.getRoles());
-      triggerToast(isRtl ? 'تم تفعيل صلاحية العمود لكافة الشاشات المفلترة.' : 'Column permissions enabled.');
+      try {
+        await CustodyDB.saveRole(updatedRole);
+        setRoles(CustodyDB.getRoles());
+        triggerToast(isRtl ? 'تم تفعيل صلاحية العمود لكافة الشاشات المفلترة.' : 'Column permissions enabled.');
+      } catch (err: any) {
+        alert(err.message || 'فشل حفظ الصلاحية');
+      }
     }
   };
 
   // Action: Select All (Check all applicable checkboxes in the matrix)
-  const handleSelectAll = () => {
+  const handleSelectAll = async () => {
     const role = getActiveRole();
     if (!role) return;
 
@@ -306,14 +317,18 @@ export default function PermissionMatrix({ language, theme }: PermissionMatrixPr
 
     if (changed) {
       const updatedRole = { ...role, permissions: currentPermissions };
-      CustodyDB.saveRole(updatedRole);
-      setRoles(CustodyDB.getRoles());
-      triggerToast(isRtl ? 'تم تفعيل مصفوفة الصلاحيات بالكامل!' : 'All applicable privileges activated!');
+      try {
+        await CustodyDB.saveRole(updatedRole);
+        setRoles(CustodyDB.getRoles());
+        triggerToast(isRtl ? 'تم تفعيل مصفوفة الصلاحيات بالكامل!' : 'All applicable privileges activated!');
+      } catch (err: any) {
+        alert(err.message || 'فشل حفظ الصلاحية');
+      }
     }
   };
 
   // Action: Clear All (Uncheck all checkboxes in the matrix)
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     const role = getActiveRole();
     if (!role) return;
 
@@ -332,14 +347,18 @@ export default function PermissionMatrix({ language, theme }: PermissionMatrixPr
 
     if (changed) {
       const updatedRole = { ...role, permissions: currentPermissions };
-      CustodyDB.saveRole(updatedRole);
-      setRoles(CustodyDB.getRoles());
-      triggerToast(isRtl ? 'تم إلغاء تفعيل مصفوفة الصلاحيات بالكامل.' : 'All matrix selections cleared.');
+      try {
+        await CustodyDB.saveRole(updatedRole);
+        setRoles(CustodyDB.getRoles());
+        triggerToast(isRtl ? 'تم إلغاء تفعيل مصفوفة الصلاحيات بالكامل.' : 'All matrix selections cleared.');
+      } catch (err: any) {
+        alert(err.message || 'فشل حفظ الصلاحية');
+      }
     }
   };
 
   // Action: Copy Permissions Between Roles
-  const handleCopyPermissions = () => {
+  const handleCopyPermissions = async () => {
     if (!copySourceRoleId) {
       alert(isRtl ? 'يرجى تحديد دور المصدر للنسخ منه.' : 'Please select a source role.');
       return;
@@ -367,9 +386,13 @@ export default function PermissionMatrix({ language, theme }: PermissionMatrixPr
       permissions: { ...sourceRole.permissions }
     };
 
-    CustodyDB.saveRole(updatedRole);
-    setRoles(CustodyDB.getRoles());
-    triggerToast(isRtl ? 'تم نسخ الصلاحيات وتعميمها بنجاح!' : 'Permissions copied successfully!');
+    try {
+      await CustodyDB.saveRole(updatedRole);
+      setRoles(CustodyDB.getRoles());
+      triggerToast(isRtl ? 'تم نسخ الصلاحيات وتعميمها بنجاح!' : 'Permissions copied successfully!');
+    } catch (err: any) {
+      alert(err.message || 'فشل حفظ الصلاحية');
+    }
   };
 
   return (
