@@ -165,7 +165,15 @@ export class TransactionsUpdateModule {
 
         transactions[idx] = updated;
         StorageEngine.setStored('transactions', transactions);
-        await syncWriteWithOfflineFallback('transactions', id, updated);
+        const syncRes = await syncWriteWithOfflineFallback('transactions', id, updated);
+        if (!syncRes.success) {
+          transactions[idx] = old;
+          StorageEngine.setStored('transactions', transactions);
+          return {
+            success: false,
+            errors: [syncRes.error || 'يلزم وجود اتصال بالإنترنت للحفظ. يرجى إعادة الاتصال والمحاولة مرة أخرى.']
+          };
+        }
 
         if (updates.status && updates.status !== old.status) {
           let action = 'Status Updated';

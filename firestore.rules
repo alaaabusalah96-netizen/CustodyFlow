@@ -9,10 +9,8 @@ service cloud.firestore {
 
     function isSystemAdmin() {
       return isLoggedIn() && (
-        request.auth.token.email == 'alaaabusalah96@gmail.com' ||
-        request.auth.token.email == 'alaabusalah96@gmail.com' ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SystemAdmin')
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SystemAdmin'
       );
     }
 

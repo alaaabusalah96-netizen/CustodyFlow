@@ -116,6 +116,8 @@ export interface Transaction {
   date: string;
   description: string;
   category_id?: string;
+  category?: string;
+  cost_center_id?: string;
   amount: number;
   items?: TransactionItem[];
   amount_in_words?: {

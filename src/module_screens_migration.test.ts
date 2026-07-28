@@ -67,27 +67,32 @@ describe('Phase 6: Module Screen Migration Test Suite', () => {
 
     const newInvoice: SalesInvoice = {
       id: 'inv-phase6-1',
+      invoiceNo: 'INV-2026-001',
       invoice_number: 'INV-2026-001',
+      customerId: 'cust-1',
       customer_id: 'cust-1',
+      customerName: 'Cairo Distributing Co.',
       customer_name: 'Cairo Distributing Co.',
       company_id: companyId,
       org_unit_id: orgUnit.id,
       invoice_date: '2026-07-27',
       due_date: '2026-08-27',
       subtotal: 1000,
+      taxAmount: 140,
       tax_amount: 140,
       discount_amount: 0,
+      totalAmount: 1140,
       total_amount: 1140,
       paid_amount: 0,
       remaining_amount: 1140,
-      status: 'ISSUED',
+      status: 'UNPAID',
       payment_type: 'CREDIT',
       created_at: new Date().toISOString(),
       created_by: 'usr-sales',
       items: [
-        { id: 'item-1', product_id: 'prod-item-1', description: 'Finished Product A', qty: 5, unit_price: 200, total: 1000 }
+        { id: 'item-1', productId: 'prod-item-1', productName: 'Finished Product A', productCode: 'PRD-A', description: 'Finished Product A', unit: 'Pcs', qty: 5, unitPrice: 200, taxRate: 0.14, taxAmount: 140, total: 1000 }
       ]
-    };
+    } as any;
 
     const existingInvoices = StorageEngine.getStored<SalesInvoice[]>('sales_invoices', []);
     StorageEngine.setStored('sales_invoices', [...existingInvoices, newInvoice]);
@@ -109,8 +114,8 @@ describe('Phase 6: Module Screen Migration Test Suite', () => {
 
     const newEmp: Employee = {
       id: 'emp-phase6-1',
-      employee_code: 'EMP-901',
-      name: 'Ahmed Hassan',
+      employee_id: 'EMP-901',
+      full_name: 'Ahmed Hassan',
       job_title: 'Factory Engineer',
       department: 'PRODUCTION',
       company_id: companyId,
@@ -122,7 +127,7 @@ describe('Phase 6: Module Screen Migration Test Suite', () => {
       hire_date: '2026-07-01',
       national_id: '29001011234567',
       status: 'ACTIVE'
-    };
+    } as any;
 
     const existingEmps = StorageEngine.getStored<Employee[]>('employees_payroll_items', []);
     StorageEngine.setStored('employees_payroll_items', [...existingEmps, newEmp]);
@@ -144,7 +149,7 @@ describe('Phase 6: Module Screen Migration Test Suite', () => {
 
     const newAsset: FixedAsset = {
       id: 'asset-phase6-1',
-      asset_code: 'AST-801',
+      asset_number: 'AST-801',
       name: 'Forklift Caterpillar 3T',
       category: 'EQUIPMENT',
       company_id: companyId,
@@ -158,7 +163,7 @@ describe('Phase 6: Module Screen Migration Test Suite', () => {
       depreciation_method: 'STRAIGHT_LINE',
       status: 'ACTIVE',
       created_at: new Date().toISOString()
-    };
+    } as any;
 
     const existingAssets = StorageEngine.getStored<FixedAsset[]>('fixed_assets_items', []);
     StorageEngine.setStored('fixed_assets_items', [...existingAssets, newAsset]);
@@ -187,11 +192,11 @@ describe('Phase 6: Module Screen Migration Test Suite', () => {
       year: 2024,
       currentOdometer: 15200,
       assignedDriver: 'Mahmoud Aly',
-      status: 'AVAILABLE',
+      status: 'ACTIVE',
       company_id: companyId,
       org_unit_id: orgUnit.id,
       created_at: new Date().toISOString()
-    };
+    } as any;
 
     const existingVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
     StorageEngine.setStored('fleet_vehicles_items', [...existingVehicles, newVehicle]);
@@ -214,19 +219,19 @@ describe('Phase 6: Module Screen Migration Test Suite', () => {
     const doc = await InventoryModule.addInventoryDocument({
       company_id: companyId,
       doc_type: 'Transfer',
-      doc_number: 'TRF-2026-001',
       date: '2026-07-27',
       source_warehouse_id: 'wh-main',
-      dest_warehouse_id: orgUnit.id,
-      status: 'Posted',
-      created_by: 'usr-inv',
-      notes: 'Branch replenishment',
+      dest_entity_id: orgUnit.id,
+      dest_entity_type: 'branch',
+      reason: 'Replenishment',
+      recipient: 'Storekeeper',
+      statement: 'Branch replenishment',
       items: [
-        { product_id: 'prod-1', qty: 20, notes: 'Boxes' }
+        { product_id: 'prod-1', product_code: 'PRD-1', product_name: 'Product 1', unit: 'Box', qty: 20, notes: 'Boxes' }
       ]
     });
 
     expect(doc.id).toBeDefined();
-    expect(doc.dest_warehouse_id).toBe(orgUnit.id);
+    expect(doc.dest_entity_id).toBe(orgUnit.id);
   });
 });

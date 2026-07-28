@@ -469,14 +469,6 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
       data.push(doc.data() as Transaction);
     });
 
-    // Merge any locally queued offline transactions that haven't reached Firestore yet
-    const pendingOffline = OfflineQueueEngine.getQueue().filter(q => q.collectionName === 'transactions' && q.action === 'set');
-    pendingOffline.forEach(item => {
-      if (item.data && !data.some(t => t.id === item.docId)) {
-        data.push(item.data);
-      }
-    });
-
     // Sort in-memory to prevent requiring composite indices in Firestore
     data.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
     updateLocalAndNotify('transactions', data);
@@ -608,13 +600,6 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
     const data: any[] = [];
     snapshot.forEach(doc => {
       data.push(doc.data());
-    });
-    // Merge pending offline journal entries if any
-    const pendingOffline = OfflineQueueEngine.getQueue().filter(q => q.collectionName === 'journal_entries' && q.action === 'set');
-    pendingOffline.forEach(item => {
-      if (item.data && !data.some(j => j.id === item.docId)) {
-        data.push(item.data);
-      }
     });
     updateLocalAndNotify('journal_entries', data);
   }, (error) => {

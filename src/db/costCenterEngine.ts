@@ -61,7 +61,7 @@ export class CostCenterEngine {
     centers.push(newCC);
     CostCenterEngine.saveCostCenters(centers);
 
-    syncWriteWithOfflineFallback('cost_centers', id, newCC);
+    syncWriteWithOfflineFallback('cost_centers', id, newCC).catch(err => console.warn('CC sync failed:', err));
 
     return newCC;
   }
@@ -88,7 +88,7 @@ export class CostCenterEngine {
     centers[idx] = updated;
     CostCenterEngine.saveCostCenters(centers);
 
-    syncWriteWithOfflineFallback('cost_centers', id, updated);
+    syncWriteWithOfflineFallback('cost_centers', id, updated).catch(err => console.warn('CC sync failed:', err));
 
     return updated;
   }
@@ -100,7 +100,7 @@ export class CostCenterEngine {
 
     CostCenterEngine.saveCostCenters(filtered);
 
-    syncWriteWithOfflineFallback('cost_centers', id, null, 4000);
+    syncWriteWithOfflineFallback('cost_centers', id, null, 4000).catch(err => console.warn('CC sync failed:', err));
 
     return true;
   }

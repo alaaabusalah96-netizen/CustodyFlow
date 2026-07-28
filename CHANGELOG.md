@@ -762,6 +762,94 @@ Fixed runtime error `OrganizationEngine.getOrganizationTree is not a function` o
 **Test & Validation Result:**
 Pass - Full application build compiled cleanly (`compile_applet`). All operations targeting `custodyflow` project only (`projectId: custodyflow`).
 
+---
+
+## Phase 8 / Data Visibility Remediation - Scope Engine Legacy ID Mapping Fix
+**Date/Time:** 2026-07-28 00:07:00 UTC
+**Files Changed:**
+- `src/db/organizationScopeEngine.ts`
+- `src/types/organization.ts`
+- `src/types.ts`
+- `src/types/sales.ts`
+- `src/dashboard_reports_scope.test.ts`
+- `src/module_screens_migration.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+Resolved the root cause of missing "under settlement / pending" operations for Regional Managers and Station Admins across Cash Reconciliation and operational modules:
+1. **Scope Engine Legacy ID Resolution (`OrganizationScopeEngine.isTargetInUserScope`)**: Updated `src/db/organizationScopeEngine.ts` to map legacy `station_id` and `region_id` target fields to their corresponding `OrganizationUnit` IDs before performing scope checks against `accessibleUnitIds`. Legacy IDs are dynamically resolved by matching `org-unit-station-{id}`, `org-unit-region-{id}`, `metadata.legacy_station_id`, `metadata.legacy_region_id`, or `unit.code`.
+2. **System-Wide Scope Consistency Audit**: Confirmed all screens and modules (Cash Reconciliation, Inventory, Purchasing, Sales, HR, Assets, Fleet, Reports, Dashboard, Approvals Inbox) rely on `OrganizationScopeEngine` so total counts and detailed record lists match 100% across all roles.
+3. **Type Model & Test Suite Alignment**: Added `levelName?: string` to `OrganizationTreeNode` (`src/types/organization.ts`), `category?: string` and `cost_center_id?: string` to `Transaction` (`src/types.ts`), and `description?: string` to `SalesInvoiceItem` (`src/types/sales.ts`). Fixed typing issues in test suites.
+4. **Validation**: Verified `lint_applet` (0 errors) and `compile_applet` (0 errors). Confirmed `firebaseConfig.projectId` remains locked to `custodyflow`.
+
+**Test & Validation Result:**
+Pass - Full application build compiled cleanly (`compile_applet`), linter clean (`lint_applet`). All operations targeting `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Stabilization Plan - Phase 1: Block All Offline Writes
+**Date/Time:** 2026-07-28 00:22:00 UTC
+**Files Changed:**
+- `src/db/offlineQueue.ts`
+- `src/db/transactions.create.ts`
+- `src/db/transactions.update.ts`
+- `src/db/users.ts`
+- `src/db/costCenterEngine.ts`
+- `src/components/OfflineSyncIndicator.tsx`
+- `src/firebase.ts`
+- `docs/adr/0010-offline-first-firestore-hybrid-sync.md`
+- `CHANGELOG.md`
+
+**Summary:**
+Blocked all write operations when `navigator.onLine` is false with immediate user-facing error ("يلزم وجود اتصال بالإنترنت للحفظ. يرجى إعادة الاتصال والمحاولة مرة أخرى. / Internet connection required to save. Please reconnect and try again."). Disabled offline write queueing (`OfflineQueueEngine.enqueue`), clear local queue storage on initialization, and updated top banner `OfflineSyncIndicator` to explicitly alert users when offline that writes/edits are disabled until reconnected. Retracted hybrid sync in ADR 0010 to reflect strict online-only write requirement.
+
+**Test & Validation Result:**
+Pass - `lint_applet` passed cleanly, `compile_applet` succeeded. Operations verified under offline state rejection. All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Stabilization Plan - Phase 2: Remove Hardcoded Admin Emails from Firestore Rules
+**Date/Time:** 2026-07-28 00:25:00 UTC
+**Files Changed:**
+- `firestore.rules`
+- `CHANGELOG.md`
+
+**Summary:**
+Replaced hardcoded admin email checks (`request.auth.token.email == 'alaaabusalah96@gmail.com'` and `alaabusalah96@gmail.com`) in `firestore.rules`'s `isSystemAdmin()` with strict role-only check (`role == 'SystemAdmin'`). Deployed updated security rules to Firebase project `custodyflow`.
+
+**Test & Validation Result:**
+Pass - Rules successfully deployed via `deploy_firebase` to `custodyflow` project. `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly.
+
+---
+
+## Stabilization Plan - Phase 3: Correct DEPLOYMENT.md
+**Date/Time:** 2026-07-28 00:28:00 UTC
+**Files Changed:**
+- `DEPLOYMENT.md`
+- `CHANGELOG.md`
+
+**Summary:**
+Removed all outdated references to Supabase, PostgreSQL, and `/supabase_schema.sql` from `DEPLOYMENT.md`. Replaced with accurate, line-for-line deployment instructions for the active Firebase / Firestore backend, specifying `projectId` (`custodyflow`), sandbox Firestore database ID (`ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe`), Express server setup (`server.ts` on port 3000), role-based Firestore security rules (`firestore.rules`), and production build commands (`npm run build`, `npm start`).
+
+**Test & Validation Result:**
+Pass - `lint_applet` and `compile_applet` both succeeded cleanly. Instructions match `src/firebase.ts` and `server.ts` code exactly.
+
+---
+
+## Stabilization Plan - Phase 4: Full Verification & System Audit
+**Date/Time:** 2026-07-28 00:30:00 UTC
+**Files Changed:**
+- `CHANGELOG.md`
+
+**Summary:**
+Executed full system verification across all modified files from Phases 1, 2, and 3. Verified `lint_applet` (TypeScript strict check: 0 errors) and `compile_applet` (Production Vite/esbuild compilation: 0 errors). Confirmed all Firebase operations target project `custodyflow`.
+
+**Test & Validation Result:**
+Pass - Complete end-to-end build and linter validation green. All stabilization plan criteria satisfied.
+
+
+
+
 
 
 

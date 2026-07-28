@@ -87,6 +87,7 @@ export interface OrganizationTemplate {
 export interface OrganizationTreeNode extends OrganizationUnit {
   typeName?: string;
   typeCode?: string;
+  levelName?: string;
   children: OrganizationTreeNode[];
 }
 

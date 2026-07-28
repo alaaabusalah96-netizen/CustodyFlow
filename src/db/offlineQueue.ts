@@ -14,89 +14,43 @@ const OFFLINE_QUEUE_KEY = 'offline_transactions_queue';
 
 export class OfflineQueueEngine {
   static getQueue(): PendingOfflineItem[] {
-    return StorageEngine.getStored<PendingOfflineItem[]>(OFFLINE_QUEUE_KEY, []);
+    // Write queueing disabled by policy; ensure localStorage queue is cleared
+    if (typeof window !== 'undefined') {
+      StorageEngine.setStored(OFFLINE_QUEUE_KEY, []);
+    }
+    return [];
   }
 
   static enqueue(collectionName: string, docId: string, data: any, action: 'set' | 'delete' = 'set') {
-    const queue = this.getQueue();
-    const existingIdx = queue.findIndex(q => q.docId === docId && q.collectionName === collectionName);
-    const newItem: PendingOfflineItem = {
-      id: `off-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      collectionName,
-      docId,
-      data,
-      timestamp: new Date().toISOString(),
-      action
-    };
-
-    if (existingIdx !== -1) {
-      queue[existingIdx] = newItem;
-    } else {
-      queue.push(newItem);
-    }
-
-    StorageEngine.setStored(OFFLINE_QUEUE_KEY, queue);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('custody_offline_queue_changed', { detail: { count: queue.length } }));
-    }
+    console.warn(`[OfflineQueue] Enqueue blocked. All writes strictly require an active internet connection (${collectionName}/${docId}).`);
   }
 
   static async flushQueue(): Promise<{ synced: number; failed: number }> {
-    const queue = this.getQueue();
-    if (queue.length === 0) return { synced: 0, failed: 0 };
-
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      return { synced: 0, failed: queue.length };
-    }
-
-    let synced = 0;
-    let failed = 0;
-    const remainingQueue: PendingOfflineItem[] = [];
-
-    for (const item of queue) {
-      try {
-        if (item.action === 'set') {
-          await dbSetDoc(item.collectionName, item.docId, item.data);
-        }
-        synced++;
-      } catch (err) {
-        console.warn(`[OfflineQueue] Failed to sync doc ${item.docId}:`, err);
-        failed++;
-        remainingQueue.push(item);
-      }
-    }
-
-    StorageEngine.setStored(OFFLINE_QUEUE_KEY, remainingQueue);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('custody_offline_queue_changed', { detail: { count: remainingQueue.length } }));
-    }
-    return { synced, failed };
+    return { synced: 0, failed: 0 };
   }
 
   static getPendingCount(): number {
-    return this.getQueue().length;
+    return 0;
   }
-}
-
-// Automatically sync whenever online event fires
-if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => {
-    console.log('[OfflineQueue] Online event detected. Flushing offline queue...');
-    OfflineQueueEngine.flushQueue();
-  });
 }
 
 export async function syncWriteWithOfflineFallback(
   collectionName: string,
   docId: string,
   data: any,
-  timeoutMs: number = 4000
-): Promise<{ success: boolean; syncedToFirestore: boolean; queuedOffline: boolean }> {
+  timeoutMs: number = 5000
+): Promise<{ success: boolean; syncedToFirestore: boolean; queuedOffline: boolean; error?: string }> {
   const isOnline = typeof navigator === 'undefined' || navigator.onLine;
 
   if (!isOnline) {
-    OfflineQueueEngine.enqueue(collectionName, docId, data, 'set');
-    return { success: true, syncedToFirestore: false, queuedOffline: true };
+    const errorMsg = 'يلزم وجود اتصال بالإنترنت للحفظ. يرجى إعادة الاتصال والمحاولة مرة أخرى. / Internet connection required to save. Please reconnect and try again.';
+    console.warn(`[WriteSync] Write blocked for ${collectionName}/${docId}: Device is offline.`);
+    return {
+      success: false,
+      syncedToFirestore: false,
+      queuedOffline: false,
+      error: errorMsg
+    };
   }
 
   try {
@@ -107,9 +61,15 @@ export async function syncWriteWithOfflineFallback(
 
     await Promise.race([writePromise, timeoutPromise]);
     return { success: true, syncedToFirestore: true, queuedOffline: false };
-  } catch (err) {
-    console.warn(`[WriteSync] Firestore write failed or timed out for ${collectionName}/${docId}. Enqueuing offline:`, err);
-    OfflineQueueEngine.enqueue(collectionName, docId, data, 'set');
-    return { success: true, syncedToFirestore: false, queuedOffline: true };
+  } catch (err: any) {
+    const errorMsg = `فشل الحفظ في قاعدة البيانات: ${err?.message || 'تعذر الاتصال بالسيرفر'}. يرجى التأكد من الإنترنت والمحاولة مجدداً.`;
+    console.warn(`[WriteSync] Firestore write failed for ${collectionName}/${docId}:`, err);
+    return {
+      success: false,
+      syncedToFirestore: false,
+      queuedOffline: false,
+      error: errorMsg
+    };
   }
 }
+

@@ -19,6 +19,7 @@ export interface SalesInvoiceItem {
   productId: string;
   productName: string;
   productCode: string;
+  description?: string;
   unit: string;
   qty: number;
   unitPrice: number;

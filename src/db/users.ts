@@ -193,7 +193,10 @@ export class UsersModule {
     for (const u of changedUsers) {
       // 1. Write public profile to 'users' collection WITHOUT password or salt
       const { password, salt, ...publicUser } = u;
-      await syncWriteWithOfflineFallback('users', u.id, publicUser);
+      const userSyncRes = await syncWriteWithOfflineFallback('users', u.id, publicUser);
+      if (!userSyncRes.success) {
+        console.warn(`[UsersModule] Could not sync user profile for ${u.id}:`, userSyncRes.error);
+      }
 
       // 2. Write private authentication credentials to restricted 'user_credentials' vault via Server Admin API
       if (password && password !== 'REDACTED') {

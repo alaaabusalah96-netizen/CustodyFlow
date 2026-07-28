@@ -131,9 +131,41 @@ export class OrganizationScopeEngine {
     }
 
     // If user has org_unit_id and target has region_id/station_id without org_unit_id
-    const accessibleUnitIds = OrganizationScopeEngine.getAccessibleOrgUnitIds(user, target.company_id);
-    if (target.region_id && accessibleUnitIds.includes(target.region_id)) return true;
-    if (target.station_id && accessibleUnitIds.includes(target.station_id)) return true;
+    const targetCompanyId = target.company_id || user.company_id || 'comp-1';
+    const accessibleUnitIds = OrganizationScopeEngine.getAccessibleOrgUnitIds(user, targetCompanyId);
+    const allUnits = OrganizationEngine.getOrganizationUnits(targetCompanyId);
+
+    if (target.region_id) {
+      if (accessibleUnitIds.includes(target.region_id) || accessibleUnitIds.includes(`legacy-region-${target.region_id}`)) {
+        return true;
+      }
+      const matchingRegionUnits = allUnits.filter(u =>
+        u.id === target.region_id ||
+        u.code === target.region_id ||
+        u.metadata?.legacy_region_id === target.region_id ||
+        u.id === `org-unit-region-${target.region_id}` ||
+        u.id === `org-unit-${target.region_id}`
+      );
+      if (matchingRegionUnits.some(u => accessibleUnitIds.includes(u.id))) {
+        return true;
+      }
+    }
+
+    if (target.station_id) {
+      if (accessibleUnitIds.includes(target.station_id) || accessibleUnitIds.includes(`legacy-station-${target.station_id}`)) {
+        return true;
+      }
+      const matchingStationUnits = allUnits.filter(u =>
+        u.id === target.station_id ||
+        u.code === target.station_id ||
+        u.metadata?.legacy_station_id === target.station_id ||
+        u.id === `org-unit-station-${target.station_id}` ||
+        u.id === `org-unit-${target.station_id}`
+      );
+      if (matchingStationUnits.some(u => accessibleUnitIds.includes(u.id))) {
+        return true;
+      }
+    }
 
     // If user has no scope restrictions, allow
     const hasNoRestrictedScope = !user.org_unit_id && (!user.assigned_org_unit_ids || user.assigned_org_unit_ids.length === 0) && !user.region_id && !user.station_id;

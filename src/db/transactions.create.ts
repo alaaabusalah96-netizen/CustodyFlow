@@ -58,8 +58,18 @@ export class TransactionsCreateModule {
       transactions.push(newTx);
       StorageEngine.setStored('transactions', transactions);
 
-      // Await Firestore write with offline fallback
-      await syncWriteWithOfflineFallback('transactions', newTx.id, newTx);
+      // Await Firestore write with online requirement
+      const syncRes = await syncWriteWithOfflineFallback('transactions', newTx.id, newTx);
+      if (!syncRes.success) {
+        // Rollback memory state
+        const idx = transactions.findIndex(t => t.id === newTx.id);
+        if (idx !== -1) transactions.splice(idx, 1);
+        StorageEngine.setStored('transactions', transactions);
+        return {
+          success: false,
+          errors: [syncRes.error || 'يلزم وجود اتصال بالإنترنت للحفظ. يرجى إعادة الاتصال والمحاولة مرة أخرى.']
+        };
+      }
 
       TransactionsHistoryModule.addTransactionHistory({
         id: `txh-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,

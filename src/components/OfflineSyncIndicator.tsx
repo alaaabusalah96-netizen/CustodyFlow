@@ -51,43 +51,23 @@ export const OfflineSyncIndicator: React.FC<OfflineSyncIndicatorProps> = ({ lang
     };
   }, []);
 
-  if (isOnline && pendingCount === 0 && !isSyncing) {
+  if (isOnline) {
     return null;
   }
 
   return (
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
-      className="w-full bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between transition-all"
+      className="w-full bg-red-500/10 border-b border-red-500/20 px-4 py-2 text-xs text-red-700 dark:text-red-300 flex items-center justify-between transition-all"
     >
       <div className="flex items-center gap-2">
-        {!isOnline ? (
-          <WifiOff size={15} className="text-amber-600 dark:text-amber-400 animate-pulse shrink-0" />
-        ) : (
-          <RefreshCw size={15} className={`text-amber-600 dark:text-amber-400 shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
-        )}
+        <WifiOff size={15} className="text-red-600 dark:text-red-400 animate-pulse shrink-0" />
         <span className="font-medium">
-          {!isOnline
-            ? (isRtl ? 'شغال Offline، هيتزامن أول ما النت يرجع' : 'Working Offline, will sync when connection returns')
-            : isSyncing
-            ? (isRtl ? 'جاري مزامنة المعاملات المسجلة أوفلاين مع البيانات...' : 'Syncing offline recorded transactions...')
-            : (isRtl ? `توجد ${pendingCount} معاملة مسجلة أوفلاين بانتظار المزامنة` : `There are ${pendingCount} offline transactions pending sync`)}
+          {isRtl
+            ? 'لا يوجد اتصال بالإنترنت. عمليات الحفظ والتعديل متوقفة مؤقتاً لحين إعادة الاتصال.'
+            : 'No internet connection. Saves and modifications are disabled until reconnected.'}
         </span>
       </div>
-
-      {isOnline && pendingCount > 0 && !isSyncing && (
-        <button
-          onClick={async () => {
-            setIsSyncing(true);
-            await OfflineQueueEngine.flushQueue();
-            setPendingCount(OfflineQueueEngine.getPendingCount());
-            setIsSyncing(false);
-          }}
-          className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] transition-all cursor-pointer shadow-sm"
-        >
-          {isRtl ? 'مزامنة الآن' : 'Sync Now'}
-        </button>
-      )}
     </div>
   );
 };
