@@ -3,7 +3,7 @@ import { EventEnvelope } from '../../types/enterprise';
 import { BusinessEngineContract, EngineExecutionResult } from './warehouse_contracts';
 import { SequenceEngine } from './sequence';
 import { AuditLogEngine } from './audit';
-import { createBaseMetadata } from './metadata';
+import { createBaseMetadata, updateBaseMetadata } from './metadata';
 import { GLAccount, JournalEntry, LedgerLine, AccountType, AccountingDimensions, JournalEntryFilterOptions } from '../../types/accounting';
 import { StorageEngine } from '../../db/storage';
 import { dbSetDoc, db } from '../../firebase';
@@ -99,14 +99,50 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     return true;
   }
 
-  static async saveJournalEntries(list: JournalEntry[]): Promise<boolean> {
+  static async saveJournalEntries(list: JournalEntry[], expectedVersions?: Record<string, number>): Promise<boolean> {
+    const existingList = StorageEngine.getStored<JournalEntry[]>('journal_entries', []);
+    const existingMap = new Map(existingList.map(e => [e.id, e]));
+
     for (const je of list) {
+      const existing = existingMap.get(je.id);
+      if (existing) {
+        const currentVer = existing.metadata?.version ?? (existing as any).version ?? 1;
+        const requestedVer = expectedVersions?.[je.id] ?? je.metadata?.version ?? (je as any).version;
+
+        if (requestedVer !== undefined && requestedVer !== currentVer) {
+          throw new Error(`⚠️ عذراً، تم تعديل قيد اليومية رقم ${je.entryNumber || je.id} بواسطة مستخدم آخر. يرجى تحديث الصفحة والمحاولة مجدداً. / Journal entry ${je.entryNumber || je.id} has been modified by another user. Please refresh and try again (concurrency conflict).`);
+        }
+
+        const newVer = currentVer + 1;
+        if (je.metadata) {
+          je.metadata = updateBaseMetadata(existing.metadata || createBaseMetadata(je.company_id, 'system'), 'system');
+          je.metadata.version = newVer;
+        } else {
+          je.metadata = {
+            tenantId: je.company_id,
+            organizationId: je.company_id,
+            created_at: existing.metadata?.created_at || new Date().toISOString(),
+            created_by: 'system',
+            updated_at: new Date().toISOString(),
+            updated_by: 'system',
+            version: newVer
+          };
+        }
+      } else {
+        if (!je.metadata) {
+          je.metadata = createBaseMetadata(je.company_id, 'system');
+        }
+      }
+
       const syncRes = await syncWriteWithOfflineFallback('journal_entries', je.id, je);
       if (!syncRes.success) {
         throw new Error(syncRes.error || `فشل حفظ قيد اليومية رقم ${je.entryNumber} في قاعدة البيانات.`);
       }
+
+      existingMap.set(je.id, je);
     }
-    StorageEngine.setStored('journal_entries', list);
+
+    StorageEngine.setStored('journal_entries', Array.from(existingMap.values()));
     return true;
   }
 

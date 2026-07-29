@@ -35,7 +35,7 @@ export interface DocumentNumberConfig {
 export interface GenerateNumberParams {
   companyId: string;
   documentType: DocumentType;
-  orgUnitId?: string;
+  org_unit_id?: string;
   orgCode?: string;
   date?: string | Date;       // ISO date or Date object to derive year/month
   dbInstance?: any;            // Optional Firestore instance

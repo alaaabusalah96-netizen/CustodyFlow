@@ -888,3 +888,120 @@ Converted `AccountingBusinessEngine.saveJournalEntries`, `saveAccounts`, `resolv
 
 **Test & Validation Result:**
 Pass - Full test suite passed completely (15 test files, 104 tests passing in 21.41s). `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Remediation Plan - Phase 1: Self-Escalation Fix in Firestore User Update Rule
+**Date/Time:** 2026-07-29 07:04:00 UTC
+**Files Changed:**
+- `firestore.rules`
+- `CHANGELOG.md`
+
+**Summary:**
+Added `isUserSelfUpdateSafe()` helper function in `firestore.rules` to strictly prevent non-admin users from escalating their permissions or altering privilege-bearing user metadata fields when updating their own user document (`/users/{id}` where `id == request.auth.uid`). Verified that fields `role`, `permissions`, `company_id`, `companyId`, `org_unit_id`, `orgUnitId`, `is_platform_owner`, `is_active`, `region_id`, and `station_id` cannot be modified via self-update requests. Preserved SystemAdmin and same-company Admin management overrides. Deployed updated rules via `deploy_firebase` tool against the `custodyflow` project.
+
+**Test & Validation Result:**
+Pass - `deploy_firebase` succeeded cleanly for `custodyflow` project (`projectId: custodyflow`). `lint_applet` (0 errors), `compile_applet` (build succeeded), and full vitest unit test suite (15 test files, 104 tests passing) all green.
+
+---
+
+## Remediation Plan - Phase 2: Administrative Mutation Endpoint Authentication
+**Date/Time:** 2026-07-29 07:10:00 UTC
+**Files Changed:**
+- `server.ts`
+- `src/db/users.ts`
+- `src/migration_auth.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+Added authentication and authorization middleware `requireSystemAdminAuth` and `requireAdminOrSystemAdminAuth` in `server.ts` using Firebase Admin SDK `verifyIdToken` and server-side `/users/{uid}` role verification. Protected tenant migration endpoints (`/api/migrations/up` and `/api/migrations/down`) to require `role == 'SystemAdmin'` or platform owner status. Protected user credentials endpoint (`/api/auth/save-credentials`) and SMTP test endpoint (`/api/auth/smtp-config/test`) to require `SystemAdmin` or `Admin` authorization. Updated `src/db/users.ts` to attach `Authorization: Bearer <idToken>` header when saving user credentials from authenticated client sessions.
+
+**Test & Validation Result:**
+Pass - `lint_applet` passed with 0 errors. `compile_applet` build succeeded cleanly. Created `src/migration_auth.test.ts` unit test suite. Full vitest unit test suite executed (16 test files, 107 tests passing in 21.89s). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Remediation Plan - Phase 3: Platform Owner Email Decoupling
+**Date/Time:** 2026-07-29 07:18:00 UTC
+**Files Changed:**
+- `.env.example`
+- `src/db/defaults.ts`
+- `src/db/users.ts`
+- `server.ts`
+- `src/stabilization.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+Decoupled the platform owner authorization mechanism from hardcoded email literals across server and client codebases. Conducted a mandatory security audit on environment variables: eliminated `VITE_PLATFORM_OWNER_EMAIL` to prevent exposing identity strings or authorization state in client-side bundles. Configured `PLATFORM_OWNER_EMAIL` strictly as a server-side environment secret in `server.ts`. Refactored `UsersModule.isPlatformOwner(email)` in `src/db/users.ts` to rely exclusively on user record flags (`is_platform_owner === true`) stored in state/database rather than client-exposed environment variables. Updated `src/db/defaults.ts` to use generic non-sensitive initial defaults. Added `isPlatformAdminUser` helper in `server.ts` to inspect user record flags and database roles dynamically using server-side secrets.
+
+**Test & Validation Result:**
+Pass - `grep -rn "alaaabusalah96" src/db/ src/lib/ server.ts` returned zero matches. Removed `VITE_PLATFORM_OWNER_EMAIL` from `.env.example`, `defaults.ts`, and `server.ts`. `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. Updated `src/stabilization.test.ts` unit tests. All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Remediation Plan - Phase 4: Comprehensive Security & Authorization Audit
+**Date/Time:** 2026-07-29 07:52:00 UTC
+**Files Changed:**
+- `server.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+Conducted a full-system comprehensive security & authorization audit across all Firestore rule match blocks, Express server routes, client write call sites, and listener query patterns.
+1. Firestore Rules Audit: Reviewed all 69 match blocks in `firestore.rules`. Confirmed proper zero-trust protection, company isolation via `isSameCompanyRead`/`isSameCompanyWrite`/`isOrgScopedRead`/`isOrgScopedWrite`, self-update field locks (`isUserSelfUpdateSafe`), and strict `allow read, write: if false` on sensitive vault collections (`user_credentials`, `password_reset_otps`, `admin_login_otps`, `system_config`).
+2. Express Server Routes Audit: Reviewed all 12 backend endpoints in `server.ts`. Identified 2 unguarded routes (`GET /api/auth/smtp-config` and `POST /api/auth/smtp-config`) and secured them with `requireAdminOrSystemAdminAuth` token verification middleware.
+3. Write-Call-Site Audit: Verified that all client-side writes routed through `StorageEngine` or direct Firestore operations target collections backed by strict server-enforced rules.
+4. Client-Side Filtering Exposure Audit: Confirmed all real-time snapshot listeners in `src/firebase.ts` pass server-evaluated `where('company_id', '==', companyId)` constraints matching Firestore rules, ensuring no un-scoped data leakage occurs.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All vitest unit tests passing (16 test files, 107 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Remediation Plan - Phase 5: Document Numbering Consolidation
+**Date/Time:** 2026-07-29 07:57:30 UTC
+**Files Changed:**
+- `src/lib/enterprise/sequence.ts`
+- `src/db/documentNumberEngine.ts`
+- `src/lib/enterprise/sales_engine.ts`
+- `src/lib/enterprise/asset_engine.ts`
+- `src/lib/enterprise/hr_engine.ts`
+- `src/lib/enterprise/fleet_engine.ts`
+- `src/lib/enterprise/purchasing_engine.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+Consolidated document numbering allocation onto the atomic Firestore transaction mechanism `SequenceEngine.getNextNumericVal` / `company_sequences`.
+1. Module Audit: Identified that Inventory, Accounting, Purchasing, and Vouchers were calling `SequenceEngine.generateNextSequence` or `company_sequences` transactions directly. Sales, Assets, HR, Fleet, and Purchasing fallback relied on non-atomic local storage increments in `DocumentNumberEngine`.
+2. Refactored `SequenceEngine`: Added `getNextNumericVal(dbInstance, companyId, sequenceKey, defaultStart)` static helper to run Firestore `runTransaction` on `doc(db, 'company_sequences', companyId)`.
+3. Integrated `DocumentNumberEngine`: Implemented `generateNextNumberAsync(params, dbInstance?)` which resolves raw sequence numbers atomically via `SequenceEngine.getNextNumericVal` and formats the string while preserving custom pattern templates (`{PREFIX}-{ORG_CODE}-{YEAR}-{SEQ:N}`).
+4. Migrated Call Sites: Updated `sales_engine.ts`, `asset_engine.ts`, `hr_engine.ts`, `fleet_engine.ts`, and `purchasing_engine.ts` to consume `DocumentNumberEngine.generateNextNumberAsync`.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All 16 vitest unit test files passing (107 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Remediation Plan - Phase 6: System-wide Optimistic Concurrency Control (OCC) Enforcement
+**Date/Time:** 2026-07-29 08:06:00 UTC
+**Files Changed:**
+- `src/db/transactions.update.ts`
+- `src/db/transactions.voucher.ts`
+- `src/db/inventory.ts`
+- `src/lib/enterprise/accounting_engine.ts`
+- `src/optimistic_locking.test.ts` (Created)
+- `CHANGELOG.md`
+
+**Summary:**
+Implemented comprehensive Optimistic Concurrency Control (OCC) across all core update and state transition workflows to prevent lost updates and data corruption under concurrent multi-user operations:
+1. `updateTransaction` (`src/db/transactions.update.ts`): Enforced version checking between expected version (`updates.metadata?.version`) and existing transaction version. If versions mismatch, the update is rejected with a clear business error ("This transaction has been modified by another user. Please refresh and try again"). On success, version is automatically incremented.
+2. `saveCashVoucher` (`src/db/transactions.voucher.ts`): Added `expectedVersion?: number` parameter. Validates version against current stored voucher version and throws a concurrency conflict error if stale. Increments voucher version upon saving.
+3. `updateInventoryDocument` & `triggerLifecycleTransition` (`src/db/inventory.ts`): Added `expectedVersion?: number` parameter to both inventory document editing and state transition workflows. Ensures draft document modifications and state transitions (Submit, Approve, Reject, Cancel, Receive) abort cleanly if another user updated the document concurrently.
+4. `saveJournalEntries` (`src/lib/enterprise/accounting_engine.ts`): Added `expectedVersions?: Record<string, number>` parameter to validate version compatibility before modifying journal entry records. Automatically updates metadata version on save.
+5. Unit Testing: Created dedicated test suite in `src/optimistic_locking.test.ts` verifying concurrent update rejection, stale version conflict error reporting, normal sequential update version increments, and inventory document / journal entry OCC enforcement.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All 17 vitest unit test files passing (113 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+
+
+

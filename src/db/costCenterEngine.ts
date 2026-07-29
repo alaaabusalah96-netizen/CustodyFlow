@@ -42,15 +42,14 @@ export class CostCenterEngine {
   static async addCostCenter(data: Omit<CostCenter, 'id'> & { id?: string }): Promise<CostCenter> {
     const centers = CostCenterEngine.getCostCenters();
     const id = data.id || `cc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const orgUnitId = data.org_unit_id || data.orgUnitId;
+    const org_unit_id = data.org_unit_id || (data as any).orgUnitId;
     const parentId = data.parent_id || data.parentId;
 
     const newCC: CostCenter = {
       ...data,
       id,
       company_id: data.company_id,
-      org_unit_id: orgUnitId,
-      orgUnitId: orgUnitId,
+      org_unit_id,
       parent_id: parentId,
       parentId: parentId,
       category: data.category || 'OPERATIONAL',
@@ -76,14 +75,13 @@ export class CostCenterEngine {
       throw new Error(`Cost Center with ID ${id} not found.`);
     }
 
-    const orgUnitId = updates.org_unit_id || updates.orgUnitId || centers[idx].org_unit_id;
+    const org_unit_id = updates.org_unit_id || (updates as any).orgUnitId || centers[idx].org_unit_id;
     const parentId = updates.parent_id || updates.parentId || centers[idx].parent_id;
 
     const updated: CostCenter = {
       ...centers[idx],
       ...updates,
-      org_unit_id: orgUnitId,
-      orgUnitId: orgUnitId,
+      org_unit_id,
       parent_id: parentId,
       parentId: parentId
     };
@@ -114,9 +112,9 @@ export class CostCenterEngine {
     return true;
   }
 
-  static getCostCentersByOrgUnit(orgUnitId: string, companyId?: string): CostCenter[] {
+  static getCostCentersByOrgUnit(org_unit_id: string, companyId?: string): CostCenter[] {
     const centers = CostCenterEngine.getCostCenters(companyId);
-    return centers.filter(cc => cc.org_unit_id === orgUnitId || cc.orgUnitId === orgUnitId);
+    return centers.filter(cc => cc.org_unit_id === org_unit_id || (cc as any).orgUnitId === org_unit_id);
   }
 
   /**
@@ -135,7 +133,6 @@ export class CostCenterEngine {
       nameEn: `Cost Center - ${orgUnit.nameEn || orgUnit.name}`,
       company_id: orgUnit.companyId,
       org_unit_id: orgUnit.id,
-      orgUnitId: orgUnit.id,
       category: 'OPERATIONAL',
       budget: 0,
       isActive: orgUnit.isActive !== undefined ? orgUnit.isActive : true

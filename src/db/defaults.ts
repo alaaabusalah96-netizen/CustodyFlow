@@ -28,7 +28,7 @@ export const DEFAULT_CATEGORIES: ExpenseCategory[] = [
 export const DEFAULT_USERS: AppUser[] = [
   {
     id: 'user-sysadmin',
-    email: 'alaaabusalah96@gmail.com',
+    email: 'admin@kemit-erp.com',
     full_name: 'Alaa Abu Salah (علاء أبو صلاح)',
     role: 'SystemAdmin',
     is_active: true,

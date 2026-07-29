@@ -1,5 +1,5 @@
 import { AppUser, UserRole, UserPermissions, SystemPermission, SystemRole, SignupRequest } from '../types';
-import { dbSetDoc, dbDeleteDoc } from '../firebase';
+import { dbSetDoc, dbDeleteDoc, auth } from '../firebase';
 import { StorageEngine } from './storage';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_USERS, DEFAULT_PERMISSIONS, DEFAULT_ROLES } from './defaults';
@@ -10,7 +10,23 @@ export class UsersModule {
   static isPlatformOwner(email?: string | null): boolean {
     if (!email || typeof email !== 'string') return false;
     const cleaned = email.toLowerCase().trim();
-    return cleaned === 'alaaabusalah96@gmail.com';
+
+    // 1. Check local storage / memory cached users
+    const users = StorageEngine.getStored<AppUser[]>('users', []);
+    if (users && users.length > 0) {
+      const match = users.find(u => u.email && u.email.toLowerCase().trim() === cleaned);
+      if (match) {
+        return match.is_platform_owner === true;
+      }
+    }
+
+    // 2. Check DEFAULT_USERS for platform owner user record
+    const defaultOwner = DEFAULT_USERS.find(u => u.is_platform_owner === true);
+    if (defaultOwner && defaultOwner.email) {
+      return defaultOwner.email.toLowerCase().trim() === cleaned;
+    }
+
+    return false;
   }
 
   static enrichUserPermissions(role: UserRole, currentPerms?: Partial<UserPermissions>): UserPermissions {
@@ -201,9 +217,14 @@ export class UsersModule {
         let credsSaved = false;
         if (typeof window !== 'undefined' && window.location) {
           try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => '') : '';
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) {
+              headers['Authorization'] = `Bearer ${token}`;
+            }
             const resp = await fetch('/api/auth/save-credentials', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers,
               body: JSON.stringify({
                 userId: u.id,
                 companyId: u.company_id,

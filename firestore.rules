@@ -103,6 +103,21 @@ service cloud.firestore {
       );
     }
 
+    function isUserSelfUpdateSafe() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'role',
+        'permissions',
+        'company_id',
+        'companyId',
+        'org_unit_id',
+        'orgUnitId',
+        'is_platform_owner',
+        'is_active',
+        'region_id',
+        'station_id'
+      ]);
+    }
+
     // --- Companies ---
     match /companies/{id} {
       allow read: if isLoggedIn() && (isSystemAdmin() || id == getCompanyId());
@@ -357,7 +372,11 @@ service cloud.firestore {
     match /users/{id} {
       allow read: if isLoggedIn() && (id == request.auth.uid || isSystemAdmin() || (resource != null && resource.data.company_id == getCompanyId()));
       allow create: if isLoggedIn() && (id == request.auth.uid || isSystemAdmin() || (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') && request.resource.data.company_id == getCompanyId()));
-      allow update: if isLoggedIn() && (id == request.auth.uid || isSystemAdmin() || (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') && resource.data.company_id == getCompanyId() && request.resource.data.company_id == getCompanyId()));
+      allow update: if isLoggedIn() && (
+        isSystemAdmin() ||
+        (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') && resource.data.company_id == getCompanyId() && request.resource.data.company_id == getCompanyId()) ||
+        (id == request.auth.uid && isUserSelfUpdateSafe())
+      );
       allow delete: if isLoggedIn() && (isSystemAdmin() || (resource != null && resource.data.email.lower() == request.auth.token.email.lower()) || (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') && resource.data.company_id == getCompanyId()));
     }
 

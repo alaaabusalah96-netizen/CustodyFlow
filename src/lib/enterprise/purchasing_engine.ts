@@ -378,11 +378,11 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           // 1. Generate sequence using DocumentNumberEngine or fallback
           let prNumber: string;
           try {
-            const docNumRes = DocumentNumberEngine.generateNextNumber({
+            const docNumRes = await DocumentNumberEngine.generateNextNumberAsync({
               companyId,
               documentType: 'PR',
               orgUnitId: targetOrgUnit
-            });
+            }, dbInstance);
             prNumber = docNumRes.documentNumber;
           } catch {
             prNumber = await SequenceEngine.generateNextSequence(
@@ -618,11 +618,11 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           // Generate PO Sequence using DocumentNumberEngine or fallback SequenceEngine
           let poNumber: string;
           try {
-            const docNumRes = DocumentNumberEngine.generateNextNumber({
+            const docNumRes = await DocumentNumberEngine.generateNextNumberAsync({
               companyId,
               documentType: 'PO',
               orgUnitId: targetOrgUnit
-            });
+            }, dbInstance);
             poNumber = docNumRes.documentNumber;
           } catch {
             poNumber = await SequenceEngine.generateNextSequence(

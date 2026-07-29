@@ -894,13 +894,13 @@ export class InventoryModule {
    */
   public static getWarehousesByOrgUnit(
     companyId: string, 
-    orgUnitId: string, 
+    org_unit_id: string, 
     includeSubUnits: boolean = true
   ): Warehouse[] {
     const warehouses = InventoryModule.getWarehouses(companyId);
-    let targetOrgUnitIds = [orgUnitId];
+    let targetOrgUnitIds = [org_unit_id];
     if (includeSubUnits) {
-      const descendants = OrganizationEngine.getDescendantUnits(orgUnitId, companyId);
+      const descendants = OrganizationEngine.getDescendantUnits(org_unit_id, companyId);
       targetOrgUnitIds.push(...descendants.map(d => d.id));
     }
     const targetSet = new Set(targetOrgUnitIds);
@@ -915,11 +915,11 @@ export class InventoryModule {
    */
   public static getOrgUnitStock(
     companyId: string, 
-    orgUnitId: string, 
+    org_unit_id: string, 
     productId?: string, 
     includeSubUnits: boolean = true
   ): number {
-    const orgWarehouses = InventoryModule.getWarehousesByOrgUnit(companyId, orgUnitId, includeSubUnits);
+    const orgWarehouses = InventoryModule.getWarehousesByOrgUnit(companyId, org_unit_id, includeSubUnits);
     const whIds = new Set(orgWarehouses.map(w => w.id));
     if (whIds.size === 0) return 0;
 
@@ -937,15 +937,15 @@ export class InventoryModule {
    */
   public static getOrgUnitStockMovements(
     companyId: string, 
-    orgUnitId: string, 
+    org_unit_id: string, 
     includeSubUnits: boolean = true
   ): StockMovement[] {
-    const orgWarehouses = InventoryModule.getWarehousesByOrgUnit(companyId, orgUnitId, includeSubUnits);
+    const orgWarehouses = InventoryModule.getWarehousesByOrgUnit(companyId, org_unit_id, includeSubUnits);
     const whIds = new Set(orgWarehouses.map(w => w.id));
     
-    let targetOrgUnitIds = [orgUnitId];
+    let targetOrgUnitIds = [org_unit_id];
     if (includeSubUnits) {
-      const descendants = OrganizationEngine.getDescendantUnits(orgUnitId, companyId);
+      const descendants = OrganizationEngine.getDescendantUnits(org_unit_id, companyId);
       targetOrgUnitIds.push(...descendants.map(d => d.id));
     }
     const targetSet = new Set(targetOrgUnitIds);
@@ -1032,19 +1032,31 @@ export class InventoryModule {
   /**
    * Update an existing draft document
    */
-  static updateInventoryDocument(docId: string, updates: Partial<InventoryDocument>): void {
+  static updateInventoryDocument(docId: string, updates: Partial<InventoryDocument>, expectedVersion?: number): void {
     const documents = InventoryModule.getInventoryDocuments();
     const idx = documents.findIndex(d => d.id === docId);
     if (idx !== -1) {
       if (documents[idx].status !== 'Draft') {
         throw new Error('Only Draft documents can be edited.');
       }
+      const existingDoc = documents[idx];
+      const currentVer = existingDoc.version ?? (existingDoc as any).metadata?.version ?? 1;
+      const requestedVer = expectedVersion ?? updates.version ?? (updates as any).metadata?.version;
+
+      if (requestedVer !== undefined && requestedVer !== currentVer) {
+        throw new Error('⚠️ عذراً، تم تعديل مستند المخزون هذا بواسطة مستخدم آخر. يرجى تحديث الصفحة والمحاولة مجدداً. / This inventory document has been modified by another user. Please refresh and try again (concurrency conflict).');
+      }
+
       const user = UsersModule.getActiveUser();
-      const updatedMetadata = updateBaseMetadata(documents[idx], user?.id || 'system');
+      const updatedMetadata = updateBaseMetadata(existingDoc, user?.id || 'system');
+      const newVer = currentVer + 1;
+      updatedMetadata.version = newVer;
+
       documents[idx] = {
-        ...documents[idx],
+        ...existingDoc,
         ...updates,
-        ...updatedMetadata
+        ...updatedMetadata,
+        version: newVer
       };
       InventoryModule.saveInventoryDocuments(documents);
 
@@ -1105,7 +1117,8 @@ export class InventoryModule {
    */
   static async triggerLifecycleTransition(
     docId: string,
-    event: 'Submit' | 'Approve' | 'Reject' | 'Cancel' | 'Receive'
+    event: 'Submit' | 'Approve' | 'Reject' | 'Cancel' | 'Receive',
+    expectedVersion?: number
   ): Promise<{ success: boolean; messageAr: string; messageEn: string }> {
     const documents = InventoryModule.getInventoryDocuments();
     const docIndex = documents.findIndex(d => d.id === docId);
@@ -1114,6 +1127,16 @@ export class InventoryModule {
     }
 
     const document = documents[docIndex];
+    if (expectedVersion !== undefined) {
+      const currentVer = document.version ?? (document as any).metadata?.version ?? 1;
+      if (expectedVersion !== currentVer) {
+        return {
+          success: false,
+          messageAr: '⚠️ عذراً، تم تعديل مستند المخزون هذا بواسطة مستخدم آخر. يرجى تحديث الصفحة والمحاولة مجدداً.',
+          messageEn: 'This inventory document has been modified by another user. Please refresh and try again (concurrency conflict).'
+        };
+      }
+    }
     const user = UsersModule.getActiveUser();
     if (!user) {
       return { success: false, messageAr: 'يجب تسجيل الدخول أولاً', messageEn: 'User must be authenticated' };
@@ -1761,7 +1784,7 @@ export class InventoryModule {
           statementEn,
           lines,
           {
-            orgUnitId: resolvedOrgUnit || undefined,
+            org_unit_id: resolvedOrgUnit || undefined,
             warehouseId: doc.source_warehouse_id,
             costCenterId: resolvedCostCenter
           }

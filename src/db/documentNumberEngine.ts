@@ -5,9 +5,31 @@ import {
   GenerateNumberParams, 
   GenerateNumberResult 
 } from '../types/documentNumber';
+import { SequenceEngine } from '../lib/enterprise/sequence';
+import { db } from '../firebase';
+import { Firestore } from 'firebase/firestore';
 
 export class DocumentNumberEngine {
   private static readonly STORAGE_KEY_CONFIGS = 'document_number_configs';
+
+  private static getSequenceKeyForDocType(docType: DocumentType): string {
+    const map: Record<string, string> = {
+      INVOICE: 'last_invoice_no',
+      RECEIPT: 'last_receipt_no',
+      PO: 'last_po_no',
+      PR: 'last_pr_no',
+      TRANSFER: 'last_transfer_no',
+      INVENTORY: 'last_inventory_no',
+      ASSET: 'last_asset_no',
+      HR: 'last_hr_no',
+      CUSTODY: 'last_cash_voucher_no',
+      VOUCHER: 'last_cash_voucher_no',
+      EXPENSE: 'last_expense_no',
+      JOURNAL_ENTRY: 'last_journal_entry_no',
+      FLEET: 'last_fleet_no'
+    };
+    return map[docType] || `last_${docType.toLowerCase()}_no`;
+  }
 
   /**
    * Resets local cache state (primarily for unit tests)
@@ -19,12 +41,12 @@ export class DocumentNumberEngine {
   /**
    * Retrieves all document number configurations for a company, optionally filtered by Org Unit
    */
-  public static getConfigs(companyId: string, orgUnitId?: string): DocumentNumberConfig[] {
+  public static getConfigs(companyId: string, org_unit_id?: string): DocumentNumberConfig[] {
     const all = StorageEngine.getStored<DocumentNumberConfig[]>(this.STORAGE_KEY_CONFIGS, []);
     return all.filter(c => {
       if (c.company_id !== companyId) return false;
-      if (orgUnitId !== undefined) {
-        return c.org_unit_id === orgUnitId;
+      if (org_unit_id !== undefined) {
+        return c.org_unit_id === org_unit_id;
       }
       return true;
     });
@@ -33,16 +55,16 @@ export class DocumentNumberEngine {
   /**
    * Finds a specific configuration for a company + document type + org unit combination
    */
-  public static getConfig(companyId: string, documentType: DocumentType, orgUnitId?: string): DocumentNumberConfig | null {
+  public static getConfig(companyId: string, documentType: DocumentType, org_unit_id?: string): DocumentNumberConfig | null {
     const all = StorageEngine.getStored<DocumentNumberConfig[]>(this.STORAGE_KEY_CONFIGS, []);
     
-    // 1. Try exact match (companyId + documentType + orgUnitId)
-    if (orgUnitId) {
-      const exact = all.find(c => c.company_id === companyId && c.documentType === documentType && c.org_unit_id === orgUnitId);
+    // 1. Try exact match (companyId + documentType + org_unit_id)
+    if (org_unit_id) {
+      const exact = all.find(c => c.company_id === companyId && c.documentType === documentType && c.org_unit_id === org_unit_id);
       if (exact) return exact;
     }
 
-    // 2. Fallback to company-wide config (companyId + documentType + no orgUnitId)
+    // 2. Fallback to company-wide config (companyId + documentType + no org_unit_id)
     const companyWide = all.find(c => c.company_id === companyId && c.documentType === documentType && (!c.org_unit_id || c.org_unit_id === ''));
     if (companyWide) return companyWide;
 
@@ -109,7 +131,7 @@ export class DocumentNumberEngine {
   /**
    * Creates default document numbering configurations for all core document types for a company or org unit
    */
-  public static createDefaultConfigs(companyId: string, orgUnitId?: string): DocumentNumberConfig[] {
+  public static createDefaultConfigs(companyId: string, org_unit_id?: string): DocumentNumberConfig[] {
     const types: DocumentType[] = [
       'INVOICE', 'RECEIPT', 'PO', 'PR', 'TRANSFER', 
       'INVENTORY', 'ASSET', 'HR', 'CUSTODY', 'VOUCHER', 'EXPENSE', 'JOURNAL_ENTRY'
@@ -120,14 +142,14 @@ export class DocumentNumberEngine {
       const prefix = this.getDefaultPrefix(docType);
       const cfg = this.saveConfig({
         company_id: companyId,
-        org_unit_id: orgUnitId,
+        org_unit_id,
         documentType: docType,
         prefix,
-        pattern: orgUnitId ? `{PREFIX}-{ORG_CODE}-{YEAR}-{SEQ:4}` : `{PREFIX}-{YEAR}-{SEQ:4}`,
+        pattern: org_unit_id ? `{PREFIX}-{ORG_CODE}-{YEAR}-{SEQ:4}` : `{PREFIX}-{YEAR}-{SEQ:4}`,
         padding: 4,
         resetFrequency: 'YEARLY',
         includeYear: true,
-        includeOrgCode: !!orgUnitId,
+        includeOrgCode: !!org_unit_id,
         currentSequence: 0,
         manualStartNo: 1001
       });
@@ -138,26 +160,73 @@ export class DocumentNumberEngine {
   }
 
   /**
-   * Generates the next document number atomically for an enterprise document.
-   * Replaces tokens: {PREFIX}, {ORG_CODE}, {YEAR}, {YY}, {MONTH}, {SEQ:N}, {SEQ}, {SUFFIX}
+   * Generates the next document number asynchronously using SequenceEngine for atomic Firestore sequence allocation.
+   */
+  public static async generateNextNumberAsync(
+    params: GenerateNumberParams,
+    dbInstance?: Firestore
+  ): Promise<GenerateNumberResult> {
+    const { companyId, documentType, org_unit_id, orgCode, date } = params;
+
+    let config = this.getConfig(companyId, documentType, org_unit_id);
+    if (!config) {
+      const prefix = this.getDefaultPrefix(documentType);
+      config = this.saveConfig({
+        company_id: companyId,
+        org_unit_id,
+        documentType,
+        prefix,
+        pattern: org_unit_id ? `{PREFIX}-{ORG_CODE}-{YEAR}-{SEQ:4}` : `{PREFIX}-{YEAR}-{SEQ:4}`,
+        padding: 4,
+        resetFrequency: 'YEARLY',
+        includeYear: true,
+        includeOrgCode: !!orgCode || !!org_unit_id,
+        currentSequence: 0,
+        manualStartNo: 1001
+      });
+    }
+
+    const startVal = config.manualStartNo !== undefined ? config.manualStartNo : 1001;
+    const sequenceKey = this.getSequenceKeyForDocType(documentType);
+
+    let nextSeq: number;
+    const targetDb = dbInstance || db;
+    if (targetDb) {
+      try {
+        nextSeq = await SequenceEngine.getNextNumericVal(targetDb, companyId, sequenceKey, startVal);
+      } catch {
+        nextSeq = config.currentSequence === 0 ? startVal : config.currentSequence + 1;
+      }
+    } else {
+      nextSeq = config.currentSequence === 0 ? startVal : config.currentSequence + 1;
+    }
+
+    config.currentSequence = nextSeq;
+    this.saveConfig(config);
+
+    return this.formatDocumentNumber(config, nextSeq, orgCode, date);
+  }
+
+  /**
+   * Generates the next document number for an enterprise document (sync fallback).
    */
   public static generateNextNumber(params: GenerateNumberParams): GenerateNumberResult {
-    const { companyId, documentType, orgUnitId, orgCode, date } = params;
+    const { companyId, documentType, org_unit_id, orgCode, date } = params;
 
-    let config = this.getConfig(companyId, documentType, orgUnitId);
+    let config = this.getConfig(companyId, documentType, org_unit_id);
     if (!config) {
       // Auto-create default config for this company & document type
       const prefix = this.getDefaultPrefix(documentType);
       config = this.saveConfig({
         company_id: companyId,
-        org_unit_id: orgUnitId,
+        org_unit_id,
         documentType,
         prefix,
-        pattern: orgUnitId ? `{PREFIX}-{ORG_CODE}-{YEAR}-{SEQ:4}` : `{PREFIX}-{YEAR}-{SEQ:4}`,
+        pattern: org_unit_id ? `{PREFIX}-{ORG_CODE}-{YEAR}-{SEQ:4}` : `{PREFIX}-{YEAR}-{SEQ:4}`,
         padding: 4,
         resetFrequency: 'YEARLY',
         includeYear: true,
-        includeOrgCode: !!orgCode || !!orgUnitId,
+        includeOrgCode: !!orgCode || !!org_unit_id,
         currentSequence: 0,
         manualStartNo: 1001
       });
@@ -171,6 +240,15 @@ export class DocumentNumberEngine {
     config.currentSequence = nextSeq;
     this.saveConfig(config);
 
+    return this.formatDocumentNumber(config, nextSeq, orgCode, date);
+  }
+
+  private static formatDocumentNumber(
+    config: DocumentNumberConfig,
+    nextSeq: number,
+    orgCode?: string,
+    date?: Date | string
+  ): GenerateNumberResult {
     // Format date components
     const d = date ? (typeof date === 'string' ? new Date(date) : date) : new Date();
     const year = d.getFullYear().toString();
@@ -178,7 +256,7 @@ export class DocumentNumberEngine {
     const month = String(d.getMonth() + 1).padStart(2, '0');
 
     const cleanOrgCode = orgCode || '';
-    const cleanPrefix = config.prefix || this.getDefaultPrefix(documentType);
+    const cleanPrefix = config.prefix || this.getDefaultPrefix(config.documentType);
     const cleanSuffix = config.suffix || '';
 
     // Process pattern template or construct default
@@ -221,15 +299,15 @@ export class DocumentNumberEngine {
       documentNumber: resultStr,
       sequenceNumber: nextSeq,
       configId: config.id,
-      documentType
+      documentType: config.documentType
     };
   }
 
   /**
    * Resets sequence counter for a document configuration
    */
-  public static resetSequence(companyId: string, documentType: DocumentType, orgUnitId?: string, newSequenceValue: number = 0): void {
-    const config = this.getConfig(companyId, documentType, orgUnitId);
+  public static resetSequence(companyId: string, documentType: DocumentType, org_unit_id?: string, newSequenceValue: number = 0): void {
+    const config = this.getConfig(companyId, documentType, org_unit_id);
     if (config) {
       config.currentSequence = newSequenceValue;
       this.saveConfig(config);

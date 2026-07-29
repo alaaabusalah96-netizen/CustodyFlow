@@ -49,7 +49,7 @@ export class AssetBusinessEngine {
     // Code generation
     let code = '';
     try {
-      const genResult = DocumentNumberEngine.generateNextNumber({
+      const genResult = await DocumentNumberEngine.generateNextNumberAsync({
         companyId,
         documentType: 'ASSET',
         orgUnitId: targetOrgUnit

@@ -135,7 +135,7 @@ export class SalesBusinessEngine {
     // Generate org-aware document number
     let invoiceNo = '';
     try {
-      const genResult = DocumentNumberEngine.generateNextNumber({
+      const genResult = await DocumentNumberEngine.generateNextNumberAsync({
         companyId,
         documentType: 'INVOICE',
         orgUnitId: targetOrgUnit
@@ -249,7 +249,7 @@ export class SalesBusinessEngine {
     // Generate sequence number
     let receiptNo = '';
     try {
-      const genResult = DocumentNumberEngine.generateNextNumber({
+      const genResult = await DocumentNumberEngine.generateNextNumberAsync({
         companyId,
         documentType: 'RECEIPT',
         orgUnitId: targetOrgUnit
@@ -339,7 +339,7 @@ export class SalesBusinessEngine {
 
     let deliveryNo = '';
     try {
-      const genResult = DocumentNumberEngine.generateNextNumber({
+      const genResult = await DocumentNumberEngine.generateNextNumberAsync({
         companyId,
         documentType: 'TRANSFER',
         orgUnitId: targetOrgUnit

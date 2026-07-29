@@ -63,14 +63,14 @@ export class StationsModule {
     const regions = StationsModule.getRegions();
     const compId = companyId || CompaniesModule.getSelectedCompanyId();
     const regId = `reg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const orgUnitId = `org-unit-region-${regId}`;
+    const org_unit_id = `org-unit-region-${regId}`;
 
     const newReg: Region = {
       id: regId,
       name,
       code: code || '',
       company_id: compId,
-      org_unit_id: orgUnitId
+      org_unit_id
     };
     regions.push(newReg);
     StationsModule.saveRegions(regions);

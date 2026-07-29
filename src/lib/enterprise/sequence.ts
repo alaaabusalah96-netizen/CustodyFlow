@@ -10,30 +10,26 @@ import { SequenceOptions } from '../../types/enterprise';
  */
 export class SequenceEngine {
   /**
-   * Generates a gap-free sequential number for a specific document type within a company/tenant context.
-   * Runs in a transaction to guarantee absolute safety and uniqueness under high concurrency.
-   * 
-   * @param dbInstance Firestore database instance
-   * @param companyId Tenant identification string (company ID)
-   * @param sequenceKey The field name representing the specific counter (e.g., 'last_voucher_no', 'last_expense_no', 'last_inventory_no')
-   * @param options Sequence format parameters (prefix, suffix, padding, includeYear)
-   * @returns Formatted sequence string (e.g., "WH-INV-2026-0001")
+   * Fetches and increments next raw sequence number inside a Firestore transaction.
    */
-  static async generateNextSequence(
-    dbInstance: Firestore,
+  static async getNextNumericVal(
+    dbInstance: Firestore | null | undefined,
     companyId: string,
-    sequenceKey: string = 'last_cash_voucher_no',
-    options: SequenceOptions
-  ): Promise<string> {
+    sequenceKey: string,
+    defaultStart: number = 1001
+  ): Promise<number> {
     if (!companyId) {
       throw new Error('Company ID is required to generate sequential document number.');
     }
 
+    if (!dbInstance) {
+      return defaultStart;
+    }
+
     const seqDocRef = doc(dbInstance, 'company_sequences', companyId);
 
-    const nextNumericVal = await runTransaction(dbInstance, async (transaction) => {
+    return await runTransaction(dbInstance, async (transaction) => {
       const sfDoc = await transaction.get(seqDocRef);
-      const defaultStart = options.manualStartNo !== undefined ? options.manualStartNo : 1001;
 
       if (!sfDoc.exists()) {
         const initialDoc: Record<string, any> = {
@@ -60,6 +56,26 @@ export class SequenceEngine {
         return nextVal;
       }
     });
+  }
+
+  /**
+   * Generates a gap-free sequential number for a specific document type within a company/tenant context.
+   * Runs in a transaction to guarantee absolute safety and uniqueness under high concurrency.
+   * 
+   * @param dbInstance Firestore database instance
+   * @param companyId Tenant identification string (company ID)
+   * @param sequenceKey The field name representing the specific counter (e.g., 'last_voucher_no', 'last_expense_no', 'last_inventory_no')
+   * @param options Sequence format parameters (prefix, suffix, padding, includeYear)
+   * @returns Formatted sequence string (e.g., "WH-INV-2026-0001")
+   */
+  static async generateNextSequence(
+    dbInstance: Firestore,
+    companyId: string,
+    sequenceKey: string = 'last_cash_voucher_no',
+    options: SequenceOptions
+  ): Promise<string> {
+    const defaultStart = options.manualStartNo !== undefined ? options.manualStartNo : 1001;
+    const nextNumericVal = await this.getNextNumericVal(dbInstance, companyId, sequenceKey, defaultStart);
 
     const padding = options.padding ?? 4;
     const includeYear = options.includeYear ?? true;

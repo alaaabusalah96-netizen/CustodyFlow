@@ -23,7 +23,6 @@ export interface LedgerLine {
   credit: number; // دائن
   notes?: string;
   org_unit_id?: string;
-  orgUnitId?: string;
   warehouse_id?: string;
   warehouseId?: string;
   project_id?: string;
@@ -34,7 +33,6 @@ export interface LedgerLine {
 
 export interface AccountingDimensions {
   org_unit_id?: string;
-  orgUnitId?: string;
   warehouse_id?: string;
   warehouseId?: string;
   project_id?: string;
@@ -57,7 +55,6 @@ export interface JournalEntry {
   totalCredit: number;
   metadata: BaseMetadata;
   org_unit_id?: string;
-  orgUnitId?: string;
   warehouse_id?: string;
   warehouseId?: string;
   project_id?: string;
@@ -68,7 +65,7 @@ export interface JournalEntry {
 
 export interface JournalEntryFilterOptions {
   companyId: string;
-  orgUnitId?: string;
+  org_unit_id?: string;
   warehouseId?: string;
   projectId?: string;
   costCenterId?: string;
@@ -86,7 +83,6 @@ export interface CostCenter {
   nameAr: string;
   nameEn: string;
   org_unit_id?: string; // Linkage to Organization Unit
-  orgUnitId?: string;
   parent_id?: string; // Parent cost center ID
   parentId?: string;
   category?: CostCenterCategory;

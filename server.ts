@@ -16,6 +16,7 @@ import {
 } from "firebase/firestore";
 import { initializeApp as initializeAdminApp, getApps as getAdminApps, cert as adminCert, App as AdminApp } from "firebase-admin/app";
 import { getFirestore as getFirestoreAdmin, FieldValue } from "firebase-admin/firestore";
+import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import nodemailer from "nodemailer";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
@@ -230,8 +231,81 @@ async function startServer() {
     legacyHeaders: false,
   });
 
+  const PLATFORM_OWNER_EMAIL = (process.env.PLATFORM_OWNER_EMAIL || "").toLowerCase().trim();
+
+  async function isPlatformAdminUser(email?: string, userData?: any): Promise<boolean> {
+    if (userData?.is_platform_owner === true || userData?.role === 'SystemAdmin') return true;
+    const targetEmail = (email || userData?.email || '').toLowerCase().trim();
+    if (!targetEmail) return false;
+    if (PLATFORM_OWNER_EMAIL && targetEmail === PLATFORM_OWNER_EMAIL) return true;
+    try {
+      const snapshot = await adminDb.collection("users").where("email", "==", targetEmail).limit(1).get();
+      if (!snapshot.empty) {
+        const data = snapshot.docs[0].data();
+        return data?.is_platform_owner === true || data?.role === 'SystemAdmin';
+      }
+    } catch (err) {
+      console.error("isPlatformAdminUser lookup error:", err);
+    }
+    return false;
+  }
+
+  // Middleware helper to verify Firebase ID token and user role
+  async function verifyUserRole(req: express.Request, allowedRoles: string[]): Promise<{ authorized: boolean; statusCode: number; message: string; user?: any }> {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return { authorized: false, statusCode: 401, message: "Unauthorized: Missing authentication token / يلزم وجود رمز المصادقة." };
+    }
+
+    const idToken = authHeader.split("Bearer ")[1]?.trim();
+    if (!idToken) {
+      return { authorized: false, statusCode: 401, message: "Unauthorized: Invalid authentication token / رمز المصادقة غير صالح." };
+    }
+
+    try {
+      const decodedToken = await getAdminAuth(adminApp).verifyIdToken(idToken);
+      const uid = decodedToken.uid;
+
+      const userDoc = await adminDb.collection("users").doc(uid).get();
+      if (!userDoc.exists) {
+        return { authorized: false, statusCode: 403, message: "Forbidden: User record not found / لا تملك صلاحية الوصول." };
+      }
+
+      const userData = userDoc.data();
+      const userRole = userData?.role || "";
+      const isPlatformOwner = await isPlatformAdminUser(userData?.email, userData);
+
+      if (isPlatformOwner || allowedRoles.includes(userRole)) {
+        return { authorized: true, statusCode: 200, message: "Authorized", user: userData };
+      }
+
+      return { authorized: false, statusCode: 403, message: "Forbidden: Insufficient privileges / تطلب صلاحية أعلى." };
+    } catch (err: any) {
+      console.error("Token verification failed:", err);
+      return { authorized: false, statusCode: 401, message: "Unauthorized: Token verification failed / فشلت عملية المصادقة." };
+    }
+  }
+
+  async function requireSystemAdminAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+    const result = await verifyUserRole(req, ["SystemAdmin"]);
+    if (!result.authorized) {
+      return res.status(result.statusCode).json({ success: false, message: result.message });
+    }
+    (req as any).user = result.user;
+    next();
+  }
+
+  async function requireAdminOrSystemAdminAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+    const result = await verifyUserRole(req, ["SystemAdmin", "Admin"]);
+    if (!result.authorized) {
+      return res.status(result.statusCode).json({ success: false, message: result.message });
+    }
+    (req as any).user = result.user;
+    next();
+  }
+
   // API Route - Run Tenant Migration (UP)
-  app.post("/api/migrations/up", async (req, res) => {
+  app.post("/api/migrations/up", requireSystemAdminAuth, async (req, res) => {
     try {
       console.log("Migration endpoint triggered [UP]");
       const result = await runTenantMigrationUp(db);
@@ -247,7 +321,7 @@ async function startServer() {
   });
 
   // API Route - Rollback Tenant Migration (DOWN)
-  app.post("/api/migrations/down", async (req, res) => {
+  app.post("/api/migrations/down", requireSystemAdminAuth, async (req, res) => {
     try {
       console.log("Migration endpoint triggered [DOWN]");
       const result = await runTenantMigrationDown(db);
@@ -302,7 +376,7 @@ async function startServer() {
         storedPasswordHash = userData.password || '';
       }
 
-      const isPlatformAdmin = emailLower === 'alaaabusalah96@gmail.com' || emailLower === 'alaabusalah96@gmail.com';
+      const isPlatformAdmin = await isPlatformAdminUser(emailLower, userData);
 
       if (!storedPasswordHash) {
         if (!isPlatformAdmin) {
@@ -375,7 +449,7 @@ async function startServer() {
   });
 
   // API Route - Server-side Save User Credentials (PBKDF2 210k)
-  app.post("/api/auth/save-credentials", async (req, res) => {
+  app.post("/api/auth/save-credentials", requireAdminOrSystemAdminAuth, async (req, res) => {
     try {
       const { userId, companyId, email, password, salt } = req.body;
       if (!userId || !password) {
@@ -423,7 +497,7 @@ async function startServer() {
       }
 
       const targetEmail = email.toLowerCase().trim();
-      const isPlatformAdmin = targetEmail === 'alaaabusalah96@gmail.com' || targetEmail === 'alaabusalah96@gmail.com';
+      const isPlatformAdmin = await isPlatformAdminUser(targetEmail);
 
       // 1. Verify that the email is the official platform admin strictly on the server
       if (!isPlatformAdmin) {
@@ -480,7 +554,7 @@ async function startServer() {
       }
 
       const targetEmail = email.toLowerCase().trim();
-      const isPlatformAdmin = targetEmail === 'alaaabusalah96@gmail.com' || targetEmail === 'alaabusalah96@gmail.com';
+      const isPlatformAdmin = await isPlatformAdminUser(targetEmail);
 
       if (!isPlatformAdmin) {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
@@ -535,7 +609,7 @@ async function startServer() {
       }
 
       const targetEmail = email.toLowerCase().trim();
-      const isPlatformAdmin = targetEmail === 'alaaabusalah96@gmail.com' || targetEmail === 'alaabusalah96@gmail.com';
+      const isPlatformAdmin = await isPlatformAdminUser(targetEmail);
 
       if (!isPlatformAdmin) {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
@@ -609,7 +683,7 @@ async function startServer() {
       }
 
       const targetEmail = email.toLowerCase().trim();
-      const isPlatformAdmin = targetEmail === 'alaaabusalah96@gmail.com' || targetEmail === 'alaabusalah96@gmail.com';
+      const isPlatformAdmin = await isPlatformAdminUser(targetEmail);
 
       if (!isPlatformAdmin) {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
@@ -678,7 +752,7 @@ async function startServer() {
       }
 
       const targetEmail = email.toLowerCase().trim();
-      const isPlatformAdmin = targetEmail === 'alaaabusalah96@gmail.com' || targetEmail === 'alaabusalah96@gmail.com';
+      const isPlatformAdmin = await isPlatformAdminUser(targetEmail);
 
       if (!isPlatformAdmin) {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
@@ -728,7 +802,7 @@ async function startServer() {
   });
 
   // GET SMTP config status
-  app.get("/api/auth/smtp-config", async (req, res) => {
+  app.get("/api/auth/smtp-config", requireAdminOrSystemAdminAuth, async (req, res) => {
     try {
       const config = await getSmtpConfig();
       if (config) {
@@ -754,7 +828,7 @@ async function startServer() {
   });
 
   // POST save SMTP config
-  app.post("/api/auth/smtp-config", async (req, res) => {
+  app.post("/api/auth/smtp-config", requireAdminOrSystemAdminAuth, async (req, res) => {
     try {
       const { 
         adminEmail, 
@@ -771,7 +845,7 @@ async function startServer() {
       }
 
       const targetEmail = adminEmail.toLowerCase().trim();
-      const isPlatformAdmin = targetEmail === 'alaaabusalah96@gmail.com' || targetEmail === 'alaabusalah96@gmail.com';
+      const isPlatformAdmin = await isPlatformAdminUser(targetEmail);
 
       if (!isPlatformAdmin) {
         return res.status(403).json({ success: false, message: "هذا الإجراء متاح فقط لأدمن منصة KEMIT ERP." });
@@ -836,7 +910,7 @@ async function startServer() {
   });
 
   // POST test SMTP connection
-  app.post("/api/auth/smtp-config/test", async (req, res) => {
+  app.post("/api/auth/smtp-config/test", requireAdminOrSystemAdminAuth, async (req, res) => {
     try {
       const { smtpHost, smtpPort, smtpUser, smtpPass } = req.body;
 

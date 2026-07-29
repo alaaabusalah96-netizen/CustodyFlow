@@ -181,13 +181,16 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
 
   describe('1.1: Platform Owner Verification', () => {
     it('should verify correct platform owner email and block incorrect typo variants', () => {
+      const defaultOwner = DEFAULT_USERS.find(u => u.is_platform_owner === true);
+      const ownerEmail = defaultOwner?.email || 'admin@kemit-erp.com';
+
       // Correct email should be owner
-      expect(UsersModule.isPlatformOwner('alaaabusalah96@gmail.com')).toBe(true);
-      expect(UsersModule.isPlatformOwner('alaaabusalah96@gmail.com ')).toBe(true); // check trimming
-      expect(UsersModule.isPlatformOwner('ALAAABUSALAH96@GMAIL.COM')).toBe(true); // check casing
+      expect(UsersModule.isPlatformOwner(ownerEmail)).toBe(true);
+      expect(UsersModule.isPlatformOwner(` ${ownerEmail} `)).toBe(true); // check trimming
+      expect(UsersModule.isPlatformOwner(ownerEmail.toUpperCase())).toBe(true); // check casing
 
       // Typo variant should be rejected
-      expect(UsersModule.isPlatformOwner('alaabusalah96@gmail.com')).toBe(false);
+      expect(UsersModule.isPlatformOwner('invalid_' + ownerEmail)).toBe(false);
       expect(UsersModule.isPlatformOwner('other_user@gmail.com')).toBe(false);
       expect(UsersModule.isPlatformOwner(undefined)).toBe(false);
     });

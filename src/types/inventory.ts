@@ -90,7 +90,7 @@ export interface WarehouseTemplate {
 export interface InstantiateWarehouseTemplateParams {
   templateId: string;
   companyId: string;
-  orgUnitId?: string | null;
+  org_unit_id?: string | null;
   namePrefixAr?: string;
   namePrefixEn?: string;
   codePrefix?: string;
@@ -189,7 +189,7 @@ export interface InventoryReportFilter {
   startDate?: string;
   endDate?: string;
   warehouseId?: string;
-  orgUnitId?: string;
+  org_unit_id?: string;
   productId?: string;
   docType?: InventoryDocType;
 }

@@ -34,13 +34,27 @@ export class TransactionsVoucherModule {
     return StorageEngine.getStored<CashVoucher[]>('CashVouchers', DEFAULT_VOUCHERS);
   }
 
-  static saveCashVoucher(voucher: CashVoucher): void {
+  static saveCashVoucher(voucher: CashVoucher, expectedVersion?: number): void {
     const vouchers = TransactionsVoucherModule.getCashVouchers();
     const index = vouchers.findIndex(v => v.id === voucher.id);
     const before = index > -1 ? vouchers[index] : null;
-    if (index > -1) {
+
+    if (before) {
+      const currentVer = (before as any).metadata?.version ?? (before as any).version ?? 1;
+      const requestedVer = expectedVersion ?? (voucher as any).metadata?.version ?? (voucher as any).version;
+      if (requestedVer !== undefined && requestedVer !== currentVer) {
+        throw new Error('⚠️ عذراً، تم تعديل سند الصرف هذا بواسطة مستخدم آخر. يرجى تحديث الصفحة والمحاولة مجدداً. / This cash voucher has been modified by another user. Please refresh and try again (concurrency conflict).');
+      }
+      const newVer = currentVer + 1;
+      (voucher as any).version = newVer;
+      if ((voucher as any).metadata) {
+        (voucher as any).metadata.version = newVer;
+      }
       vouchers[index] = voucher;
     } else {
+      if ((voucher as any).version === undefined) {
+        (voucher as any).version = 1;
+      }
       vouchers.unshift(voucher);
     }
     StorageEngine.setStored('CashVouchers', vouchers);

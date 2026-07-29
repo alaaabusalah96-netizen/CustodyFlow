@@ -90,13 +90,13 @@ export class ApprovalEngine {
     companyId: string, 
     documentType: string, 
     amount?: number, 
-    orgUnitId?: string
+    org_unit_id?: string
   ): ApprovalWorkflowDefinition | null {
     const workflows = this.getWorkflows(companyId, documentType).filter(w => w.isActive);
     if (workflows.length === 0) return null;
 
-    // Filter by Org Unit specificity if specified, or global (no orgUnitId)
-    const orgMatches = workflows.filter(w => !w.organization_unit_id || w.organization_unit_id === orgUnitId);
+    // Filter by Org Unit specificity if specified, or global (no org_unit_id)
+    const orgMatches = workflows.filter(w => !w.organization_unit_id || w.organization_unit_id === org_unit_id);
     
     // Filter by amount range
     const amountMatches = orgMatches.filter(w => {
@@ -124,16 +124,16 @@ export class ApprovalEngine {
     documentType: string;
     documentId: string;
     amount?: number;
-    orgUnitId?: string;
+    org_unit_id?: string;
     requesterId: string;
     requesterName?: string;
   }): { instance: ApprovalInstance | null; isAutoApproved: boolean } {
-    const { companyId, documentType, documentId, amount, orgUnitId, requesterId, requesterName } = params;
+    const { companyId, documentType, documentId, amount, org_unit_id, requesterId, requesterName } = params;
 
-    let matchingWf = this.findMatchingWorkflow(companyId, documentType, amount, orgUnitId);
+    let matchingWf = this.findMatchingWorkflow(companyId, documentType, amount, org_unit_id);
     if (!matchingWf && this.getWorkflows(companyId, documentType).length === 0) {
       this.createDefaultWorkflows(companyId);
-      matchingWf = this.findMatchingWorkflow(companyId, documentType, amount, orgUnitId);
+      matchingWf = this.findMatchingWorkflow(companyId, documentType, amount, org_unit_id);
     }
 
     if (!matchingWf || !matchingWf.steps || matchingWf.steps.length === 0) {
@@ -155,7 +155,7 @@ export class ApprovalEngine {
       documentId,
       documentType,
       company_id: companyId,
-      organization_unit_id: orgUnitId,
+      organization_unit_id: org_unit_id,
       amount,
       requesterId,
       requesterName,
@@ -191,7 +191,7 @@ export class ApprovalEngine {
 
   public static canUserApproveStep(
     instance: ApprovalInstance,
-    user: { id: string; role: string; userRoles?: string[]; permissions?: Record<string, boolean>; orgUnitId?: string }
+    user: { id: string; role: string; userRoles?: string[]; permissions?: Record<string, boolean>; org_unit_id?: string }
   ): boolean {
     if (instance.status !== 'PENDING') return false;
 
@@ -324,7 +324,7 @@ export class ApprovalEngine {
 
   public static getPendingApprovalsForUser(
     companyId: string,
-    user: { id: string; role: string; userRoles?: string[]; orgUnitId?: string }
+    user: { id: string; role: string; userRoles?: string[]; org_unit_id?: string }
   ): ApprovalInstance[] {
     const instances = StorageEngine.getStored<ApprovalInstance[]>(this.STORAGE_KEY_INSTANCES, []);
     const pending = instances.filter(i => i.company_id === companyId && i.status === 'PENDING');
