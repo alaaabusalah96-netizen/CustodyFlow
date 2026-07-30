@@ -18,6 +18,7 @@ import {
   X
 } from 'lucide-react';
 import { CustodyDB } from '../db';
+import { useScreenListeners } from '../firebase';
 import { translations, Language, Theme, Transaction, Station, ExpenseCategory } from '../types';
 
 interface StationDetailsProps {
@@ -116,6 +117,8 @@ export default function StationDetails({
   theme,
   onBack
 }: StationDetailsProps) {
+  useScreenListeners(['transactions', 'logs']);
+
   const t = translations[language];
   const isRtl = language === 'ar';
 

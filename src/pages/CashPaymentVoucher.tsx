@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB } from '../db';
+import { useScreenListeners } from '../firebase';
 import { translations, Language, Theme, Transaction, CashVoucher, Company, Station } from '../types';
 import { getArabicTafqeet, getEnglishTafqeet } from '../utils/tafqeet';
 import { 
@@ -274,6 +275,8 @@ export default function CashPaymentVoucher({
   selectedTx,
   setSelectedTx
 }: CashPaymentVoucherProps) {
+  useScreenListeners(['CashVouchers', 'Expenses', 'transactions']);
+
   const t = translations[language];
   const l = localLabels[language];
   const isRtl = language === 'ar';

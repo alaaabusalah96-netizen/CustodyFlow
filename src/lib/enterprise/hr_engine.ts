@@ -10,30 +10,30 @@ export class HRBusinessEngine {
   /**
    * Retrieves all employees filtered by company, supporting organizational subtree filtering
    */
-  public static getEmployeesByOrgUnit(companyId: string, orgUnitId?: string): Employee[] {
+  public static getEmployeesByOrgUnit(companyId: string, org_unit_id?: string): Employee[] {
     const all = StorageEngine.getStored<Employee[]>('employees_payroll_items', []);
     const companyEmployees = all.filter(e => e.company_id === companyId);
 
-    if (!orgUnitId || orgUnitId === 'ALL') {
+    if (!org_unit_id || org_unit_id === 'ALL') {
       return companyEmployees;
     }
 
-    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(orgUnitId, companyId));
+    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(org_unit_id, companyId));
     return companyEmployees.filter(e => e.org_unit_id && validSubtreeIds.has(e.org_unit_id));
   }
 
   /**
    * Retrieves all processed payroll runs filtered by company, supporting organizational subtree filtering
    */
-  public static getPayrollRunsByOrgUnit(companyId: string, orgUnitId?: string): PayrollRun[] {
+  public static getPayrollRunsByOrgUnit(companyId: string, org_unit_id?: string): PayrollRun[] {
     const all = StorageEngine.getStored<PayrollRun[]>('payroll_processed_runs', []);
     const companyRuns = all.filter(r => r.company_id === companyId);
 
-    if (!orgUnitId || orgUnitId === 'ALL') {
+    if (!org_unit_id || org_unit_id === 'ALL') {
       return companyRuns;
     }
 
-    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(orgUnitId, companyId));
+    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(org_unit_id, companyId));
     return companyRuns.filter(r => r.org_unit_id && validSubtreeIds.has(r.org_unit_id));
   }
 
@@ -68,7 +68,7 @@ export class HRBusinessEngine {
       const genResult = await DocumentNumberEngine.generateNextNumberAsync({
         companyId,
         documentType: 'HR',
-        orgUnitId: targetOrgUnit
+        org_unit_id: targetOrgUnit
       });
       code = genResult.documentNumber;
     } catch {

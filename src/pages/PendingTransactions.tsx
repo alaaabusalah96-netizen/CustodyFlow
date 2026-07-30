@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB } from '../db';
+import { useScreenListeners } from '../firebase';
 import { translations, Language, Theme, Transaction } from '../types';
 import { 
   Clock, 
@@ -105,6 +106,8 @@ export default function PendingTransactions({
   onNavigate,
   onSelectTransactionForSettle 
 }: PendingTransactionsProps) {
+  useScreenListeners(['transactions']);
+
   const t = translations[language];
   const l = localLabels[language];
   const isRtl = language === 'ar';

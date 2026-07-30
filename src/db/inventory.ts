@@ -850,7 +850,7 @@ export class InventoryModule {
     const companyId = CompaniesModule.getSelectedCompanyId() || 'comp-1';
     const currentStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
     const current_balance_after = currentStock + qtyChange;
-    const orgUnitId = InventoryModule.resolveWarehouseOrgUnit(warehouseId, companyId);
+    const org_unit_id = InventoryModule.resolveWarehouseOrgUnit(warehouseId, companyId);
     const movement: StockMovement = {
       id: `m-adj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       doc_id: 'direct-adjust',
@@ -858,7 +858,7 @@ export class InventoryModule {
       doc_type: docType,
       product_id: productId,
       warehouse_id: warehouseId,
-      org_unit_id: orgUnitId,
+      org_unit_id,
       bin_id: binId,
       qty_change: qtyChange,
       type: qtyChange >= 0 ? 'IN' : 'OUT',

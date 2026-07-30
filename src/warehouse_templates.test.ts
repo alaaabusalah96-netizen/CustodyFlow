@@ -70,7 +70,7 @@ describe('Phase 6: Dynamic Warehouse Templates Unit Tests', () => {
     const createdWarehouses = WarehouseTemplateEngine.instantiateWarehouseTemplate({
       templateId: 'wh-tpl-factory',
       companyId,
-      orgUnitId: 'org-unit-factory-10',
+      org_unit_id: 'org-unit-factory-10',
       namePrefixAr: 'مصنع العاشر',
       namePrefixEn: '10th Factory',
       codePrefix: 'F10',

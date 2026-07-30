@@ -48,7 +48,7 @@ describe('Phase 9: Document Number Engine Unit Tests', () => {
     const hqResult1 = DocumentNumberEngine.generateNextNumber({
       companyId,
       documentType: 'PR',
-      orgUnitId: 'org-hq',
+      org_unit_id: 'org-hq',
       orgCode: 'HQ',
       date: new Date('2026-07-24')
     });
@@ -59,7 +59,7 @@ describe('Phase 9: Document Number Engine Unit Tests', () => {
     const alxResult1 = DocumentNumberEngine.generateNextNumber({
       companyId,
       documentType: 'PR',
-      orgUnitId: 'org-alx',
+      org_unit_id: 'org-alx',
       orgCode: 'ALX',
       date: new Date('2026-07-24')
     });
@@ -70,7 +70,7 @@ describe('Phase 9: Document Number Engine Unit Tests', () => {
     const hqResult2 = DocumentNumberEngine.generateNextNumber({
       companyId,
       documentType: 'PR',
-      orgUnitId: 'org-hq',
+      org_unit_id: 'org-hq',
       orgCode: 'HQ',
       date: new Date('2026-07-24')
     });
@@ -128,7 +128,7 @@ describe('Phase 9: Document Number Engine Unit Tests', () => {
     const res = DocumentNumberEngine.generateNextNumber({
       companyId,
       documentType: 'TRANSFER',
-      orgUnitId: 'org-unconfigured',
+      org_unit_id: 'org-unconfigured',
       orgCode: 'UNC'
     });
 

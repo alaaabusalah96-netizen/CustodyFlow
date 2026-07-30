@@ -35,11 +35,7 @@ service cloud.firestore {
     }
 
     function getUserOrgUnitId() {
-      return userDocExists() ? (
-        ("org_unit_id" in getUserData()) ? getUserData().org_unit_id : (
-          ("orgUnitId" in getUserData()) ? getUserData().orgUnitId : ""
-        )
-      ) : "";
+      return userDocExists() && ("org_unit_id" in getUserData()) ? getUserData().org_unit_id : "";
     }
 
     function getDocCompanyId(data) {
@@ -51,11 +47,7 @@ service cloud.firestore {
     }
 
     function getDocOrgUnitId(data) {
-      return data == null ? "" : (
-        ("org_unit_id" in data) ? data.org_unit_id : (
-          ("orgUnitId" in data) ? data.orgUnitId : ""
-        )
-      );
+      return (data != null && ("org_unit_id" in data)) ? data.org_unit_id : "";
     }
 
     function isSameCompanyRead(resourceData) {
@@ -63,7 +55,7 @@ service cloud.firestore {
         isLoggedIn() && 
         getCompanyId() != "" && 
         resourceData != null && 
-        (getDocCompanyId(resourceData) == getCompanyId() || getDocCompanyId(resourceData) == "")
+        getDocCompanyId(resourceData) == getCompanyId()
       );
     }
 
@@ -72,8 +64,8 @@ service cloud.firestore {
         isLoggedIn() &&
         getCompanyId() != "" &&
         requestData != null &&
-        (getDocCompanyId(requestData) == getCompanyId() || getDocCompanyId(requestData) == "") &&
-        (resourceData == null || getDocCompanyId(resourceData) == getCompanyId() || getDocCompanyId(resourceData) == "")
+        getDocCompanyId(requestData) == getCompanyId() &&
+        (resourceData == null || getDocCompanyId(resourceData) == getCompanyId())
       );
     }
 
@@ -98,7 +90,6 @@ service cloud.firestore {
         getUserRole() == 'SystemAdmin' ||
         getUserOrgUnitId() == "" ||
         requestData == null ||
-        getDocOrgUnitId(requestData) == "" ||
         getDocOrgUnitId(requestData) == getUserOrgUnitId()
       );
     }

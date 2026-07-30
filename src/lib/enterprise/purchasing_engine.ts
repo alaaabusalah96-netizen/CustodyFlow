@@ -185,16 +185,16 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
     return list.filter(pr => pr.company_id === companyId);
   }
 
-  static getPurchaseRequestsByOrgUnit(companyId: string, orgUnitId: string, includeSubtree = true): PurchaseRequest[] {
+  static getPurchaseRequestsByOrgUnit(companyId: string, org_unit_id: string, includeSubtree = true): PurchaseRequest[] {
     const all = PurchasingBusinessEngine.getPurchaseRequests(companyId);
-    if (!orgUnitId) return all;
+    if (!org_unit_id) return all;
 
     if (!includeSubtree) {
-      return all.filter(pr => pr.org_unit_id === orgUnitId);
+      return all.filter(pr => pr.org_unit_id === org_unit_id);
     }
 
-    const descendants = OrganizationEngine.getDescendantUnits(orgUnitId, companyId);
-    const validUnitIds = new Set([orgUnitId, ...descendants.map(u => u.id)]);
+    const descendants = OrganizationEngine.getDescendantUnits(org_unit_id, companyId);
+    const validUnitIds = new Set([org_unit_id, ...descendants.map(u => u.id)]);
     return all.filter(pr => pr.org_unit_id && validUnitIds.has(pr.org_unit_id));
   }
 
@@ -203,16 +203,16 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
     return list.filter(po => po.company_id === companyId);
   }
 
-  static getPurchaseOrdersByOrgUnit(companyId: string, orgUnitId: string, includeSubtree = true): PurchaseOrder[] {
+  static getPurchaseOrdersByOrgUnit(companyId: string, org_unit_id: string, includeSubtree = true): PurchaseOrder[] {
     const all = PurchasingBusinessEngine.getPurchaseOrders(companyId);
-    if (!orgUnitId) return all;
+    if (!org_unit_id) return all;
 
     if (!includeSubtree) {
-      return all.filter(po => po.org_unit_id === orgUnitId);
+      return all.filter(po => po.org_unit_id === org_unit_id);
     }
 
-    const descendants = OrganizationEngine.getDescendantUnits(orgUnitId, companyId);
-    const validUnitIds = new Set([orgUnitId, ...descendants.map(u => u.id)]);
+    const descendants = OrganizationEngine.getDescendantUnits(org_unit_id, companyId);
+    const validUnitIds = new Set([org_unit_id, ...descendants.map(u => u.id)]);
     return all.filter(po => po.org_unit_id && validUnitIds.has(po.org_unit_id));
   }
 
@@ -381,7 +381,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
             const docNumRes = await DocumentNumberEngine.generateNextNumberAsync({
               companyId,
               documentType: 'PR',
-              orgUnitId: targetOrgUnit
+              org_unit_id: targetOrgUnit
             }, dbInstance);
             prNumber = docNumRes.documentNumber;
           } catch {
@@ -621,7 +621,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
             const docNumRes = await DocumentNumberEngine.generateNextNumberAsync({
               companyId,
               documentType: 'PO',
-              orgUnitId: targetOrgUnit
+              org_unit_id: targetOrgUnit
             }, dbInstance);
             poNumber = docNumRes.documentNumber;
           } catch {
@@ -782,11 +782,11 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
               statementAr,
               statementEn,
               [
-                { accountCode: '120101', debit: amount, credit: 0, notes: `Debit: Warehouse Stock Inventory`, orgUnitId: targetOrgUnit, costCenterId: targetCostCenter, warehouseId },
-                { accountCode: '210101', debit: 0, credit: amount, notes: `Credit: Accounts Payable (${allPOs[idx].vendorName})`, orgUnitId: targetOrgUnit, costCenterId: targetCostCenter }
+                { accountCode: '120101', debit: amount, credit: 0, notes: `Debit: Warehouse Stock Inventory`, org_unit_id: targetOrgUnit, costCenterId: targetCostCenter, warehouseId },
+                { accountCode: '210101', debit: 0, credit: amount, notes: `Credit: Accounts Payable (${allPOs[idx].vendorName})`, org_unit_id: targetOrgUnit, costCenterId: targetCostCenter }
               ],
               {
-                orgUnitId: targetOrgUnit,
+                org_unit_id: targetOrgUnit,
                 warehouseId,
                 costCenterId: targetCostCenter
               }

@@ -197,7 +197,7 @@ export class StationsModule {
     const stations = StationsModule.getStations();
     const compId = companyId || CompaniesModule.getSelectedCompanyId();
     const stnId = `stn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const orgUnitId = `org-unit-station-${stnId}`;
+    const org_unit_id = `org-unit-station-${stnId}`;
 
     const newStn: Station = {
       id: stnId,
@@ -207,7 +207,7 @@ export class StationsModule {
       is_active: true,
       region_id: regionId || undefined,
       company_id: compId,
-      org_unit_id: orgUnitId
+      org_unit_id
     };
     stations.push(newStn);
     StationsModule.saveStations(stations);

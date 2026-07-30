@@ -26,7 +26,7 @@ describe('Phase 10: Accounting Integration Unit & Integration Tests', () => {
         { accountCode: '410101', debit: 0, credit: 15000, notes: 'Credit Sales Revenue' }
       ],
       {
-        orgUnitId: 'org-cairo-branch',
+        org_unit_id: 'org-cairo-branch',
         warehouseId: 'wh-cairo-main',
         projectId: 'proj-expansion',
         costCenterId: 'cc-sales-01'
@@ -43,7 +43,7 @@ describe('Phase 10: Accounting Integration Unit & Integration Tests', () => {
 
     // Verify dimensions propagated to ledger lines
     expect(je.lines.length).toBe(2);
-    expect(je.lines[0].orgUnitId).toBe('org-cairo-branch');
+    expect(je.lines[0].org_unit_id).toBe('org-cairo-branch');
     expect(je.lines[0].warehouseId).toBe('wh-cairo-main');
     expect(je.lines[1].projectId).toBe('proj-expansion');
     expect(je.lines[1].costCenterId).toBe('cc-sales-01');
@@ -78,7 +78,7 @@ describe('Phase 10: Accounting Integration Unit & Integration Tests', () => {
 
     expect(je.warehouse_id).toBe('wh-auto-derive');
     expect(je.org_unit_id).toBe('org-derived-unit');
-    expect(je.lines[0].orgUnitId).toBe('org-derived-unit');
+    expect(je.lines[0].org_unit_id).toBe('org-derived-unit');
   });
 
   it('should support line-specific dimensions overriding header-level defaults', async () => {
@@ -89,21 +89,21 @@ describe('Phase 10: Accounting Integration Unit & Integration Tests', () => {
       'توزيع مصاريف مشتركة بين الموقعين',
       'Shared expense allocation between sites',
       [
-        { accountCode: '510101', debit: 5000, credit: 0, orgUnitId: 'org-site-north', costCenterId: 'cc-north' },
-        { accountCode: '510101', debit: 3000, credit: 0, orgUnitId: 'org-site-south', costCenterId: 'cc-south' },
-        { accountCode: '110101', debit: 0, credit: 8000, orgUnitId: 'org-hq' }
+        { accountCode: '510101', debit: 5000, credit: 0, org_unit_id: 'org-site-north', costCenterId: 'cc-north' },
+        { accountCode: '510101', debit: 3000, credit: 0, org_unit_id: 'org-site-south', costCenterId: 'cc-south' },
+        { accountCode: '110101', debit: 0, credit: 8000, org_unit_id: 'org-hq' }
       ],
       {
-        orgUnitId: 'org-hq'
+        org_unit_id: 'org-hq'
       }
     );
 
     expect(je.org_unit_id).toBe('org-hq');
-    expect(je.lines[0].orgUnitId).toBe('org-site-north');
+    expect(je.lines[0].org_unit_id).toBe('org-site-north');
     expect(je.lines[0].costCenterId).toBe('cc-north');
-    expect(je.lines[1].orgUnitId).toBe('org-site-south');
+    expect(je.lines[1].org_unit_id).toBe('org-site-south');
     expect(je.lines[1].costCenterId).toBe('cc-south');
-    expect(je.lines[2].orgUnitId).toBe('org-hq');
+    expect(je.lines[2].org_unit_id).toBe('org-hq');
   });
 
   it('should filter journal entries accurately by org unit, warehouse, project, and cost center', async () => {
@@ -118,7 +118,7 @@ describe('Phase 10: Accounting Integration Unit & Integration Tests', () => {
         { accountCode: '510101', debit: 1000, credit: 0 },
         { accountCode: '110101', debit: 0, credit: 1000 }
       ],
-      { orgUnitId: 'org-north', costCenterId: 'cc-100' }
+      { org_unit_id: 'org-north', costCenterId: 'cc-100' }
     );
 
     // Post JE 2: South Branch
@@ -132,12 +132,12 @@ describe('Phase 10: Accounting Integration Unit & Integration Tests', () => {
         { accountCode: '510101', debit: 2000, credit: 0 },
         { accountCode: '110101', debit: 0, credit: 2000 }
       ],
-      { orgUnitId: 'org-south', costCenterId: 'cc-200' }
+      { org_unit_id: 'org-south', costCenterId: 'cc-200' }
     );
 
     const northEntries = AccountingBusinessEngine.getJournalEntriesFiltered({
       companyId,
-      orgUnitId: 'org-north'
+      org_unit_id: 'org-north'
     });
     expect(northEntries.length).toBe(1);
     expect(northEntries[0].sourceReference).toBe('REF-1');

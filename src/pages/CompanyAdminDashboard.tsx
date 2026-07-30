@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CustodyDB } from '../db';
+import { useScreenListeners } from '../firebase';
 import { Company, AppUser, Language, Theme, Region, Station, UserPermissions, Transaction, TransactionStatus, ActivityLog, DeletedTransaction, SignupRequest } from '../types';
 import { 
   Building2, ShieldCheck, KeyRound, UserCheck, RefreshCw, AlertTriangle, 
@@ -489,6 +490,8 @@ function AdminCredentialsForm({
 }
 
 export default function CompanyAdminDashboard({ activeUser, language, theme }: CompanyAdminDashboardProps) {
+  useScreenListeners(['transactions', 'logs', 'Expenses', 'CashVouchers', 'TransactionHistory', 'deleted_transactions']);
+
   const isRtl = language === 'ar';
   const myCompanyId = activeUser.company_id || '';
 

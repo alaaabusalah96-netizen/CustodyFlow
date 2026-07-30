@@ -69,7 +69,7 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
     expect(secondCallCC?.id).toBe(linkedCC?.id);
   });
 
-  it('should automatically populate costCenterId in Journal Entries when only orgUnitId is provided', async () => {
+  it('should automatically populate costCenterId in Journal Entries when only org_unit_id is provided', async () => {
     // Create Org Unit
     const orgUnit = OrganizationEngine.addUnit({
       companyId: companyId,
@@ -81,7 +81,7 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
       isActive: true
     });
 
-    // Post double entry providing ONLY orgUnitId
+    // Post double entry providing ONLY org_unit_id
     const je = await AccountingBusinessEngine.postOperationalDoubleEntry(
       companyId,
       operatorId,
@@ -92,7 +92,7 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
         { accountCode: '110301', debit: 12000, credit: 0 },
         { accountCode: '410101', debit: 0, credit: 12000 }
       ],
-      { orgUnitId: orgUnit.id }
+      { org_unit_id: orgUnit.id }
     );
 
     expect(je.org_unit_id).toBe(orgUnit.id);
@@ -104,7 +104,7 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
     expect(derivedCC?.code).toBe('CC-BR-CAIRO');
   });
 
-  it('should automatically populate orgUnitId in Journal Entries when only costCenterId is provided', async () => {
+  it('should automatically populate org_unit_id in Journal Entries when only costCenterId is provided', async () => {
     // Create Org Unit and Cost Center linked to it
     const orgUnit = OrganizationEngine.addUnit({
       companyId: companyId,

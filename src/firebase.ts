@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
@@ -375,7 +376,7 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
   });
   activeUnsubscribes.push(unsubCategories);
 
-  // If no active user, do not load transactional collections to protect performance
+  // If no active user, do not load further collections to protect performance
   if (!activeUser) {
     return;
   }
@@ -455,89 +456,7 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
   });
   activeUnsubscribes.push(unsubUsers);
 
-  // 7. Sync Transactions with limit (Smart Cache: 150 items max)
-  const isStationAdmin = activeUser.role === 'StationAdmin';
-  const isSystemAdminAll = activeUser.role === 'SystemAdmin' && (!companyId || companyId === 'all');
-  const qTransactions = isStationAdmin && activeUser.station_id
-    ? query(collection(db, 'transactions'), where('company_id', '==', companyId), where('station_id', '==', activeUser.station_id), limit(150))
-    : isSystemAdminAll
-    ? query(collection(db, 'transactions'), limit(150))
-    : query(collection(db, 'transactions'), where('company_id', '==', companyId), limit(150));
-  const unsubTransactions = onSnapshot(qTransactions, (snapshot) => {
-    const data: Transaction[] = [];
-    snapshot.forEach(doc => {
-      data.push(doc.data() as Transaction);
-    });
-
-    // Sort in-memory to prevent requiring composite indices in Firestore
-    data.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
-    updateLocalAndNotify('transactions', data);
-  }, (error) => {
-    handleFirestoreError(error, OperationType.GET, 'transactions');
-  });
-  activeUnsubscribes.push(unsubTransactions);
-
-  // 8. Sync Logs with limit (Smart Cache: 100 items max)
-  const qLogs = query(collection(db, 'logs'), where('company_id', '==', companyId), limit(100));
-  const unsubLogs = onSnapshot(qLogs, (snapshot) => {
-    const data: ActivityLog[] = [];
-    snapshot.forEach(doc => {
-      data.push(doc.data() as ActivityLog);
-    });
-    data.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-    updateLocalAndNotify('logs', data);
-  }, (error) => {
-    handleFirestoreError(error, OperationType.GET, 'logs');
-  });
-  activeUnsubscribes.push(unsubLogs);
-
-  // 9. Sync Expenses with limit (Smart Cache: 150 items max)
-  const qExpenses = isStationAdmin && activeUser.station_id
-    ? query(collection(db, 'Expenses'), where('company_id', '==', companyId), where('station_id', '==', activeUser.station_id), limit(150))
-    : query(collection(db, 'Expenses'), where('company_id', '==', companyId), limit(150));
-  const unsubExpenses = onSnapshot(qExpenses, (snapshot) => {
-    const data: Expense[] = [];
-    snapshot.forEach(doc => {
-      data.push(doc.data() as Expense);
-    });
-    data.sort((a, b) => b.created_at.localeCompare(a.created_at));
-    updateLocalAndNotify('Expenses', data);
-  }, (error) => {
-    handleFirestoreError(error, OperationType.GET, 'Expenses');
-  });
-  activeUnsubscribes.push(unsubExpenses);
-
-  // 10. Sync CashVouchers with limit (Smart Cache: 150 items max)
-  const qVouchers = isStationAdmin && activeUser.station_id
-    ? query(collection(db, 'CashVouchers'), where('company_id', '==', companyId), where('station_id', '==', activeUser.station_id), limit(150))
-    : query(collection(db, 'CashVouchers'), where('company_id', '==', companyId), limit(150));
-  const unsubVouchers = onSnapshot(qVouchers, (snapshot) => {
-    const data: CashVoucher[] = [];
-    snapshot.forEach(doc => {
-      data.push(doc.data() as CashVoucher);
-    });
-    data.sort((a, b) => b.created_at.localeCompare(a.created_at));
-    updateLocalAndNotify('CashVouchers', data);
-  }, (error) => {
-    handleFirestoreError(error, OperationType.GET, 'CashVouchers');
-  });
-  activeUnsubscribes.push(unsubVouchers);
-
-  // 11. Sync TransactionHistory with limit (Smart Cache: 150 items max)
-  const qHistory = query(collection(db, 'TransactionHistory'), where('company_id', '==', companyId), limit(150));
-  const unsubHistory = onSnapshot(qHistory, (snapshot) => {
-    const data: TransactionHistory[] = [];
-    snapshot.forEach(doc => {
-      data.push(doc.data() as TransactionHistory);
-    });
-    data.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-    updateLocalAndNotify('TransactionHistory', data);
-  }, (error) => {
-    handleFirestoreError(error, OperationType.GET, 'TransactionHistory');
-  });
-  activeUnsubscribes.push(unsubHistory);
-
-  // 12. Sync Notifications with limit (Smart Cache: 50 items max)
+  // 7. Sync Notifications with limit (Smart Cache: 50 items max)
   const qNotifications = query(collection(db, 'Notifications'), where('company_id', '==', companyId), limit(50));
   const unsubNotifications = onSnapshot(qNotifications, (snapshot) => {
     const data: Notification[] = [];
@@ -551,37 +470,7 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
   });
   activeUnsubscribes.push(unsubNotifications);
 
-  // 13. Sync AuditLogs with limit (Smart Cache: 100 items max)
-  if (activeUser.role === 'SystemAdmin' || activeUser.role === 'Admin') {
-    const qAudit = query(collection(db, 'AuditLogs'), where('company_id', '==', companyId), limit(100));
-    const unsubAudit = onSnapshot(qAudit, (snapshot) => {
-      const data: AuditLog[] = [];
-      snapshot.forEach(doc => {
-        data.push(doc.data() as AuditLog);
-      });
-      data.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-      updateLocalAndNotify('AuditLogs', data);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'AuditLogs');
-    });
-    activeUnsubscribes.push(unsubAudit);
-  }
-
-  // 14. Sync Deleted Transactions with limit (Smart Cache: 100 items max)
-  const qDeleted = query(collection(db, 'deleted_transactions'), where('company_id', '==', companyId), limit(100));
-  const unsubDeleted = onSnapshot(qDeleted, (snapshot) => {
-    const data: DeletedTransaction[] = [];
-    snapshot.forEach(doc => {
-      data.push(doc.data() as DeletedTransaction);
-    });
-    data.sort((a, b) => b.deleted_at.localeCompare(a.deleted_at));
-    updateLocalAndNotify('deleted_transactions', data);
-  }, (error) => {
-    handleFirestoreError(error, OperationType.GET, 'deleted_transactions');
-  });
-  activeUnsubscribes.push(unsubDeleted);
-
-  // 15. Sync Company Sequences
+  // 8. Sync Company Sequences
   const qSequences = query(collection(db, 'company_sequences'), where('company_id', '==', companyId));
   const unsubSequences = onSnapshot(qSequences, (snapshot) => {
     const data: any[] = [];
@@ -593,36 +482,133 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
     handleFirestoreError(error, OperationType.GET, 'company_sequences');
   });
   activeUnsubscribes.push(unsubSequences);
+}
 
-  // 15.1. Sync Journal Entries
-  const qJournal = query(collection(db, 'journal_entries'), where('company_id', '==', companyId), limit(200));
-  const unsubJournal = onSnapshot(qJournal, (snapshot) => {
-    const data: any[] = [];
-    snapshot.forEach(doc => {
-      data.push(doc.data());
-    });
-    updateLocalAndNotify('journal_entries', data);
-  }, (error) => {
-    handleFirestoreError(error, OperationType.GET, 'journal_entries');
-  });
-  activeUnsubscribes.push(unsubJournal);
+// On-Demand Screen Listener Subscription Manager
+export function subscribeScreenListeners(listenerTypes: string[]): () => void {
+  const activeUserStr = localStorage.getItem('custody_active_user');
+  const activeUser = activeUserStr ? JSON.parse(activeUserStr) : null;
+  const companyId = localStorage.getItem('custody_selected_company_id') || (activeUser ? activeUser.company_id : 'comp-1') || 'comp-1';
 
-  // 16. Sync Signup Requests
-  if (activeUser.role === 'SystemAdmin' || activeUser.role === 'Admin') {
-    const qSignup = activeUser.role === 'SystemAdmin'
-      ? query(collection(db, 'signup_requests'), limit(50))
-      : query(collection(db, 'signup_requests'), where('company_id', '==', companyId), limit(50));
-    const unsubSignup = onSnapshot(qSignup, (snapshot) => {
-      const data: SignupRequest[] = [];
-      snapshot.forEach(doc => {
-        data.push(doc.data() as SignupRequest);
-      });
-      updateLocalAndNotify('signup_requests', data);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'signup_requests');
-    });
-    activeUnsubscribes.push(unsubSignup);
+  if (!activeUser) {
+    return () => {};
   }
+
+  const isStationAdmin = activeUser.role === 'StationAdmin';
+  const isSystemAdminAll = activeUser.role === 'SystemAdmin' && (!companyId || companyId === 'all');
+  const unsubs: (() => void)[] = [];
+
+  listenerTypes.forEach(type => {
+    try {
+      if (type === 'transactions') {
+        const qTransactions = isStationAdmin && activeUser.station_id
+          ? query(collection(db, 'transactions'), where('company_id', '==', companyId), where('station_id', '==', activeUser.station_id), limit(150))
+          : isSystemAdminAll
+          ? query(collection(db, 'transactions'), limit(150))
+          : query(collection(db, 'transactions'), where('company_id', '==', companyId), limit(150));
+
+        const unsub = onSnapshot(qTransactions, (snapshot) => {
+          const data: Transaction[] = [];
+          snapshot.forEach(doc => data.push(doc.data() as Transaction));
+          data.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+          updateLocalAndNotify('transactions', data);
+        }, (error) => handleFirestoreError(error, OperationType.GET, 'transactions'));
+        unsubs.push(unsub);
+      } else if (type === 'logs') {
+        const qLogs = query(collection(db, 'logs'), where('company_id', '==', companyId), limit(100));
+        const unsub = onSnapshot(qLogs, (snapshot) => {
+          const data: ActivityLog[] = [];
+          snapshot.forEach(doc => data.push(doc.data() as ActivityLog));
+          data.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+          updateLocalAndNotify('logs', data);
+        }, (error) => handleFirestoreError(error, OperationType.GET, 'logs'));
+        unsubs.push(unsub);
+      } else if (type === 'Expenses') {
+        const qExpenses = isStationAdmin && activeUser.station_id
+          ? query(collection(db, 'Expenses'), where('company_id', '==', companyId), where('station_id', '==', activeUser.station_id), limit(150))
+          : query(collection(db, 'Expenses'), where('company_id', '==', companyId), limit(150));
+        const unsub = onSnapshot(qExpenses, (snapshot) => {
+          const data: Expense[] = [];
+          snapshot.forEach(doc => data.push(doc.data() as Expense));
+          data.sort((a, b) => b.created_at.localeCompare(a.created_at));
+          updateLocalAndNotify('Expenses', data);
+        }, (error) => handleFirestoreError(error, OperationType.GET, 'Expenses'));
+        unsubs.push(unsub);
+      } else if (type === 'CashVouchers') {
+        const qVouchers = isStationAdmin && activeUser.station_id
+          ? query(collection(db, 'CashVouchers'), where('company_id', '==', companyId), where('station_id', '==', activeUser.station_id), limit(150))
+          : query(collection(db, 'CashVouchers'), where('company_id', '==', companyId), limit(150));
+        const unsub = onSnapshot(qVouchers, (snapshot) => {
+          const data: CashVoucher[] = [];
+          snapshot.forEach(doc => data.push(doc.data() as CashVoucher));
+          data.sort((a, b) => b.created_at.localeCompare(a.created_at));
+          updateLocalAndNotify('CashVouchers', data);
+        }, (error) => handleFirestoreError(error, OperationType.GET, 'CashVouchers'));
+        unsubs.push(unsub);
+      } else if (type === 'TransactionHistory') {
+        const qHistory = query(collection(db, 'TransactionHistory'), where('company_id', '==', companyId), limit(150));
+        const unsub = onSnapshot(qHistory, (snapshot) => {
+          const data: TransactionHistory[] = [];
+          snapshot.forEach(doc => data.push(doc.data() as TransactionHistory));
+          data.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+          updateLocalAndNotify('TransactionHistory', data);
+        }, (error) => handleFirestoreError(error, OperationType.GET, 'TransactionHistory'));
+        unsubs.push(unsub);
+      } else if (type === 'AuditLogs') {
+        if (activeUser.role === 'SystemAdmin' || activeUser.role === 'Admin') {
+          const qAudit = query(collection(db, 'AuditLogs'), where('company_id', '==', companyId), limit(100));
+          const unsub = onSnapshot(qAudit, (snapshot) => {
+            const data: AuditLog[] = [];
+            snapshot.forEach(doc => data.push(doc.data() as AuditLog));
+            data.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+            updateLocalAndNotify('AuditLogs', data);
+          }, (error) => handleFirestoreError(error, OperationType.GET, 'AuditLogs'));
+          unsubs.push(unsub);
+        }
+      } else if (type === 'deleted_transactions') {
+        const qDeleted = query(collection(db, 'deleted_transactions'), where('company_id', '==', companyId), limit(100));
+        const unsub = onSnapshot(qDeleted, (snapshot) => {
+          const data: DeletedTransaction[] = [];
+          snapshot.forEach(doc => data.push(doc.data() as DeletedTransaction));
+          data.sort((a, b) => b.deleted_at.localeCompare(a.deleted_at));
+          updateLocalAndNotify('deleted_transactions', data);
+        }, (error) => handleFirestoreError(error, OperationType.GET, 'deleted_transactions'));
+        unsubs.push(unsub);
+      } else if (type === 'journal_entries') {
+        const qJournal = query(collection(db, 'journal_entries'), where('company_id', '==', companyId), limit(200));
+        const unsub = onSnapshot(qJournal, (snapshot) => {
+          const data: any[] = [];
+          snapshot.forEach(doc => data.push(doc.data()));
+          updateLocalAndNotify('journal_entries', data);
+        }, (error) => handleFirestoreError(error, OperationType.GET, 'journal_entries'));
+        unsubs.push(unsub);
+      } else if (type === 'signup_requests') {
+        if (activeUser.role === 'SystemAdmin' || activeUser.role === 'Admin') {
+          const qSignup = activeUser.role === 'SystemAdmin'
+            ? query(collection(db, 'signup_requests'), limit(50))
+            : query(collection(db, 'signup_requests'), where('company_id', '==', companyId), limit(50));
+          const unsub = onSnapshot(qSignup, (snapshot) => {
+            const data: SignupRequest[] = [];
+            snapshot.forEach(doc => data.push(doc.data() as SignupRequest));
+            updateLocalAndNotify('signup_requests', data);
+          }, (error) => handleFirestoreError(error, OperationType.GET, 'signup_requests'));
+          unsubs.push(unsub);
+        }
+      }
+    } catch (e) {
+      console.warn(`Error subscribing on-demand listener for ${type}:`, e);
+    }
+  });
+
+  return () => {
+    unsubs.forEach(unsub => {
+      try {
+        unsub();
+      } catch (e) {
+        console.warn('Error unsubscribing on-demand listener:', e);
+      }
+    });
+  };
 }
 
 // Track last synced state to prevent infinite listener recreation loop
@@ -865,3 +851,14 @@ export async function fetchTransactionsOnDemand(
     lastVisible: querySnapshot.docs[querySnapshot.docs.length - 1]
   };
 }
+
+export function useScreenListeners(listenerTypes: string[]) {
+  const typesKey = listenerTypes.join(',');
+  useEffect(() => {
+    const unsubscribe = subscribeScreenListeners(listenerTypes);
+    return () => {
+      unsubscribe();
+    };
+  }, [typesKey]);
+}
+

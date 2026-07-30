@@ -72,7 +72,7 @@ export default function ApprovalInbox({
       id: activeUser.id,
       role: activeUser.role,
       userRoles: activeUser.userRoles,
-      orgUnitId: activeUser.org_unit_id || activeUser.station_id
+      org_unit_id: activeUser.org_unit_id || activeUser.station_id
     });
     setPendingInstances(pending);
 

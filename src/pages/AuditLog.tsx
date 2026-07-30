@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CustodyDB } from '../db';
+import { useScreenListeners } from '../firebase';
 import { translations, Language, Theme, AuditLog } from '../types';
 import { 
   ShieldAlert, 
@@ -28,6 +29,8 @@ interface AuditLogProps {
 }
 
 export default function AuditLogView({ language, theme }: AuditLogProps) {
+  useScreenListeners(['AuditLogs', 'logs']);
+
   const isRtl = language === 'ar';
   const t = translations[language];
 

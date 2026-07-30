@@ -284,9 +284,9 @@ describe('Phase 13: Purchasing Module Organization Unit Migration & Integration'
     expect(jes.length).toBeGreaterThan(0);
     const poJE = jes.find(j => j.statementAr.includes(po.poNumber));
     expect(poJE).toBeDefined();
-    expect(poJE?.orgUnitId).toBe(cairoUnit.id);
+    expect(poJE?.org_unit_id).toBe(cairoUnit.id);
     expect(poJE?.costCenterId).toBeDefined();
-    expect(poJE?.lines[0].orgUnitId).toBe(cairoUnit.id);
+    expect(poJE?.lines[0].org_unit_id).toBe(cairoUnit.id);
   });
 
   test('4. Subtree filtering queries PRs and POs across organizational hierarchy', async () => {

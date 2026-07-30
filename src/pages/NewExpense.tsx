@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB } from '../db';
+import { useScreenListeners } from '../firebase';
 import { translations, Language, Theme, Transaction, Attachment, ExpenseCategory } from '../types';
 import { getArabicTafqeet, getEnglishTafqeet } from '../utils/tafqeet';
 import { 
@@ -29,6 +30,8 @@ const formatFileSize = (bytes: number): string => {
 };
 
 export default function NewExpense({ language, theme, onNavigate }: NewExpenseProps) {
+  useScreenListeners(['transactions', 'Expenses']);
+
   const t = translations[language];
   const isRtl = language === 'ar';
 

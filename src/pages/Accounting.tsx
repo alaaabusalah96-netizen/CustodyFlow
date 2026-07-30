@@ -7,6 +7,7 @@ import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
 import { CustodyDB } from '../db';
+import { useScreenListeners } from '../firebase';
 import { GLAccount, JournalEntry, LedgerLine } from '../types/accounting';
 import { createEventEnvelope } from '../lib/enterprise/metadata';
 
@@ -16,6 +17,8 @@ interface AccountingProps {
 }
 
 export default function Accounting({ language, theme }: AccountingProps) {
+  useScreenListeners(['journal_entries', 'transactions', 'Expenses', 'CashVouchers']);
+
   const isRtl = language === 'ar';
   const activeUser = UsersModule.getActiveUser();
   const companyId = CompaniesModule.getSelectedCompanyId();

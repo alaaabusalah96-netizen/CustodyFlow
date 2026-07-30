@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { CustodyDB, ModulesModule } from './db';
 import { AppUser, Language, Theme, Transaction } from './types';
 import { auth } from './firebase';
@@ -6,33 +6,33 @@ import { onAuthStateChanged } from 'firebase/auth';
 import Layout from './components/Layout';
 import { Download, X, Smartphone, ArrowDown, Sparkles, ShieldAlert } from 'lucide-react';
 
-// Pages
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import NewExpense from './pages/NewExpense';
-import PendingTransactions from './pages/PendingTransactions';
-import CashPaymentVoucher from './pages/CashPaymentVoucher';
-import UnderSettlement from './pages/UnderSettlement';
-import CashReconciliation from './pages/CashReconciliation';
-import Reports from './pages/Reports';
-import Search from './pages/Search';
-import Settings from './pages/Settings';
-import RegionalDashboard from './pages/RegionalDashboard';
-import Stations from './pages/Stations';
-import StationDetails from './pages/StationDetails';
-import AuditLogView from './pages/AuditLog';
-import SuperAdmin from './pages/SuperAdmin';
-import CompanyAdminDashboard from './pages/CompanyAdminDashboard';
-import RegionAdminDashboard from './pages/RegionAdminDashboard';
-import Inventory from './pages/Inventory';
-import Purchasing from './pages/Purchasing';
-import Accounting from './pages/Accounting';
-import SalesAR from './pages/SalesAR';
-import POS from './pages/POS';
-import CRM from './pages/CRM';
-import FixedAssets from './pages/FixedAssets';
-import FleetManagement from './pages/FleetManagement';
-import HRPayroll from './pages/HRPayroll';
+// Lazy Loaded Pages for Role-Based Code Splitting
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const NewExpense = lazy(() => import('./pages/NewExpense'));
+const PendingTransactions = lazy(() => import('./pages/PendingTransactions'));
+const CashPaymentVoucher = lazy(() => import('./pages/CashPaymentVoucher'));
+const UnderSettlement = lazy(() => import('./pages/UnderSettlement'));
+const CashReconciliation = lazy(() => import('./pages/CashReconciliation'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Search = lazy(() => import('./pages/Search'));
+const Settings = lazy(() => import('./pages/Settings'));
+const RegionalDashboard = lazy(() => import('./pages/RegionalDashboard'));
+const Stations = lazy(() => import('./pages/Stations'));
+const StationDetails = lazy(() => import('./pages/StationDetails'));
+const AuditLogView = lazy(() => import('./pages/AuditLog'));
+const SuperAdmin = lazy(() => import('./pages/SuperAdmin'));
+const CompanyAdminDashboard = lazy(() => import('./pages/CompanyAdminDashboard'));
+const RegionAdminDashboard = lazy(() => import('./pages/RegionAdminDashboard'));
+const Inventory = lazy(() => import('./pages/Inventory'));
+const Purchasing = lazy(() => import('./pages/Purchasing'));
+const Accounting = lazy(() => import('./pages/Accounting'));
+const SalesAR = lazy(() => import('./pages/SalesAR'));
+const POS = lazy(() => import('./pages/POS'));
+const CRM = lazy(() => import('./pages/CRM'));
+const FixedAssets = lazy(() => import('./pages/FixedAssets'));
+const FleetManagement = lazy(() => import('./pages/FleetManagement'));
+const HRPayroll = lazy(() => import('./pages/HRPayroll'));
 import ApprovalInbox from './components/ApprovalInbox';
 
 export default function App() {
@@ -582,7 +582,11 @@ export default function App() {
   // If user is not logged in, force Login screen
   if (!activeUser) {
     return (
-      <>
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+        </div>
+      }>
         <Login
           language={language}
           setLanguage={setLanguage}
@@ -590,7 +594,7 @@ export default function App() {
           onLoginSuccess={handleLoginSuccess}
         />
         {renderPwaBanner()}
-      </>
+      </Suspense>
     );
   }
 
@@ -605,9 +609,16 @@ export default function App() {
       activeUser={activeUser}
       onLogout={handleLogout}
     >
-      <div>
+      <Suspense fallback={
+        <div className="flex flex-col items-center justify-center min-h-[400px] p-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 dark:border-emerald-400"></div>
+          <span className="text-xs text-slate-500 dark:text-slate-400 mt-3 font-medium">
+            {isRtl ? 'جاري التحميل...' : 'Loading module...'}
+          </span>
+        </div>
+      }>
         {renderPage()}
-      </div>
+      </Suspense>
       {renderPwaBanner()}
     </Layout>
   );

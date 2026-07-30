@@ -182,22 +182,9 @@ export default function Layout({
             <div>
               {activeUser?.role === 'SystemAdmin' ? (
                 <div className="flex items-center gap-1.5">
-                  <select
-                    value={CustodyDB.getSelectedCompanyId()}
-                    onChange={(e) => {
-                      CustodyDB.setSelectedCompanyId(e.target.value);
-                      window.location.reload();
-                    }}
-                    className={`text-xs font-bold border rounded-lg px-1.5 py-1 max-w-[110px] xs:max-w-[140px] sm:max-w-[200px] md:max-w-none truncate focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${
-                      theme === 'dark' ? 'text-slate-100 bg-[#1e293b] border-[#334155]' : 'text-slate-800 bg-white border-slate-200'
-                    }`}
-                  >
-                    {CustodyDB.getCompanies().map((comp) => (
-                      <option key={comp.id} value={comp.id}>
-                        {comp.name}
-                      </option>
-                    ))}
-                  </select>
+                  <h1 className="text-xs sm:text-sm md:text-lg font-bold tracking-tight truncate max-w-[130px] xs:max-w-[180px] sm:max-w-[240px] md:max-w-none">
+                    {config.company_name}
+                  </h1>
                   <span className="hidden xs:inline-block bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0">
                     {isRtl ? 'مشرف عام المنصة' : 'Platform Admin'}
                   </span>

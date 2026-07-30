@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB } from '../db';
+import { useScreenListeners } from '../firebase';
 import { translations, Language, Theme, Transaction, Station } from '../types';
 import { Search as SearchIcon, Filter, X, Sliders, DollarSign, Calendar, Eye, FileCheck, Clock, Printer } from 'lucide-react';
 import VoucherModal from '../components/VoucherModal';
@@ -17,6 +18,8 @@ export default function Search({
   onNavigate,
   onSelectTransactionForSettle 
 }: SearchProps) {
+  useScreenListeners(['transactions']);
+
   const t = translations[language];
   const isRtl = language === 'ar';
 
@@ -55,6 +58,7 @@ export default function Search({
 
   // Results state
   const [results, setResults] = useState<Transaction[]>(allTransactions);
+  const [searchLimit, setSearchLimit] = useState(20);
 
   // Instant Search calculation logic on input changes
   useEffect(() => {
@@ -264,7 +268,7 @@ export default function Search({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {results.map((tx) => {
+                  {results.slice(0, searchLimit).map((tx) => {
                     return (
                       <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20">
                         <td className="py-3 px-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">{tx.transaction_no}</td>
@@ -326,6 +330,18 @@ export default function Search({
                 </tbody>
               </table>
             </div>
+
+            {results.length > searchLimit && (
+              <div className="flex justify-center p-4 border-t border-slate-100 dark:border-slate-800/40">
+                <button
+                  onClick={() => setSearchLimit(prev => prev + 20)}
+                  className="px-4 py-2 text-xs font-bold bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <span>{isRtl ? 'عرض المزيد من نتائج البحث' : 'Load More Results'}</span>
+                  <span className="text-[10px] opacity-75">({results.length - searchLimit} {isRtl ? 'متبقي' : 'remaining'})</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

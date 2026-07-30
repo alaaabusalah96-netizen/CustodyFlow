@@ -361,7 +361,7 @@ export class WarehouseTemplateEngine {
         max_capacity_qty: node.maxCapacityQty,
         parent_id: parentId,
         type_code: node.typeCode,
-        org_unit_id: params.orgUnitId || null,
+        org_unit_id: params.org_unit_id || null,
       });
 
       createdWarehouses.push(created);

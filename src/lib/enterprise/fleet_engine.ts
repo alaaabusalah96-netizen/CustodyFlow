@@ -10,15 +10,15 @@ export class FleetBusinessEngine {
   /**
    * Retrieves vehicles filtered by company and optional organization unit subtree
    */
-  public static getVehiclesByOrgUnit(companyId: string, orgUnitId?: string): Vehicle[] {
+  public static getVehiclesByOrgUnit(companyId: string, org_unit_id?: string): Vehicle[] {
     const all = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
     const companyVehicles = all.filter(v => v.company_id === companyId);
 
-    if (!orgUnitId || orgUnitId === 'ALL') {
+    if (!org_unit_id || org_unit_id === 'ALL') {
       return companyVehicles;
     }
 
-    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(orgUnitId, companyId));
+    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(org_unit_id, companyId));
     return companyVehicles.filter(v => v.org_unit_id && validSubtreeIds.has(v.org_unit_id));
   }
 
@@ -55,7 +55,7 @@ export class FleetBusinessEngine {
       const genResult = await DocumentNumberEngine.generateNextNumberAsync({
         companyId,
         documentType: 'FLEET',
-        orgUnitId: targetOrgUnit
+        org_unit_id: targetOrgUnit
       });
       code = genResult.documentNumber;
     } catch {

@@ -11,45 +11,45 @@ export class SalesBusinessEngine {
   /**
    * Retrieves all customers filtered by company, supporting organizational subtree filtering
    */
-  public static getCustomersByOrgUnit(companyId: string, orgUnitId?: string): Customer[] {
+  public static getCustomersByOrgUnit(companyId: string, org_unit_id?: string): Customer[] {
     const all = StorageEngine.getStored<Customer[]>('customers', []);
     const companyCustomers = all.filter(c => c.company_id === companyId);
     
-    if (!orgUnitId || orgUnitId === 'ALL') {
+    if (!org_unit_id || org_unit_id === 'ALL') {
       return companyCustomers;
     }
 
-    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(orgUnitId, companyId));
+    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(org_unit_id, companyId));
     return companyCustomers.filter(c => c.org_unit_id && validSubtreeIds.has(c.org_unit_id));
   }
 
   /**
    * Retrieves all sales invoices filtered by company, supporting organizational subtree filtering
    */
-  public static getSalesInvoicesByOrgUnit(companyId: string, orgUnitId?: string): SalesInvoice[] {
+  public static getSalesInvoicesByOrgUnit(companyId: string, org_unit_id?: string): SalesInvoice[] {
     const all = StorageEngine.getStored<SalesInvoice[]>('sales_invoices', []);
     const companyInvoices = all.filter(i => i.company_id === companyId);
 
-    if (!orgUnitId || orgUnitId === 'ALL') {
+    if (!org_unit_id || org_unit_id === 'ALL') {
       return companyInvoices;
     }
 
-    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(orgUnitId, companyId));
+    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(org_unit_id, companyId));
     return companyInvoices.filter(i => i.org_unit_id && validSubtreeIds.has(i.org_unit_id));
   }
 
   /**
    * Retrieves all POS transactions filtered by company, supporting organizational subtree filtering
    */
-  public static getPOSTransactionsByOrgUnit(companyId: string, orgUnitId?: string): POSTransaction[] {
+  public static getPOSTransactionsByOrgUnit(companyId: string, org_unit_id?: string): POSTransaction[] {
     const all = StorageEngine.getStored<POSTransaction[]>('pos_transactions', []);
     const companyPOS = all.filter(p => p.company_id === companyId);
 
-    if (!orgUnitId || orgUnitId === 'ALL') {
+    if (!org_unit_id || org_unit_id === 'ALL') {
       return companyPOS;
     }
 
-    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(orgUnitId, companyId));
+    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(org_unit_id, companyId));
     return companyPOS.filter(p => p.org_unit_id && validSubtreeIds.has(p.org_unit_id));
   }
 
@@ -138,7 +138,7 @@ export class SalesBusinessEngine {
       const genResult = await DocumentNumberEngine.generateNextNumberAsync({
         companyId,
         documentType: 'INVOICE',
-        orgUnitId: targetOrgUnit
+        org_unit_id: targetOrgUnit
       });
       invoiceNo = genResult.documentNumber;
     } catch {
@@ -252,7 +252,7 @@ export class SalesBusinessEngine {
       const genResult = await DocumentNumberEngine.generateNextNumberAsync({
         companyId,
         documentType: 'RECEIPT',
-        orgUnitId: targetOrgUnit
+        org_unit_id: targetOrgUnit
       });
       receiptNo = genResult.documentNumber;
     } catch {
@@ -342,7 +342,7 @@ export class SalesBusinessEngine {
       const genResult = await DocumentNumberEngine.generateNextNumberAsync({
         companyId,
         documentType: 'TRANSFER',
-        orgUnitId: targetOrgUnit
+        org_unit_id: targetOrgUnit
       });
       deliveryNo = genResult.documentNumber;
     } catch {

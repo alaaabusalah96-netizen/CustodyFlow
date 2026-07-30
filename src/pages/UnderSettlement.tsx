@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB } from '../db';
+import { useScreenListeners } from '../firebase';
 import { translations, Language, Theme, Transaction } from '../types';
 import { 
   FileCheck, 
@@ -29,6 +30,8 @@ interface UnderSettlementProps {
 }
 
 export default function UnderSettlement({ language, theme, onNavigate }: UnderSettlementProps) {
+  useScreenListeners(['transactions', 'Expenses', 'CashVouchers']);
+
   const t = translations[language];
   const isRtl = language === 'ar';
 

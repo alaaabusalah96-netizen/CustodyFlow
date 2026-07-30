@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB } from '../db';
+import { useScreenListeners } from '../firebase';
 import { CompaniesModule } from '../db/companies';
 import { OrganizationEngine } from '../db/organizationEngine';
 import { WarehouseHierarchyEngine } from '../db/warehouseHierarchyEngine';
@@ -33,6 +34,8 @@ interface ReportsProps {
 type ReportType = 'pending' | 'settled' | 'daily' | 'monthly' | 'movement';
 
 export default function Reports({ language, theme }: ReportsProps) {
+  useScreenListeners(['transactions', 'Expenses', 'CashVouchers', 'journal_entries']);
+
   const t = translations[language];
   const isRtl = language === 'ar';
 
@@ -94,7 +97,7 @@ export default function Reports({ language, theme }: ReportsProps) {
   const getInitialFilteredList = () => {
     return EnterpriseReportEngine.getCustodyReport({
       companyId: selectedCompanyId,
-      orgUnitId: selectedOrgUnit,
+      org_unit_id: selectedOrgUnit,
       warehouseId: selectedWarehouse,
       costCenterId: selectedCostCenter,
       projectId: selectedProject,
@@ -111,7 +114,7 @@ export default function Reports({ language, theme }: ReportsProps) {
   const handleGenerate = () => {
     let list = EnterpriseReportEngine.getCustodyReport({
       companyId: selectedCompanyId,
-      orgUnitId: selectedOrgUnit,
+      org_unit_id: selectedOrgUnit,
       warehouseId: selectedWarehouse,
       costCenterId: selectedCostCenter,
       projectId: selectedProject,

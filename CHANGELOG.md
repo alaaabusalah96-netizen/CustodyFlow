@@ -1002,6 +1002,159 @@ Implemented comprehensive Optimistic Concurrency Control (OCC) across all core u
 **Test & Validation Result:**
 Pass - `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All 17 vitest unit test files passing (113 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
 
+---
+
+## Remediation Plan - Phase 7: Field Naming Unification (org_unit_id vs orgUnitId)
+**Date/Time:** 2026-07-30 07:05:00 UTC
+**Files Changed:**
+- `src/types/inventory.ts`
+- `src/db/inventory.ts`
+- `src/db/users.ts`
+- `src/db/costCenterEngine.ts`
+- `src/pages/Reports.tsx`
+- `src/pages/Settings.tsx`
+- `src/accounting_integration.test.ts`
+- `src/cost_center_engine.test.ts`
+- `src/document_number_engine.test.ts`
+- `src/purchasing_migration.test.ts`
+- `src/warehouse_templates.test.ts`
+- `firestore.rules`
+- `CHANGELOG.md`
+
+**Summary:**
+Standardized organization unit field naming across the entire codebase onto `org_unit_id` (snake_case), resolving dual-naming inconsistencies (`org_unit_id` vs `orgUnitId`):
+1. Codebase Audit: Searched all files in `src/` and `firestore.rules` for occurrences of `orgUnitId` and `org_unit_id`.
+2. Application Code Update: Standardized interface parameters, state variables, component properties, and data structures to `org_unit_id` across `Reports.tsx`, `Settings.tsx`, `src/db/inventory.ts`, `src/db/costCenterEngine.ts`, and test files.
+3. Firestore Security Rules Simplification: Updated `getUserOrgUnitId()` and `getDocOrgUnitId()` helper functions in `firestore.rules` to exclusively rely on `org_unit_id`, removing redundant `orgUnitId` dual-field fallbacks.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All 17 vitest unit test files passing (113 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Remediation Plan - Phase 8: Empty company_id and org_unit_id Fallback Audit in Firestore Rules
+**Date/Time:** 2026-07-30 07:15:00 UTC
+**Files Changed:**
+- `firestore.rules`
+- `CHANGELOG.md`
+
+**Summary:**
+Audited and tightened `firestore.rules` to remove unauthorized fallback bypasses caused by empty `company_id` and `org_unit_id` checks:
+1. Company-Level Fallback Audit: Audited `isSameCompanyRead` and `isSameCompanyWrite`. Identified that `getDocCompanyId(...) == ""` permitted un-scoped access to tenant data documents lacking explicit company IDs. Removed `|| getDocCompanyId(...) == ""` from both helpers. Confirmed that intentionally global shared collections (`organization_templates`, `warehouse_types`, `warehouse_templates`, `organization_unit_types`, `categories`, `system_meta`, `config`) retain their explicit global read rules while all operational tenant collections strictly require `getDocCompanyId(...) == getCompanyId()`.
+2. Org-Unit Level Fallback Audit: Audited `isOrgScopedRead` and `isOrgScopedWrite`. Identified that `getDocOrgUnitId(requestData) == ""` permitted org-unit restricted users to write unassigned/company-wide records. Removed `getDocOrgUnitId(requestData) == ""` from `isOrgScopedWrite`, enforcing that non-admin users with assigned org units can only write documents matching their specific `org_unit_id`.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All 17 vitest unit test files passing (113 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Remediation Plan - Phase 9: Firestore Listener Optimization & On-Demand Subscription Integration
+**Date/Time:** 2026-07-30 07:23:00 UTC
+**Files Changed:**
+- `src/firebase.ts`
+- `src/pages/Dashboard.tsx`
+- `src/pages/Accounting.tsx`
+- `src/pages/AuditLog.tsx`
+- `src/pages/CashPaymentVoucher.tsx`
+- `src/pages/CashReconciliation.tsx`
+- `src/pages/CompanyAdminDashboard.tsx`
+- `src/pages/RegionAdminDashboard.tsx`
+- `src/pages/Reports.tsx`
+- `src/pages/SuperAdmin.tsx`
+- `src/pages/Search.tsx`
+- `src/pages/PendingTransactions.tsx`
+- `src/pages/UnderSettlement.tsx`
+- `src/pages/StationDetails.tsx`
+- `src/pages/NewExpense.tsx`
+- `src/pages/Settings.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+Optimized Firestore listener architecture to eliminate performance overhead and memory leaks caused by monolithic real-time listeners:
+1. **Core Listener Refactoring (`src/firebase.ts`)**: Separated listeners into Global core collections (Companies, Config, Categories, Regions, Stations, Users, Notifications, Company Sequences) that stay constantly synchronized, and On-Demand transactional listeners (`subscribeScreenListeners`).
+2. **On-Demand Lifecycle Hook (`useScreenListeners`)**: Created `useScreenListeners` hook in `src/firebase.ts` that attaches listener subscriptions on component mount and automatically unsubscribes on unmount.
+3. **Screen Integration**: Integrated `useScreenListeners` across all major UI pages (`Dashboard`, `Accounting`, `AuditLog`, `CashPaymentVoucher`, `CashReconciliation`, `CompanyAdminDashboard`, `RegionAdminDashboard`, `Reports`, `SuperAdmin`, `Search`, `PendingTransactions`, `UnderSettlement`, `StationDetails`, `NewExpense`, `Settings`), attaching transactional listeners (transactions, expenses, cash vouchers, logs, journal entries) on-demand only while the corresponding view is mounted.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All 17 vitest test files passing (113 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Remediation Plan - Phase 10: Cursor-Based Pagination & Load Controls Integration
+**Date/Time:** 2026-07-30 07:27:00 UTC
+**Files Changed:**
+- `src/firebase.ts`
+- `src/pages/Search.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+Implemented cursor-based pagination and load-more controls for large datasets and search lists across the application:
+1. **Firestore Pagination Engine (`src/firebase.ts`)**: Confirmed `fetchTransactionsOnDemand` with `startAfter` query cursors for pagination on Firestore `transactions` collection.
+2. **Search Screen Pagination (`src/pages/Search.tsx`)**: Added `searchLimit` state (default page size: 20 items), applied `.slice(0, searchLimit)` to search results table rendering, and integrated responsive "Load More Results" button when results exceed the limit.
+3. **List Pagination Alignment**: Verified existing pagination controls in `AuditLog.tsx`, `Reports.tsx`, and `PendingTransactions.tsx`, ensuring consistent page sizes and "Load More" controls.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All 17 vitest test files passing (113 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Remediation Plan - Phase 11: Client Cache Migration: localStorage to IndexedDB
+**Date/Time:** 2026-07-30 07:30:00 UTC
+**Files Changed:**
+- `src/db/storage.ts`
+- `src/storage_indexeddb.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+Migrated client storage engine from synchronous localStorage-only persistence to IndexedDB with automatic background hydration and localStorage fallback:
+1. **IndexedDB Engine (`src/db/storage.ts`)**: Implemented `custody_erp_idb` IndexedDB database with object store `custody_cache`. Added `persistToIDB`, `loadFromIDB`, and `migrateLocalStorageToIDB` functions.
+2. **Backward Compatibility & Fallback**: `StorageEngine.getStored` and `StorageEngine.setStored` maintain identical synchronous signatures via `StorageEngine.cache`. Data is written to IndexedDB asynchronously and synced to `localStorage`.
+3. **Quota Error Resilience**: When `localStorage` throws `QuotaExceededError`, `StorageEngine` checks `StorageEngine.isIDBSupported()`. If IndexedDB is supported, the payload is safely persisted in IndexedDB and the user prompt is suppressed.
+4. **Unit Test Suite (`src/storage_indexeddb.test.ts`)**: Verified cross-module storage operations (Users, Transactions, Organization, Warehouse), QuotaExceededError graceful handling, and IDB fallback logic.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All 18 vitest test files passing (116 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Remediation Plan - Phase 12: Code Splitting & Component Decomposition
+**Date/Time:** 2026-07-30 07:35:00 UTC
+**Files Changed:**
+- `src/App.tsx`
+- `src/pages/SuperAdmin.tsx`
+- `src/components/SuperAdminImpersonateTab.tsx`
+- `src/components/SuperAdminAuditTab.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+Implemented Route-level Code Splitting and Component Decomposition to optimize initial bundle size and initial load performance:
+1. **Route Code Splitting (`src/App.tsx`)**: Replaced all eager page component imports with `React.lazy()` dynamic imports (including `Login`, `Dashboard`, `SuperAdmin`, `CompanyAdminDashboard`, `StationAdminDashboard`, `Inventory`, `Purchasing`, `CashPaymentVoucher`, `Reports`, `Search`, `AuditLog`, `Users`, `PendingTransactions`, `OrganizationBuilderPage`, `WarehouseManagerPage`, `DirectSalesVoucher`, `TreasuryVaultsPage`). Wrapped application routes with React `<Suspense>` boundaries featuring styled fallback spinners.
+2. **Component Decomposition (`src/pages/SuperAdmin.tsx`)**: Extracted large inline tab renderers into standalone sub-components (`src/components/SuperAdminImpersonateTab.tsx` for technical support user selection and `src/components/SuperAdminAuditTab.tsx` for support session audit logs). Reduced file size and memory footprint of main page modules.
+3. **Behavioral Integrity**: Retained exact props, event handlers, permission checks, and Arabic/English localization strings.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All vitest test files passing. All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Remediation Plan - Phase 13: Remove Global Company Switcher from Header
+**Date/Time:** 2026-07-30 07:40:00 UTC
+**Files Changed:**
+- `src/components/Layout.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+Removed persistent top-bar company selection dropdown for `SystemAdmin` in header navigation:
+1. **Header Layout Clean-up (`src/components/Layout.tsx`)**: Replaced global company `<select>` dropdown previously rendered for `SystemAdmin` with clean, non-interactive company title and `Platform Admin` badge.
+2. **Behavioral Integrity**: Preserved company-scoped navigation for operational roles (`Admin`, `RegionalManager`, `StationAdmin`) and retained all background data filtering APIs.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All vitest unit tests passing. All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+
+
+
+
 
 
 

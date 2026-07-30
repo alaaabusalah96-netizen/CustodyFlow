@@ -10,15 +10,15 @@ export class AssetBusinessEngine {
   /**
    * Retrieves all fixed assets filtered by company and optional organization unit subtree
    */
-  public static getAssetsByOrgUnit(companyId: string, orgUnitId?: string): FixedAsset[] {
+  public static getAssetsByOrgUnit(companyId: string, org_unit_id?: string): FixedAsset[] {
     const all = StorageEngine.getStored<FixedAsset[]>('fixed_assets_items', []);
     const companyAssets = all.filter(a => a.company_id === companyId);
 
-    if (!orgUnitId || orgUnitId === 'ALL') {
+    if (!org_unit_id || org_unit_id === 'ALL') {
       return companyAssets;
     }
 
-    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(orgUnitId, companyId));
+    const validSubtreeIds = new Set(OrganizationEngine.getSubtreeUnitIds(org_unit_id, companyId));
     return companyAssets.filter(a => a.org_unit_id && validSubtreeIds.has(a.org_unit_id));
   }
 
@@ -52,7 +52,7 @@ export class AssetBusinessEngine {
       const genResult = await DocumentNumberEngine.generateNextNumberAsync({
         companyId,
         documentType: 'ASSET',
-        orgUnitId: targetOrgUnit
+        org_unit_id: targetOrgUnit
       });
       code = genResult.documentNumber;
     } catch {
@@ -107,7 +107,7 @@ export class AssetBusinessEngine {
     operatorId: string,
     depreciationDate: string,
     runLogs: DepreciationRunLog[],
-    orgUnitId?: string,
+    org_unit_id?: string,
     costCenterId?: string
   ): Promise<void> {
     if (runLogs.length === 0) return;
@@ -137,7 +137,7 @@ export class AssetBusinessEngine {
     }
 
     const totalExp = runLogs.reduce((sum, rl) => sum + rl.expense, 0);
-    const targetOrgUnit = orgUnitId || undefined;
+    const targetOrgUnit = org_unit_id || undefined;
 
     let targetCostCenter = costCenterId;
     if (!targetCostCenter && targetOrgUnit) {

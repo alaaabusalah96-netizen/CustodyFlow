@@ -27,6 +27,7 @@ import {
   Layers
 } from 'lucide-react';
 import { CustodyDB } from '../db';
+import { useScreenListeners } from '../firebase';
 import { OrganizationEngine } from '../db/organizationEngine';
 import { translations, Language, Theme, Transaction, Station } from '../types';
 import { 
@@ -53,6 +54,8 @@ export default function Dashboard({
   onNavigate,
   onSelectTransactionForSettle 
 }: DashboardProps) {
+  useScreenListeners(['transactions', 'logs', 'Expenses', 'CashVouchers']);
+
   const t = translations[language];
   const isRtl = language === 'ar';
   const user = CustodyDB.getActiveUser();
@@ -119,8 +122,8 @@ export default function Dashboard({
     // Dynamically retrieve metrics according to selected section
     const stId = selectedSection.type === 'station' ? selectedSection.id : undefined;
     const regId = selectedSection.type === 'region' ? selectedSection.id : undefined;
-    const orgUnitId = selectedSection.type === 'org_unit' ? selectedSection.id : undefined;
-    setMetrics(CustodyDB.getReconciliation(stId, regId, orgUnitId));
+    const org_unit_id = selectedSection.type === 'org_unit' ? selectedSection.id : undefined;
+    setMetrics(CustodyDB.getReconciliation(stId, regId, org_unit_id));
 
     // Retrieve scoped transactions of the active company
     const scopedTxs = CustodyDB.getScopedTransactions();
@@ -128,7 +131,7 @@ export default function Dashboard({
     // Filter transactions by selected section
     if (selectedSection.type === 'org_unit') {
       const validOrgUnitIds = new Set(OrganizationEngine.getSubtreeUnitIds(selectedSection.id, selectedCompanyId));
-      setAllTransactions(scopedTxs.filter(t => (t.org_unit_id && validOrgUnitIds.has(t.org_unit_id)) || ((t as any).orgUnitId && validOrgUnitIds.has((t as any).orgUnitId))));
+      setAllTransactions(scopedTxs.filter(t => t.org_unit_id && validOrgUnitIds.has(t.org_unit_id)));
     } else if (selectedSection.type === 'station') {
       setAllTransactions(scopedTxs.filter(t => t.station_id === selectedSection.id));
     } else if (selectedSection.type === 'region') {

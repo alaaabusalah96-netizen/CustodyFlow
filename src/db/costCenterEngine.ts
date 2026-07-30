@@ -142,14 +142,14 @@ export class CostCenterEngine {
   /**
    * Resolves or auto-generates the Cost Center associated with an Organization Unit ID.
    */
-  static async resolveCostCenterForOrgUnit(orgUnitId: string, companyId: string): Promise<CostCenter | undefined> {
-    const existing = CostCenterEngine.getCostCentersByOrgUnit(orgUnitId, companyId);
+  static async resolveCostCenterForOrgUnit(org_unit_id: string, companyId: string): Promise<CostCenter | undefined> {
+    const existing = CostCenterEngine.getCostCentersByOrgUnit(org_unit_id, companyId);
     if (existing.length > 0) {
       return existing[0];
     }
 
     try {
-      const unit = OrganizationEngine.getUnitById(orgUnitId);
+      const unit = OrganizationEngine.getUnitById(org_unit_id);
       if (unit) {
         return await CostCenterEngine.autoCreateOrLinkCostCenterForOrgUnit(unit);
       }

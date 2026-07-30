@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB } from '../db';
+import { useScreenListeners } from '../firebase';
 import { translations, Language, Theme, Transaction, ExpenseCategory } from '../types';
 import { 
   TrendingUp, 
@@ -45,6 +46,8 @@ export default function CashReconciliation({
   onNavigate,
   onSelectTransactionForSettle 
 }: CashReconciliationProps) {
+  useScreenListeners(['CashVouchers', 'Expenses', 'transactions']);
+
   const t = translations[language];
   const isRtl = language === 'ar';
   const user = CustodyDB.getActiveUser();

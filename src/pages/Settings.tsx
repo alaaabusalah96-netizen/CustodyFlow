@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB, ModulesModule } from '../db';
+import { useScreenListeners } from '../firebase';
 import PermissionMatrix from '../components/PermissionMatrix';
 import ApprovalWorkflowManager from '../components/ApprovalWorkflowManager';
 import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
@@ -83,6 +84,8 @@ const PERMISSIONS_LIST = [
 ] as const;
 
 export default function Settings({ language, theme }: SettingsProps) {
+  useScreenListeners(['logs', 'AuditLogs']);
+
   const t = translations[language];
   const isRtl = language === 'ar';
 
@@ -146,7 +149,7 @@ export default function Settings({ language, theme }: SettingsProps) {
   });
   const [editUserIsDefaultMode, setEditUserIsDefaultMode] = useState<boolean>(true);
 
-  const [pendingMappings, setPendingMappings] = useState<Record<string, { stationId?: string; regionId?: string; orgUnitId?: string }>>({});
+  const [pendingMappings, setPendingMappings] = useState<Record<string, { stationId?: string; regionId?: string; org_unit_id?: string }>>({});
 
   const [toastMessage, setToastMessage] = useState('');
 
@@ -1079,10 +1082,10 @@ export default function Settings({ language, theme }: SettingsProps) {
                               </label>
                               <OrgUnitTreeSelect
                                 companyId={pendingUser.company_id || CustodyDB.getSelectedCompanyId()}
-                                value={mapping.orgUnitId || ''}
+                                value={mapping.org_unit_id || ''}
                                 onChange={(unitId) => setPendingMappings({
                                   ...pendingMappings,
-                                  [pendingUser.id]: { ...mapping, orgUnitId: unitId }
+                                  [pendingUser.id]: { ...mapping, org_unit_id: unitId }
                                 })}
                                 mode="single"
                                 isRtl={isRtl}
@@ -1166,7 +1169,7 @@ export default function Settings({ language, theme }: SettingsProps) {
                                   return {
                                     ...u,
                                     is_active: true,
-                                    org_unit_id: mapping.orgUnitId || undefined,
+                                    org_unit_id: mapping.org_unit_id || undefined,
                                     station_id: pendingUser.role === 'StationAdmin' ? mapping.stationId : undefined,
                                     region_id: mappedRegionId || undefined,
                                     permissions: CustodyDB.enrichUserPermissions(u.role)

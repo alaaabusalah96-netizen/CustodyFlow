@@ -156,18 +156,18 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
   ): Promise<AccountingDimensions> {
     const merged = { ...provided, ...lineSpecific };
 
-    let orgUnitId = merged.orgUnitId || merged.org_unit_id;
-    let warehouseId = merged.warehouseId || merged.warehouse_id;
-    const projectId = merged.projectId || merged.project_id;
-    let costCenterId = merged.costCenterId || merged.cost_center_id;
+    let org_unit_id = (merged as any).orgUnitId || merged.org_unit_id;
+    let warehouseId = (merged as any).warehouseId || merged.warehouse_id;
+    const projectId = (merged as any).projectId || merged.project_id;
+    let costCenterId = (merged as any).costCenterId || merged.cost_center_id;
 
     // 1. Auto-derive Org Unit from Warehouse if missing
-    if (!orgUnitId && warehouseId) {
+    if (!org_unit_id && warehouseId) {
       try {
         const whs = WarehouseHierarchyEngine.getWarehouses(companyId);
         const targetWh = whs.find(w => w.id === warehouseId);
         if (targetWh?.org_unit_id) {
-          orgUnitId = targetWh.org_unit_id;
+          org_unit_id = targetWh.org_unit_id;
         }
       } catch {
         // Safe fallback if warehouse lookup fails
@@ -175,9 +175,9 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     }
 
     // 2. Auto-derive Cost Center from Org Unit if missing
-    if (!costCenterId && orgUnitId) {
+    if (!costCenterId && org_unit_id) {
       try {
-        const cc = await CostCenterEngine.resolveCostCenterForOrgUnit(orgUnitId, companyId);
+        const cc = await CostCenterEngine.resolveCostCenterForOrgUnit(org_unit_id, companyId);
         if (cc) {
           costCenterId = cc.id;
         }
@@ -187,11 +187,11 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     }
 
     // 3. Auto-derive Org Unit from Cost Center if missing
-    if (!orgUnitId && costCenterId) {
+    if (!org_unit_id && costCenterId) {
       try {
         const cc = CostCenterEngine.getCostCenter(costCenterId);
         if (cc?.org_unit_id) {
-          orgUnitId = cc.org_unit_id;
+          org_unit_id = cc.org_unit_id;
         }
       } catch {
         // Safe fallback
@@ -199,8 +199,7 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     }
 
     return {
-      org_unit_id: orgUnitId,
-      orgUnitId: orgUnitId,
+      org_unit_id,
       warehouse_id: warehouseId,
       warehouseId: warehouseId,
       project_id: projectId,
@@ -342,9 +341,10 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
       if (options.endDate && je.date > options.endDate) return false;
 
       // Filter by Org Unit (matches header or line)
-      if (options.orgUnitId) {
-        const matchesHeader = je.orgUnitId === options.orgUnitId || je.org_unit_id === options.orgUnitId;
-        const matchesLine = je.lines.some(l => l.orgUnitId === options.orgUnitId || l.org_unit_id === options.orgUnitId);
+      if (options.org_unit_id) {
+        const target = options.org_unit_id;
+        const matchesHeader = je.org_unit_id === target || (je as any).orgUnitId === target;
+        const matchesLine = je.lines.some(l => l.org_unit_id === target || (l as any).orgUnitId === target);
         if (!matchesHeader && !matchesLine) return false;
       }
 

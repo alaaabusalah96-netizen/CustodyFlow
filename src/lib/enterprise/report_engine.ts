@@ -11,7 +11,8 @@ import { Vehicle, MaintenanceLog, FuelLog } from '../../types/fleet';
 
 export interface ReportFilterCriteria {
   companyId: string;
-  orgUnitId?: string; // ALL or specific unit (with subtree inclusion)
+  org_unit_id?: string; // ALL or specific unit (with subtree inclusion)
+  orgUnitId?: string; // backwards compatibility alias during migration
   warehouseId?: string; // ALL or specific warehouse
   costCenterId?: string; // ALL or specific cost center
   projectId?: string; // ALL or specific project
@@ -23,11 +24,12 @@ export class EnterpriseReportEngine {
   /**
    * Resolves set of valid Organization Unit IDs considering subtree inheritance
    */
-  public static getValidOrgUnitIds(companyId: string, orgUnitId?: string): Set<string> | null {
-    if (!orgUnitId || orgUnitId === 'ALL' || orgUnitId === 'all') {
+  public static getValidOrgUnitIds(companyId: string, org_unit_id?: string): Set<string> | null {
+    const targetUnit = org_unit_id;
+    if (!targetUnit || targetUnit === 'ALL' || targetUnit === 'all') {
       return null; // Null means no filtering (all units allowed)
     }
-    return new Set(OrganizationEngine.getSubtreeUnitIds(orgUnitId, companyId));
+    return new Set(OrganizationEngine.getSubtreeUnitIds(targetUnit, companyId));
   }
 
   /**
@@ -40,7 +42,7 @@ export class EnterpriseReportEngine {
     list = list.filter(t => (t as any).company_id === criteria.companyId || !((t as any).company_id));
 
     // Filter by Organization Unit Subtree
-    const validOrgUnits = this.getValidOrgUnitIds(criteria.companyId, criteria.orgUnitId);
+    const validOrgUnits = this.getValidOrgUnitIds(criteria.companyId, criteria.org_unit_id || criteria.orgUnitId);
     if (validOrgUnits) {
       list = list.filter(t => (t as any).org_unit_id && validOrgUnits.has((t as any).org_unit_id));
     }
@@ -76,7 +78,7 @@ export class EnterpriseReportEngine {
     list = list.filter(d => d.company_id === criteria.companyId || !d.company_id);
 
     // Filter by Org Unit
-    const validOrgUnits = this.getValidOrgUnitIds(criteria.companyId, criteria.orgUnitId);
+    const validOrgUnits = this.getValidOrgUnitIds(criteria.companyId, criteria.org_unit_id || criteria.orgUnitId);
     if (validOrgUnits) {
       list = list.filter(d => d.org_unit_id && validOrgUnits.has(d.org_unit_id));
     }
@@ -115,7 +117,7 @@ export class EnterpriseReportEngine {
 
     list = list.filter(e => e.company_id === criteria.companyId);
 
-    const validOrgUnits = this.getValidOrgUnitIds(criteria.companyId, criteria.orgUnitId);
+    const validOrgUnits = this.getValidOrgUnitIds(criteria.companyId, criteria.org_unit_id || criteria.orgUnitId);
     if (validOrgUnits) {
       list = list.filter(e => e.org_unit_id && validOrgUnits.has(e.org_unit_id));
     }
@@ -148,7 +150,7 @@ export class EnterpriseReportEngine {
     maint = maint.filter(m => m.company_id === criteria.companyId);
     fuel = fuel.filter(f => f.company_id === criteria.companyId);
 
-    const validOrgUnits = this.getValidOrgUnitIds(criteria.companyId, criteria.orgUnitId);
+    const validOrgUnits = this.getValidOrgUnitIds(criteria.companyId, criteria.org_unit_id || criteria.orgUnitId);
     if (validOrgUnits) {
       maint = maint.filter(m => m.org_unit_id && validOrgUnits.has(m.org_unit_id));
       fuel = fuel.filter(f => f.org_unit_id && validOrgUnits.has(f.org_unit_id));

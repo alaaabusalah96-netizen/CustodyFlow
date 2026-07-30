@@ -6,7 +6,7 @@ import { OrganizationEngine } from './organizationEngine';
 import { DEFAULT_TRANSACTIONS } from './defaults';
 
 export class TransactionsReconciliationModule {
-  static getReconciliation(stationId?: string, regionId?: string, orgUnitId?: string) {
+  static getReconciliation(stationId?: string, regionId?: string, org_unit_id?: string) {
     const targetCompanyId = CompaniesModule.getSelectedCompanyId();
     const stations = StationsModule.getStations().filter(s => s.company_id === targetCompanyId);
     const transactions = StorageEngine.getStored<any[]>('transactions', DEFAULT_TRANSACTIONS).filter(t => t.company_id === targetCompanyId);
@@ -15,8 +15,8 @@ export class TransactionsReconciliationModule {
     let targetStationIds: string[] = [];
     let custodyValue = 0;
 
-    if (orgUnitId && orgUnitId !== 'ALL' && orgUnitId !== 'all') {
-      const validOrgUnitIds = new Set(OrganizationEngine.getSubtreeUnitIds(orgUnitId, targetCompanyId));
+    if (org_unit_id && org_unit_id !== 'ALL' && org_unit_id !== 'all') {
+      const validOrgUnitIds = new Set(OrganizationEngine.getSubtreeUnitIds(org_unit_id, targetCompanyId));
       const orgStations = stations.filter(s => s.org_unit_id && validOrgUnitIds.has(s.org_unit_id));
       targetStationIds = orgStations.map(s => s.id);
       custodyValue = orgStations.reduce((sum, s) => sum + s.custody_amount, 0);

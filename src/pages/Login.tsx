@@ -273,10 +273,14 @@ export default function Login({
                 (window as any).__firebase_auth_provider_disabled = true;
                 window.dispatchEvent(new CustomEvent('firebase_auth_provider_disabled'));
               }
+            } else if (createErr.code === 'auth/network-request-failed' || createErr?.message?.includes('network-request-failed')) {
+              console.warn('Firebase Auth auto-creation offline/network failed, using local credentials mode:', createErr.message);
             } else {
               console.error('Firebase Auth auto-creation failed:', createErr);
             }
           }
+        } else if (authErr.code === 'auth/network-request-failed' || authErr?.message?.includes('network-request-failed')) {
+          console.warn('Firebase Auth sign-in network request failed, operating in offline local credentials mode:', authErr.message);
         } else {
           console.error('Firebase Auth signin error:', authErr);
         }
