@@ -56,16 +56,16 @@ import { db } from './firebase';
 export { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings, ConfigurationEngine, type TenantSettings };
 
 export class CustodyDB {
-  static hashPassword(password: string, salt: string = ''): string {
-    return hashPassword(password, salt);
+  static hashPassword(password: string, salt: string = '', pepperVersion: number = 2): string {
+    return hashPassword(password, salt, pepperVersion);
   }
 
-  static legacyStretchedHashPassword1000(password: string, salt: string = ''): string {
-    return legacyStretchedHashPassword1000(password, salt);
+  static legacyStretchedHashPassword1000(password: string, salt: string = '', pepperVersion: number = 2): string {
+    return legacyStretchedHashPassword1000(password, salt, pepperVersion);
   }
 
-  static legacySinglePassHashPassword(password: string, salt: string = ''): string {
-    return legacySinglePassHashPassword(password, salt);
+  static legacySinglePassHashPassword(password: string, salt: string = '', pepperVersion: number = 2): string {
+    return legacySinglePassHashPassword(password, salt, pepperVersion);
   }
 
   static legacyHashPassword(password: string, salt: string = ''): string {

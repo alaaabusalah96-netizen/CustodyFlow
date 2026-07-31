@@ -254,6 +254,7 @@ export async function seedDatabaseIfEmpty(defaults: {
           email: u.email,
           password: pwd,
           salt: salt,
+          pepper_version: 2,
           updated_at: new Date().toISOString()
         });
       });

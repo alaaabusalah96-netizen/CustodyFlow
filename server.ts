@@ -21,13 +21,12 @@ import nodemailer from "nodemailer";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import { runTenantMigrationUp, runTenantMigrationDown } from "./src/migrations/tenantMigration";
-import { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000 } from "./src/lib/hash";
+import { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, getPepperByVersion } from "./src/lib/hash";
 
-const SERVER_PEPPER = process.env.APP_PEPPER || "CustodyFlowSecureSystemPepper2026!KeyDerivationV2";
-
-function hashPasswordPBKDF2_210k(password: string, salt: string): string {
+function hashPasswordPBKDF2_210k(password: string, salt: string, pepperVersion: number = 2): string {
   if (!password) return '';
-  const combinedSalt = salt ? `${salt.toLowerCase().trim()}_${SERVER_PEPPER}` : SERVER_PEPPER;
+  const pepper = getPepperByVersion(pepperVersion);
+  const combinedSalt = salt ? `${salt.toLowerCase().trim()}_${pepper}` : pepper;
   return crypto.pbkdf2Sync(password, combinedSalt, 210000, 64, 'sha256').toString('hex');
 }
 
@@ -214,6 +213,10 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  if (!process.env.APP_PEPPER) {
+    console.error("CRITICAL SECURITY ERROR: APP_PEPPER environment variable is not set. Auth verification will refuse to operate without a secure pepper.");
+  }
+
   // Trust first proxy in Cloud Run / Nginx container environment for rate limiter IP resolution
   app.set("trust proxy", 1);
 
@@ -366,15 +369,18 @@ async function startServer() {
       let storedPasswordHash = '';
       let salt = userData.salt || emailLower;
       let kdf = 'legacy';
+      let pepperVersion = 1;
 
       if (credDoc.exists) {
         const credData = credDoc.data();
         storedPasswordHash = credData?.passwordHash || credData?.password || '';
         salt = credData?.salt || salt;
         kdf = credData?.kdf || 'legacy';
+        pepperVersion = typeof credData?.pepper_version === 'number' ? credData.pepper_version : 1;
       } else {
         // Fallback to legacy fields directly on user document
         storedPasswordHash = userData.password || '';
+        pepperVersion = typeof userData.pepper_version === 'number' ? userData.pepper_version : 1;
       }
 
       const isPlatformAdmin = await isPlatformAdminUser(emailLower, userData);
@@ -385,11 +391,11 @@ async function startServer() {
         }
       }
 
-      // 3. Perform Password Comparisons across KDF iterations
-      const pbkdf2Hash = hashPasswordPBKDF2_210k(password, salt);
-      const hash10k = hashPassword(password, salt);
-      const hash1k = legacyStretchedHashPassword1000(password, salt);
-      const hashSinglePass = legacySinglePassHashPassword(password, salt);
+      // 3. Perform Password Comparisons across KDF iterations using stored pepper_version
+      const pbkdf2Hash = hashPasswordPBKDF2_210k(password, salt, pepperVersion);
+      const hash10k = hashPassword(password, salt, pepperVersion);
+      const hash1k = legacyStretchedHashPassword1000(password, salt, pepperVersion);
+      const hashSinglePass = legacySinglePassHashPassword(password, salt, pepperVersion);
       const hashOldEmailSalt = legacyHashPassword(password, emailLower);
       const hashLegacyUnsalted = legacyHashPassword(password);
 
@@ -407,10 +413,10 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "كلمة المرور غير صحيحة." });
       }
 
-      // 4. Auto-upgrade credential to PBKDF2 210,000 iterations in user_credentials vault
-      if (!credDoc.exists || kdf !== 'sha256_pbkdf2_210k' || !isPBKDF2Match) {
+      // 4. Auto-upgrade credential to PBKDF2 210,000 iterations & pepper_version: 2 in user_credentials vault
+      if (!credDoc.exists || kdf !== 'sha256_pbkdf2_210k' || !isPBKDF2Match || pepperVersion !== 2) {
         const newSalt = salt || crypto.randomUUID();
-        const newPbkdf2Hash = hashPasswordPBKDF2_210k(password, newSalt);
+        const newPbkdf2Hash = hashPasswordPBKDF2_210k(password, newSalt, 2);
 
         await adminDb.collection("user_credentials").doc(userId).set({
           id: userId,
@@ -419,6 +425,7 @@ async function startServer() {
           passwordHash: newPbkdf2Hash,
           salt: newSalt,
           kdf: 'sha256_pbkdf2_210k',
+          pepper_version: 2,
           updated_at: new Date().toISOString()
         }, { merge: true });
 
@@ -459,7 +466,7 @@ async function startServer() {
 
       const emailLower = (email || '').toLowerCase().trim();
       const userSalt = salt || crypto.randomUUID();
-      const newPbkdf2Hash = hashPasswordPBKDF2_210k(password, userSalt);
+      const newPbkdf2Hash = hashPasswordPBKDF2_210k(password, userSalt, 2);
 
       // Save strictly to user_credentials collection using Admin SDK
       await adminDb.collection("user_credentials").doc(userId).set({
@@ -469,6 +476,7 @@ async function startServer() {
         passwordHash: newPbkdf2Hash,
         salt: userSalt,
         kdf: 'sha256_pbkdf2_210k',
+        pepper_version: 2,
         updated_at: new Date().toISOString()
       }, { merge: true });
 
@@ -777,11 +785,25 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
       }
 
-      const hashedPassword = hashPassword(newPassword, targetEmail);
+      const hashedPassword = hashPassword(newPassword, targetEmail, 2);
       const updatePromises = snapshot.docs.map(async (userDoc) => {
-        await adminDb.collection("users").doc(userDoc.id).update({
-          password: hashedPassword
+        const userId = userDoc.id;
+        const userSalt = targetEmail;
+        const pbkdf2Hash = hashPasswordPBKDF2_210k(newPassword, userSalt, 2);
+
+        await adminDb.collection("users").doc(userId).update({
+          password: hashedPassword,
+          pepper_version: 2
         });
+
+        await adminDb.collection("user_credentials").doc(userId).set({
+          id: userId,
+          passwordHash: pbkdf2Hash,
+          salt: userSalt,
+          kdf: 'sha256_pbkdf2_210k',
+          pepper_version: 2,
+          updated_at: new Date().toISOString()
+        }, { merge: true });
       });
       await Promise.all(updatePromises);
 
@@ -819,9 +841,10 @@ async function startServer() {
 
       const userData = snapshot.docs[0].data();
       const storedPassword = userData.password || '';
+      const pepperVersion = typeof userData.pepper_version === 'number' ? userData.pepper_version : 1;
 
-      const enteredHashSalted = hashPassword(password, targetEmail);
-      const enteredHashLegacy = hashPassword(password);
+      const enteredHashSalted = hashPassword(password, targetEmail, pepperVersion);
+      const enteredHashLegacy = hashPassword(password, '', pepperVersion);
       const isPlainMatch = storedPassword !== '' && storedPassword === password;
       const isLegacyHashMatch = storedPassword !== '' && storedPassword === enteredHashLegacy;
       const isSaltedHashMatch = storedPassword !== '' && storedPassword === enteredHashSalted;
@@ -832,10 +855,12 @@ async function startServer() {
       }
 
       // Auto migrate legacy password to secure salted hash on Firestore using Admin SDK
-      if (storedPassword !== '' && (isPlainMatch || isLegacyHashMatch)) {
+      if (storedPassword !== '' && (isPlainMatch || isLegacyHashMatch || pepperVersion !== 2)) {
         try {
+          const newHash = hashPassword(password, targetEmail, 2);
           await adminDb.collection("users").doc(snapshot.docs[0].id).update({
-            password: enteredHashSalted
+            password: newHash,
+            pepper_version: 2
           });
         } catch (migErr) {
           console.warn("Failed to auto-migrate platform admin password on login request:", migErr);
@@ -982,9 +1007,10 @@ async function startServer() {
       const userData = snapshot.docs[0].data();
       const storedPassword = userData.password || '';
       const storedPin = userData.security_pin || '';
+      const pepperVersion = typeof userData.pepper_version === 'number' ? userData.pepper_version : 1;
 
-      const enteredHashSalted = hashPassword(adminPassword, targetEmail);
-      const enteredHashLegacy = hashPassword(adminPassword);
+      const enteredHashSalted = hashPassword(adminPassword, targetEmail, pepperVersion);
+      const enteredHashLegacy = hashPassword(adminPassword, '', pepperVersion);
       const isPlainMatch = storedPassword !== '' && storedPassword === adminPassword;
       const isLegacyHashMatch = storedPassword !== '' && storedPassword === enteredHashLegacy;
       const isSaltedHashMatch = storedPassword !== '' && storedPassword === enteredHashSalted;
@@ -995,10 +1021,12 @@ async function startServer() {
       }
 
       // Auto migrate legacy password to secure salted hash on Firestore using Admin SDK
-      if (storedPassword !== '' && (isPlainMatch || isLegacyHashMatch)) {
+      if (storedPassword !== '' && (isPlainMatch || isLegacyHashMatch || pepperVersion !== 2)) {
         try {
+          const newHash = hashPassword(adminPassword, targetEmail, 2);
           await adminDb.collection("users").doc(snapshot.docs[0].id).update({
-            password: enteredHashSalted
+            password: newHash,
+            pepper_version: 2
           });
         } catch (migErr) {
           console.warn("Failed to auto-migrate platform admin password on SMTP save:", migErr);

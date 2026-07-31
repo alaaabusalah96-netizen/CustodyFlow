@@ -247,6 +247,7 @@ export class UsersModule {
             email: u.email,
             password: password,
             salt: salt,
+            pepper_version: 2,
             updated_at: new Date().toISOString()
           });
           if (!credsSyncRes.success) {

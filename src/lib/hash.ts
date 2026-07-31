@@ -1,7 +1,31 @@
-// High-Security Key Derivation (PBKDF2 HMAC-SHA256 with 10,000 iterations)
-const SYSTEM_PEPPER = (typeof process !== 'undefined' && process.env?.APP_PEPPER) 
-  ? process.env.APP_PEPPER 
-  : "CustodyFlowSecureSystemPepper2026!KeyDerivationV2";
+// Legacy hardcoded pepper: known-exposed, verification-only, never used for new hashes
+export const LEGACY_EXPOSED_PEPPER = "CustodyFlowSecureSystemPepper2026!KeyDerivationV2";
+
+/**
+ * Returns the active APP_PEPPER from environment.
+ * Fails loudly if APP_PEPPER is unset in the environment.
+ */
+export function getActivePepper(): string {
+  const envPepper = (typeof process !== 'undefined' && process.env?.APP_PEPPER) ? process.env.APP_PEPPER : '';
+  if (!envPepper) {
+    const msg = "CRITICAL SECURITY ERROR: APP_PEPPER environment variable is not set. Refusing to operate with insecure fallback.";
+    console.error(msg);
+    throw new Error(msg);
+  }
+  return envPepper;
+}
+
+/**
+ * Returns pepper according to stored pepper_version.
+ * - pepper_version: 1 -> LEGACY_EXPOSED_PEPPER (verification-only for old hashes)
+ * - pepper_version: 2 (or other) -> active APP_PEPPER from environment
+ */
+export function getPepperByVersion(version: number = 2): string {
+  if (version === 1) {
+    return LEGACY_EXPOSED_PEPPER;
+  }
+  return getActivePepper();
+}
 
 function runSHA256(text: string): string {
   function rotateRight(n: number, x: number) {
@@ -79,11 +103,12 @@ function runSHA256(text: string): string {
  * High-stretching password hashing using 10,000 iterations of SHA-256 key stretching
  * combined with per-user unique salt and system pepper to resist brute-force/GPU cracking.
  */
-export function hashPassword(password: string, salt: string = ''): string {
+export function hashPassword(password: string, salt: string = '', pepperVersion: number = 2): string {
   if (!password) return '';
+  const pepper = getPepperByVersion(pepperVersion);
   const combinedSalt = salt 
-    ? `${salt.toLowerCase().trim()}_${SYSTEM_PEPPER}` 
-    : SYSTEM_PEPPER;
+    ? `${salt.toLowerCase().trim()}_${pepper}` 
+    : pepper;
   let currentHash = runSHA256(`${password}:${combinedSalt}`);
   
   // OWASP Key Stretching: 10,000 iterations prevents GPU dictionary attacks
@@ -96,11 +121,12 @@ export function hashPassword(password: string, salt: string = ''): string {
 /**
  * 1,000-pass stretched hash function used for smooth auto-migration of accounts hashed during v1 stretching.
  */
-export function legacyStretchedHashPassword1000(password: string, salt: string = ''): string {
+export function legacyStretchedHashPassword1000(password: string, salt: string = '', pepperVersion: number = 2): string {
   if (!password) return '';
+  const pepper = getPepperByVersion(pepperVersion);
   const combinedSalt = salt 
-    ? `${salt.toLowerCase().trim()}_${SYSTEM_PEPPER}` 
-    : SYSTEM_PEPPER;
+    ? `${salt.toLowerCase().trim()}_${pepper}` 
+    : pepper;
   let currentHash = runSHA256(`${password}:${combinedSalt}`);
   for (let i = 0; i < 999; i++) {
     currentHash = runSHA256(`${currentHash}:${combinedSalt}:${i}`);
@@ -111,11 +137,12 @@ export function legacyStretchedHashPassword1000(password: string, salt: string =
 /**
  * Pre-stretching hash function used for checking legacy accounts during login.
  */
-export function legacySinglePassHashPassword(password: string, salt: string = ''): string {
+export function legacySinglePassHashPassword(password: string, salt: string = '', pepperVersion: number = 2): string {
   if (!password) return '';
+  const pepper = getPepperByVersion(pepperVersion);
   const combinedSalt = salt 
-    ? `${salt.toLowerCase().trim()}_${SYSTEM_PEPPER}` 
-    : SYSTEM_PEPPER;
+    ? `${salt.toLowerCase().trim()}_${pepper}` 
+    : pepper;
   return runSHA256(`${password}:${combinedSalt}`);
 }
 

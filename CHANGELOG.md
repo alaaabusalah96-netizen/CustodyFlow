@@ -1198,16 +1198,32 @@ Pass - `lint_applet` (0 errors), `compile_applet` (0 errors), and `npm test` (18
 2. **Operational Role Access Preservation**: Company Admin and operational roles (`Admin`, `RegionalManager`, `StationAdmin`) retain full access to their respective operational modules in the sidebar without any modification.
 3. **Automated Unit & Integration Verification**: Added `src/system_admin_navigation.test.ts` with 2 automated tests verifying that `SystemAdmin` menu items contain zero operational modules while `Admin` menu items retain full operational access.
 
+
+---
+
+## Remediation Plan - Part A: Security Hardening (Hardcoded Password Pepper Fallback)
+**Date/Time:** 2026-07-31 09:30:00 UTC
+**Files Changed:**
+- `src/lib/hash.ts`
+- `src/db.ts`
+- `server.ts`
+- `src/db/users.ts`
+- `src/firebase.ts`
+- `.env.example`
+- `src/migration_auth.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Hardcoded Pepper Remediation**: Removed hardcoded fallback pepper strings (`SERVER_PEPPER`, `SYSTEM_PEPPER`, `APP_PEPPER || "..."`) from new password hashing operations. The hardcoded pepper is now strictly isolated as `LEGACY_EXPOSED_PEPPER` and only used for read-only verification of existing accounts with `pepper_version: 1`.
+2. **Fail-Loud Active Pepper Enforcement**: Implemented `getActivePepper()` in `src/lib/hash.ts` which requires `process.env.APP_PEPPER` to be set in the runtime environment. Fails loudly with a critical error instead of silently using an insecure fallback.
+3. **Pepper Versioning & Auto-Rotation (`pepper_version`)**:
+   - Stored `pepper_version: 1` indicates an account hashed with the legacy exposed pepper.
+   - Stored `pepper_version: 2` indicates an account hashed with the active `APP_PEPPER` from the environment.
+   - Updated `/api/auth/verify-credentials` and `/api/auth/verify-legacy` in `server.ts` to verify passwords against `getPepperByVersion(pepperVersion)`.
+   - When a user logs in successfully with `pepper_version: 1`, the server automatically re-hashes their password with `pepper_version: 2` (`APP_PEPPER`) and upgrades both their `user_credentials` and `users` records in Firestore.
+4. **New User Creation & SMTP User Operations**: Updated user creation, password reset, admin password updates, and test user initialization to strictly store `pepper_version: 2` with `APP_PEPPER`.
+5. **Environment Documentation**: Updated `.env.example` to document `APP_PEPPER="REPLACE_WITH_LONG_RANDOM_SECRET_NEVER_COMMIT"`.
+6. **Automated Security Tests**: Added 4 unit tests in `src/migration_auth.test.ts` verifying pepper version selection, hash divergence across pepper versions, and loud failure when `APP_PEPPER` is unset.
+
 **Test & Validation Result:**
-Pass - `lint_applet` (0 errors), `compile_applet` (0 errors), and `npm test` (19 test files, 118 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
-
-
-
-
-
-
-
-
-
-
-
+Pass - `lint_applet` (0 errors), `compile_applet` (0 errors), and `npm test` (19 test files, 122 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
