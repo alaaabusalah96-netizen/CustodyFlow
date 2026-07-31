@@ -50,6 +50,81 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
+export function getFilteredMenuItems(activeUser: AppUser | null, language: Language = 'ar') {
+  const t = translations[language];
+  const isRtl = language === 'ar';
+
+  const menuItems = [
+    { id: 'super-admin', label: isRtl ? 'لوحة تحكم الساس SaaS' : 'SaaS Super Admin', icon: ShieldCheck, roleAllowed: ['SystemAdmin'] },
+    { id: 'company-admin', label: isRtl ? 'لوحة تحكم الشركة' : 'Company Dashboard', icon: Building, roleAllowed: ['Admin'] },
+    { id: 'region-admin', label: isRtl ? 'لوحة تحكم المنطقة' : 'Region Dashboard', icon: Layers, roleAllowed: ['RegionalManager'] },
+    { id: 'new-expense', label: t.newExpense, icon: PlusCircle, permission: 'create_expense' },
+    { id: 'voucher', label: t.cashPaymentVoucher, icon: FileCheck, permission: 'settle_voucher' },
+    { id: 'reconciliation', label: isRtl ? 'جرد ومطابقة العهدة' : 'Custody Reconciliation & Inventory', icon: TrendingUp, roleAllowed: ['Admin', 'StationAdmin', 'RegionalManager'] },
+    { id: 'approvals', label: isRtl ? 'صندوق الاعتمادات والموافقات' : 'My Approvals Inbox', icon: Inbox },
+    { id: 'inventory', label: isRtl ? 'إدارة المخازن والمستودعات' : 'Inventory & Warehouses', icon: Layers, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
+    { id: 'purchasing', label: isRtl ? 'إدارة المشتريات والتموين' : 'Procurement & Supply Chain', icon: ShoppingCart, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager'] },
+    { id: 'accounting', label: isRtl ? 'الاستحقاق والقيود المزدوجة' : 'Double-Entry Accounting', icon: BookOpen, roleAllowed: ['SystemAdmin', 'Admin'] },
+    { id: 'sales_ar', label: isRtl ? 'المبيعات وحسابات العملاء' : 'Sales & Accounts Receivable', icon: SalesIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
+    { id: 'pos', label: isRtl ? 'نقاط البيع السريع (POS)' : 'Point of Sale (POS)', icon: PosIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
+    { id: 'crm', label: isRtl ? 'علاقات العملاء CRM' : 'Customer Relations (CRM)', icon: UsersIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
+    { id: 'fixed_assets', label: isRtl ? 'الأصول الثابتة والاستهلاكات' : 'Fixed Assets & Depreciation', icon: AssetIcon, roleAllowed: ['SystemAdmin', 'Admin'] },
+    { id: 'fleet', label: isRtl ? 'إدارة الأسطول والحركة' : 'Fleet & Transportation', icon: FleetIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager'] },
+    { id: 'hr_payroll', label: isRtl ? 'الموارد البشرية والرواتب' : 'HR & Payroll Ledger', icon: Briefcase, roleAllowed: ['SystemAdmin', 'Admin'] },
+    { id: 'reports', label: t.reports, icon: FileText, permission: 'view_reports' },
+    { id: 'search', label: t.search, icon: SearchIcon },
+    { id: 'audit-log', label: isRtl ? 'سجل الرقابة والامتثال' : 'Security & Audit Log', icon: ShieldCheck, roleAllowed: ['Admin', 'SystemAdmin'] },
+    { id: 'settings', label: t.settings, icon: SettingsIcon, permission: 'manage_settings' },
+  ];
+
+  return menuItems.filter(item => {
+    if (!activeUser) return false;
+    
+    // Check if the screen/item belongs to an enabled module for the user's company
+    if (activeUser.company_id && !ModulesModule.isScreenEnabledForCompany(activeUser.company_id, item.id)) {
+      return false;
+    }
+    
+    // Explicitly hide operational module entries from SystemAdmin (SaaS / Platform Tools only)
+    if (activeUser.role === 'SystemAdmin') {
+      const operationalModuleIds = [
+        'new-expense',
+        'voucher',
+        'reconciliation',
+        'approvals',
+        'inventory',
+        'purchasing',
+        'accounting',
+        'sales_ar',
+        'pos',
+        'crm',
+        'fixed_assets',
+        'fleet',
+        'hr_payroll',
+        'reports'
+      ];
+      if (operationalModuleIds.includes(item.id)) {
+        return false;
+      }
+    }
+    if (activeUser.role === 'Admin') {
+      if (item.id === 'new-expense' || item.id === 'voucher') {
+        return false;
+      }
+    }
+    
+    if (item.roleAllowed && !item.roleAllowed.includes(activeUser.role)) {
+      return false;
+    }
+    
+    if (item.permission) {
+      const permKey = item.permission as keyof typeof activeUser.permissions;
+      return activeUser.permissions[permKey];
+    }
+    return true;
+  });
+}
+
 export default function Layout({
   currentTab,
   setCurrentTab,
@@ -87,60 +162,9 @@ export default function Layout({
   const metrics = CustodyDB.getReconciliation();
   const config = CustodyDB.getConfig();
 
-  const menuItems = [
-    { id: 'super-admin', label: isRtl ? 'لوحة تحكم الساس SaaS' : 'SaaS Super Admin', icon: ShieldCheck, roleAllowed: ['SystemAdmin'] },
-    { id: 'company-admin', label: isRtl ? 'لوحة تحكم الشركة' : 'Company Dashboard', icon: Building, roleAllowed: ['Admin'] },
-    { id: 'region-admin', label: isRtl ? 'لوحة تحكم المنطقة' : 'Region Dashboard', icon: Layers, roleAllowed: ['RegionalManager'] },
-    { id: 'new-expense', label: t.newExpense, icon: PlusCircle, permission: 'create_expense' },
-    { id: 'voucher', label: t.cashPaymentVoucher, icon: FileCheck, permission: 'settle_voucher' },
-    { id: 'reconciliation', label: isRtl ? 'جرد ومطابقة العهدة' : 'Custody Reconciliation & Inventory', icon: TrendingUp, roleAllowed: ['Admin', 'StationAdmin', 'RegionalManager'] },
-    { id: 'approvals', label: isRtl ? 'صندوق الاعتمادات والموافقات' : 'My Approvals Inbox', icon: Inbox },
-    { id: 'inventory', label: isRtl ? 'إدارة المخازن والمستودعات' : 'Inventory & Warehouses', icon: Layers, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
-    { id: 'purchasing', label: isRtl ? 'إدارة المشتريات والتموين' : 'Procurement & Supply Chain', icon: ShoppingCart, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager'] },
-    { id: 'accounting', label: isRtl ? 'الاستحقاق والقيود المزدوجة' : 'Double-Entry Accounting', icon: BookOpen, roleAllowed: ['SystemAdmin', 'Admin'] },
-    { id: 'sales_ar', label: isRtl ? 'المبيعات وحسابات العملاء' : 'Sales & Accounts Receivable', icon: SalesIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
-    { id: 'pos', label: isRtl ? 'نقاط البيع السريع (POS)' : 'Point of Sale (POS)', icon: PosIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
-    { id: 'crm', label: isRtl ? 'علاقات العملاء CRM' : 'Customer Relations (CRM)', icon: UsersIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
-    { id: 'fixed_assets', label: isRtl ? 'الأصول الثابتة والاستهلاكات' : 'Fixed Assets & Depreciation', icon: AssetIcon, roleAllowed: ['SystemAdmin', 'Admin'] },
-    { id: 'fleet', label: isRtl ? 'إدارة الأسطول والحركة' : 'Fleet & Transportation', icon: FleetIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager'] },
-    { id: 'hr_payroll', label: isRtl ? 'الموارد البشرية والرواتب' : 'HR & Payroll Ledger', icon: Briefcase, roleAllowed: ['SystemAdmin', 'Admin'] },
-    { id: 'reports', label: t.reports, icon: FileText, permission: 'view_reports' },
-    { id: 'search', label: t.search, icon: SearchIcon },
-    { id: 'audit-log', label: isRtl ? 'سجل الرقابة والامتثال' : 'Security & Audit Log', icon: ShieldCheck, roleAllowed: ['Admin', 'SystemAdmin'] },
-    { id: 'settings', label: t.settings, icon: SettingsIcon, permission: 'manage_settings' },
-  ];
-
-  // Filter menu items by user permissions and roleAllowed scopes
-  const filteredMenuItems = menuItems.filter(item => {
-    if (!activeUser) return false;
-    
-    // Check if the screen/item belongs to an enabled module for the user's company
-    if (activeUser.company_id && !ModulesModule.isScreenEnabledForCompany(activeUser.company_id, item.id)) {
-      return false;
-    }
-    
-    // Explicitly hide specified features from Admin & SystemAdmin
-    if (activeUser.role === 'SystemAdmin') {
-      if (item.id === 'new-expense' || item.id === 'voucher' || item.id === 'reconciliation') {
-        return false;
-      }
-    }
-    if (activeUser.role === 'Admin') {
-      if (item.id === 'new-expense' || item.id === 'voucher') {
-        return false;
-      }
-    }
-    
-    if (item.roleAllowed && !item.roleAllowed.includes(activeUser.role)) {
-      return false;
-    }
-    
-    if (item.permission) {
-      const permKey = item.permission as keyof typeof activeUser.permissions;
-      return activeUser.permissions[permKey];
-    }
-    return true;
-  });
+  const filteredMenuItems = React.useMemo(() => {
+    return getFilteredMenuItems(activeUser, language);
+  }, [activeUser, language]);
 
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'ar' : 'en');

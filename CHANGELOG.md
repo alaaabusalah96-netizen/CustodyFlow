@@ -1184,6 +1184,24 @@ Resolved IDOR vulnerability and hardcoded email fallback in authentication migra
 **Test & Validation Result:**
 Pass - `lint_applet` (0 errors), `compile_applet` (0 errors), and `npm test` (18 test files, 116 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
 
+---
+
+## Remediation Plan - Phase 14: SystemAdmin Navigation = SaaS / Platform Tools Only
+**Date/Time:** 2026-07-31 08:40:00 UTC
+**Files Changed:**
+- `src/components/Layout.tsx`
+- `src/system_admin_navigation.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **SystemAdmin Navigation Scoping**: Updated `getFilteredMenuItems` in `src/components/Layout.tsx` so that when `activeUser.role === 'SystemAdmin'`, day-to-day operational modules (`inventory`, `purchasing`, `accounting`, `sales_ar`, `pos`, `crm`, `fixed_assets`, `fleet`, `hr_payroll`, `new-expense`, `voucher`, `reconciliation`, `approvals`, `reports`) are hidden from the sidebar. Only platform-level tools (`super-admin` SaaS dashboard, `audit-log`, `settings`, `search`) are displayed.
+2. **Operational Role Access Preservation**: Company Admin and operational roles (`Admin`, `RegionalManager`, `StationAdmin`) retain full access to their respective operational modules in the sidebar without any modification.
+3. **Automated Unit & Integration Verification**: Added `src/system_admin_navigation.test.ts` with 2 automated tests verifying that `SystemAdmin` menu items contain zero operational modules while `Admin` menu items retain full operational access.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors), `compile_applet` (0 errors), and `npm test` (19 test files, 118 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+
 
 
 
