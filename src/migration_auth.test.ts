@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getPepperByVersion, getActivePepper, LEGACY_EXPOSED_PEPPER, DEFAULT_APP_PEPPER_V2, hashPassword } from './lib/hash';
+import { getPepperByVersion, getActiveServerPepper, LEGACY_EXPOSED_PEPPER, TRANSIENT_EXPOSED_PEPPER_V2, hashPassword } from './lib/server_hash';
 
 describe('Phase 2 - Authentication on Migration Endpoints', () => {
   it('rejects unauthenticated requests to migration endpoints with 401', async () => {
@@ -45,14 +45,19 @@ describe('Security - Pepper Versioning & Rotation Support', () => {
     expect(hashV1).not.toBe(hashV2);
   });
 
-  it('returns DEFAULT_APP_PEPPER_V2 when APP_PEPPER is unset for pepper_version = 2 (safe fallback)', () => {
+  it('throws a critical security error when APP_PEPPER is unset for pepper_version = 2 (fail-loud behavior)', () => {
     const originalPepper = process.env.APP_PEPPER;
     delete process.env.APP_PEPPER;
     try {
-      expect(getPepperByVersion(2)).toBe(DEFAULT_APP_PEPPER_V2);
+      expect(() => getPepperByVersion(2)).toThrow(/CRITICAL SECURITY ERROR: APP_PEPPER environment variable is not set/);
     } finally {
       process.env.APP_PEPPER = originalPepper;
     }
+  });
+
+  it('returns TRANSIENT_EXPOSED_PEPPER_V2 for pepper_version = 3 (transient regression backward compatibility)', () => {
+    const pepper = getPepperByVersion(3);
+    expect(pepper).toBe(TRANSIENT_EXPOSED_PEPPER_V2);
   });
 });
 

@@ -62,6 +62,9 @@ export class StationsModule {
   static addRegion(name: string, code?: string, companyId?: string): Region {
     const regions = StationsModule.getRegions();
     const compId = companyId || CompaniesModule.getSelectedCompanyId();
+    if (!compId || compId.trim() === '') {
+      throw new Error('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
+    }
     const regId = `reg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const org_unit_id = `org-unit-region-${regId}`;
 
@@ -196,6 +199,9 @@ export class StationsModule {
   static addStation(name: string, code: string, custodyAmount: number, regionId?: string, companyId?: string): Station {
     const stations = StationsModule.getStations();
     const compId = companyId || CompaniesModule.getSelectedCompanyId();
+    if (!compId || compId.trim() === '') {
+      throw new Error('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
+    }
     const stnId = `stn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const org_unit_id = `org-unit-station-${stnId}`;
 

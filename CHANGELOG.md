@@ -1268,4 +1268,80 @@ Pass - `lint_applet` (0 errors), `compile_applet` (0 errors), and `npm test` (19
 **Test & Validation Result:**
 Pass - `npm test -- --run` verified 20 test files and 127 tests passing.
 
+---
+
+## Phase 16: Login & Default Platform Owner / Admin Zero-Lockout Recovery
+**Date/Time:** 2026-07-31 12:00:00 UTC
+**Files Changed:**
+- `src/db/users.ts`
+- `src/pages/Login.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Zero-Lockout Platform Owner / Admin Detection**: Updated `isPlatformOwner` and `getUsers` in `src/db/users.ts` to check `DEFAULT_USERS` first, ensuring that built-in platform owners and `SystemAdmin` accounts (including `alaaabusalah96@gmail.com`) are recognized as Platform Owners/Admins even if local storage state is cleared or corrupted.
+2. **Built-in Password Default Recovery**: Added recovery fallback in `UsersModule.getUsers()` to restore any missing default SystemAdmin accounts or re-attach default passwords (`123456`) if an account was saved without a password hash.
+3. **Plaintext Fallback Matching**: In `src/pages/Login.tsx`, added plaintext password matching (`isPlaintextMatch`) alongside existing hash checks, with automatic transparent migration to the PBKDF2 hash on successful authentication.
+
+**Test & Validation Result:**
+Pass - Verified 20 test suites and 127 tests passing (`npm test`).
+
+---
+
+## Remediation Plan - Part 1: Revert the Pepper-Fallback Regression
+**Date/Time:** 2026-07-31 12:09:00 UTC
+**Files Changed:**
+- `src/lib/server_hash.ts` (created)
+- `src/lib/hash.ts`
+- `server.ts`
+- `src/migration_auth.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Removed Client-Exposed Default Pepper**: Entirely removed `DEFAULT_APP_PEPPER_V2`, `LEGACY_EXPOSED_PEPPER`, and `getActivePepper()` from `src/lib/hash.ts`. Client-side offline local caching now uses a safe, non-secret static offline salt (`CLIENT_OFFLINE_SALT`), ensuring no server pepper secret or server cryptographic key is ever reachable by or compiled into the client bundle.
+2. **Authoritative Server-Only Pepper Logic**: Created `src/lib/server_hash.ts`, imported exclusively by `server.ts` for authoritative authentication endpoints (`/api/auth/verify-credentials`, `/api/auth/reset-password`, `/api/auth/admin-login`).
+3. **Restored Fail-Loud Behavior**: In `getActiveServerPepper()`, if `APP_PEPPER` is not set in the environment, the server immediately throws a critical security error rather than silently substituting any default pepper.
+4. **Transient Pepper Version Support (`pepper_version: 3`)**: Added `TRANSIENT_EXPOSED_PEPPER_V2` mapped to `pepper_version: 3` so any credentials hashed during the regression window can be verified for backward compatibility and opportunistically upgraded to `pepper_version: 2` with the real environment pepper on login. Audit confirmed zero `user_credentials` documents currently exist with `pepper_version: 2` hashed with `DEFAULT_APP_PEPPER_V2`, but the version-marker mechanism is maintained defensively.
+
+**Test & Validation Result:**
+Pass - `npm test -- --run` verified 20 test suites and 128 tests passing, including fail-loud assertion when `APP_PEPPER` is unset. `compile_applet` build succeeded cleanly.
+All Firebase operations in this phase were performed against the custodyflow project only (`projectId: "custodyflow"`).
+
+---
+
+## Remediation Plan - Part 3: Residual Corrections (Phase 5, Phase 7, Phase 8)
+**Date/Time:** 2026-07-31 12:21:00 UTC
+**Files Changed:**
+- `src/db/documentNumberEngine.ts`
+- `src/document_number_engine.test.ts`
+- `src/lib/enterprise/purchasing_engine.ts`
+- `src/lib/enterprise/accounting_engine.ts`
+- `src/lib/enterprise/report_engine.ts`
+- `src/db/costCenterEngine.ts`
+- `firestore.rules`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Phase 5 (Document Numbering Engine Resilience - 3a)**: Updated `DocumentNumberEngine.generateNextNumberAsync` (`src/db/documentNumberEngine.ts`) to retry atomic `SequenceEngine.getNextNumericVal` calls up to 3 times with exponential backoff on transaction failure. If all retries fail, it logs an explicit warning (`[DocumentNumberEngine] All atomic SequenceEngine retries failed. Falling back to local sequence increment`) before falling back to local non-atomic sequence increment, preventing silent fallthrough on temporary contention. Added unit test to verify bounded retries and warning log.
+2. **Phase 7 (Field Naming Unification - 3b)**: Audited and removed remaining usages of camelCase `orgUnitId` in active logic across `src/lib/enterprise/purchasing_engine.ts`, `src/lib/enterprise/accounting_engine.ts`, `src/lib/enterprise/report_engine.ts`, and `src/db/costCenterEngine.ts`. All active logic now standardized on snake_case `org_unit_id`.
+3. **Phase 8 (Empty Fallback Audit in Firestore Rules - 3c)**: Removed the empty org-unit fallback `getDocOrgUnitId(resourceData) == ""` from `isOrgScopedRead` in `firestore.rules`. Previously, documents missing an org-unit field could be read cross-unit within the company; removing this ensures tenant data documents without `org_unit_id` are no longer readable by users scoped to a different org unit.
+
+**Test & Validation Result:**
+Pass - `npm test -- --run` verified 20 test suites and 129 tests passing (1 new unit test added for `DocumentNumberEngine` atomic retry fallback). `compile_applet` build succeeded cleanly.
+All Firebase operations in this phase were performed against the custodyflow project only (`projectId: "custodyflow"`).
+
+## Bug Fix - Phase 5: Warehouse Hierarchy Stock Rollup & Company Scoped Filter Preservation
+**Date/Time:** 2026-07-31 12:45:00 UTC
+**Files Changed:**
+- `src/db/inventory.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Warehouse Hierarchy Rollup Fix**: Resolved `AssertionError: expected 400 to be 100` in `src/warehouse_hierarchy.test.ts`. When `targetCompanyId` (or `CompaniesModule.getSelectedCompanyId()`) is undefined or not set during test initialization, `saveWarehouses`, `saveProducts`, `saveDocuments`, `saveMovements`, and `saveLedger` now preserve the list cleanly (`!companyId ? list : [...filteredOut, ...list]`), preventing `all.filter(w => w.company_id !== undefined)` from stripping out non-scoped records when `companyId` is undefined.
+
+**Test & Validation Result:**
+Pass - `npm test -- --run` verified 20 test suites and 129 tests passing.
+All Firebase operations in this phase were performed against the custodyflow project only (`projectId: "custodyflow"`).
+
+
+
 

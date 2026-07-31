@@ -254,7 +254,7 @@ export class InventoryModule {
     const all = StorageEngine.getStored<Warehouse[]>('warehouses', DEFAULT_WAREHOUSES);
     const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(w => w.company_id !== companyId);
-    const combined = [...filteredOut, ...list];
+    const combined = !companyId ? list : [...filteredOut, ...list];
     StorageEngine.setStored('warehouses', combined);
     list.forEach(w => dbSetDoc('warehouses', w.id, w));
   }
@@ -548,7 +548,7 @@ export class InventoryModule {
     const all = StorageEngine.getStored<Product[]>('products', DEFAULT_PRODUCTS);
     const companyId = CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(p => p.company_id !== companyId);
-    const combined = [...filteredOut, ...list];
+    const combined = !companyId ? list : [...filteredOut, ...list];
     StorageEngine.setStored('products', combined);
     list.forEach(p => dbSetDoc('products', p.id, p));
   }
@@ -577,7 +577,7 @@ export class InventoryModule {
     const all = StorageEngine.getStored<InventoryDocument[]>('inventory_documents', []);
     const companyId = CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(d => d.tenantId !== companyId);
-    const combined = [...filteredOut, ...list];
+    const combined = !companyId ? list : [...filteredOut, ...list];
     StorageEngine.setStored('inventory_documents', combined);
     list.forEach(d => dbSetDoc('inventory_documents', d.id, d));
   }
@@ -586,6 +586,7 @@ export class InventoryModule {
   static getStockMovements(): StockMovement[] {
     const companyId = CompaniesModule.getSelectedCompanyId();
     const list = StorageEngine.getStored<StockMovement[]>('stock_movements', DEFAULT_MOVEMENTS);
+    if (!companyId) return list;
     return list.filter(m => m.company_id === companyId);
   }
 
@@ -593,7 +594,7 @@ export class InventoryModule {
     const all = StorageEngine.getStored<StockMovement[]>('stock_movements', DEFAULT_MOVEMENTS);
     const companyId = CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(m => m.company_id !== companyId);
-    const combined = [...filteredOut, ...list];
+    const combined = !companyId ? list : [...filteredOut, ...list];
     StorageEngine.setStored('stock_movements', combined);
     list.forEach(m => dbSetDoc('stock_movements', m.id, m));
   }
@@ -768,7 +769,7 @@ export class InventoryModule {
     ] : all;
 
     const filteredOut = initialList.filter(entry => entry.company_id !== companyId);
-    const combined = [...filteredOut, ...list];
+    const combined = !companyId ? list : [...filteredOut, ...list];
     StorageEngine.setStored('inventory_ledger', combined);
     list.forEach(entry => dbSetDoc('inventory_ledger', entry.id, entry));
   }
@@ -847,7 +848,8 @@ export class InventoryModule {
     userId: string,
     binId?: string
   ): void {
-    const companyId = CompaniesModule.getSelectedCompanyId() || 'comp-1';
+    const wh = StorageEngine.getStored<Warehouse[]>('warehouses', []).find(w => w.id === warehouseId);
+    const companyId = wh?.company_id || CompaniesModule.getSelectedCompanyId() || 'comp-1';
     const currentStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
     const current_balance_after = currentStock + qtyChange;
     const org_unit_id = InventoryModule.resolveWarehouseOrgUnit(warehouseId, companyId);

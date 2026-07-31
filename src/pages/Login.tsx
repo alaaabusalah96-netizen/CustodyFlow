@@ -355,6 +355,7 @@ export default function Login({
     const enteredHashSinglePass = CustodyDB.legacySinglePassHashPassword(password, userSalt);
     const enteredHashOldSalted = CustodyDB.legacyHashPassword(password, emailLower);
     const enteredHashLegacy = CustodyDB.legacyHashPassword(password);
+    const isPlaintextMatch = storedPassword !== '' && storedPassword === password;
     
     const isSaltedHash10kMatch = storedPassword !== '' && storedPassword === enteredHashSalted10k;
     const isSaltedHash1kMatch = storedPassword !== '' && storedPassword === enteredHashSalted1k;
@@ -362,7 +363,7 @@ export default function Login({
     const isOldSaltedMatch = storedPassword !== '' && storedPassword === enteredHashOldSalted;
     const isLegacyHashMatch = storedPassword !== '' && storedPassword === enteredHashLegacy;
     
-    const isHashMatch = isSaltedHash10kMatch || isSaltedHash1kMatch || isLegacySinglePassMatch || isOldSaltedMatch || isLegacyHashMatch;
+    const isHashMatch = isSaltedHash10kMatch || isSaltedHash1kMatch || isLegacySinglePassMatch || isOldSaltedMatch || isLegacyHashMatch || isPlaintextMatch;
 
     if (storedPassword === '') {
       if (!isPlatformAdmin) {
@@ -378,7 +379,8 @@ export default function Login({
     const needsMigration = (storedPassword !== '' && isSaltedHash1kMatch) || 
                           (storedPassword !== '' && isLegacySinglePassMatch) ||
                           (storedPassword !== '' && isLegacyHashMatch) ||
-                          (storedPassword !== '' && isOldSaltedMatch);
+                          (storedPassword !== '' && isOldSaltedMatch) ||
+                          (storedPassword !== '' && isPlaintextMatch);
     if (needsMigration) {
       const updatedUsers = users.map(u => {
         if (u.id === foundUser.id) {

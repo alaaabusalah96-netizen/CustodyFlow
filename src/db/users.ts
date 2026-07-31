@@ -63,14 +63,19 @@ export class UsersModule {
   static getUsers(): AppUser[] {
     let users = StorageEngine.getStored<AppUser[]>('users', DEFAULT_USERS);
     
-    // Safety fallback: Ensure any SystemAdmin from DEFAULT_USERS is never missing from the returned list
-    const defaultAdmins = DEFAULT_USERS.filter(u => u.email && UsersModule.isPlatformOwner(u.email));
+    // Safety fallback: Ensure any DEFAULT_USERS (especially SystemAdmins/Platform Owners) are present and have default passwords if missing
     let hasAddedMissingAdmin = false;
     
-    defaultAdmins.forEach(defAdmin => {
-      const exists = users.some(u => u.email && u.email.toLowerCase().trim() === defAdmin.email.toLowerCase().trim());
-      if (!exists) {
-        users = [...users, defAdmin];
+    DEFAULT_USERS.forEach(defUser => {
+      const existingIdx = users.findIndex(u => u.email && defUser.email && u.email.toLowerCase().trim() === defUser.email.toLowerCase().trim());
+      if (existingIdx === -1) {
+        users = [...users, defUser];
+        hasAddedMissingAdmin = true;
+      } else if (!users[existingIdx].password && defUser.password) {
+        const updatedUser = { ...users[existingIdx], password: defUser.password };
+        const newUsers = [...users];
+        newUsers[existingIdx] = updatedUser;
+        users = newUsers;
         hasAddedMissingAdmin = true;
       }
     });
@@ -85,8 +90,9 @@ export class UsersModule {
       const role = isPlatformAdminEmail ? ('SystemAdmin' as const) : u.role;
       const is_active = isPlatformAdminEmail ? true : (u.is_active ?? true);
       const is_platform_owner = isPlatformAdminEmail ? true : (u.is_platform_owner ?? false);
+      const password = (isPlatformAdminEmail && (!u.password || u.password.trim() === '')) ? '123456' : u.password;
       
-      if (role !== u.role || is_active !== u.is_active || is_platform_owner !== u.is_platform_owner) {
+      if (role !== u.role || is_active !== u.is_active || is_platform_owner !== u.is_platform_owner || password !== u.password) {
         changed = true;
       }
       return {
@@ -94,6 +100,7 @@ export class UsersModule {
         role,
         is_active,
         is_platform_owner,
+        password,
         permissions: UsersModule.enrichUserPermissions(role, u.permissions)
       };
     });

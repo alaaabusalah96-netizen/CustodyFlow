@@ -189,12 +189,28 @@ export class DocumentNumberEngine {
     const startVal = config.manualStartNo !== undefined ? config.manualStartNo : 1001;
     const sequenceKey = this.getSequenceKeyForDocType(documentType);
 
-    let nextSeq: number;
+    let nextSeq: number = 0;
     const targetDb = dbInstance || db;
     if (targetDb) {
-      try {
-        nextSeq = await SequenceEngine.getNextNumericVal(targetDb, companyId, sequenceKey, startVal);
-      } catch {
+      let retries = 3;
+      let delayMs = 50;
+      let success = false;
+      let lastError: any = null;
+      while (retries > 0 && !success) {
+        try {
+          nextSeq = await SequenceEngine.getNextNumericVal(targetDb, companyId, sequenceKey, startVal);
+          success = true;
+        } catch (err) {
+          lastError = err;
+          retries--;
+          if (retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            delayMs *= 2;
+          }
+        }
+      }
+      if (!success) {
+        console.warn('[DocumentNumberEngine] All atomic SequenceEngine retries failed. Falling back to local sequence increment:', lastError);
         nextSeq = config.currentSequence === 0 ? startVal : config.currentSequence + 1;
       }
     } else {

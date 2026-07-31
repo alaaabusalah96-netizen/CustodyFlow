@@ -51,24 +51,41 @@ export class CompaniesModule {
   }
 
   static getSelectedCompanyId(): string {
+    const resolveFromStorage = (): string => {
+      const stored = StorageEngine.getStored<string>('selected_company_id', '');
+      if (stored && stored !== 'undefined' && stored !== 'null') return stored;
+
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem('custody_selected_company_id');
+        if (saved && saved !== 'undefined' && saved !== 'null') {
+          try {
+            const parsed = JSON.parse(saved);
+            if (typeof parsed === 'string') return parsed;
+          } catch {
+            return saved;
+          }
+        }
+      }
+      return '';
+    };
+
     const user = UsersModule.getActiveUser();
-    if (!user) return 'comp-1';
+    if (!user) {
+      return resolveFromStorage();
+    }
     
     if (user.role !== 'SystemAdmin' && user.company_id) {
       return user.company_id;
     }
     
-    if (typeof localStorage !== 'undefined') {
-      const saved = localStorage.getItem('custody_selected_company_id');
-      if (saved) return saved;
-    }
-    return 'comp-1';
+    return resolveFromStorage();
   }
 
   static setSelectedCompanyId(id: string): void {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem('custody_selected_company_id', id);
     }
+    StorageEngine.setStored('selected_company_id', id);
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Switch Company', `Viewing focus changed to company ID: ${id}`);
   }

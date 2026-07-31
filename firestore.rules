@@ -76,7 +76,6 @@ service cloud.firestore {
         getUserRole() == 'SystemAdmin' ||
         getUserOrgUnitId() == "" ||
         resourceData == null ||
-        getDocOrgUnitId(resourceData) == "" ||
         getDocOrgUnitId(resourceData) == getUserOrgUnitId() ||
         (userDocExists() && ("station_id" in getUserData()) && ("station_id" in resourceData) && resourceData.station_id == getUserData().station_id) ||
         (userDocExists() && ("region_id" in getUserData()) && ("region_id" in resourceData) && resourceData.region_id == getUserData().region_id)

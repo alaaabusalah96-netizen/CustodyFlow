@@ -359,7 +359,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
       switch (event.eventType) {
         case 'PR_SUBMITTED': {
-          const { requesterId, requesterName, items, notes, department, org_unit_id, orgUnitId, cost_center_id, costCenterId } = event.payload;
+          const { requesterId, requesterName, items, notes, department, org_unit_id, cost_center_id, costCenterId } = event.payload;
 
           // Check Creation Permission for PR (BUG-10)
           const allowedCreatorRoles = ['Admin', 'RegionalManager', 'SystemAdmin', 'StationAdmin'];
@@ -367,7 +367,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
             throw new Error(`User role (${event.user_role}) is not authorized to submit a Purchase Request`);
           }
 
-          const targetOrgUnit = org_unit_id || orgUnitId || undefined;
+          const targetOrgUnit = org_unit_id || undefined;
           let targetCostCenter = cost_center_id || costCenterId || undefined;
 
           if (targetOrgUnit && !targetCostCenter) {
@@ -580,7 +580,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
         }
 
         case 'PO_ISSUED': {
-          const { prId, vendorId, items, notes, deliveryWarehouseId, org_unit_id, orgUnitId, cost_center_id, costCenterId } = event.payload;
+          const { prId, vendorId, items, notes, deliveryWarehouseId, org_unit_id, cost_center_id, costCenterId } = event.payload;
 
           // Check Creation Permission for PO (BUG-10)
           const allowedIssuerRoles = ['Admin', 'RegionalManager', 'SystemAdmin'];
@@ -607,7 +607,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           }
 
           const resolvedWhOrgUnit = deliveryWarehouseId ? InventoryModule.resolveWarehouseOrgUnit(deliveryWarehouseId, companyId) : undefined;
-          const targetOrgUnit = org_unit_id || orgUnitId || resolvedWhOrgUnit || prOrgUnit || undefined;
+          const targetOrgUnit = org_unit_id || resolvedWhOrgUnit || prOrgUnit || undefined;
           let targetCostCenter = cost_center_id || costCenterId || prCostCenter || undefined;
 
           if (targetOrgUnit && !targetCostCenter) {

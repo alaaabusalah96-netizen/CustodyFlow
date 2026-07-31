@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DocumentNumberEngine } from './db/documentNumberEngine';
+import { SequenceEngine } from './lib/enterprise/sequence';
 
 describe('Phase 9: Document Number Engine Unit Tests', () => {
   const companyId = 'comp-phase9-test';
@@ -153,5 +154,27 @@ describe('Phase 9: Document Number Engine Unit Tests', () => {
 
     expect(res.sequenceNumber).toBe(2001);
     expect(res.documentNumber).toBe('HR-2026-2001');
+  });
+
+  it('should retry atomic transaction bounded times and log a warning when falling back to local sequence increment', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const seqSpy = vi.spyOn(SequenceEngine, 'getNextNumericVal').mockRejectedValue(new Error('Simulated atomic transaction failure'));
+
+    const fakeDb = {} as any;
+    const res = await DocumentNumberEngine.generateNextNumberAsync({
+      companyId,
+      documentType: 'PO',
+      date: new Date('2026-05-15')
+    }, fakeDb);
+
+    expect(seqSpy).toHaveBeenCalledTimes(3);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[DocumentNumberEngine] All atomic SequenceEngine retries failed. Falling back to local sequence increment:',
+      expect.any(Error)
+    );
+    expect(res.sequenceNumber).toBe(1001);
+
+    seqSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 });

@@ -1,34 +1,6 @@
-// Legacy hardcoded pepper: known-exposed, verification-only, never used for new hashes
-export const LEGACY_EXPOSED_PEPPER = "CustodyFlowSecureSystemPepper2026!KeyDerivationV2";
-
-// Default secure pepper for version 2 when APP_PEPPER environment variable is not explicitly provided
-export const DEFAULT_APP_PEPPER_V2 = "CustodyFlowActivePepper2026_SecureDefault_v2_KeyDerivation";
-
-/**
- * Returns the active APP_PEPPER from environment or secure built-in default.
- * Never throws an exception so browser SPA and dev server operate without crashing.
- */
-export function getActivePepper(): string {
-  const envPepper = (typeof process !== 'undefined' && process.env?.APP_PEPPER)
-    ? process.env.APP_PEPPER
-    : ((typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_APP_PEPPER) || '');
-  if (!envPepper) {
-    return DEFAULT_APP_PEPPER_V2;
-  }
-  return envPepper;
-}
-
-/**
- * Returns pepper according to stored pepper_version.
- * - pepper_version: 1 -> LEGACY_EXPOSED_PEPPER (verification-only for old hashes)
- * - pepper_version: 2 (or other) -> active APP_PEPPER from environment or DEFAULT_APP_PEPPER_V2
- */
-export function getPepperByVersion(version: number = 2): string {
-  if (version === 1) {
-    return LEGACY_EXPOSED_PEPPER;
-  }
-  return getActivePepper();
-}
+// Client-side offline fallback salt for SPA caching and offline login fallback only.
+// Server-side authoritative hashing uses src/lib/server_hash.ts with fail-loud APP_PEPPER environment secret.
+const CLIENT_OFFLINE_SALT = "CustodyFlow_ClientOfflineSalt_2026";
 
 function runSHA256(text: string): string {
   function rotateRight(n: number, x: number) {
@@ -106,12 +78,11 @@ function runSHA256(text: string): string {
  * High-stretching password hashing using 10,000 iterations of SHA-256 key stretching
  * combined with per-user unique salt and system pepper to resist brute-force/GPU cracking.
  */
-export function hashPassword(password: string, salt: string = '', pepperVersion: number = 2): string {
+export function hashPassword(password: string, salt: string = '', _pepperVersion: number = 2): string {
   if (!password) return '';
-  const pepper = getPepperByVersion(pepperVersion);
   const combinedSalt = salt 
-    ? `${salt.toLowerCase().trim()}_${pepper}` 
-    : pepper;
+    ? `${salt.toLowerCase().trim()}_${CLIENT_OFFLINE_SALT}` 
+    : CLIENT_OFFLINE_SALT;
   let currentHash = runSHA256(`${password}:${combinedSalt}`);
   
   // OWASP Key Stretching: 10,000 iterations prevents GPU dictionary attacks
@@ -124,12 +95,11 @@ export function hashPassword(password: string, salt: string = '', pepperVersion:
 /**
  * 1,000-pass stretched hash function used for smooth auto-migration of accounts hashed during v1 stretching.
  */
-export function legacyStretchedHashPassword1000(password: string, salt: string = '', pepperVersion: number = 2): string {
+export function legacyStretchedHashPassword1000(password: string, salt: string = '', _pepperVersion: number = 2): string {
   if (!password) return '';
-  const pepper = getPepperByVersion(pepperVersion);
   const combinedSalt = salt 
-    ? `${salt.toLowerCase().trim()}_${pepper}` 
-    : pepper;
+    ? `${salt.toLowerCase().trim()}_${CLIENT_OFFLINE_SALT}` 
+    : CLIENT_OFFLINE_SALT;
   let currentHash = runSHA256(`${password}:${combinedSalt}`);
   for (let i = 0; i < 999; i++) {
     currentHash = runSHA256(`${currentHash}:${combinedSalt}:${i}`);
@@ -140,12 +110,11 @@ export function legacyStretchedHashPassword1000(password: string, salt: string =
 /**
  * Pre-stretching hash function used for checking legacy accounts during login.
  */
-export function legacySinglePassHashPassword(password: string, salt: string = '', pepperVersion: number = 2): string {
+export function legacySinglePassHashPassword(password: string, salt: string = '', _pepperVersion: number = 2): string {
   if (!password) return '';
-  const pepper = getPepperByVersion(pepperVersion);
   const combinedSalt = salt 
-    ? `${salt.toLowerCase().trim()}_${pepper}` 
-    : pepper;
+    ? `${salt.toLowerCase().trim()}_${CLIENT_OFFLINE_SALT}` 
+    : CLIENT_OFFLINE_SALT;
   return runSHA256(`${password}:${combinedSalt}`);
 }
 

@@ -21,14 +21,7 @@ import nodemailer from "nodemailer";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import { runTenantMigrationUp, runTenantMigrationDown } from "./src/migrations/tenantMigration";
-import { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, getPepperByVersion } from "./src/lib/hash";
-
-function hashPasswordPBKDF2_210k(password: string, salt: string, pepperVersion: number = 2): string {
-  if (!password) return '';
-  const pepper = getPepperByVersion(pepperVersion);
-  const combinedSalt = salt ? `${salt.toLowerCase().trim()}_${pepper}` : pepper;
-  return crypto.pbkdf2Sync(password, combinedSalt, 210000, 64, 'sha256').toString('hex');
-}
+import { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, getPepperByVersion, hashPasswordPBKDF2_210k } from "./src/lib/server_hash";
 
 const firebaseConfig = {
   projectId: "custodyflow",

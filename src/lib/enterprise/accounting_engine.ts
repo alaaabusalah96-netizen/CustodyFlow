@@ -156,7 +156,7 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
   ): Promise<AccountingDimensions> {
     const merged = { ...provided, ...lineSpecific };
 
-    let org_unit_id = (merged as any).orgUnitId || merged.org_unit_id;
+    let org_unit_id = merged.org_unit_id;
     let warehouseId = (merged as any).warehouseId || merged.warehouse_id;
     const projectId = (merged as any).projectId || merged.project_id;
     let costCenterId = (merged as any).costCenterId || merged.cost_center_id;
@@ -223,7 +223,6 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
       debit: number; 
       credit: number; 
       notes?: string;
-      orgUnitId?: string;
       org_unit_id?: string;
       warehouseId?: string;
       warehouse_id?: string;
@@ -343,8 +342,8 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
       // Filter by Org Unit (matches header or line)
       if (options.org_unit_id) {
         const target = options.org_unit_id;
-        const matchesHeader = je.org_unit_id === target || (je as any).orgUnitId === target;
-        const matchesLine = je.lines.some(l => l.org_unit_id === target || (l as any).orgUnitId === target);
+        const matchesHeader = je.org_unit_id === target;
+        const matchesLine = je.lines.some(l => l.org_unit_id === target);
         if (!matchesHeader && !matchesLine) return false;
       }
 
@@ -410,7 +409,7 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
         }
 
         case 'JOURNAL_ENTRY_POSTED': {
-          const { statementAr, statementEn, lines, sourceRef, dimensions, orgUnitId, warehouseId, projectId, costCenterId } = event.payload;
+          const { statementAr, statementEn, lines, sourceRef, dimensions, org_unit_id, warehouseId, projectId, costCenterId } = event.payload;
           const companyId = event.tenantId;
 
           const je = await AccountingBusinessEngine.postOperationalDoubleEntry(
@@ -420,7 +419,7 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
             statementAr,
             statementEn,
             lines,
-            dimensions || { orgUnitId, warehouseId, projectId, costCenterId }
+            dimensions || { org_unit_id, warehouseId, projectId, costCenterId }
           );
 
           return {
