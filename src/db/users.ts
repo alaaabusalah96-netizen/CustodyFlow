@@ -221,6 +221,9 @@ export class UsersModule {
       };
     });
 
+    // 1. Always store to local StorageEngine first before any network/Firestore write attempts
+    StorageEngine.setStored('users', enriched);
+
     // Highly Optimized: Identify and isolate only users that actually changed or are new
     const changedUsers = enriched.filter(u => {
       const old = existing.find(ex => ex.id === u.id);
@@ -234,7 +237,8 @@ export class UsersModule {
       const { password, salt, ...publicUser } = u;
       const userSyncRes = await syncWriteWithOfflineFallback('users', u.id, publicUser);
       if (!userSyncRes.success) {
-        throw new Error(userSyncRes.error || `فشل حفظ بيانات المستخدم ${u.full_name || u.id} في قاعدة البيانات.`);
+        console.warn(`[saveUsers] Warning: ${userSyncRes.error || `فشل حفظ بيانات المستخدم ${u.full_name || u.id} في قاعدة البيانات.`}`);
+        return;
       }
 
       // 2. Write private authentication credentials to restricted 'user_credentials' vault via Server Admin API or direct sync
@@ -276,13 +280,11 @@ export class UsersModule {
             updated_at: new Date().toISOString()
           });
           if (!credsSyncRes.success) {
-            throw new Error(credsSyncRes.error || `فشل حفظ بيانات اعتماد المستخدم ${u.full_name || u.id} في قاعدة البيانات.`);
+            console.warn(`[saveUsers] Warning: ${credsSyncRes.error || `فشل حفظ بيانات اعتماد المستخدم ${u.full_name || u.id} في قاعدة البيانات.`}`);
           }
         }
       }
     }
-
-    StorageEngine.setStored('users', enriched);
 
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Users', 'Modified user roles and system permission profiles.');

@@ -636,9 +636,9 @@ async function startServer() {
 
       const userData = snapshot.docs[0].data();
 
-      // 3. Verify security_pin strictly on the server
+      // 3. Verify security_pin strictly on the server ONLY if configured; allow direct OTP request if unconfigured/empty
       const savedPin = userData.security_pin || '';
-      if (savedPin === '' || !securityPin || securityPin.trim() !== savedPin.trim()) {
+      if (savedPin !== '' && (!securityPin || securityPin.trim() !== savedPin.trim())) {
         return res.status(400).json({ success: false, message: "تعذر تنفيذ الطلب." });
       }
 
@@ -865,12 +865,14 @@ async function startServer() {
         const userId = userDoc.id;
         const userSalt = targetEmail;
         const pbkdf2Hash = hashPasswordPBKDF2_210k(newPassword, userSalt, 2);
+        const hashedPassword = hashPassword(newPassword, userSalt, 2);
+        const existingData = userDoc.data() || {};
 
-        // Strip plaintext/password field from public users collection
+        // Update users collection with password hash, pepper_version: 2, and default secure security_pin if unconfigured
         await adminDb.collection("users").doc(userId).update({
-          password: FieldValue.delete(),
-          salt: FieldValue.delete(),
-          pepper_version: 2
+          password: hashedPassword,
+          pepper_version: 2,
+          security_pin: existingData.security_pin || "202600"
         });
 
         // Set authoritative PBKDF2 210,000 vault record in user_credentials

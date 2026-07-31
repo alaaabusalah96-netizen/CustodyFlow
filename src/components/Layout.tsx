@@ -204,7 +204,16 @@ export default function Layout({
               <img src={kemitLogo} alt="KEMIT ERP Logo" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
             </div>
             <div>
-              {activeUser?.role === 'SystemAdmin' ? (
+              {activeUser?.role === 'SystemAdmin' && !activeUser?.impersonator ? (
+                <div className="flex items-center gap-1.5">
+                  <h1 className="text-xs sm:text-sm md:text-lg font-bold tracking-tight truncate max-w-[130px] xs:max-w-[180px] sm:max-w-[240px] md:max-w-none">
+                    {isRtl ? 'تحكم المنصة (SaaS)' : 'KEMIT Platform Control'}
+                  </h1>
+                  <span className="hidden xs:inline-block bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0">
+                    {isRtl ? 'مشرف عام المنصة' : 'Platform Admin'}
+                  </span>
+                </div>
+              ) : activeUser?.role === 'SystemAdmin' ? (
                 <div className="flex items-center gap-1.5">
                   <h1 className="text-xs sm:text-sm md:text-lg font-bold tracking-tight truncate max-w-[130px] xs:max-w-[180px] sm:max-w-[240px] md:max-w-none">
                     {config.company_name}
@@ -236,15 +245,17 @@ export default function Layout({
             <span>{isRtl ? 'سحابي نشط' : 'LIVE CLOUD'}</span>
           </div>
 
-          {/* Quick Cash available info */}
-          <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium ${
-            theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-slate-50 border-slate-200'
-          }`}>
-            <span className="text-slate-500 dark:text-slate-400">{t.cashAvailable}:</span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">
-              {metrics.cashAvailable.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP
-            </span>
-          </div>
+          {/* Quick Cash available info - Hidden for standalone SystemAdmin */}
+          {(!activeUser || activeUser.role !== 'SystemAdmin' || activeUser.impersonator) && (
+            <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium ${
+              theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <span className="text-slate-500 dark:text-slate-400">{t.cashAvailable}:</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">
+                {metrics.cashAvailable.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP
+              </span>
+            </div>
+          )}
 
           {/* Theme Switcher */}
           <button
@@ -434,8 +445,8 @@ export default function Layout({
             </div>
           )}
 
-          {/* Quick Alert if custody gets low */}
-          {metrics.cashAvailable < 5000 && (
+          {/* Quick Alert if custody gets low - Hidden for standalone SystemAdmin */}
+          {(!activeUser || activeUser.role !== 'SystemAdmin' || activeUser.impersonator) && metrics.cashAvailable < 5000 && (
             <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-semibold flex items-center gap-2">
               <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
               <span>

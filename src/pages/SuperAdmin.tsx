@@ -850,6 +850,77 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         </div>
       </div>
 
+      {/* SaaS Overview Summary Cards - Completely isolated from company context */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="p-4 sm:p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span className="text-xs font-bold">{isRtl ? 'إجمالي الشركات المنضمّة' : 'Total SaaS Companies'}</span>
+            <div className="p-2 rounded-xl bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400">
+              <Building2 size={18} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-baseline justify-between">
+            <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono">
+              {companies.length}
+            </span>
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+              {isRtl ? 'شركة مسجلة' : 'Registered'}
+            </span>
+          </div>
+        </div>
+
+        <div className="p-4 sm:p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span className="text-xs font-bold">{isRtl ? 'الشركات النشطة حالياً' : 'Active Organizations'}</span>
+            <div className="p-2 rounded-xl bg-emerald-50 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 size={18} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-baseline justify-between">
+            <span className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+              {companies.filter(c => c.is_active !== false).length}
+            </span>
+            <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">
+              {isRtl ? 'تعمل بنشاط' : 'Active'}
+            </span>
+          </div>
+        </div>
+
+        <div className="p-4 sm:p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span className="text-xs font-bold">{isRtl ? 'الشركات الموقوفة / المعطلة' : 'Suspended Entities'}</span>
+            <div className="p-2 rounded-xl bg-rose-50 dark:bg-slate-800 text-rose-600 dark:text-rose-400">
+              <XCircle size={18} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-baseline justify-between">
+            <span className="text-2xl sm:text-3xl font-black text-rose-600 dark:text-rose-400 font-mono">
+              {companies.filter(c => c.is_active === false).length}
+            </span>
+            <span className="text-[10px] text-rose-400 font-bold uppercase tracking-wider">
+              {isRtl ? 'موقوف' : 'Suspended'}
+            </span>
+          </div>
+        </div>
+
+        <div className="p-4 sm:p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span className="text-xs font-bold">{isRtl ? 'طلبات الاشتراك المعلقة' : 'Pending Signup Requests'}</span>
+            <div className="p-2 rounded-xl bg-amber-50 dark:bg-slate-800 text-amber-600 dark:text-amber-400">
+              <AlertTriangle size={18} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-baseline justify-between">
+            <span className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 font-mono">
+              {CustodyDB.getSignupRequests().filter(r => r.status === 'Pending' || (r.status as any) === 'pending').length}
+            </span>
+            <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">
+              {isRtl ? 'في انتظار الموافقة' : 'Pending'}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Navigation Sub-Tabs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
         <button
@@ -1076,74 +1147,84 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
                               </div>
                             </div>
 
-                            {/* Company Quick Actions */}
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => startStructAddRegionForCompany(comp.id)}
-                                className="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-slate-700 text-xs font-black transition-all flex items-center gap-1 cursor-pointer"
-                                title={isRtl ? 'إضافة قطاع/منطقة تحت هذه الشركة' : 'Add Sector under Company'}
-                              >
-                                <Globe size={13} className="text-indigo-500" />
-                                <span>{isRtl ? 'إضافة قطاع/منطقة' : 'Add Sector'}</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => startStructAddStationDirectForCompany(comp.id)}
-                                className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-slate-700 text-xs font-black transition-all flex items-center gap-1 cursor-pointer"
-                                title={isRtl ? 'إضافة فرع عهدة مباشر بدون قطاع' : 'Add Direct custody branch'}
-                              >
-                                <Building size={13} className="text-emerald-500" />
-                                <span>{isRtl ? 'فرع مباشر' : 'Add Direct Branch'}</span>
-                              </button>
-                              
-                              {/* Toggle active status */}
-                              <button
-                                type="button"
-                                onClick={() => handleToggleCompanyActive(comp.id, comp.is_active !== false)}
-                                className={`p-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                                  comp.is_active !== false
-                                    ? 'hover:bg-amber-50 dark:hover:bg-slate-800 text-amber-500'
-                                    : 'hover:bg-emerald-50 dark:hover:bg-slate-800 text-emerald-500'
-                                }`}
-                                title={comp.is_active !== false ? (isRtl ? 'تعطيل الحساب' : 'Suspend Account') : (isRtl ? 'تفعيل الحساب' : 'Activate Account')}
-                              >
-                                <Power size={14} />
-                              </button>
+                            {/* Company Quick Actions - Grouped in clear sections with short titles */}
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                              {/* Group 1: Organization Structure */}
+                              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[10px] font-extrabold text-slate-400 px-2 hidden lg:inline">{isRtl ? 'الهيكل:' : 'Structure:'}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => startStructAddRegionForCompany(comp.id)}
+                                  className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-slate-700 text-xs font-black transition-all flex items-center gap-1 cursor-pointer"
+                                  title={isRtl ? 'إضافة قطاع/منطقة تحت هذه الشركة' : 'Add Sector under Company'}
+                                >
+                                  <Globe size={13} className="text-indigo-500" />
+                                  <span>{isRtl ? 'إضافة قطاع' : 'Add Sector'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => startStructAddStationDirectForCompany(comp.id)}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-slate-700 text-xs font-black transition-all flex items-center gap-1 cursor-pointer"
+                                  title={isRtl ? 'إضافة فرع عهدة مباشر بدون قطاع' : 'Add Direct custody branch'}
+                                >
+                                  <Building size={13} className="text-emerald-500" />
+                                  <span>{isRtl ? 'فرع مباشر' : 'Direct Branch'}</span>
+                                </button>
+                              </div>
 
-                              {/* Manage Subscription */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingCompany(comp);
-                                  setSubPlan(comp.subscription_plan || 'Basic');
-                                  setSubStatus(comp.subscription_status || 'active');
-                                  setSubExpiry(comp.subscription_expiry || '');
-                                  setCompanyModules(ModulesModule.getCompanyModules(comp.id));
-                                  setActiveModalTab('subscription');
-                                }}
-                                className="p-1.5 rounded-md hover:bg-indigo-50 dark:hover:bg-slate-800 text-purple-500 cursor-pointer"
-                                title={isRtl ? 'إدارة الاشتراك والتراخيص' : 'Manage Subscription'}
-                              >
-                                <Calendar size={14} />
-                              </button>
+                              {/* Group 2: Subscription & Status */}
+                              <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                                <span className="text-[10px] font-extrabold text-slate-400 px-2 hidden lg:inline">{isRtl ? 'الاشتراك:' : 'Subscription:'}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingCompany(comp);
+                                    setSubPlan(comp.subscription_plan || 'Basic');
+                                    setSubStatus(comp.subscription_status || 'active');
+                                    setSubExpiry(comp.subscription_expiry || '');
+                                    setCompanyModules(ModulesModule.getCompanyModules(comp.id));
+                                    setActiveModalTab('subscription');
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700/80 hover:bg-purple-50 dark:hover:bg-purple-900/30 text-purple-600 dark:text-purple-400 border border-slate-200 dark:border-slate-600 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                  title={isRtl ? 'إدارة الاشتراك والتراخيص' : 'Manage Subscription'}
+                                >
+                                  <Calendar size={13} />
+                                  <span>{isRtl ? 'الترخيص' : 'Plan'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleCompanyActive(comp.id, comp.is_active !== false)}
+                                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer border ${
+                                    comp.is_active !== false
+                                      ? 'bg-amber-50 hover:bg-amber-100 dark:bg-slate-700 dark:hover:bg-amber-900/30 text-amber-600 border-amber-200 dark:border-amber-800'
+                                      : 'bg-emerald-50 hover:bg-emerald-100 dark:bg-slate-700 dark:hover:bg-emerald-900/30 text-emerald-600 border-emerald-200 dark:border-emerald-800'
+                                  }`}
+                                  title={comp.is_active !== false ? (isRtl ? 'تعطيل الحساب' : 'Suspend Account') : (isRtl ? 'تفعيل الحساب' : 'Activate Account')}
+                                >
+                                  <Power size={13} />
+                                  <span>{comp.is_active !== false ? (isRtl ? 'تعطيل' : 'Suspend') : (isRtl ? 'تفعيل' : 'Activate')}</span>
+                                </button>
+                              </div>
 
-                              <button
-                                type="button"
-                                onClick={() => startStructEditCompany(comp)}
-                                className="p-1.5 rounded-md hover:bg-indigo-50 dark:hover:bg-slate-800 text-indigo-600 dark:text-indigo-400 cursor-pointer"
-                                title={isRtl ? 'تعديل اسم الشركة' : 'Edit Company Name'}
-                              >
-                                <Edit size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleStructDeleteCompany(comp.id)}
-                                className="p-1.5 rounded-md hover:bg-rose-50 dark:hover:bg-slate-800 text-rose-500 hover:text-rose-600 cursor-pointer"
-                                title={isRtl ? 'حذف الشركة' : 'Delete Company'}
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                              {/* Group 3: Account Actions */}
+                              <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                                <button
+                                  type="button"
+                                  onClick={() => startStructEditCompany(comp)}
+                                  className="p-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-400 cursor-pointer transition-all"
+                                  title={isRtl ? 'تعديل اسم الشركة' : 'Edit Company Name'}
+                                >
+                                  <Edit size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStructDeleteCompany(comp.id)}
+                                  className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-slate-700 text-rose-500 hover:text-rose-600 cursor-pointer transition-all"
+                                  title={isRtl ? 'حذف الشركة' : 'Delete Company'}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
                             </div>
                           </div>
 

@@ -807,7 +807,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       (navigator as any).onLine = true;
     });
 
-    it('should reject saveUsers when offline and prevent StorageEngine pollution (Phase 2 Correction)', async () => {
+    it('should store users locally when offline and warn without throwing (Non-blocking fallback)', async () => {
       const existingUser: any = {
         id: 'usr-phase2-existing',
         email: 'existing@example.com',
@@ -824,12 +824,12 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       // Simulate offline state
       (navigator as any).onLine = false;
 
-      await expect(UsersModule.saveUsers([updatedUser])).rejects.toThrow('يلزم وجود اتصال بالإنترنت للحفظ');
+      await expect(UsersModule.saveUsers([updatedUser])).resolves.toBeUndefined();
 
-      // Verify local storage was NOT updated
+      // Verify local storage was updated cleanly for offline resilience
       const stored = StorageEngine.getStored<any[]>('users', []);
       const checkUser = stored.find(u => u.id === 'usr-phase2-existing');
-      expect(checkUser.full_name).toBe('Existing User');
+      expect(checkUser.full_name).toBe('Updated Offline Name');
 
       // Reset online state
       (navigator as any).onLine = true;

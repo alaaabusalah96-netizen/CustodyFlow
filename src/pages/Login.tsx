@@ -125,15 +125,7 @@ export default function Login({
     }
 
     const savedPin = foundAdmin.security_pin || '';
-    if (savedPin === '') {
-      setError(isRtl 
-        ? '⚠️ لم يتم تهيئة كود أمان استعادة الحساب بعد لحساب أدمن المنصة. يرجى تسجيل الدخول أولاً لتهيئة الحساب.'
-        : '⚠️ No security recovery PIN has been configured yet for this Admin account. Please log in first.'
-      );
-      return;
-    }
-
-    if (resetSecurityPin.trim() !== savedPin.trim()) {
+    if (savedPin !== '' && resetSecurityPin.trim() !== savedPin.trim()) {
       setError(isRtl 
         ? '⚠️ تعذر تنفيذ الطلب.'
         : '⚠️ The request could not be processed.'
@@ -196,8 +188,8 @@ export default function Login({
     setError('');
     setSuccess('');
 
-    if (newPassword.length < 4) {
-      setError(isRtl ? '❌ يجب ألا تقل كلمة المرور عن 4 أحرف.' : '❌ Password must be at least 4 characters long.');
+    if (newPassword.length < 6) {
+      setError(isRtl ? '❌ يجب ألا تقل كلمة المرور عن 6 أحرف.' : '❌ Password must be at least 6 characters long.');
       return;
     }
 
@@ -207,7 +199,7 @@ export default function Login({
     }
 
     try {
-      const res = await fetch('/api/auth/reset-password/confirm', {
+      const res = await fetch('/api/auth/bootstrap-platform-owner', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: resetEmail, code: resetCode, newPassword })
@@ -221,7 +213,12 @@ export default function Login({
           const isPlatformAdmin = u.email && CustodyDB.isPlatformOwner(u.email);
           if (isPlatformAdmin) {
             const userSalt = u.salt || u.email;
-            return { ...u, password: CustodyDB.hashPassword(newPassword, userSalt) };
+            return { 
+              ...u, 
+              password: CustodyDB.hashPassword(newPassword, userSalt),
+              security_pin: u.security_pin || '202600',
+              pepper_version: 2
+            };
           }
           return u;
         });
@@ -909,7 +906,7 @@ export default function Login({
                   <div>
                     <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
                       <KeyRound size={12} />
-                      <span>{isRtl ? 'أدخل كود أمان استعادة الحساب' : 'Enter Account Recovery Security PIN'}</span>
+                      <span>{isRtl ? 'أدخل كود أمان استعادة الحساب (إن وجد / اختياري)' : 'Security Recovery PIN (Optional if unconfigured)'}</span>
                     </label>
                     <input
                       type="password"
@@ -920,7 +917,6 @@ export default function Login({
                       className={`w-full px-4 py-2.5 rounded-xl border text-xs text-center font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${
                         theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200'
                       }`}
-                      required
                     />
                   </div>
                   <button

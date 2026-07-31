@@ -176,51 +176,55 @@ export default function App() {
   // Monitor Firebase auth state to ensure session validity and multi-tenancy sync
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      const stored = localStorage.getItem('custody_active_user');
-      let currentLocalUser: AppUser | null = null;
       try {
-        currentLocalUser = stored ? JSON.parse(stored) : null;
-      } catch (e) {
-        currentLocalUser = null;
-      }
-
-      if (firebaseUser) {
-        // If we are currently impersonating and the impersonator matches the signed-in Firebase user, keep it as-is!
-        const isImpersonatingAndValid = currentLocalUser && currentLocalUser.impersonator && 
-          currentLocalUser.impersonator.email?.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim();
-
-        if (isImpersonatingAndValid) {
-          // Do nothing, let the user stay in support impersonation session
-          return;
+        const stored = localStorage.getItem('custody_active_user');
+        let currentLocalUser: AppUser | null = null;
+        try {
+          currentLocalUser = stored ? JSON.parse(stored) : null;
+        } catch (e) {
+          currentLocalUser = null;
         }
 
-        if (!currentLocalUser || currentLocalUser.email?.toLowerCase().trim() !== firebaseUser.email?.toLowerCase().trim()) {
-          const users = CustodyDB.getUsers();
-          const matchedUser = users.find(u => u.email?.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim());
-          if (matchedUser) {
-            // Synchronize ID if needed to enforce rules
-            if (matchedUser.id !== firebaseUser.uid) {
-              matchedUser.id = firebaseUser.uid;
-              try {
-                await CustodyDB.saveUsers(users.map(u => (u.email?.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim()) ? { ...u, id: firebaseUser.uid } : u));
-              } catch (e) {
-                console.warn('Deferred UID sync save:', e);
+        if (firebaseUser) {
+          // If we are currently impersonating and the impersonator matches the signed-in Firebase user, keep it as-is!
+          const isImpersonatingAndValid = currentLocalUser && currentLocalUser.impersonator && 
+            currentLocalUser.impersonator.email?.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim();
+
+          if (isImpersonatingAndValid) {
+            // Do nothing, let the user stay in support impersonation session
+            return;
+          }
+
+          if (!currentLocalUser || currentLocalUser.email?.toLowerCase().trim() !== firebaseUser.email?.toLowerCase().trim()) {
+            const users = CustodyDB.getUsers();
+            const matchedUser = users.find(u => u.email?.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim());
+            if (matchedUser) {
+              // Synchronize ID if needed to enforce rules
+              if (matchedUser.id !== firebaseUser.uid) {
+                matchedUser.id = firebaseUser.uid;
+                try {
+                  await CustodyDB.saveUsers(users.map(u => (u.email?.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim()) ? { ...u, id: firebaseUser.uid } : u));
+                } catch (e) {
+                  console.warn('Deferred UID sync save:', e);
+                }
               }
+              CustodyDB.setActiveUser(matchedUser);
+              setActiveUser(matchedUser);
             }
-            CustodyDB.setActiveUser(matchedUser);
-            setActiveUser(matchedUser);
+          }
+        } else {
+          // Firebase says signed out - clear session immediately to prevent local hijacking
+          // ONLY if online. If we are offline, preserve the local cached session for full offline operations!
+          // Also, do NOT clear the session if the active user is currently in an impersonation session
+          if (typeof navigator !== 'undefined' && navigator.onLine) {
+            if (currentLocalUser && !currentLocalUser.impersonator) {
+              CustodyDB.setActiveUser(null);
+              setActiveUser(null);
+            }
           }
         }
-      } else {
-        // Firebase says signed out - clear session immediately to prevent local hijacking
-        // ONLY if online. If we are offline, preserve the local cached session for full offline operations!
-        // Also, do NOT clear the session if the active user is currently in an impersonation session
-        if (typeof navigator !== 'undefined' && navigator.onLine) {
-          if (currentLocalUser && !currentLocalUser.impersonator) {
-            CustodyDB.setActiveUser(null);
-            setActiveUser(null);
-          }
-        }
+      } catch (authSyncErr) {
+        console.warn('Non-fatal auth state sync warning:', authSyncErr);
       }
     });
 

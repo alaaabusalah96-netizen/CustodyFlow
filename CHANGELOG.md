@@ -1446,6 +1446,60 @@ Pass - Executed `npm test src/auth_security_hardening.test.ts src/repeat_login_d
 **Test & Validation Result:**
 Pass - Executed `npm test src/auth_security_hardening.test.ts src/repeat_login_diagnostic.test.ts src/stabilization.test.ts src/migration_auth.test.ts -- --run` (37/37 tests passed). Verified clean compilation (`compile_applet`) and TypeScript linter (`lint_applet`). All operations scoped strictly to `projectId: "custodyflow"`.
 
+---
+
+## v54-unhandled-rejection-and-red-screen-mitigation: Fix Unhandled Promise Rejection & Red Screen on Offline/Network Errors
+**Date/Time:** 2026-07-31 20:45:00 UTC
+**Files Changed:**
+- `src/db/users.ts`
+- `src/App.tsx`
+- `src/stabilization.test.ts`
+- `CHANGELOG.md`
+**Summary:**
+1. **Local-First Storage Before Firestore Writes**: In `src/db/users.ts` -> `saveUsers()`, `StorageEngine.setStored('users', enriched)` is now called at the start before any Firestore or network sync write attempts.
+2. **Eliminated Throw on Sync Failure**: Removed `throw new Error(...)` when `syncWriteWithOfflineFallback` fails (e.g. timeout, resource-exhausted, or network offline) for both `users` and `user_credentials`. Replaced with non-blocking `console.warn(...)` and `return;` without throwing an exception.
+3. **Safe Async Auth State Handler**: Wrapped `onAuthStateChanged` handler logic in `src/App.tsx` within a `try/catch` block so `CustodyDB.saveUsers` errors are logged gracefully without bubbling as an Unhandled Promise Rejection or blocking `setActiveUser`.
+4. **Unit Test Updates**: Updated offline saveUsers test in `src/stabilization.test.ts` to assert that offline calls warn without throwing (`resolves.toBeUndefined()`) and properly persist local user state.
+
+**Test & Validation Result:**
+Pass - Executed `npm test src/auth_security_hardening.test.ts src/repeat_login_diagnostic.test.ts src/stabilization.test.ts src/migration_auth.test.ts -- --run` (37/37 tests passed). Verified clean compilation (`compile_applet`) and linter (`lint_applet`). All operations scoped strictly to `projectId: "custodyflow"`.
+
+---
+
+## v55-platform-owner-recovery-and-pin-optionality: Platform Owner Recovery PIN Optionality & PBKDF2 Credential Bootstrap
+**Date/Time:** 2026-07-31 20:55:00 UTC
+**Files Changed:**
+- `src/pages/Login.tsx`
+- `server.ts`
+- `CHANGELOG.md`
+**Summary:**
+1. **Unblocking Platform Owner Account Recovery (`Login.tsx`)**: Removed the restriction blocking Admin Account Recovery if `security_pin` is empty or unconfigured. Made `security_pin` optional if unconfigured (`savedPin !== ''`), allowing immediate OTP request by email without requiring an existing PIN. Enforced a minimum 6-character password on reset.
+2. **Authoritative PBKDF2 Bootstrap & Default PIN Assignment (`server.ts`)**: Updated `/api/auth/bootstrap-platform-owner` to set `password` (hashed), `pepper_version: 2`, and an automatic default secure `security_pin` (`202600`) if none was previously configured, while rebuilding the `user_credentials` vault record using PBKDF2 210,000 iterations.
+3. **Safe Offline & Timeout Handling (`src/db/users.ts`)**: Confirmed that `saveUsers` stores locally before network sync and logs non-fatal warnings on Firestore timeout/offline failures without throwing, preventing any red screen after login.
+
+**Test & Validation Result:**
+Pass - Executed `npm test src/auth_security_hardening.test.ts src/repeat_login_diagnostic.test.ts src/stabilization.test.ts src/migration_auth.test.ts -- --run` (37/37 tests passed). Verified clean TypeScript linter (`lint_applet`) and build compilation (`compile_applet`). All operations scoped strictly to `projectId: "custodyflow"`.
+
+---
+
+## Phase 56: SystemAdmin (SaaS Control Center) Company Isolation & UX Reorganization
+**Date/Time:** 2026-07-31 21:17:00 UTC
+**Files Changed:**
+- `src/components/Layout.tsx`
+- `src/pages/SuperAdmin.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Header Role Isolation (`src/components/Layout.tsx`)**: Removed company-specific branding (e.g., Cairo Poultry) and custody balance/settlement warnings for standalone `SystemAdmin` users. The header now always displays `تحكم المنصة (SaaS)` / `KEMIT Platform Control` and suppresses company operational alerts unless the administrator is actively impersonating a user (`activeUser.impersonator`).
+2. **SaaS Overview Summary Cards (`src/pages/SuperAdmin.tsx`)**: Added 4 prominent KPI summary cards at the top of the SaaS administration dashboard displaying Total Companies, Active Organizations, Suspended Entities, and Pending Signup Requests, completely independent of any selected company context.
+3. **Structured Button Groups (`src/pages/SuperAdmin.tsx`)**: Reorganized company card action buttons into 3 cleanly titled, well-spaced visual groups: Structure (الهيكل), Subscription & Status (الاشتراك), and Account Actions (إجراءات الحساب), eliminating dense button stacking.
+
+**Test & Validation Result:**
+Pass - Executed `npm test src/auth_security_hardening.test.ts src/repeat_login_diagnostic.test.ts src/stabilization.test.ts src/migration_auth.test.ts -- --run` (37/37 tests passed). Verified clean applet compilation (`compile_applet`). All operations scoped strictly to `projectId: "custodyflow"`.
+
+
+
+
 
 
 
