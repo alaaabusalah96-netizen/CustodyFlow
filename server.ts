@@ -811,6 +811,90 @@ async function startServer() {
     }
   });
 
+  // API Route - Dedicated Platform Owner Zero-Lockout Bootstrap & Credential Reset
+  // Implements recommended recovery endpoint: verifies Platform Owner identity via OTP and cleanly wipes/rebuilds PBKDF2 210,000 vault credentials
+  app.post("/api/auth/bootstrap-platform-owner", otpRateLimiter, async (req, res) => {
+    try {
+      const { email, code, newPassword } = req.body;
+      if (!email || !code || !newPassword) {
+        return res.status(400).json({ success: false, message: "يرجى إدخال البريد الإلكتروني، كود التحقق، وكلمة المرور الجديدة." });
+      }
+
+      const targetEmail = email.toLowerCase().trim();
+      const isPlatformAdmin = await isPlatformAdminUser(targetEmail);
+
+      if (!isPlatformAdmin) {
+        return res.status(403).json({ success: false, message: "هذا الإجراء مخصص لمشرف المنصة فقط." });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ success: false, message: "كلمة المرور يجب أن لا تقل عن 6 أحرف." });
+      }
+
+      const otpDoc = await adminDb.collection("password_reset_otps").doc(targetEmail).get();
+      if (!otpDoc.exists) {
+        return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
+      }
+
+      const otpData = otpDoc.data();
+      if (!otpData) {
+        return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
+      }
+
+      if (otpData.expiresAt < Date.now()) {
+        await adminDb.collection("password_reset_otps").doc(targetEmail).delete();
+        return res.status(400).json({ success: false, message: "انتهت صلاحية كود التحقق." });
+      }
+
+      if (otpData.code !== code.trim()) {
+        const attempts = (otpData.attempts || 0) + 1;
+        if (attempts >= 5) {
+          await adminDb.collection("password_reset_otps").doc(targetEmail).delete();
+          return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات." });
+        }
+        await adminDb.collection("password_reset_otps").doc(targetEmail).update({ attempts });
+        return res.status(400).json({ success: false, message: `كود التحقق غير صحيح. المحاولات المتبقية: ${5 - attempts}` });
+      }
+
+      const snapshot = await adminDb.collection("users").where("email", "==", targetEmail).get();
+      if (snapshot.empty) {
+        return res.status(400).json({ success: false, message: "لم يتم العثور على حساب مشرف المنصة في قاعدة البيانات." });
+      }
+
+      const updatePromises = snapshot.docs.map(async (userDoc) => {
+        const userId = userDoc.id;
+        const userSalt = targetEmail;
+        const pbkdf2Hash = hashPasswordPBKDF2_210k(newPassword, userSalt, 2);
+
+        // Strip plaintext/password field from public users collection
+        await adminDb.collection("users").doc(userId).update({
+          password: FieldValue.delete(),
+          salt: FieldValue.delete(),
+          pepper_version: 2
+        });
+
+        // Set authoritative PBKDF2 210,000 vault record in user_credentials
+        await adminDb.collection("user_credentials").doc(userId).set({
+          id: userId,
+          email: targetEmail,
+          passwordHash: pbkdf2Hash,
+          salt: userSalt,
+          kdf: 'sha256_pbkdf2_210k',
+          pepper_version: 2,
+          updated_at: new Date().toISOString()
+        }, { merge: false });
+      });
+      await Promise.all(updatePromises);
+
+      await adminDb.collection("password_reset_otps").doc(targetEmail).delete();
+
+      return res.json({ success: true, message: "تم إعادة ضبط بيانات اعتماد مشرف المنصة بنجاح." });
+    } catch (error) {
+      console.error("Error in bootstrap-platform-owner process:", error);
+      return res.status(500).json({ success: false, message: "تعذر تنفيذ طلب إعادة الضبط." });
+    }
+  });
+
   // API Route - Admin Login Request
   app.post("/api/auth/admin-login/request", otpRateLimiter, async (req, res) => {
     try {

@@ -7,6 +7,8 @@ import { LogsModule } from './logs';
 import { hashPassword } from '../lib/hash';
 
 export class UsersModule {
+  private static hasAutoPromotedInSession = false;
+
   static isPlatformOwner(email?: string | null): boolean {
     if (!email || typeof email !== 'string') return false;
     const cleaned = email.toLowerCase().trim();
@@ -95,7 +97,11 @@ export class UsersModule {
         ? (allowDefaultAdminPassword ? '123456' : '')
         : u.password;
       
-      if (role !== u.role || is_active !== u.is_active || is_platform_owner !== u.is_platform_owner || password !== u.password) {
+      const currentRole = u.role;
+      const currentIsActive = u.is_active ?? true;
+      const currentIsOwner = u.is_platform_owner ?? false;
+      const currentPassword = u.password || '';
+      if (role !== currentRole || is_active !== currentIsActive || is_platform_owner !== currentIsOwner || (password || '') !== currentPassword) {
         changed = true;
       }
       return {
@@ -109,13 +115,18 @@ export class UsersModule {
     });
 
     if (changed) {
-      setTimeout(async () => {
-        try {
-          await UsersModule.saveUsers(updated);
-        } catch (e) {
-          console.error('Error auto-promoting user in database:', e);
-        }
-      }, 100);
+      StorageEngine.setStored('users', updated);
+      if (!UsersModule.hasAutoPromotedInSession) {
+        UsersModule.hasAutoPromotedInSession = true;
+        setTimeout(async () => {
+          try {
+            await UsersModule.saveUsers(updated);
+          } catch (e) {
+            console.warn('Error auto-promoting user in database (deferred):', e);
+            UsersModule.hasAutoPromotedInSession = false;
+          }
+        }, 300);
+      }
     }
     return updated;
   }

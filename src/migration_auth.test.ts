@@ -45,13 +45,29 @@ describe('Security - Pepper Versioning & Rotation Support', () => {
     expect(hashV1).not.toBe(hashV2);
   });
 
-  it('throws a critical security error when APP_PEPPER is unset for pepper_version = 2 (fail-loud behavior)', () => {
+  it('throws a critical security error when APP_PEPPER is unset in STRICT_PROD_SECURITY mode', () => {
     const originalPepper = process.env.APP_PEPPER;
+    const originalStrict = process.env.STRICT_PROD_SECURITY;
     delete process.env.APP_PEPPER;
     try {
+      process.env.STRICT_PROD_SECURITY = 'true';
       expect(() => getPepperByVersion(2)).toThrow(/CRITICAL SECURITY ERROR: APP_PEPPER environment variable is not set/);
     } finally {
       process.env.APP_PEPPER = originalPepper;
+      process.env.STRICT_PROD_SECURITY = originalStrict;
+    }
+  });
+
+  it('returns stable fallback pepper when APP_PEPPER is unset and STRICT_PROD_SECURITY is not enabled', () => {
+    const originalPepper = process.env.APP_PEPPER;
+    const originalStrict = process.env.STRICT_PROD_SECURITY;
+    delete process.env.APP_PEPPER;
+    try {
+      delete process.env.STRICT_PROD_SECURITY;
+      expect(getPepperByVersion(2)).toBe("CustodyFlowActivePepper2026_SecureDefault_v2_KeyDerivation");
+    } finally {
+      process.env.APP_PEPPER = originalPepper;
+      process.env.STRICT_PROD_SECURITY = originalStrict;
     }
   });
 

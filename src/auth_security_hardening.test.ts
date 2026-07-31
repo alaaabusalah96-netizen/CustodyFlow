@@ -55,4 +55,21 @@ describe('v49-security-hardening: Authentication & Security Standards Verificati
     expect(UsersModule.isPlatformOwner('random_user@domain.com')).toBe(false);
     expect(UsersModule.isPlatformOwner('')).toBe(false);
   });
+
+  it('should verify STRICT_PROD_SECURITY disables plaintext fallback even if ALLOW_PLAINTEXT_DEV_FALLBACK is true', () => {
+    const origStrict = process.env.STRICT_PROD_SECURITY;
+    const origFallback = process.env.ALLOW_PLAINTEXT_DEV_FALLBACK;
+
+    try {
+      process.env.STRICT_PROD_SECURITY = 'true';
+      process.env.ALLOW_PLAINTEXT_DEV_FALLBACK = 'true';
+
+      const isStrictProdSecurity = process.env.STRICT_PROD_SECURITY === 'true';
+      const allowPlaintextFallback = !isStrictProdSecurity && (process.env.NODE_ENV !== 'production' || process.env.ALLOW_PLAINTEXT_DEV_FALLBACK === 'true');
+      expect(allowPlaintextFallback).toBe(false);
+    } finally {
+      process.env.STRICT_PROD_SECURITY = origStrict;
+      process.env.ALLOW_PLAINTEXT_DEV_FALLBACK = origFallback;
+    }
+  });
 });

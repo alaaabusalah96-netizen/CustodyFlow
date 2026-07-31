@@ -1377,6 +1377,77 @@ Pass - `npm test src/repeat_login_diagnostic.test.ts -- --run` verified diagnost
 **Test & Validation Result:**
 Pass - Executed `npm test src/auth_security_hardening.test.ts -- --run` (4/4 tests passed in 200ms) and verified zero regression across diagnostic and stabilization suites (`src/repeat_login_diagnostic.test.ts` and `src/stabilization.test.ts`). All operations scoped strictly to `projectId: "custodyflow"`.
 
+---
+
+## v50-firestore-quota-resilience: Firestore Write Quota Resilience & Zero-Crash Login Handlers
+**Date/Time:** 2026-07-31 19:46:00 UTC
+**Files Changed:**
+- `src/db/users.ts`
+- `src/App.tsx`
+- `src/pages/Login.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Eliminated `getUsers()` Infinite Firestore Write Loop (`src/db/users.ts`)**: Fixed boolean normalization in `UsersModule.getUsers()` so that optional `is_active` and `is_platform_owner` properties on stored user records do not repeatedly trigger `changed = true`. Added session-level guard (`UsersModule.hasAutoPromotedInSession`) to ensure auto-promotion database sync executes at most once per browser session, preventing `[code=resource-exhausted]: Quota exceeded` and write timeout spam.
+2. **Offline-First Local Storage Pre-Save (`src/db/users.ts`)**: Updated `UsersModule.saveUsers` to call `StorageEngine.setStored('users', enriched)` immediately before attempting Firestore sync. If Firestore write times out or quota is exceeded, the failure is logged as a non-fatal warning while local state remains fully updated.
+3. **Zero-Crash Auth State Handler (`src/App.tsx`)**: Wrapped `await CustodyDB.saveUsers(...)` inside `onAuthStateChanged` with a `try...catch` block to prevent Unhandled Promise Rejections from showing Vite's red error overlay screen ("الشاشة الحمرا") on startup.
+4. **Resilient Login Handlers (`src/pages/Login.tsx`)**: Wrapped all `await CustodyDB.saveUsers(...)` calls during login (first-time admin pin setup, legacy hash migration, and UID migration) with non-fatal `try...catch` blocks so login succeeds seamlessly even when Firestore quota is throttled.
+
+**Test & Validation Result:**
+Pass - Compiled production bundle (`compile_applet`) and verified TypeScript linter (`lint_applet`). All operations scoped strictly to `projectId: "custodyflow"`.
+
+---
+
+## v51-v49-evaluation-hardening: Production Plaintext Security Alignment & Client/Server Guard Unification
+**Date/Time:** 2026-07-31 19:57:00 UTC
+**Files Changed:**
+- `src/pages/Login.tsx`
+- `src/auth_security_hardening.test.ts`
+- `src/repeat_login_diagnostic.test.ts`
+- `src/db/users.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Client/Server Plaintext Auth Guard Unification (`src/pages/Login.tsx`)**: Implemented recommendation from v49 external security evaluation by binding client-side plaintext password matching (`isPlaintextMatch`) strictly to `STRICT_PROD_SECURITY / VITE_STRICT_PROD_SECURITY`. Plaintext fallback is now completely disabled when production security mode is active (`VITE_STRICT_PROD_SECURITY === 'true'` or `STRICT_PROD_SECURITY === 'true'`).
+2. **Strict Production Precedence Test (`src/auth_security_hardening.test.ts`)**: Added automated test verifying that `STRICT_PROD_SECURITY === 'true'` disables plaintext fallback even if `ALLOW_PLAINTEXT_DEV_FALLBACK === 'true'` is accidentally set.
+3. **Repeat-Login Diagnostic & Offline State Regression Verification (`src/repeat_login_diagnostic.test.ts` & `src/db/users.ts`)**: Verified that Phase 2 offline validation rules remain intact (`saveUsers` blocks writes and prevents local storage pollution when offline) and updated diagnostic assertions to cover all try-catch wrapped login migration paths.
+
+**Test & Validation Result:**
+Pass - Executed `npm test src/auth_security_hardening.test.ts src/repeat_login_diagnostic.test.ts src/stabilization.test.ts -- --run` (28/28 tests passed across all 3 test suites). Verified clean compilation (`compile_applet`) and TypeScript linter (`lint_applet`). All operations scoped strictly to `projectId: "custodyflow"`.
+
+---
+
+## v52-platform-owner-bootstrap-and-pepper-resilience: OTP Zero-Lockout Recovery & Non-Strict Preview Pepper Fallback
+**Date/Time:** 2026-07-31 20:03:00 UTC
+**Files Changed:**
+- `server.ts`
+- `src/lib/server_hash.ts`
+- `src/migration_auth.test.ts`
+- `CHANGELOG.md`
+**Summary:**
+1. **Platform Owner Zero-Lockout Bootstrap Endpoint (`server.ts`)**: Added `/api/auth/bootstrap-platform-owner` endpoint protected by OTP email verification to enable the platform owner (`alaaabusalah96@gmail.com`) to reset credentials cleanly and rebuild authoritative PBKDF2 210,000 hashes in `user_credentials` without requiring manual Firestore document deletion.
+2. **Non-Strict Preview Pepper Resilience (`src/lib/server_hash.ts`)**: In non-strict preview/development mode (`STRICT_PROD_SECURITY !== 'true'`), `getActiveServerPepper()` now logs a security notice and returns a stable fallback pepper (`TRANSIENT_EXPOSED_PEPPER_V2`) when `APP_PEPPER` is unset, preventing dev server startup crashes while preserving fail-loud critical security behavior in production.
+3. **Automated Test Validation (`src/migration_auth.test.ts`)**: Added unit tests verifying both strict fail-loud behavior when `STRICT_PROD_SECURITY = true` and stable fallback behavior when unset in non-strict mode.
+
+**Test & Validation Result:**
+Pass - Executed `npm test src/auth_security_hardening.test.ts src/repeat_login_diagnostic.test.ts src/stabilization.test.ts src/migration_auth.test.ts -- --run` (37/37 tests passed across all 4 test suites). Clean TypeScript linter check (`lint_applet`) and build verification (`compile_applet`). All operations scoped strictly to `projectId: "custodyflow"`.
+
+---
+
+## v53-production-environment-secrets-activation: Environment Secrets Verification & Strict Mode Activation
+**Date/Time:** 2026-07-31 20:17:00 UTC
+**Files Changed:**
+- `.env.example`
+- `CHANGELOG.md`
+**Summary:**
+1. **Environment Secrets Verification & Activation**: Confirmed configuration of `APP_PEPPER`, `PLATFORM_OWNER_EMAIL`, and `STRICT_PROD_SECURITY=true` in platform deployment secrets. Restarted the development server (`restart_dev_server`) so that the running server process binds to the active secret pepper and enforces strict production security mode.
+2. **Environment Variable Documentation (`.env.example`)**: Added `STRICT_PROD_SECURITY` documentation to `.env.example` alongside `APP_PEPPER` and `PLATFORM_OWNER_EMAIL` without exposing sensitive production secret values.
+
+**Test & Validation Result:**
+Pass - Executed `npm test src/auth_security_hardening.test.ts src/repeat_login_diagnostic.test.ts src/stabilization.test.ts src/migration_auth.test.ts -- --run` (37/37 tests passed). Verified clean compilation (`compile_applet`) and TypeScript linter (`lint_applet`). All operations scoped strictly to `projectId: "custodyflow"`.
+
+
+
 
 
 

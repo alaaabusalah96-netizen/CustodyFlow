@@ -363,7 +363,16 @@ export default function Login({
     const enteredHashSinglePass = CustodyDB.legacySinglePassHashPassword(password, userSalt);
     const enteredHashOldSalted = CustodyDB.legacyHashPassword(password, emailLower);
     const enteredHashLegacy = CustodyDB.legacyHashPassword(password);
-    const isPlaintextMatch = storedPassword !== '' && storedPassword === password;
+
+    // Unify client and server plaintext matching guard (disabled in strict production)
+    const isStrictProdSecurity =
+      (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_STRICT_PROD_SECURITY === 'true') ||
+      (typeof process !== 'undefined' && process.env && process.env.STRICT_PROD_SECURITY === 'true');
+    const allowPlaintextFallback = !isStrictProdSecurity && (
+      (typeof import.meta !== 'undefined' && (import.meta as any).env && ((import.meta as any).env.DEV || (import.meta as any).env.VITE_ALLOW_PLAINTEXT_DEV_FALLBACK === 'true')) ||
+      (typeof process !== 'undefined' && process.env && (process.env.NODE_ENV !== 'production' || process.env.ALLOW_PLAINTEXT_DEV_FALLBACK === 'true'))
+    );
+    const isPlaintextMatch = Boolean(allowPlaintextFallback) && storedPassword !== '' && storedPassword === password;
     
     const isSaltedHash10kMatch = storedPassword !== '' && storedPassword === enteredHashSalted10k;
     const isSaltedHash1kMatch = storedPassword !== '' && storedPassword === enteredHashSalted1k;
@@ -396,7 +405,11 @@ export default function Login({
         }
         return u;
       });
-      await CustodyDB.saveUsers(updatedUsers);
+      try {
+        await CustodyDB.saveUsers(updatedUsers);
+      } catch (e) {
+        console.warn('Deferred hash migration save during login:', e);
+      }
       foundUser.password = enteredHashSalted10k;
     }
 
@@ -440,7 +453,11 @@ export default function Login({
           }
           return u;
         });
-        await CustodyDB.saveUsers(updatedUsers);
+        try {
+          await CustodyDB.saveUsers(updatedUsers);
+        } catch (e) {
+          console.warn('Deferred ID migration save during login:', e);
+        }
         foundUser.id = firebaseUser.uid;
       }
     }
@@ -460,7 +477,11 @@ export default function Login({
           }
           return u;
         });
-        await CustodyDB.saveUsers(updatedUsers);
+        try {
+          await CustodyDB.saveUsers(updatedUsers);
+        } catch (e) {
+          console.warn('Deferred first-time admin setup save during login:', e);
+        }
         foundUser.password = enteredHashSalted10k;
         foundUser.security_pin = '1234';
       }

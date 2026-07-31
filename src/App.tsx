@@ -201,7 +201,11 @@ export default function App() {
             // Synchronize ID if needed to enforce rules
             if (matchedUser.id !== firebaseUser.uid) {
               matchedUser.id = firebaseUser.uid;
-              await CustodyDB.saveUsers(users.map(u => (u.email?.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim()) ? { ...u, id: firebaseUser.uid } : u));
+              try {
+                await CustodyDB.saveUsers(users.map(u => (u.email?.toLowerCase().trim() === firebaseUser.email?.toLowerCase().trim()) ? { ...u, id: firebaseUser.uid } : u));
+              } catch (e) {
+                console.warn('Deferred UID sync save:', e);
+              }
             }
             CustodyDB.setActiveUser(matchedUser);
             setActiveUser(matchedUser);
