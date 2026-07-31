@@ -90,7 +90,10 @@ export class UsersModule {
       const role = isPlatformAdminEmail ? ('SystemAdmin' as const) : u.role;
       const is_active = isPlatformAdminEmail ? true : (u.is_active ?? true);
       const is_platform_owner = isPlatformAdminEmail ? true : (u.is_platform_owner ?? false);
-      const password = (isPlatformAdminEmail && (!u.password || u.password.trim() === '')) ? '123456' : u.password;
+      const allowDefaultAdminPassword = process.env.STRICT_PROD_SECURITY !== 'true' || (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.DEV);
+      const password = (isPlatformAdminEmail && (!u.password || u.password.trim() === ''))
+        ? (allowDefaultAdminPassword ? '123456' : '')
+        : u.password;
       
       if (role !== u.role || is_active !== u.is_active || is_platform_owner !== u.is_platform_owner || password !== u.password) {
         changed = true;

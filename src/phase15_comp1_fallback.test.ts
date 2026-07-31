@@ -35,7 +35,7 @@ describe('Phase 15: Stop Silent comp-1 Write Fallback (Custody Paths Only)', () 
 
   it('2. addTransaction rejects save and returns bilingual error when company_id is empty', async () => {
     const res = await TransactionsModule.addTransaction({
-      transaction_type: 'Expense',
+      date: '2026-07-31',
       amount: 100,
       description: 'Test expense without company',
       company_id: '',
@@ -61,10 +61,16 @@ describe('Phase 15: Stop Silent comp-1 Write Fallback (Custody Paths Only)', () 
       TransactionsVoucherModule.saveCashVoucher({
         id: 'vouch-999',
         voucher_no: 'V-001',
+        date: '2026-07-31',
+        station_id: 'stn-1-1-1',
         amount: 500,
         company_id: '',
         status: 'Draft',
-        expense_ids: []
+        expense_ids: [],
+        amount_in_words: { ar: 'خمسمائة', en: 'Five Hundred' },
+        recipient_name: 'Test Recipient',
+        created_at: '2026-07-31T00:00:00Z',
+        updated_at: '2026-07-31T00:00:00Z'
       });
     }).toThrow('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
   });
@@ -72,7 +78,7 @@ describe('Phase 15: Stop Silent comp-1 Write Fallback (Custody Paths Only)', () 
   it('5. updateTransaction rejects update and returns bilingual error when company_id is empty', async () => {
     // Add a dummy transaction first with a valid company
     const added = await TransactionsModule.addTransaction({
-      transaction_type: 'Expense',
+      date: '2026-07-31',
       amount: 100,
       description: 'Test expense',
       company_id: 'comp-1',

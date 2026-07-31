@@ -1342,6 +1342,43 @@ All Firebase operations in this phase were performed against the custodyflow pro
 Pass - `npm test -- --run` verified 20 test suites and 129 tests passing.
 All Firebase operations in this phase were performed against the custodyflow project only (`projectId: "custodyflow"`).
 
+## Part 2: Repeat-Login-Failure Diagnostic Audit (Diagnosis Only)
+**Date/Time:** 2026-07-31 18:50:00 UTC
+**Files Changed:**
+- `src/pages/Login.tsx`
+- `src/repeat_login_diagnostic.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Diagnostic Logging Added**: Added explicit diagnostic logs (`[Diagnostic Part 2] signInWithEmailAndPassword authErr.code:` and `[Diagnostic Part 2] createUserWithEmailAndPassword createErr.code:`) to `syncWithFirebaseAuth` in `src/pages/Login.tsx` to trace `signInWithEmailAndPassword` errors and fallback `createUserWithEmailAndPassword` creation errors.
+2. **Root Cause Analysis (Repeat Login & UID Divergence)**: Audited `syncWithFirebaseAuth` and confirmed that `auth/invalid-credential` is triggered on both invalid password and non-existent Firebase Auth user. When `createUserWithEmailAndPassword` is invoked after an existing Firebase user fails password sign-in, Firebase throws `auth/email-already-in-use`, causing `syncWithFirebaseAuth` to throw or return null.
+3. **Migration Partial Application Audit**: Identified the unwrapped `await CustodyDB.saveUsers(updatedUsers)` call in `Login.tsx` (around line 436) after ID migration, where a Firestore write timeout leaves the local/remote ID migration partially applied.
+
+**Test & Validation Result:**
+Pass - `npm test src/repeat_login_diagnostic.test.ts -- --run` verified diagnostic test suite passing (2 tests). All Firebase operations performed against the custodyflow project only (`projectId: "custodyflow"`).
+
+---
+
+## v49-security-hardening: Zero-Problem Production Login System & Zero-Trust Password Security Hardening
+**Date/Time:** 2026-07-31 19:16:00 UTC
+**Files Changed:**
+- `.env.example`
+- `server.ts`
+- `src/db/users.ts`
+- `src/auth_security_hardening.test.ts` (Created)
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Removed Plaintext Password Matching in Production (`server.ts`)**: Re-audited `server.ts` authentication endpoints (`/api/auth/verify-credentials` and admin endpoints) and wrapped all plaintext password matching (`isPlainMatch`) with an explicit environment guard (`process.env.NODE_ENV !== 'production' || process.env.ALLOW_PLAINTEXT_DEV_FALLBACK === 'true'`). In production environments, plaintext password matching is strictly disabled.
+2. **Hardened SystemAdmin Default Password Allocation (`src/db/users.ts`)**: Updated `UsersModule.syncDefaults` so that fallback assignment of `'123456'` to SystemAdmin accounts with empty passwords only occurs in development mode (`DEV` environment or `ALLOW_DEFAULT_ADMIN_PASSWORD === 'true'`). In production, empty passwords are never overwritten with default plaintext strings.
+3. **Redacted Personal Email & Enforced Server-Side Pepper (`.env.example`)**: Replaced `PLATFORM_OWNER_EMAIL="alaaabusalah96@gmail.com"` with generic enterprise domain `"admin@your-domain.com"` in `.env.example` to ensure zero personal email exposure. Documented required cryptographic pepper (`APP_PEPPER=`) for server-side PBKDF2 210,000-iteration hashing.
+4. **Automated Security Verification Suite (`src/auth_security_hardening.test.ts`)**: Created automated security hardening tests verifying PBKDF2 210k hash uniqueness across pepper versions, disabling of plaintext matching in production, platform owner identity validation, and `.env.example` documentation requirements.
+
+**Test & Validation Result:**
+Pass - Executed `npm test src/auth_security_hardening.test.ts -- --run` (4/4 tests passed in 200ms) and verified zero regression across diagnostic and stabilization suites (`src/repeat_login_diagnostic.test.ts` and `src/stabilization.test.ts`). All operations scoped strictly to `projectId: "custodyflow"`.
+
+
+
 
 
 

@@ -76,13 +76,19 @@ export default function Login({
 
   const refreshSmtpStatus = () => {
     fetch('/api/auth/smtp-config')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setSmtpConfiguredStatus(data);
+      .then(async res => {
+        if (!res.ok) return;
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data.success) {
+            setSmtpConfiguredStatus(data);
+          }
         }
       })
-      .catch(err => console.error("Error fetching SMTP status:", err));
+      .catch(() => {
+        // Silently ignore network/boot errors during initial SMTP status check
+      });
   };
 
   React.useEffect(() => {
@@ -259,10 +265,12 @@ export default function Login({
         }
 
         if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/invalid-email') {
+          console.log('[Diagnostic Part 2] signInWithEmailAndPassword authErr.code:', authErr.code);
           try {
             const userCredential = await createUserWithEmailAndPassword(auth, emailLower, passStr);
             return userCredential.user;
           } catch (createErr: any) {
+            console.log('[Diagnostic Part 2] createUserWithEmailAndPassword createErr.code:', createErr.code);
             if (createErr.code === 'auth/operation-not-allowed') {
               console.warn(
                 'Firebase Auth: Email/Password sign-in provider is not enabled in your Firebase project. ' +
