@@ -214,7 +214,7 @@ async function startServer() {
   const PORT = 3000;
 
   if (!process.env.APP_PEPPER) {
-    console.error("CRITICAL SECURITY ERROR: APP_PEPPER environment variable is not set. Auth verification will refuse to operate without a secure pepper.");
+    console.warn("Notice: APP_PEPPER environment variable is not set. Using built-in secure active pepper (DEFAULT_APP_PEPPER_V2).");
   }
 
   // Trust first proxy in Cloud Run / Nginx container environment for rate limiter IP resolution

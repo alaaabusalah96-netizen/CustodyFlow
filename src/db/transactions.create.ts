@@ -15,7 +15,13 @@ export class TransactionsCreateModule {
       const transactions = StorageEngine.getStored<Transaction[]>('transactions', DEFAULT_TRANSACTIONS);
       const user = UsersModule.getActiveUser();
       const station_id = data.station_id || user?.station_id;
-      const company_id = user?.company_id || CompaniesModule.getSelectedCompanyId();
+      const company_id = data.company_id || user?.company_id || (typeof localStorage !== 'undefined' ? localStorage.getItem('custody_selected_company_id') : null);
+      if (!company_id || company_id.trim() === '') {
+        return {
+          success: false,
+          errors: ['يجب اختيار شركة قبل الحفظ. / Please select a company before saving.']
+        };
+      }
       const status = data.status || 'Pending';
       const category_id = data.category_id || 'cat-6';
 

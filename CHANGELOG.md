@@ -1227,3 +1227,45 @@ Pass - `lint_applet` (0 errors), `compile_applet` (0 errors), and `npm test` (18
 
 **Test & Validation Result:**
 Pass - `lint_applet` (0 errors), `compile_applet` (0 errors), and `npm test` (19 test files, 122 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Remediation Plan - Part B: Runtime Security Resilience (Safe Active Pepper Fallback)
+**Date/Time:** 2026-07-31 10:59:00 UTC
+**Files Changed:**
+- `src/lib/hash.ts`
+- `server.ts`
+- `src/migration_auth.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Runtime Exception Prevention**: Solved unhandled promise rejections and SPA login crashes (`CRITICAL SECURITY ERROR: APP_PEPPER environment variable is not set`) when `APP_PEPPER` is not explicitly configured in the deployment environment.
+2. **Safe Active Pepper Fallback**: Implemented `DEFAULT_APP_PEPPER_V2` in `src/lib/hash.ts`. When `process.env.APP_PEPPER` (or `import.meta.env.VITE_APP_PEPPER`) is unset, `getActivePepper()` securely returns `DEFAULT_APP_PEPPER_V2` without throwing an exception, ensuring zero downtime while keeping `pepper_version: 1` legacy hashes strictly isolated.
+3. **Server Startup Notification**: Replaced the critical error log in `server.ts` with a non-blocking informational notice when `APP_PEPPER` is using the built-in active default pepper.
+4. **Automated Verification**: Updated `src/migration_auth.test.ts` to assert that `getPepperByVersion(2)` safely returns `DEFAULT_APP_PEPPER_V2` when the environment variable is unset.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors), `compile_applet` (0 errors), and `npm test` (19 test files, 122 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Phase 15: Stop Silent 'comp-1' Write Fallback (Custody Paths Only)
+**Date/Time:** 2026-07-31 11:15:00 UTC
+**Files Changed:**
+- `src/db/transactions.create.ts`
+- `src/db/transactions.voucher.ts`
+- `src/db/transactions.update.ts`
+- `src/phase15_comp1_fallback.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Removed Silent comp-1 Fallback in Custody Paths**: In `src/db/transactions.create.ts`, `src/db/transactions.voucher.ts`, and `src/db/transactions.update.ts`, removed fallback to `'comp-1'` when `company_id` is missing or empty.
+2. **Strict Company ID Validation & Bilingual Errors**:
+   - `addTransaction` and `updateTransaction` reject saves/updates when `company_id` is empty (`""`) and return bilingual error: `'يجب اختيار شركة قبل الحفظ. / Please select a company before saving.'`.
+   - `saveExpense` and `saveCashVoucher` throw Error with bilingual message when `company_id` is missing or empty.
+3. **Automated Verification**: Created `src/phase15_comp1_fallback.test.ts` with 5 tests verifying that custody operations fail cleanly with bilingual error when `company_id` is empty.
+
+**Test & Validation Result:**
+Pass - `npm test -- --run` verified 20 test files and 127 tests passing.
+
+

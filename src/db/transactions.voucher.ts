@@ -12,6 +12,9 @@ export class TransactionsVoucherModule {
   }
 
   static saveExpense(expense: any): void {
+    if (!expense.company_id || expense.company_id.trim() === '') {
+      throw new Error('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
+    }
     const expenses = TransactionsVoucherModule.getExpenses();
     const index = expenses.findIndex(e => e.id === expense.id);
     if (index > -1) {
@@ -35,6 +38,9 @@ export class TransactionsVoucherModule {
   }
 
   static saveCashVoucher(voucher: CashVoucher, expectedVersion?: number): void {
+    if (!voucher.company_id || voucher.company_id.trim() === '') {
+      throw new Error('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
+    }
     const vouchers = TransactionsVoucherModule.getCashVouchers();
     const index = vouchers.findIndex(v => v.id === voucher.id);
     const before = index > -1 ? vouchers[index] : null;

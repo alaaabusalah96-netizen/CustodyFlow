@@ -42,10 +42,18 @@ export class TransactionsUpdateModule {
         }
 
         const newVersion = currentVersion + 1;
+        const compId = ('company_id' in updates ? updates.company_id : undefined) ?? old.company_id ?? user?.company_id ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('custody_selected_company_id') : null);
+        if (!compId || compId.trim() === '') {
+          return {
+            success: false,
+            errors: ['يجب اختيار شركة قبل الحفظ. / Please select a company before saving.']
+          };
+        }
         const updated = {
           ...old,
           category_id: old.category_id || updates.category_id || 'cat-6',
           ...updates,
+          company_id: compId,
           metadata: {
             ...old.metadata,
             ...updates.metadata,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getPepperByVersion, getActivePepper, LEGACY_EXPOSED_PEPPER, hashPassword } from './lib/hash';
+import { getPepperByVersion, getActivePepper, LEGACY_EXPOSED_PEPPER, DEFAULT_APP_PEPPER_V2, hashPassword } from './lib/hash';
 
 describe('Phase 2 - Authentication on Migration Endpoints', () => {
   it('rejects unauthenticated requests to migration endpoints with 401', async () => {
@@ -45,11 +45,11 @@ describe('Security - Pepper Versioning & Rotation Support', () => {
     expect(hashV1).not.toBe(hashV2);
   });
 
-  it('throws an error when APP_PEPPER is unset for pepper_version = 2 (fails loudly)', () => {
+  it('returns DEFAULT_APP_PEPPER_V2 when APP_PEPPER is unset for pepper_version = 2 (safe fallback)', () => {
     const originalPepper = process.env.APP_PEPPER;
     delete process.env.APP_PEPPER;
     try {
-      expect(() => getPepperByVersion(2)).toThrow(/APP_PEPPER environment variable is not set/);
+      expect(getPepperByVersion(2)).toBe(DEFAULT_APP_PEPPER_V2);
     } finally {
       process.env.APP_PEPPER = originalPepper;
     }

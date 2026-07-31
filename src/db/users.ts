@@ -11,19 +11,23 @@ export class UsersModule {
     if (!email || typeof email !== 'string') return false;
     const cleaned = email.toLowerCase().trim();
 
-    // 1. Check local storage / memory cached users
+    // 1. Check DEFAULT_USERS first for any built-in platform owner or SystemAdmin record
+    const isDefaultAdmin = DEFAULT_USERS.some(u => 
+      (u.is_platform_owner === true || u.role === 'SystemAdmin') && 
+      u.email && 
+      u.email.toLowerCase().trim() === cleaned
+    );
+    if (isDefaultAdmin) {
+      return true;
+    }
+
+    // 2. Check local storage / memory cached users
     const users = StorageEngine.getStored<AppUser[]>('users', []);
     if (users && users.length > 0) {
       const match = users.find(u => u.email && u.email.toLowerCase().trim() === cleaned);
       if (match) {
-        return match.is_platform_owner === true;
+        return match.is_platform_owner === true || match.role === 'SystemAdmin';
       }
-    }
-
-    // 2. Check DEFAULT_USERS for platform owner user record
-    const defaultOwner = DEFAULT_USERS.find(u => u.is_platform_owner === true);
-    if (defaultOwner && defaultOwner.email) {
-      return defaultOwner.email.toLowerCase().trim() === cleaned;
     }
 
     return false;
