@@ -395,6 +395,27 @@ export default function Login({
       const currentUsers = CustodyDB.getUsers();
       const legacyUser = currentUsers.find(u => u.email?.toLowerCase().trim() === emailLower && u.id !== firebaseUser.uid);
       if (legacyUser) {
+        // Migrate credential vault document via server endpoint
+        try {
+          const idToken = await firebaseUser.getIdToken().catch(() => '');
+          if (idToken) {
+            await fetch('/api/auth/migrate-credential-id', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+              },
+              body: JSON.stringify({
+                oldId: legacyUser.id,
+                newId: firebaseUser.uid,
+                email: emailLower
+              })
+            });
+          }
+        } catch (migErr) {
+          console.warn('Failed to migrate credential vault ID:', migErr);
+        }
+
         // Delete legacy doc from Firestore
         try {
           await dbDeleteDoc('users', legacyUser.id);

@@ -1151,6 +1151,41 @@ Removed persistent top-bar company selection dropdown for `SystemAdmin` in heade
 **Test & Validation Result:**
 Pass - `lint_applet` (0 errors) and `compile_applet` (0 errors) passed cleanly. All vitest unit tests passing. All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
 
+---
+
+## Remediation Plan - Login/Session Diagnostic Follow-up (Correction)
+**Date/Time:** 2026-07-31 07:25:00 UTC
+**Files Changed:**
+- `src/pages/Login.tsx`
+- `server.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+Corrected the credential migration and repair mechanism for orphaned `user_credentials` after legacy ID migration to Firebase UID:
+1. **Migration Source Fix (`src/pages/Login.tsx`, `server.ts`)**: Added dedicated server endpoint `POST /api/auth/migrate-credential-id` protected by Firebase Auth token verification. When `Login.tsx` migrates a `legacyUser` (`legacyUser.id !== firebaseUser.uid`), it calls this endpoint while `legacyUser.id` is still in scope to copy `user_credentials/{legacyUser.id}` to `user_credentials/{firebaseUser.uid}` and delete the old vault document before removing `users/{legacyUser.id}`.
+2. **Dead-Code Removal & One-Time Repair (`server.ts`)**: Removed the non-functional `userData.id !== userId` self-healing branch from `/api/auth/verify-credentials`. Added `POST /api/auth/repair-orphaned-credentials` (protected by `requireSystemAdminAuth`) to list any orphaned `user_credentials` documents not present in `users`, auto-pair them by matching `email` where present, or require human manual confirmation (`confirmPairing`, `manualOldId`, `manualNewId`) where email is absent.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors), `compile_applet` (0 errors), and `npm test` (18 files, 116 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+---
+
+## Remediation Plan - Login/Session Diagnostic Follow-up (Security Correction)
+**Date/Time:** 2026-07-31 07:34:00 UTC
+**Files Changed:**
+- `server.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+Resolved IDOR vulnerability and hardcoded email fallback in authentication migration/repair endpoints:
+1. **IDOR Prevention in `POST /api/auth/migrate-credential-id`**: Added authorization check verifying that `user_credentials/{oldId}` belongs to the requesting user (`oldEmail === callerEmail`) before copying or deleting any credential document. Resolves `callerEmail` from `decodedToken.email` or `users/{newId}` server-side.
+2. **Hardcoded Email Removal in `POST /api/auth/repair-orphaned-credentials`**: Removed the hardcoded `'alaaabusalah96@gmail.com'` default email string. If an orphaned credential lacks an email and no manual email is supplied, the record is added to `pendingConfirmation` instead of assigning a default identity.
+
+**Test & Validation Result:**
+Pass - `lint_applet` (0 errors), `compile_applet` (0 errors), and `npm test` (18 test files, 116 tests passing). All Firebase operations targeted `custodyflow` project only (`projectId: custodyflow`).
+
+
+
 
 
 

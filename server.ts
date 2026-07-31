@@ -362,6 +362,7 @@ async function startServer() {
 
       // 2. Fetch private credentials from 'user_credentials' vault using Admin SDK
       const credDoc = await adminDb.collection("user_credentials").doc(userId).get();
+
       let storedPasswordHash = '';
       let salt = userData.salt || emailLower;
       let kdf = 'legacy';
@@ -485,6 +486,126 @@ async function startServer() {
     } catch (err: any) {
       console.error("Error in save-credentials endpoint:", err);
       return res.status(500).json({ success: false, message: "حدث خطأ أثناء حفظ الاعتمادات." });
+    }
+  });
+
+  // API Route - Server-side Migrate Credential Vault ID (when legacy user ID -> Firebase Auth UID)
+  app.post("/api/auth/migrate-credential-id", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization || "";
+      const idToken = authHeader.split("Bearer ")[1]?.trim();
+      if (!idToken) {
+        return res.status(401).json({ success: false, message: "Unauthorized token." });
+      }
+      const decodedToken = await getAdminAuth(adminApp).verifyIdToken(idToken);
+      const { oldId, newId, email } = req.body;
+      if (!oldId || !newId || decodedToken.uid !== newId) {
+        return res.status(400).json({ success: false, message: "Invalid migration parameters or token mismatch." });
+      }
+
+      // Resolve requesting user's own email from decodedToken or by loading users/{newId} server-side
+      let callerEmail = (decodedToken.email || "").toLowerCase().trim();
+      if (!callerEmail) {
+        const userDocSnap = await adminDb.collection("users").doc(newId).get();
+        callerEmail = (userDocSnap.data()?.email || "").toLowerCase().trim();
+      }
+      if (!callerEmail) {
+        return res.status(403).json({ success: false, message: "Caller email could not be resolved for authorization." });
+      }
+
+      const oldCredRef = adminDb.collection("user_credentials").doc(oldId);
+      const oldCredDoc = await oldCredRef.get();
+      if (oldCredDoc.exists) {
+        const credData = oldCredDoc.data() || {};
+        const oldEmail = (credData.email || "").toLowerCase().trim();
+        // Check that oldId actually belongs to the same person making the request
+        if (!oldEmail || oldEmail !== callerEmail) {
+          return res.status(403).json({ success: false, message: "Forbidden: credential ownership mismatch." });
+        }
+
+        await adminDb.collection("user_credentials").doc(newId).set({
+          ...credData,
+          id: newId,
+          email: callerEmail,
+          updated_at: new Date().toISOString()
+        }, { merge: true });
+        if (oldId !== newId) {
+          try {
+            await oldCredRef.delete();
+          } catch (delErr) {
+            console.warn("Failed to delete legacy user_credentials doc:", delErr);
+          }
+        }
+        return res.json({ success: true, message: "Credential vault migrated successfully." });
+      }
+      return res.json({ success: false, message: "No legacy credential found to migrate." });
+    } catch (err: any) {
+      console.error("Error migrating credential vault ID:", err);
+      return res.status(500).json({ success: false, message: "Server error during credential migration." });
+    }
+  });
+
+  // API Route - One-time repair for already orphaned user_credentials (requires SystemAdmin or manual confirmation)
+  app.post("/api/auth/repair-orphaned-credentials", requireSystemAdminAuth, async (req, res) => {
+    try {
+      const { targetEmail, confirmPairing, manualOldId, manualNewId } = req.body || {};
+      const usersSnap = await adminDb.collection("users").get();
+      const credsSnap = await adminDb.collection("user_credentials").get();
+      const userIds = new Set(usersSnap.docs.map(d => d.id));
+
+      const orphanedDocs = credsSnap.docs.filter(d => !userIds.has(d.id));
+      const repaired: string[] = [];
+      const pendingConfirmation: any[] = [];
+
+      for (const oldDoc of orphanedDocs) {
+        const data = oldDoc.data() || {};
+        const docEmail = (data.email || '').toLowerCase().trim();
+
+        if (manualOldId && manualNewId && confirmPairing && oldDoc.id === manualOldId) {
+          const resolvedEmail = (targetEmail || docEmail || '').toLowerCase().trim();
+          if (!resolvedEmail) {
+            pendingConfirmation.push({ oldId: oldDoc.id, reason: "No email field present on orphaned record or request; manual email confirmation required." });
+            continue;
+          }
+          await adminDb.collection("user_credentials").doc(manualNewId).set({
+            ...data,
+            id: manualNewId,
+            email: resolvedEmail,
+            updated_at: new Date().toISOString()
+          }, { merge: true });
+          await oldDoc.ref.delete();
+          repaired.push(`Manually paired ${oldDoc.id} -> ${manualNewId}`);
+          continue;
+        }
+
+        if (docEmail) {
+          const matchingUserDoc = usersSnap.docs.find(u => (u.data()?.email || '').toLowerCase().trim() === docEmail);
+          if (matchingUserDoc) {
+            await adminDb.collection("user_credentials").doc(matchingUserDoc.id).set({
+              ...data,
+              id: matchingUserDoc.id,
+              email: docEmail,
+              updated_at: new Date().toISOString()
+            }, { merge: true });
+            await oldDoc.ref.delete();
+            repaired.push(`Auto-repaired by email ${docEmail}: ${oldDoc.id} -> ${matchingUserDoc.id}`);
+          } else {
+            pendingConfirmation.push({ oldId: oldDoc.id, email: docEmail });
+          }
+        } else {
+          pendingConfirmation.push({ oldId: oldDoc.id, reason: "No email field present on orphaned record; manual confirmation required." });
+        }
+      }
+
+      return res.json({
+        success: true,
+        repairedCount: repaired.length,
+        repaired,
+        pendingConfirmation
+      });
+    } catch (err: any) {
+      console.error("Error in repair-orphaned-credentials:", err);
+      return res.status(500).json({ success: false, message: "Error repairing orphaned credentials." });
     }
   });
 
