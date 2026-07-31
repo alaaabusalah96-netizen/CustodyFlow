@@ -575,7 +575,11 @@ service cloud.firestore {
 
     // --- Signup Requests ---
     match /signup_requests/{id} {
-      allow create: if isLoggedIn();
+      allow create: if request.resource.data.keys().hasAll(['email', 'full_name', 'company_id', 'status'])
+                    && request.resource.data.status == 'Pending'
+                    && request.resource.data.email is string
+                    && request.resource.data.full_name is string
+                    && request.resource.data.company_id is string;
       allow read, update, delete: if isSystemAdmin() || (
         isLoggedIn() && 
         (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') && 

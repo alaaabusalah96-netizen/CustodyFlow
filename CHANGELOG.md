@@ -1497,6 +1497,33 @@ Pass - Executed `npm test src/auth_security_hardening.test.ts src/repeat_login_d
 **Test & Validation Result:**
 Pass - Executed `npm test src/auth_security_hardening.test.ts src/repeat_login_diagnostic.test.ts src/stabilization.test.ts src/migration_auth.test.ts -- --run` (37/37 tests passed). Verified clean applet compilation (`compile_applet`). All operations scoped strictly to `projectId: "custodyflow"`.
 
+---
+
+## Phase 57: Critical Fix for New User Signup Requests & Admin Review Flow
+**Date/Time:** 2026-07-31 21:39:00 UTC
+**Files Changed:**
+- `firestore.rules`
+- `src/db/users.ts`
+- `src/pages/Login.tsx`
+- `src/pages/CompanyAdminDashboard.tsx`
+- `src/pages/RegionAdminDashboard.tsx`
+- `src/components/AdminCredentialsForm.tsx`
+- `src/pages/SuperAdmin.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Firestore Security Rules (`firestore.rules`)**: Updated `signup_requests` to allow unauthenticated visitor `create` operations from the Login screen, enforcing required schema fields (`email`, `full_name`, `company_id`, `status`) and restricting initial creation status strictly to `'Pending'`. Preserved existing restricted `read`, `update`, and `delete` permissions for authorized `SystemAdmin` and `Admin` users.
+2. **Local-First Resilient Request Storage (`src/db/users.ts`)**: Updated `saveSignupRequest` and `deleteSignupRequest` to save and update localStorage (`signup_requests`) immediately before attempting Firestore synchronization, and replaced blocking exceptions with non-fatal `console.warn` logging so network timeouts do not impede the UI flow.
+3. **Login Request Security & Hash Hiding (`src/pages/Login.tsx`)**: Replaced plaintext password storage in `signup_requests` with secure PBKDF2/SHA-256 password hashing before storing the signup request, and ensured success feedback is displayed immediately upon local submission.
+4. **Admin & SaaS Real-time Review UI (`src/pages/CompanyAdminDashboard.tsx`, `src/pages/RegionAdminDashboard.tsx`, `src/pages/SuperAdmin.tsx`, `src/components/AdminCredentialsForm.tsx`)**:
+   - Registered `signup_requests` in real-time `useScreenListeners` across Admin dashboards so pending requests appear instantly without page refresh.
+   - Set deterministic user salt (`email.toLowerCase().trim()`) when approving pending signup requests so hashed credentials verify correctly upon first login.
+   - Added an interactive Pending Signup Requests list with quick **Approve** (قبول وتفعيل) and **Reject** (رفض) action buttons directly in the SuperAdmin dashboard.
+
+**Test & Validation Result:**
+Pass - Executed `npm test src/auth_security_hardening.test.ts src/repeat_login_diagnostic.test.ts src/stabilization.test.ts src/migration_auth.test.ts -- --run` (37/37 tests passed). Verified clean TypeScript linter (`lint_applet`) and build compilation (`compile_applet`). All operations scoped strictly to `projectId: "custodyflow"`.
+
+
 
 
 

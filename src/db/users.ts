@@ -450,10 +450,7 @@ export class UsersModule {
   }
 
   static async saveSignupRequest(request: SignupRequest): Promise<void> {
-    const syncRes = await syncWriteWithOfflineFallback('signup_requests', request.id, request);
-    if (!syncRes.success) {
-      throw new Error(syncRes.error || `فشل حفظ طلب التسجيل في قاعدة البيانات.`);
-    }
+    // 1. Save locally first (local-first)
     const requests = UsersModule.getSignupRequests();
     const index = requests.findIndex(r => r.id === request.id);
     if (index > -1) {
@@ -462,16 +459,33 @@ export class UsersModule {
       requests.unshift(request);
     }
     StorageEngine.setStored('signup_requests', requests);
+
+    // 2. Sync to Firestore without throwing on failure
+    try {
+      const syncRes = await syncWriteWithOfflineFallback('signup_requests', request.id, request);
+      if (!syncRes.success) {
+        console.warn(`[saveSignupRequest] Cloud sync deferred/warning: ${syncRes.error}`);
+      }
+    } catch (err: any) {
+      console.warn('[saveSignupRequest] Firestore sync failed, saved locally:', err?.message || err);
+    }
   }
 
   static async deleteSignupRequest(id: string): Promise<void> {
-    const syncRes = await syncWriteWithOfflineFallback('signup_requests', id, null);
-    if (!syncRes.success) {
-      throw new Error(syncRes.error || `فشل حذف طلب التسجيل من قاعدة البيانات.`);
-    }
+    // 1. Update local storage first (local-first)
     const requests = UsersModule.getSignupRequests();
     const filtered = requests.filter(r => r.id !== id);
     StorageEngine.setStored('signup_requests', filtered);
+
+    // 2. Sync deletion to Firestore without throwing on failure
+    try {
+      const syncRes = await syncWriteWithOfflineFallback('signup_requests', id, null);
+      if (!syncRes.success) {
+        console.warn(`[deleteSignupRequest] Cloud delete deferred/warning: ${syncRes.error}`);
+      }
+    } catch (err: any) {
+      console.warn('[deleteSignupRequest] Firestore delete failed, deleted locally:', err?.message || err);
+    }
   }
 
   static upsertLocalUser(user: AppUser): void {

@@ -786,6 +786,38 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
     }
   };
 
+  const handleApproveSignupRequest = async (req: SignupRequest) => {
+    const newUser: AppUser = {
+      id: `user-approved-${req.role.toLowerCase()}-${Date.now()}`,
+      email: req.email.toLowerCase().trim(),
+      full_name: req.full_name,
+      role: req.role,
+      company_id: req.company_id,
+      station_id: req.station_id,
+      is_active: true,
+      password: req.password || '123456',
+      salt: req.email.toLowerCase().trim(),
+      permissions: CustodyDB.enrichUserPermissions(req.role)
+    };
+
+    const usersList = CustodyDB.getUsers();
+    usersList.push(newUser);
+    await CustodyDB.saveUsers(usersList);
+    await CustodyDB.deleteSignupRequest(req.id);
+    CustodyDB.logAudit('APPROVE_SIGNUP_REQUEST', `Approved signup for ${req.full_name} (${req.email}) as ${req.role}`);
+    alert(isRtl ? 'تم قبول طلب التسجيل وتفعيل الحساب بنجاح!' : 'Signup request approved successfully!');
+    handleRefreshData();
+  };
+
+  const handleRejectSignupRequest = async (id: string, email: string) => {
+    if (confirm(isRtl ? 'هل أنت متأكد من رفض هذا الطلب وحذفه؟' : 'Are you sure you want to reject and delete this request?')) {
+      await CustodyDB.deleteSignupRequest(id);
+      CustodyDB.logAudit('REJECT_SIGNUP_REQUEST', `Rejected signup request for ${email}`);
+      alert(isRtl ? 'تم رفض طلب التسجيل وحذفه.' : 'Signup request rejected and deleted.');
+      handleRefreshData();
+    }
+  };
+
   // Filters
   const filteredCompanies = useMemo(() => {
     return companies.filter(c => 
@@ -920,6 +952,54 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
           </div>
         </div>
       </div>
+
+      {/* Interactive Pending Signup Requests Banner/List for SuperAdmin */}
+      {(() => {
+        const pendingReqs = CustodyDB.getSignupRequests().filter(r => r.status === 'Pending' || (r.status as any) === 'pending');
+        if (pendingReqs.length === 0) return null;
+        return (
+          <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-bold text-sm">
+                <AlertTriangle size={18} className="text-amber-600 dark:text-amber-400" />
+                <span>{isRtl ? `طلبات تسجيل مستخدمين جديدة بانتظار الموافقة (${pendingReqs.length})` : `New Pending Signup Requests (${pendingReqs.length})`}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {pendingReqs.map(req => (
+                <div key={req.id} className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-amber-100 dark:border-slate-800 shadow-sm flex flex-col justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-slate-800 dark:text-slate-100 text-sm truncate">{req.full_name}</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-slate-700">{req.role}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">{req.email}</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                      {isRtl ? 'الشركة: ' : 'Company: '}{companies.find(c => c.id === req.company_id)?.name || req.company_id}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => handleApproveSignupRequest(req)}
+                      className="flex-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
+                    >
+                      {isRtl ? 'قبول وتفعيل' : 'Approve'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRejectSignupRequest(req.id, req.email)}
+                      className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-rose-600 dark:text-rose-400 text-xs font-bold transition-all cursor-pointer border border-rose-200 dark:border-slate-700"
+                    >
+                      {isRtl ? 'رفض' : 'Reject'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Navigation Sub-Tabs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">

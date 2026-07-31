@@ -136,6 +136,7 @@ function AdminCredentialsForm({
       station_id: req.station_id,
       is_active: true,
       password: req.password || '123456',
+      salt: req.email.toLowerCase().trim(),
       permissions: CustodyDB.enrichUserPermissions(req.role)
     };
 
@@ -490,7 +491,7 @@ function AdminCredentialsForm({
 }
 
 export default function CompanyAdminDashboard({ activeUser, language, theme }: CompanyAdminDashboardProps) {
-  useScreenListeners(['transactions', 'logs', 'Expenses', 'CashVouchers', 'TransactionHistory', 'deleted_transactions']);
+  useScreenListeners(['transactions', 'logs', 'Expenses', 'CashVouchers', 'TransactionHistory', 'deleted_transactions', 'signup_requests']);
 
   const isRtl = language === 'ar';
   const myCompanyId = activeUser.company_id || '';

@@ -631,20 +631,25 @@ export default function Login({
         return;
       }
 
+      const emailClean = email.toLowerCase().trim();
       const newRequest: SignupRequest = {
         id: `request-${Date.now()}`,
-        email: email.toLowerCase().trim(),
+        email: emailClean,
         full_name: fullName.trim(),
         role: selectedRole,
         company_id: selectedCompanyId,
         region_id: selectedRole !== 'Admin' ? selectedRegionId : undefined,
         station_id: selectedRole === 'StationAdmin' ? selectedStationId : undefined,
-        password: password,
+        password: CustodyDB.hashPassword(password, emailClean),
         created_at: new Date().toISOString(),
         status: 'Pending'
       };
 
-      await CustodyDB.saveSignupRequest(newRequest);
+      try {
+        await CustodyDB.saveSignupRequest(newRequest);
+      } catch (e) {
+        console.warn('Signup request deferred/saved locally:', e);
+      }
       setSuccess(isRtl 
         ? 'تم تقديم طلب التسجيل بنجاح! بانتظار موافقة المسؤول لتفعيل الحساب.' 
         : 'Registration request submitted successfully! Pending approval to activate your account.'

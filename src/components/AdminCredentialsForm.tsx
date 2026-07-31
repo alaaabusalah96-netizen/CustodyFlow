@@ -126,6 +126,7 @@ export default function AdminCredentialsForm({
       station_id: req.station_id,
       is_active: true,
       password: req.password || '123456',
+      salt: req.email.toLowerCase().trim(),
       permissions: CustodyDB.enrichUserPermissions(req.role)
     };
 
