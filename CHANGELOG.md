@@ -1876,5 +1876,52 @@ Pass - Executed `compile_applet` (build succeeded cleanly) and ran 100% of unit 
 **Test & Validation Result:**
 Pass - Executed `lint_applet` (0 errors) and `compile_applet` (build succeeded cleanly). Restarted dev server (`restart_dev_server`) so server-side credential verification changes take immediate effect. Verified `projectId` remains locked to `custodyflow`.
 
+---
+
+## v58-platform-owner-bootstrap-restriction: Restrict Bootstrap to Configured Platform Owner Email Only
+**Date/Time:** 2026-08-01 00:46:00 UTC
+**Files Changed:**
+- `server.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+- Restricted `/api/auth/bootstrap-platform-owner` in `server.ts` to reject attempts where `targetEmail !== PLATFORM_OWNER_EMAIL` with a 403 status code and message `"غير مسموح بإعداد هذا الحساب كمشرف للمنصة. البريد الإلكتروني غير مطابق للمالك المُعرَّف مسبقًا."`. Verified that `PLATFORM_OWNER_EMAIL` environment variable is configured.
+
+**Test & Validation Result:**
+Pass - Ran `lint_applet` (0 errors) and full unit test suite `npm test -- --run` (156/156 tests passing across 26 test files).
+
+---
+
+## v59-firebase-auth-already-exists-handling: Stop Silently Swallowing Firebase-Account-Already-Exists in Login Flow
+**Date/Time:** 2026-08-01 00:48:00 UTC
+**Files Changed:**
+- `src/pages/Login.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+- In `src/pages/Login.tsx` inside `syncWithFirebaseAuth`, added an explicit `else if (createErr.code === 'auth/email-already-in-use')` branch when `createUserWithEmailAndPassword` throws during offline/sync fallback.
+- Logged clear diagnostic warning `[Diagnostic Part 2] Firebase Auth account already exists for this email...` instead of a generic error, allowing the login flow to continue cleanly without a synced Firebase UID for that attempt.
+- Left the existing outer `if` condition (`authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential' || ...`) unchanged as instructed.
+
+**Test & Validation Result:**
+Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded cleanly), and full unit test suite `npm test -- --run` (156/156 tests passing across 26 test files).
+
+---
+
+## v60-remove-hardcoded-security-pin-and-add-correction-rules: Remove Hardcoded Default Security PIN + Add Missing Firestore Rule
+**Date/Time:** 2026-08-01 00:52:00 UTC
+**Files Changed:**
+- `src/pages/Login.tsx`
+- `firestore.rules`
+- `CHANGELOG.md`
+
+**Summary:**
+- Removed hardcoded default `security_pin: '1234'` assignments in `src/pages/Login.tsx` during initial admin setup and deferred first-time admin saving. Verified zero occurrences of `security_pin: '1234'` across the codebase.
+- Added missing `account_correction_requests` Firestore security rules block in `firestore.rules`, allowing creation of `'Pending'` requests with required fields (`targetEmail`, `targetUserId`, `correctionType`, `status`, `company_id`) and restricting read/update/delete to company-scoped `Admin`/`RegionalManager` or `SystemAdmin`, mirroring `signup_requests`.
+
+**Test & Validation Result:**
+Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded cleanly), and full unit test suite `npm test -- --run` (156/156 tests passing across 26 test files).
+
+
 
 

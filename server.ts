@@ -888,6 +888,13 @@ async function startServer() {
       }
 
       const targetEmail = email.toLowerCase().trim();
+      if (!PLATFORM_OWNER_EMAIL || targetEmail !== PLATFORM_OWNER_EMAIL) {
+        return res.status(403).json({
+          success: false,
+          message: "غير مسموح بإعداد هذا الحساب كمشرف للمنصة. البريد الإلكتروني غير مطابق للمالك المُعرَّف مسبقًا."
+        });
+      }
+
       if (password.length < 6) {
         return res.status(400).json({ success: false, message: "كلمة المرور يجب أن لا تقل عن 6 أحرف." });
       }

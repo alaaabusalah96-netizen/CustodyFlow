@@ -587,6 +587,19 @@ service cloud.firestore {
       );
     }
 
+    match /account_correction_requests/{id} {
+      allow create: if request.resource.data.keys().hasAll(['targetEmail', 'targetUserId', 'correctionType', 'status', 'company_id'])
+                    && request.resource.data.status == 'Pending'
+                    && request.resource.data.targetEmail is string
+                    && request.resource.data.targetUserId is string
+                    && request.resource.data.company_id is string;
+      allow read, update, delete: if isSystemAdmin() || (
+        isLoggedIn() &&
+        (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'RegionalManager') &&
+        (resource == null || resource.data.company_id == getCompanyId())
+      );
+    }
+
     // --- Secure Platform Server Collections (Locked Down from client-side SDK) ---
     match /password_reset_otps/{id} {
       allow read, write: if false;

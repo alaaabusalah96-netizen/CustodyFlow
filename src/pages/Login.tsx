@@ -365,6 +365,8 @@ export default function Login({
               }
             } else if (createErr.code === 'auth/network-request-failed' || createErr?.message?.includes('network-request-failed')) {
               console.warn('Firebase Auth auto-creation offline/network failed, using local credentials mode:', createErr.message);
+            } else if (createErr.code === 'auth/email-already-in-use') {
+              console.warn('[Diagnostic Part 2] Firebase Auth account already exists for this email but sign-in failed with an ambiguous error; proceeding without a synced Firebase UID for this attempt (custody password check already verified correct).', createErr.code);
             } else {
               console.error('Firebase Auth auto-creation failed:', createErr);
             }
@@ -553,8 +555,7 @@ export default function Login({
             return { 
               ...u, 
               password: enteredHashSalted10k, 
-              is_active: true,
-              security_pin: '1234'
+              is_active: true
             };
           }
           return u;
@@ -565,7 +566,6 @@ export default function Login({
           console.warn('Deferred first-time admin setup save during login:', e);
         }
         foundUser.password = enteredHashSalted10k;
-        foundUser.security_pin = '1234';
       }
 
       foundUser.is_active = true;
