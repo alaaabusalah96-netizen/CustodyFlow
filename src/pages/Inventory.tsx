@@ -1662,7 +1662,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
         <div className="space-y-6">
           {/* Warehouse Hierarchy Tree & Template Manager */}
           <WarehouseHierarchyManager
-            companyId={activeUser?.company_id || 'comp-1'}
+            companyId={activeUser?.company_id || CustodyDB.getSelectedCompanyId() || ''}
             isRtl={isRtl}
             theme={theme}
             onWarehousesUpdated={() => setRefreshKey(prev => prev + 1)}
@@ -1725,7 +1725,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
                       setRelocFromBinId('');
                       setRelocToBinId('');
                     }}
-                    companyId={activeUser?.company_id || 'comp-1'}
+                    companyId={activeUser?.company_id || CustodyDB.getSelectedCompanyId() || ''}
                     isRtl={isRtl}
                     theme={theme}
                   />
@@ -1809,7 +1809,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
                           return;
                         }
                         const res = InventoryModule.relocateBinStock(
-                          activeUser?.company_id || 'comp-1',
+                          activeUser?.company_id || CustodyDB.getSelectedCompanyId() || '',
                           relocWhId,
                           relocProdId,
                           relocFromBinId,

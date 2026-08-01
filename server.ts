@@ -688,6 +688,47 @@ async function startServer() {
     }
   });
 
+  // API Route - Check Hash Migration Status (Phase 4.1 Deprecation Plan)
+  // Queries user_credentials to report how many accounts are still on legacy hash formats (pepper_version 1 or 3) vs PBKDF2 210,000 (pepper_version 2)
+  app.get("/api/auth/hash-migration-status", requireSystemAdminAuth, async (req, res) => {
+    try {
+      const credsSnap = await adminDb.collection("user_credentials").get();
+      let legacyCount = 0;
+      let pbkdf2Count = 0;
+      let transientV2Count = 0;
+      const details: { userId: string; pepperVersion: number; format: string }[] = [];
+
+      credsSnap.docs.forEach(d => {
+        const data = d.data() || {};
+        const pVer = typeof data.pepper_version === 'number' ? data.pepper_version : 1;
+        if (pVer === 1) {
+          legacyCount++;
+          details.push({ userId: d.id, pepperVersion: 1, format: "legacy_sha256" });
+        } else if (pVer === 3) {
+          transientV2Count++;
+          details.push({ userId: d.id, pepperVersion: 3, format: "transient_regression_v2" });
+        } else {
+          pbkdf2Count++;
+          details.push({ userId: d.id, pepperVersion: 2, format: "pbkdf2_210000" });
+        }
+      });
+
+      return res.json({
+        success: true,
+        totalCredentials: credsSnap.docs.length,
+        legacyCount,
+        transientV2Count,
+        pbkdf2Count,
+        details,
+        messageAr: `حالة التشفير: ${pbkdf2Count} حساب محدث (PBKDF2)، ${legacyCount + transientV2Count} حساب يحتاج هجرة تلقائية عند تسجيل الدخول.`,
+        messageEn: `Encryption status: ${pbkdf2Count} upgraded (PBKDF2), ${legacyCount + transientV2Count} pending auto-migration upon login.`
+      });
+    } catch (err: any) {
+      console.error("Error in hash-migration-status:", err);
+      return res.status(500).json({ success: false, message: "Error retrieving hash migration status." });
+    }
+  });
+
   // API Route - Password Reset Request
   app.post("/api/auth/reset-password/request", otpRateLimiter, async (req, res) => {
     try {

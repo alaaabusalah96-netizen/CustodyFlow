@@ -2161,6 +2161,72 @@ Pass - Documentation-only update; verified changes via diff inspection.
 **Test & Validation Result:**
 Pass - Executed `npm test -- --run` (168/168 tests passing across 29 test files) and `compile_applet` (build succeeded cleanly).
 
+---
+
+## v71-security-tenant-scope-no-comp1-fallback: Stop Silent comp-1 Fallback in Tenant Scope, Access Permission & Filtering Paths (Category B)
+**Date/Time:** 2026-08-01 15:45:00 UTC
+**Files Changed:**
+- `src/db/organizationScopeEngine.ts`
+- `src/db/inventory.ts`
+- `src/db/users.ts`
+- `src/db/logs.ts`
+- `src/phase15_comp1_fallback.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+- Removed silent fallback to `'comp-1'` in `OrganizationScopeEngine.getAccessibleOrgUnitIds` and `OrganizationScopeEngine.isTargetInUserScope` (`src/db/organizationScopeEngine.ts`). When `company_id` is empty/missing, scope functions now return `[]` or `false` rather than leaking access to company `'comp-1'`.
+- Removed silent `'comp-1'` fallback in stock movement filtering methods (`src/db/inventory.ts` lines 1040 & 1067), ensuring movements without a valid company context are not mistakenly matched against `'comp-1'`.
+- Updated `UsersModule.getScopedUsers()` (`src/db/users.ts` line 335) so `SystemAdmin` queries do not default `targetCompanyId` to `'comp-1'` when no company is selected in storage.
+- Updated `LogsModule.logAudit()` (`src/db/logs.ts` line 147) to inspect `details?.company_id || details?.tenantId || activeUser?.company_id || savedCompanyId` and drop the log cleanly if no company context is available, rather than defaulting to `'comp-1'`. Added `company_id: request.company_id` to administrative correction request audit events in `src/db/users.ts`.
+- Added 4 new automated tests (`6.` through `9.`) in `src/phase15_comp1_fallback.test.ts` verifying all Category B scope and filtering paths.
+- Verified all 172 unit and integration tests across 29 test files pass cleanly (`npm test -- --run`) and production build succeeds (`compile_applet`).
+
+**Test & Validation Result:**
+Pass - Executed `npm test -- --run` (172/172 tests passing across 29 test files) and `compile_applet` (build succeeded cleanly).
+
+---
+
+## v72-security-tenant-scope-no-comp1-fallback-ui: Stop Silent comp-1 Fallback in UI Props & Internal Inventory Relocation Paths (Category C)
+**Date/Time:** 2026-08-01 15:58:00 UTC
+**Files Changed:**
+- `src/components/InventoryDocumentForm.tsx`
+- `src/pages/Inventory.tsx`
+- `src/pages/Purchasing.tsx`
+- `src/pages/Settings.tsx`
+- `src/pages/CashPaymentVoucher.tsx`
+- `src/db/inventory.ts`
+- `src/phase15_comp1_fallback.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+- Removed silent `'comp-1'` fallback when passing `companyId` props in `InventoryDocumentForm.tsx`, `Inventory.tsx`, `Purchasing.tsx`, `Settings.tsx`, and `CashPaymentVoucher.tsx`. Now correctly resolves using `activeUser?.company_id || CustodyDB.getSelectedCompanyId() || ''` without defaulting to `'comp-1'`.
+- Hardened `InventoryModule.relocateBinStock` (`src/db/inventory.ts` line 404) to validate `companyId` and return a clear Arabic/English error message (`يجب اختيار شركة أولاً قبل النقل الداخلي. / Please select a company before internal relocation.`) if no company context is provided, preventing silent stock mutations on company `'comp-1'`.
+- Added automated test #10 in `src/phase15_comp1_fallback.test.ts` to verify `relocateBinStock` returns `success: false` when invoked with an empty `companyId`.
+- Verified all 173 unit and integration tests across 29 test files pass cleanly (`npm test -- --run`) and production build succeeds (`compile_applet`).
+
+**Test & Validation Result:**
+Pass - Executed `npm test -- --run` (173/173 tests passing across 29 test files) and `compile_applet` (build succeeded cleanly).
+
+---
+
+## v73-security-hash-migration-query-and-concurrency-docs: Password Hash Migration Status API Endpoint & Optimistic Locking Concurrency Scope Documentation (Phase 3.2 & 4.1)
+**Date/Time:** 2026-08-01 16:13:00 UTC
+**Files Changed:**
+- `server.ts`
+- `src/optimistic_locking.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+- Implemented `GET /api/auth/hash-migration-status` in `server.ts` (Phase 4.1 step 1: Query endpoint) accessible exclusively by `SystemAdmin` users. This endpoint audits `user_credentials` and returns real-time counts and details of accounts using legacy SHA-256 (`pepper_version: 1`), regression v2 (`pepper_version: 3`), and modern PBKDF2 210,000 iterations (`pepper_version: 2`) without modifying or deleting any hashes.
+- Added comprehensive architectural and testing scope documentation in `src/optimistic_locking.test.ts` (Phase 3.2) clarifying that the suite verifies domain-level optimistic locking and version rejection rules against `StorageEngine`, while production Firestore atomic isolation relies on security rules and SDK transaction guarantees.
+- Verified that all 173 tests across 29 test files pass cleanly (`npm test -- --run`) and production build compiles without errors (`compile_applet`).
+
+**Test & Validation Result:**
+Pass - Executed `npm test -- --run` (173/173 tests passing across 29 test files) and `compile_applet` (build succeeded cleanly).
+
+
+
+
 
 
 

@@ -144,7 +144,11 @@ export class LogsModule {
     const ipStr = '197.34.' + Math.floor(10 + Math.random() * 200) + '.' + Math.floor(10 + Math.random() * 200);
 
     const savedCompanyId = typeof localStorage !== 'undefined' ? localStorage.getItem('custody_selected_company_id') : null;
-    const companyId = activeUser?.company_id || savedCompanyId || 'comp-1';
+    const companyId = details?.company_id || details?.tenantId || activeUser?.company_id || savedCompanyId;
+    if (!companyId) {
+      console.warn('[Logs] Audit log dropped: no company context available.');
+      return;
+    }
 
     const log: AuditLog = {
       id: `audit-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
@@ -164,9 +168,7 @@ export class LogsModule {
 
     // Enterprise 3.7 Dual-Write: write to the new enterprise AuditLogEngine
     try {
-      // Get selected company id directly
-      const savedCompanyId = typeof localStorage !== 'undefined' ? localStorage.getItem('custody_selected_company_id') : null;
-      const tenantId = activeUser?.company_id || savedCompanyId || 'comp-1';
+      const tenantId = companyId;
 
       const eventEnvelope = createEventEnvelope({
         eventType: actionType,

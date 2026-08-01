@@ -793,7 +793,7 @@ export default function InventoryDocumentForm({
               value={sourceWarehouseId}
               onChange={(whId) => handleSourceWarehouseChange(whId)}
               filterTypeCode={docType === 'Damage' ? 'DAMAGED' : undefined}
-              companyId={activeUser?.company_id || 'comp-1'}
+              companyId={activeUser?.company_id || CustodyDB.getSelectedCompanyId() || ''}
               isRtl={isRtl}
               theme={theme}
               error={errors.sourceWarehouseId}

@@ -1617,7 +1617,7 @@ export default function Settings({ language, theme }: SettingsProps) {
 
       {activeTab === 'workflows' && (
         <ApprovalWorkflowManager
-          companyId={currentUser.company_id || 'comp-1'}
+          companyId={currentUser.company_id || CustodyDB.getSelectedCompanyId() || ''}
           isRtl={isRtl}
           theme={theme}
         />

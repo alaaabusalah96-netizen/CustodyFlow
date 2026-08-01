@@ -332,11 +332,11 @@ export class UsersModule {
     
     const savedCompanyId = typeof localStorage !== 'undefined' ? localStorage.getItem('custody_selected_company_id') : null;
     const targetCompanyId = activeUser.role === 'SystemAdmin' 
-      ? (savedCompanyId || 'comp-1')
+      ? (savedCompanyId || activeUser.company_id || '')
       : activeUser.company_id;
 
     if (activeUser.role === 'SystemAdmin') {
-      return users.filter(u => u.role === 'SystemAdmin' || u.company_id === targetCompanyId);
+      return users.filter(u => u.role === 'SystemAdmin' || (targetCompanyId ? u.company_id === targetCompanyId : true));
     }
     
     let filtered = users.filter(u => u.company_id === activeUser.company_id);
@@ -697,6 +697,7 @@ export class UsersModule {
       'APPROVE_ACCOUNT_CORRECTION',
       `Approved correction for user ${oldName} (${oldEmail}) -> ${targetUser.full_name} (${targetUser.email})`,
       {
+        company_id: request.company_id,
         request_id: id,
         target_user_id: targetUser.id,
         old_email: oldEmail,
@@ -743,6 +744,7 @@ export class UsersModule {
       'REJECT_ACCOUNT_CORRECTION',
       `Rejected correction request for user ${request.targetUserName} (${request.targetEmail}). Reason: ${rejectionReason}`,
       {
+        company_id: request.company_id,
         request_id: id,
         target_email: request.targetEmail,
         rejection_reason: rejectionReason

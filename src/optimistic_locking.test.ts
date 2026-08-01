@@ -9,6 +9,17 @@ import { CashVoucher } from './types';
 import { InventoryDocument } from './types/inventory';
 import { JournalEntry } from './types/accounting';
 
+/**
+ * [Architectural & Testing Scope Note - Phase 3.2 Test Hardening]
+ * Note on Concurrency Testing Boundary:
+ * This test suite validates optimistic locking and version increment logic at the local
+ * StorageEngine level (in-memory/localStorage). It simulates race conditions and stale
+ * version rejections according to the application's domain logic.
+ * 
+ * IMPORTANT: This does NOT test real Firestore `runTransaction` atomic isolation or
+ * cloud network-level contention. When deploying to production Firestore, actual concurrency
+ * guarantees depend on Firestore security rules and atomic server-side/client SDK transactions.
+ */
 describe('Phase 6: Optimistic Locking Enforcement Unit Tests', () => {
   beforeEach(() => {
     (navigator as any).onLine = true;

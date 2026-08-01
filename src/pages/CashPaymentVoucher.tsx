@@ -367,7 +367,7 @@ export default function CashPaymentVoucher({
     };
   }, []);
 
-  const activeCompanyId = companyFilter !== 'All' ? companyFilter : (user?.company_id || CustodyDB.getSelectedCompanyId() || 'comp-1');
+  const activeCompanyId = companyFilter !== 'All' ? companyFilter : (user?.company_id || CustodyDB.getSelectedCompanyId() || '');
   const [isManualVoucherNo, setIsManualVoucherNo] = useState(false);
 
   // Pre-fill parameters when a single expense is passed from parent (Backward compatibility)

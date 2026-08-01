@@ -6,6 +6,9 @@ import { TransactionsVoucherModule } from './db/transactions.voucher';
 import { TransactionsUpdateModule } from './db/transactions.update';
 import { DEFAULT_CATEGORIES, DEFAULT_COMPANIES, DEFAULT_STATIONS } from './db/defaults';
 import { StationsModule } from './db/stations';
+import { OrganizationScopeEngine } from './db/organizationScopeEngine';
+import { LogsModule } from './db/logs';
+import { InventoryModule } from './db/inventory';
 
 describe('Phase 15: Stop Silent comp-1 Write Fallback (Custody Paths Only)', () => {
   beforeEach(() => {
@@ -96,6 +99,46 @@ describe('Phase 15: Stop Silent comp-1 Write Fallback (Custody Paths Only)', () 
     });
     expect(res.success).toBe(false);
     expect(res.errors).toContain('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
+  });
+
+  it('6. OrganizationScopeEngine.getAccessibleOrgUnitIds returns empty array when user company_id is empty without falling back to comp-1', () => {
+    const user: any = { id: 'u-no-comp', role: 'CompanyAdmin', company_id: '' };
+    const res = OrganizationScopeEngine.getAccessibleOrgUnitIds(user);
+    expect(res).toEqual([]);
+  });
+
+  it('7. OrganizationScopeEngine.isTargetInUserScope returns false when user and target company_id are empty without falling back to comp-1', () => {
+    const user: any = { id: 'u-no-comp', role: 'CompanyAdmin', company_id: '' };
+    const target: any = { id: 'target-no-comp', company_id: '' };
+    const res = OrganizationScopeEngine.isTargetInUserScope(target, user);
+    expect(res).toBe(false);
+  });
+
+  it('8. UsersModule.getScopedUsers for SystemAdmin does not default targetCompanyId to comp-1 when saved company is unset', () => {
+    vi.spyOn(UsersModule, 'getActiveUser').mockReturnValue({
+      id: 'sys-admin',
+      role: 'SystemAdmin',
+      full_name: 'Super Admin',
+      company_id: ''
+    } as any);
+    localStorage.removeItem('custody_selected_company_id');
+    const users = UsersModule.getScopedUsers();
+    expect(Array.isArray(users)).toBe(true);
+  });
+
+  it('9. LogsModule.logAudit drops log cleanly when no company context is available without falling back to comp-1', () => {
+    vi.spyOn(UsersModule, 'getActiveUser').mockReturnValue(null);
+    localStorage.removeItem('custody_selected_company_id');
+    const initialCount = LogsModule.getAuditLogs().length;
+    LogsModule.logAudit('TEST_ACTION', 'Test description');
+    const newCount = LogsModule.getAuditLogs().length;
+    expect(newCount).toBe(initialCount);
+  });
+
+  it('10. InventoryModule.relocateBinStock returns failure without falling back to comp-1 when companyId is empty', () => {
+    const res = InventoryModule.relocateBinStock('', 'wh-1', 'prod-1', 'bin-from', 'bin-to', 10);
+    expect(res.success).toBe(false);
+    expect(res.messageAr).toContain('يجب اختيار شركة');
   });
 });
 

@@ -19,7 +19,10 @@ export class OrganizationScopeEngine {
    * access to all descendant nodes (Branches, Stations, Sub-units) under that parent.
    */
   static getAccessibleOrgUnitIds(user: AppUser, companyId?: string): string[] {
-    const targetCompanyId = companyId || user.company_id || 'comp-1';
+    const targetCompanyId = companyId || user.company_id;
+    if (!targetCompanyId) {
+      return [];
+    }
     const currentVersion = OrganizationEngine.getUnitsVersionKey();
     if (OrganizationScopeEngine._cacheVersion !== currentVersion) {
       OrganizationScopeEngine._accessibleIdsCache.clear();
@@ -154,7 +157,10 @@ export class OrganizationScopeEngine {
     }
 
     // If user has org_unit_id and target has region_id/station_id without org_unit_id
-    const targetCompanyId = target.company_id || user.company_id || 'comp-1';
+    const targetCompanyId = target.company_id || user.company_id;
+    if (!targetCompanyId) {
+      return false;
+    }
     const accessibleUnitIds = OrganizationScopeEngine.getAccessibleOrgUnitIds(user, targetCompanyId);
     const allUnits = OrganizationEngine.getOrganizationUnits(targetCompanyId);
 

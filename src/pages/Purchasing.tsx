@@ -1255,7 +1255,7 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
           </form>
 
           <ApprovalWorkflowManager
-            companyId={activeUser?.company_id || 'comp-1'}
+            companyId={activeUser?.company_id || CustodyDB.getSelectedCompanyId() || ''}
             isRtl={isRtl}
             theme={theme}
           />

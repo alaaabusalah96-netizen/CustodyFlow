@@ -404,6 +404,13 @@ export class InventoryModule {
     toBinId: string,
     qty: number
   ): { success: boolean; messageAr: string; messageEn: string } {
+    if (!companyId) {
+      return {
+        success: false,
+        messageAr: 'يجب اختيار شركة أولاً قبل النقل الداخلي.',
+        messageEn: 'Please select a company before internal relocation.'
+      };
+    }
     if (qty <= 0) {
       return {
         success: false,
@@ -1040,7 +1047,7 @@ export class InventoryModule {
     const whIds = new Set(orgWarehouses.map(w => w.id));
     if (whIds.size === 0) return 0;
 
-    const movements = InventoryModule.getStockMovements().filter(m => (m.company_id || 'comp-1') === companyId && whIds.has(m.warehouse_id));
+    const movements = InventoryModule.getStockMovements().filter(m => m.company_id === companyId && whIds.has(m.warehouse_id));
     if (productId) {
       return movements
         .filter(m => m.product_id === productId)
@@ -1068,7 +1075,7 @@ export class InventoryModule {
     const targetSet = new Set(targetOrgUnitIds);
 
     return InventoryModule.getStockMovements().filter(m => {
-      if ((m.company_id || 'comp-1') !== companyId) return false;
+      if (m.company_id !== companyId) return false;
       if (m.org_unit_id && targetSet.has(m.org_unit_id)) return true;
       return whIds.has(m.warehouse_id);
     });
