@@ -2338,6 +2338,26 @@ Mechanically extracted the Warehouses tab (`activeTab === 'warehouses'`) from `s
 **Test & Validation Result:**
 Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passed, 196/196 tests passed) and applet compilation (`compile_applet` -> build succeeded cleanly with 0 TypeScript errors).
 
+---
+
+## UI Refactoring: Mechanical Extraction of Inventory Settings Tab
+**Date/Time:** 2026-08-01 18:26:00 UTC
+**Files Changed:**
+- `src/components/inventory/InventorySettingsTab.tsx` (Created)
+- `src/pages/Inventory.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+Mechanically extracted the Workflow Rules & Settings tab (`activeTab === 'settings'`) from `src/pages/Inventory.tsx` into a standalone modular component `src/components/inventory/InventorySettingsTab.tsx` without any change in logic, behavior, conditions, Arabic/English copy, or styling.
+- Created `InventorySettingsTab` with `InventorySettingsTabProps` interface matching exactly 6 external props: `isRtl`, `theme`, `invConfig`, `setInvConfig`, `configSavedToast`, and `setConfigSavedToast`.
+- Kept conditional single quotes (`'settings'`) and all original formatting untouched.
+- Replaced the original 317-line JSX block in `src/pages/Inventory.tsx` with `<InventorySettingsTab {...props} />` and imported `InventorySettingsTab`.
+- After extracting all 4 tabs (`documents`, `reports`, `warehouses`, `settings`), `src/pages/Inventory.tsx` line count was reduced from 2,261 lines to 1,048 lines (retaining core state, handlers, header, routing, plus the shared Document Creation Form, Document Detail View, and Document Print Modal).
+
+**Test & Validation Result:**
+Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passed, 196/196 tests passed) and applet compilation (`compile_applet` -> build succeeded cleanly with 0 TypeScript errors).
+
+
 
 
 
