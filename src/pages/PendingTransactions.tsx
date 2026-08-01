@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CustodyDB } from '../db';
 import { useScreenListeners } from '../firebase';
 import { translations, Language, Theme, Transaction } from '../types';
+import { PaginationToolbar, usePaginatedList } from '../components/PaginationToolbar';
 import { 
   Clock, 
   Search, 
@@ -125,7 +126,6 @@ export default function PendingTransactions({
 
   // Search and Filter states
   const [searchTerm, setSearchTerm] = useState('');
-  const [visibleCount, setVisibleCount] = useState(15);
   const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Rejected'>('All');
   const [companyFilter, setCompanyFilter] = useState<string>('All');
   const [stationFilter, setStationFilter] = useState<string>('All');
@@ -400,6 +400,16 @@ export default function PendingTransactions({
 
     return matchesSearch && matchesStatus && matchesCompany && matchesStation && matchesDate && matchesAmount;
   });
+
+  const {
+    items: paginatedTransactions,
+    totalItems,
+    totalPages,
+    currentPage,
+    pageSize,
+    setCurrentPage,
+    setPageSize,
+  } = usePaginatedList(filtered, 15);
 
   // Selection toggle handlers
   const handleToggleSelect = (id: string) => {
@@ -756,7 +766,7 @@ export default function PendingTransactions({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filtered.slice(0, visibleCount).map((tx) => {
+              {paginatedTransactions.map((tx) => {
                 const isRejected = tx.status === 'Rejected';
                 const isSelected = selectedIds.includes(tx.id);
 
@@ -910,15 +920,18 @@ export default function PendingTransactions({
           </table>
         </div>
 
-        {filtered.length > visibleCount && (
-          <div className="flex justify-center p-4 border-t border-slate-100 dark:border-slate-800/40">
-            <button
-              onClick={() => setVisibleCount(prev => prev + 15)}
-              className="px-4 py-2 text-xs font-bold bg-amber-500/10 text-amber-600 hover:bg-amber-600 hover:text-white rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
-            >
-              <span>{isRtl ? 'عرض المزيد من الحركات' : 'Load More Transactions'}</span>
-              <span className="text-[10px] opacity-75">({filtered.length - visibleCount} {isRtl ? 'متبقي' : 'remaining'})</span>
-            </button>
+        {filtered.length > 0 && (
+          <div className="p-3 border-t border-slate-100 dark:border-slate-800/40">
+            <PaginationToolbar
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              language={language}
+              theme={theme}
+            />
           </div>
         )}
       </div>

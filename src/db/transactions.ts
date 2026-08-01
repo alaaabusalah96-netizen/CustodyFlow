@@ -101,6 +101,58 @@ export class TransactionsModule {
     return OrganizationScopeEngine.filterByOrganizationScope(companyTxs, user);
   }
 
+  static getPaginatedScopedTransactions(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (tx: Transaction) => boolean,
+    sortFn?: (a: Transaction, b: Transaction) => number
+  ): { data: Transaction[]; total: number; page: number; pageSize: number; totalPages: number } {
+    const user = UsersModule.getActiveUser();
+    if (!user) {
+      return { data: [], total: 0, page: 1, pageSize, totalPages: 1 };
+    }
+    const targetCompanyId = user.role === 'SystemAdmin'
+      ? CompaniesModule.getSelectedCompanyId()
+      : user.company_id;
+
+    const scopedFilter = (t: Transaction): boolean => {
+      if (t.status === 'Deleted' || (t.status as string) === 'deleted') return false;
+      if ((t as any).company_id && (t as any).company_id !== targetCompanyId) return false;
+      if (user.role !== 'SystemAdmin' && user.role !== 'Admin') {
+        if (!OrganizationScopeEngine.isTargetInUserScope(t as any, user)) return false;
+      }
+      return filterFn ? filterFn(t) : true;
+    };
+
+    return StorageEngine.getStoredPaginated<Transaction>('transactions', page, pageSize, scopedFilter, sortFn);
+  }
+
+  static async getPaginatedScopedTransactionsIDB(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (tx: Transaction) => boolean,
+    sortFn?: (a: Transaction, b: Transaction) => number
+  ): Promise<{ data: Transaction[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    const user = UsersModule.getActiveUser();
+    if (!user) {
+      return { data: [], total: 0, page: 1, pageSize, totalPages: 1 };
+    }
+    const targetCompanyId = user.role === 'SystemAdmin'
+      ? CompaniesModule.getSelectedCompanyId()
+      : user.company_id;
+
+    const scopedFilter = (t: Transaction): boolean => {
+      if (t.status === 'Deleted' || (t.status as string) === 'deleted') return false;
+      if ((t as any).company_id && (t as any).company_id !== targetCompanyId) return false;
+      if (user.role !== 'SystemAdmin' && user.role !== 'Admin') {
+        if (!OrganizationScopeEngine.isTargetInUserScope(t as any, user)) return false;
+      }
+      return filterFn ? filterFn(t) : true;
+    };
+
+    return StorageEngine.getPaginatedIDB<Transaction>('transactions', page, pageSize, scopedFilter, sortFn);
+  }
+
   static saveTransactions(transactions: Transaction[]): void {
     StorageEngine.setStored('transactions', transactions);
   }

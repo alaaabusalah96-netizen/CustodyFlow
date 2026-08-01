@@ -106,11 +106,31 @@ export class StorageEngine {
 
   static initializeCacheListener(): void {
     if (typeof window !== 'undefined') {
-      window.addEventListener('custody_db_updated', () => {
-        StorageEngine.cache = {};
+      window.addEventListener('custody_db_updated', (e: Event) => {
+        const customEvent = e as CustomEvent<{ key?: string; value?: any }>;
+        if (customEvent && customEvent.detail && customEvent.detail.key !== undefined) {
+          if (customEvent.detail.value !== undefined) {
+            StorageEngine.cache[customEvent.detail.key] = customEvent.detail.value;
+          } else {
+            delete StorageEngine.cache[customEvent.detail.key];
+          }
+        } else {
+          StorageEngine.cache = {};
+        }
       });
-      window.addEventListener('storage', (e) => {
+      window.addEventListener('storage', (e: StorageEvent) => {
         if (e.key && e.key.startsWith('custody_')) {
+          const keyWithoutPrefix = e.key.substring('custody_'.length);
+          if (e.newValue) {
+            try {
+              StorageEngine.cache[keyWithoutPrefix] = JSON.parse(e.newValue);
+            } catch {
+              delete StorageEngine.cache[keyWithoutPrefix];
+            }
+          } else {
+            delete StorageEngine.cache[keyWithoutPrefix];
+          }
+        } else if (!e.key) {
           StorageEngine.cache = {};
         }
       });
@@ -135,7 +155,7 @@ export class StorageEngine {
       // Hydrate from IDB asynchronously if needed
       if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') {
         loadFromIDB(key).then((idbVal) => {
-          if (idbVal !== undefined) {
+          if (idbVal !== undefined && idbVal !== null) {
             this.cache[key] = idbVal;
           }
         }).catch(() => {});
@@ -161,7 +181,11 @@ export class StorageEngine {
       }
       if (typeof window !== 'undefined') {
         setTimeout(() => {
-          window.dispatchEvent(new Event('custody_db_updated'));
+          window.dispatchEvent(
+            new CustomEvent('custody_db_updated', {
+              detail: { key, value }
+            })
+          );
         }, 0);
       }
     } catch (err: any) {
@@ -185,5 +209,76 @@ export class StorageEngine {
       }
     }
   }
+
+  static getStoredPaginated<T>(
+    key: string,
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (item: T) => boolean,
+    sortFn?: (a: T, b: T) => number
+  ): { data: T[]; total: number; page: number; pageSize: number; totalPages: number } {
+    const rawData = StorageEngine.getStored<T[]>(key, []);
+    const allItems = Array.isArray(rawData) ? rawData : [];
+
+    let filtered = filterFn ? allItems.filter(filterFn) : allItems;
+    if (sortFn) {
+      filtered = [...filtered].sort(sortFn);
+    }
+
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.max(1, Math.min(page, totalPages));
+    const startIdx = (safePage - 1) * pageSize;
+    const slice = filtered.slice(startIdx, startIdx + pageSize);
+
+    return {
+      data: slice,
+      total,
+      page: safePage,
+      pageSize,
+      totalPages,
+    };
+  }
+
+  static async getPaginatedIDB<T>(
+    key: string,
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (item: T) => boolean,
+    sortFn?: (a: T, b: T) => number
+  ): Promise<{ data: T[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    let allItems: T[] = [];
+    if (StorageEngine.cache[key] !== undefined && Array.isArray(StorageEngine.cache[key])) {
+      allItems = StorageEngine.cache[key];
+    } else {
+      const idbVal = await loadFromIDB(key);
+      if (idbVal !== undefined && idbVal !== null && Array.isArray(idbVal)) {
+        StorageEngine.cache[key] = idbVal;
+        allItems = idbVal;
+      } else {
+        allItems = StorageEngine.getStored<T[]>(key, []);
+      }
+    }
+
+    let filtered = filterFn ? allItems.filter(filterFn) : allItems;
+    if (sortFn) {
+      filtered = [...filtered].sort(sortFn);
+    }
+
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.max(1, Math.min(page, totalPages));
+    const startIdx = (safePage - 1) * pageSize;
+    const slice = filtered.slice(startIdx, startIdx + pageSize);
+
+    return {
+      data: slice,
+      total,
+      page: safePage,
+      pageSize,
+      totalPages,
+    };
+  }
 }
+
 

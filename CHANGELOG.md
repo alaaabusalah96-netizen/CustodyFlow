@@ -1954,7 +1954,123 @@ Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded clea
 **Test & Validation Result:**
 Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded cleanly), and full unit test suite `npm test -- --run` (156/156 tests passing across 26 test files).
 
+---
 
+## v63-phase1-cache-selectivity-storage-engine-optimization: Optimize StorageEngine Cache & Selective Event Hydration
+**Date/Time:** 2026-08-01 03:28:30 UTC
+**Files Changed:**
+- `src/db/storage.ts`
+- `src/firebase.ts`
+- `CHANGELOG.md`
 
+**Summary:**
+- Upgraded `StorageEngine.initializeCacheListener` in `src/db/storage.ts` to inspect `CustomEvent` detail (`key` and `value`) when receiving `custody_db_updated` and `storage` events. Instead of wiping `StorageEngine.cache = {}` on every event and forcing full re-reads from localStorage/IndexedDB across the application, `StorageEngine.cache` is now selectively updated or invalidated per key.
+- Updated `StorageEngine.setStored()` in `src/db/storage.ts` and `updateLocalAndNotify()` in `src/firebase.ts` to emit `CustomEvent('custody_db_updated', { detail: { key, value } })` and keep `StorageEngine.cache[key]` synchronized in-memory.
+- Verified zero regression across all 156 unit and integration tests (including IndexedDB fallback and memory-only audit logging).
 
+**Test & Validation Result:**
+Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded cleanly), and full unit test suite `npm test -- --run` (156/156 tests passing across 26 test files).
+
+---
+
+## v63-phase2-organization-engine-index-and-scope-caching: OrganizationEngine Lookup Indexing & Scope Engine Memoization
+**Date/Time:** 2026-08-01 03:43:30 UTC
+**Files Changed:**
+- `src/db/organizationEngine.ts`
+- `src/db/organizationScopeEngine.ts`
+- `src/db.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+- Implemented `OrganizationEngine.getUnitLookupIndex()` in `src/db/organizationEngine.ts`, which builds an O(1) in-memory `Map` lookup index of organization units by ID, code, and legacy mapping IDs (`legacyStationId`, `legacyRegionId`, `legacyCompanyId`, `comp-root-<companyId>`), invalidated automatically whenever `organization_units` change.
+- Upgraded `OrganizationEngine.resolveOrgUnitForEntity` to check `getUnitLookupIndex()` first for O(1) resolution before falling back to array filtering, eliminating repeated O(n) table scans when resolving org units across transactions and legacy records.
+- Implemented `OrganizationScopeEngine.getAccessibleOrgUnitIds()` memoization in `src/db/organizationScopeEngine.ts` with version-based cache validation against `OrganizationEngine.getUnitsVersionKey()`, preventing repetitive scope array calculations.
+- Integrated cache invalidation into `CustodyDB.clearCache()` and `CustodyDB.initializeCacheListener()` in `src/db.ts` so that `organization_units` updates immediately refresh lookup indexes and scope caches.
+- Verified zero regression across all 156 unit and integration tests (26 test suites passing).
+
+**Test & Validation Result:**
+Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded cleanly), and full unit test suite `npm test -- --run` (156/156 tests passing across 26 test files).
+
+---
+
+## v63-phase3-paginated-indexed-storage-queries: StorageEngine & CustodyDB Paginated & Indexed Queries for Transactions
+**Date/Time:** 2026-08-01 03:52:00 UTC
+**Files Changed:**
+- `src/db/storage.ts`
+- `src/db/transactions.ts`
+- `src/db.ts`
+- `src/transactions_pagination.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+- Added generic paginated query support to `StorageEngine` (`getStoredPaginated<T>` and async `getPaginatedIDB<T>`) in `src/db/storage.ts`, allowing sliced result retrieval with custom filter and sort callbacks (`filterFn`, `sortFn`) as well as returning `{ data, total, page, pageSize, totalPages }`.
+- Added `TransactionsModule.getPaginatedScopedTransactions` and `TransactionsModule.getPaginatedScopedTransactionsIDB` in `src/db/transactions.ts` to perform paginated and scoped transaction queries across both synchronous cache/localStorage and asynchronous IndexedDB storage without loading the entire collection into components.
+- Exposed `CustodyDB.getPaginatedScopedTransactions` and `CustodyDB.getPaginatedScopedTransactionsIDB` in `src/db.ts` for unified application-wide access.
+- Created `src/transactions_pagination.test.ts` to verify pagination calculation, sorting, filtering, and scope resolution.
+- Verified all 160 unit and integration tests across 27 test files pass cleanly (`npm test -- --run`).
+
+**Test & Validation Result:**
+Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded cleanly), and full unit test suite `npm test -- --run` (160/160 tests passing across 27 test files).
+
+---
+
+## v64-phase4-inventory-o1-lookup-and-logs-pagination: Inventory Stock Balance O(1) Lookup Index & Paginated Storage Queries
+**Date/Time:** 2026-08-01 04:12:00 UTC
+**Files Changed:**
+- `src/db/inventory.ts`
+- `src/db/logs.ts`
+- `src/db.ts`
+- `src/inventory_logs_optimization.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+- Implemented `StockLookupIndex` and `InventoryModule.getStockLookupIndex()` in `src/db/inventory.ts` to provide O(1) in-memory maps (`byProductWarehouse`, `byProductBinWarehouse`, `byProductBin`, `byBin`, `byWarehouse`) for instant stock balance calculation without repeatedly scanning movement arrays.
+- Refactored `InventoryModule.getProductStock`, `getBinProductStock`, `getBinTotalStock`, and `getWarehouseTotalStock` to use the O(1) lookup index.
+- Added automatic cache invalidation and versioning (`stockIndexVersionKey`) so that the index is invalidated and recomputed cleanly when movements change or when `CustodyDB.clearCache()` / `CustodyDB.clearStockLookupIndex()` is invoked.
+- Added paginated query methods (`getPaginatedLogs`, `getPaginatedLogsIDB`, `getPaginatedAuditLogs`, `getPaginatedAuditLogsIDB`) in `LogsModule` and exposed them via `CustodyDB`.
+- Added paginated query methods (`getPaginatedInventoryDocuments`, `getPaginatedInventoryDocumentsIDB`, `getPaginatedStockMovements`, `getPaginatedStockMovementsIDB`) in `InventoryModule` and exposed them via `CustodyDB`.
+- Created `src/inventory_logs_optimization.test.ts` with comprehensive unit and integration tests covering O(1) stock lookup index accuracy, automatic invalidation, and paginated/tenant-scoped queries for logs, audit logs, inventory documents, and stock movements.
+- Verified all 164 unit and integration tests across 28 test files pass cleanly (`npm test -- --run`).
+
+**Test & Validation Result:**
+Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded cleanly), and full unit test suite `npm test -- --run` (164/164 tests passing across 28 test files).
+
+---
+
+## v64-phase5-ux-dom-pagination: DOM Pagination & Slice Calculation (`PaginationToolbar` and `usePaginatedList`)
+**Date/Time:** 2026-08-01 04:26:00 UTC
+**Files Changed:**
+- `src/components/PaginationToolbar.tsx` (Created)
+- `src/table_dom_pagination.test.ts` (Created)
+- `src/pages/AuditLog.tsx`
+- `src/components/SuperAdminAuditTab.tsx`
+- `src/pages/PendingTransactions.tsx`
+- `src/pages/Reports.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+- Implemented reusable, accessible, RTL-aware `PaginationToolbar`, `paginateArray`, and `usePaginatedList` in `src/components/PaginationToolbar.tsx` to replace manual `.slice(0, visibleCount)` / "Load More" patterns with true page-based pagination.
+- Features O(1) slice calculation after filtering and sorting, automatic out-of-bounds page clamping when search filters shrink results, page size selection dropdowns (`[10, 15, 20, 50, 100]`), first/prev/next/last navigation buttons, and item range display (`Showing X-Y of Z items` / Arabic RTL `عرض X-Y من إجمالي Z سجل`).
+- Upgraded System Audit Logs (`src/pages/AuditLog.tsx`), Super Admin Audit Log Tab (`src/components/SuperAdminAuditTab.tsx`), Pending Transactions & Vouchers (`src/pages/PendingTransactions.tsx`), and Analytical Reports (`src/pages/Reports.tsx`) to use `usePaginatedList` and `<PaginationToolbar />`.
+- Created comprehensive unit tests in `src/table_dom_pagination.test.ts` verifying boundary conditions, empty array handling, slice calculation accuracy, and auto-clamping behavior.
+- Verified all 168 unit and integration tests across 29 test files pass cleanly (`npm test -- --run`) and application builds successfully (`compile_applet`).
+
+**Test & Validation Result:**
+Pass - Executed `compile_applet` (build succeeded cleanly) and full unit test suite `npm test -- --run` (168/168 tests passing across 29 test files, including 4/4 new pagination tests in `src/table_dom_pagination.test.ts`).
+
+---
+
+## v65-defensive-pagination-hardening: Defensive Null/Undefined Safety in `PaginationToolbar`
+**Date/Time:** 2026-08-01 04:33:00 UTC
+**Files Changed:**
+- `src/components/PaginationToolbar.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+- Hardened `paginateArray` and `usePaginatedList` in `src/components/PaginationToolbar.tsx` against unexpected `null`, `undefined`, or non-array inputs using `Array.isArray(items) ? items : []`.
+- Added defensive fallbacks for `pageSizeOptions` (`pageSizeOptions || [10, 15, 20, 50, 100]`), page numbers, and page size calculation to eliminate runtime render errors during async loading or transition states.
+- Verified all 168 unit and integration tests across 29 test files pass cleanly (`npm test -- --run`) and application builds successfully (`compile_applet`).
+
+**Test & Validation Result:**
+Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded cleanly), and full unit test suite `npm test -- --run` (168/168 tests passing across 29 test files).
 

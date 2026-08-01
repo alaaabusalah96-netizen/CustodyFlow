@@ -1,6 +1,7 @@
 import React from 'react';
 import { AuditLog, Language } from '../types';
 import { ClipboardList, Globe, Laptop } from 'lucide-react';
+import { PaginationToolbar, usePaginatedList } from './PaginationToolbar';
 
 interface SuperAdminAuditTabProps {
   impersonationAuditLogs: AuditLog[];
@@ -13,6 +14,16 @@ export const SuperAdminAuditTab: React.FC<SuperAdminAuditTabProps> = ({
   language,
   isRtl,
 }) => {
+  const {
+    items: paginatedLogs,
+    totalItems,
+    totalPages,
+    currentPage,
+    pageSize,
+    setCurrentPage,
+    setPageSize,
+  } = usePaginatedList(impersonationAuditLogs, 10);
+
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
@@ -27,7 +38,7 @@ export const SuperAdminAuditTab: React.FC<SuperAdminAuditTabProps> = ({
         <div>
           {/* Mobile Cards Layout */}
           <div className="block md:hidden space-y-4 p-4">
-            {impersonationAuditLogs.map(log => {
+            {paginatedLogs.map(log => {
               const dets = log.details || {};
               return (
                 <div key={log.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-sm space-y-3 text-xs">
@@ -93,7 +104,7 @@ export const SuperAdminAuditTab: React.FC<SuperAdminAuditTabProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 text-xs text-right md:text-left">
-                {impersonationAuditLogs.map(log => {
+                {paginatedLogs.map(log => {
                   const dets = log.details || {};
                   return (
                     <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all">
@@ -137,6 +148,20 @@ export const SuperAdminAuditTab: React.FC<SuperAdminAuditTabProps> = ({
               </tbody>
             </table>
           </div>
+
+          {impersonationAuditLogs.length > 0 && (
+            <div className="p-3 border-t border-slate-100 dark:border-slate-800">
+              <PaginationToolbar
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                language={language}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

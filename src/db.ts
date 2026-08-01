@@ -24,6 +24,8 @@ import {
 import { seedDatabaseIfEmpty, setupFirebaseSync, dbFetchUserByEmail } from './firebase';
 
 import { StorageEngine } from './db/storage';
+import { OrganizationEngine } from './db/organizationEngine';
+import { OrganizationScopeEngine } from './db/organizationScopeEngine';
 import { 
   DEFAULT_COMPANIES,
   DEFAULT_REGIONS,
@@ -51,11 +53,12 @@ import { StationsModule } from './db/stations';
 import { NotificationsModule } from './db/notifications';
 import { TransactionsModule } from './db/transactions';
 import { ModulesModule, ERP_MODULES_REGISTRY, CompanyModuleSettings } from './db/modules';
+import { InventoryModule, StockLookupIndex } from './db/inventory';
 import { ConfigurationEngine } from './lib/enterprise/configuration';
 import { TenantSettings } from './types/enterprise';
 import { db } from './firebase';
 
-export { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings, ConfigurationEngine, type TenantSettings };
+export { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings, ConfigurationEngine, type TenantSettings, type StockLookupIndex };
 
 export class CustodyDB {
   static hashPassword(password: string, salt: string = '', pepperVersion: number = 2): string {
@@ -105,10 +108,33 @@ export class CustodyDB {
 
   static clearCache(): void {
     StorageEngine.clearCache();
+    OrganizationEngine.invalidateLookupIndex();
+    OrganizationScopeEngine.invalidateScopeCache();
+    InventoryModule.clearStockLookupIndex();
   }
 
   static initializeCacheListener(): void {
     StorageEngine.initializeCacheListener();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('custody_db_updated', ((e: CustomEvent) => {
+        const { key } = e.detail || {};
+        if (key === 'organization_units' || !key) {
+          OrganizationEngine.invalidateLookupIndex();
+          OrganizationScopeEngine.invalidateScopeCache();
+        }
+        if (key === 'stock_movements' || !key) {
+          InventoryModule.clearStockLookupIndex();
+        }
+      }) as EventListener);
+    }
+  }
+
+  static getStockLookupIndex(): StockLookupIndex {
+    return InventoryModule.getStockLookupIndex();
+  }
+
+  static clearStockLookupIndex(): void {
+    InventoryModule.clearStockLookupIndex();
   }
 
   // Companies
@@ -334,6 +360,24 @@ export class CustodyDB {
     return LogsModule.getLogs();
   }
 
+  static getPaginatedLogs(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (log: ActivityLog) => boolean,
+    sortFn?: (a: ActivityLog, b: ActivityLog) => number
+  ): { data: ActivityLog[]; total: number; page: number; pageSize: number; totalPages: number } {
+    return LogsModule.getPaginatedLogs(page, pageSize, filterFn, sortFn);
+  }
+
+  static async getPaginatedLogsIDB(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (log: ActivityLog) => boolean,
+    sortFn?: (a: ActivityLog, b: ActivityLog) => number
+  ): Promise<{ data: ActivityLog[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    return LogsModule.getPaginatedLogsIDB(page, pageSize, filterFn, sortFn);
+  }
+
   static addLog(
     userId: string,
     userName: string,
@@ -357,6 +401,60 @@ export class CustodyDB {
 
   static getAuditLogs(): AuditLog[] {
     return LogsModule.getAuditLogs();
+  }
+
+  static getPaginatedAuditLogs(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (log: AuditLog) => boolean,
+    sortFn?: (a: AuditLog, b: AuditLog) => number
+  ): { data: AuditLog[]; total: number; page: number; pageSize: number; totalPages: number } {
+    return LogsModule.getPaginatedAuditLogs(page, pageSize, filterFn, sortFn);
+  }
+
+  static async getPaginatedAuditLogsIDB(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (log: AuditLog) => boolean,
+    sortFn?: (a: AuditLog, b: AuditLog) => number
+  ): Promise<{ data: AuditLog[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    return LogsModule.getPaginatedAuditLogsIDB(page, pageSize, filterFn, sortFn);
+  }
+
+  static getPaginatedInventoryDocuments(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (doc: any) => boolean,
+    sortFn?: (a: any, b: any) => number
+  ): { data: any[]; total: number; page: number; pageSize: number; totalPages: number } {
+    return InventoryModule.getPaginatedInventoryDocuments(page, pageSize, filterFn, sortFn);
+  }
+
+  static async getPaginatedInventoryDocumentsIDB(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (doc: any) => boolean,
+    sortFn?: (a: any, b: any) => number
+  ): Promise<{ data: any[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    return InventoryModule.getPaginatedInventoryDocumentsIDB(page, pageSize, filterFn, sortFn);
+  }
+
+  static getPaginatedStockMovements(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (m: any) => boolean,
+    sortFn?: (a: any, b: any) => number
+  ): { data: any[]; total: number; page: number; pageSize: number; totalPages: number } {
+    return InventoryModule.getPaginatedStockMovements(page, pageSize, filterFn, sortFn);
+  }
+
+  static async getPaginatedStockMovementsIDB(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (m: any) => boolean,
+    sortFn?: (a: any, b: any) => number
+  ): Promise<{ data: any[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    return InventoryModule.getPaginatedStockMovementsIDB(page, pageSize, filterFn, sortFn);
   }
 
   static addAuditLog(auditLog: AuditLog): void {
@@ -392,6 +490,24 @@ export class CustodyDB {
 
   static getScopedTransactions(): Transaction[] {
     return TransactionsModule.getScopedTransactions();
+  }
+
+  static getPaginatedScopedTransactions(
+    page?: number,
+    pageSize?: number,
+    filterFn?: (tx: Transaction) => boolean,
+    sortFn?: (a: Transaction, b: Transaction) => number
+  ): { data: Transaction[]; total: number; page: number; pageSize: number; totalPages: number } {
+    return TransactionsModule.getPaginatedScopedTransactions(page, pageSize, filterFn, sortFn);
+  }
+
+  static async getPaginatedScopedTransactionsIDB(
+    page?: number,
+    pageSize?: number,
+    filterFn?: (tx: Transaction) => boolean,
+    sortFn?: (a: Transaction, b: Transaction) => number
+  ): Promise<{ data: Transaction[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    return TransactionsModule.getPaginatedScopedTransactionsIDB(page, pageSize, filterFn, sortFn);
   }
 
   static saveTransactions(transactions: Transaction[]): void {

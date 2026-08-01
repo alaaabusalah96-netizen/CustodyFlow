@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CustodyDB } from '../db';
 import { useScreenListeners } from '../firebase';
 import { translations, Language, Theme, AuditLog } from '../types';
+import { PaginationToolbar, usePaginatedList } from '../components/PaginationToolbar';
 import { 
   ShieldAlert, 
   Search, 
@@ -79,6 +80,16 @@ export default function AuditLogView({ language, theme }: AuditLogProps) {
 
     return matchesSearch && matchesAction && matchesRole && matchesStartDate && matchesEndDate;
   });
+
+  const {
+    items: paginatedLogs,
+    totalItems,
+    totalPages,
+    currentPage,
+    pageSize,
+    setCurrentPage,
+    setPageSize,
+  } = usePaginatedList(filteredLogs, 15);
 
   // Toggle expand
   const toggleExpand = (id: string) => {
@@ -373,7 +384,7 @@ export default function AuditLogView({ language, theme }: AuditLogProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
-              {filteredLogs.slice(0, logsLimit).map((log) => {
+              {paginatedLogs.map((log) => {
                 const isExpanded = expandedLogId === log.id;
                 const hasDetails = log.details && (log.details.before || log.details.after);
                 
@@ -529,15 +540,18 @@ export default function AuditLogView({ language, theme }: AuditLogProps) {
           </table>
         </div>
 
-        {filteredLogs.length > logsLimit && (
-          <div className="flex justify-center p-4 border-t border-slate-100 dark:border-slate-800/40">
-            <button
-              onClick={() => setLogsLimit(prev => prev + 15)}
-              className="px-4 py-2 text-xs font-bold bg-indigo-500/10 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
-            >
-              <span>{isRtl ? 'عرض المزيد من السجلات' : 'Load More Records'}</span>
-              <span className="text-[10px] opacity-75">({filteredLogs.length - logsLimit} {isRtl ? 'متبقي' : 'remaining'})</span>
-            </button>
+        {filteredLogs.length > 0 && (
+          <div className="p-3 border-t border-slate-100 dark:border-slate-800/40">
+            <PaginationToolbar
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              language={language}
+              theme={theme}
+            />
           </div>
         )}
       </div>

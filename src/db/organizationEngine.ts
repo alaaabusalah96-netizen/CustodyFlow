@@ -187,6 +187,64 @@ export const DEFAULT_ORGANIZATION_TEMPLATES: OrganizationTemplate[] = [
 
 
 export class OrganizationEngine {
+  private static _unitLookupIndex: Map<string, OrganizationUnit> | null = null;
+  private static _unitsVersionKey: string = '';
+
+  static invalidateLookupIndex(): void {
+    OrganizationEngine._unitLookupIndex = null;
+    OrganizationEngine._unitsVersionKey = '';
+  }
+
+  static getUnitsVersionKey(): string {
+    const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+    return `${units.length}_${units[0]?.id || ''}_${units[units.length - 1]?.id || ''}_${units[units.length - 1]?.updatedAt || ''}`;
+  }
+
+  static getUnitLookupIndex(): Map<string, OrganizationUnit> {
+    const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+    const currentVersionKey = `${units.length}_${units[0]?.id || ''}_${units[units.length - 1]?.id || ''}_${units[units.length - 1]?.updatedAt || ''}`;
+    if (OrganizationEngine._unitLookupIndex && OrganizationEngine._unitsVersionKey === currentVersionKey) {
+      return OrganizationEngine._unitLookupIndex;
+    }
+
+    const index = new Map<string, OrganizationUnit>();
+    for (const u of units) {
+      index.set(u.id, u);
+      if (u.code) index.set(u.code, u);
+      if (u.metadata?.legacyStationId) {
+        index.set(u.metadata.legacyStationId, u);
+        index.set(`org-unit-station-${u.metadata.legacyStationId}`, u);
+      }
+      if (u.metadata?.legacy_station_id) {
+        index.set(u.metadata.legacy_station_id, u);
+        index.set(`org-unit-station-${u.metadata.legacy_station_id}`, u);
+      }
+      if (u.metadata?.legacyRegionId) {
+        index.set(u.metadata.legacyRegionId, u);
+        index.set(`org-unit-region-${u.metadata.legacyRegionId}`, u);
+      }
+      if (u.metadata?.legacy_region_id) {
+        index.set(u.metadata.legacy_region_id, u);
+        index.set(`org-unit-region-${u.metadata.legacy_region_id}`, u);
+      }
+      if (u.metadata?.legacyCompanyId) {
+        index.set(u.metadata.legacyCompanyId, u);
+        index.set(`org-unit-company-${u.metadata.legacyCompanyId}`, u);
+      }
+      if (u.metadata?.legacy_company_id) {
+        index.set(u.metadata.legacy_company_id, u);
+        index.set(`org-unit-company-${u.metadata.legacy_company_id}`, u);
+      }
+      if (u.parentId === null && (u.companyId || u.company_id)) {
+        index.set(`comp-root-${u.companyId || u.company_id}`, u);
+      }
+    }
+
+    OrganizationEngine._unitLookupIndex = index;
+    OrganizationEngine._unitsVersionKey = currentVersionKey;
+    return index;
+  }
+
   // --- Organization Unit Types ---
 
   static getUnitTypes(companyId?: string): OrganizationUnitType[] {
@@ -465,6 +523,7 @@ export class OrganizationEngine {
   }
 
   static saveUnits(units: OrganizationUnit[]): void {
+    OrganizationEngine.invalidateLookupIndex();
     StorageEngine.setStored('organization_units', units);
     units.forEach(u => dbSetDoc('organization_units', u.id, u));
   }
@@ -1176,36 +1235,57 @@ export class OrganizationEngine {
     const allUnits = OrganizationEngine.getUnits(targetCompanyId);
     if (!allUnits || allUnits.length === 0) return null;
 
+    const index = OrganizationEngine.getUnitLookupIndex();
+
     if (entity.org_unit_id) {
-      const byId = allUnits.find(u => u.id === entity.org_unit_id || u.code === entity.org_unit_id);
-      if (byId) return byId;
+      const byId = index.get(entity.org_unit_id);
+      if (byId && (!targetCompanyId || byId.companyId === targetCompanyId || byId.company_id === targetCompanyId)) {
+        return byId;
+      }
+      const found = allUnits.find(u => u.id === entity.org_unit_id || u.code === entity.org_unit_id);
+      if (found) return found;
     }
 
     if (entity.station_id) {
-      const byStation = allUnits.find(u =>
+      const byStation = index.get(`org-unit-station-${entity.station_id}`) || index.get(entity.station_id);
+      if (byStation && (!targetCompanyId || byStation.companyId === targetCompanyId || byStation.company_id === targetCompanyId)) {
+        return byStation;
+      }
+      const found = allUnits.find(u =>
         u.id === `org-unit-station-${entity.station_id}` ||
         u.id === entity.station_id ||
-        u.metadata?.legacyStationId === entity.station_id
+        u.metadata?.legacyStationId === entity.station_id ||
+        u.metadata?.legacy_station_id === entity.station_id
       );
-      if (byStation) return byStation;
+      if (found) return found;
     }
 
     if (entity.region_id) {
-      const byRegion = allUnits.find(u =>
+      const byRegion = index.get(`org-unit-region-${entity.region_id}`) || index.get(entity.region_id);
+      if (byRegion && (!targetCompanyId || byRegion.companyId === targetCompanyId || byRegion.company_id === targetCompanyId)) {
+        return byRegion;
+      }
+      const found = allUnits.find(u =>
         u.id === `org-unit-region-${entity.region_id}` ||
         u.id === entity.region_id ||
-        u.metadata?.legacyRegionId === entity.region_id
+        u.metadata?.legacyRegionId === entity.region_id ||
+        u.metadata?.legacy_region_id === entity.region_id
       );
-      if (byRegion) return byRegion;
+      if (found) return found;
     }
 
     if (entity.company_id) {
-      const byCompany = allUnits.find(u =>
+      const byCompany = index.get(`org-unit-company-${entity.company_id}`) || index.get(`comp-root-${entity.company_id}`) || index.get(entity.company_id);
+      if (byCompany && (!targetCompanyId || byCompany.companyId === targetCompanyId || byCompany.company_id === targetCompanyId)) {
+        return byCompany;
+      }
+      const found = allUnits.find(u =>
         u.id === `org-unit-company-${entity.company_id}` ||
         u.metadata?.legacyCompanyId === entity.company_id ||
+        u.metadata?.legacy_company_id === entity.company_id ||
         (u.parentId === null && (u.companyId === entity.company_id || u.company_id === entity.company_id))
       );
-      if (byCompany) return byCompany;
+      if (found) return found;
     }
 
     return null;

@@ -5,6 +5,14 @@ import { PermissionContext } from '../types/enterprise';
 import { PermissionEngine } from '../lib/enterprise/permission';
 
 export class OrganizationScopeEngine {
+  private static _accessibleIdsCache = new Map<string, string[]>();
+  private static _cacheVersion: string = '';
+
+  static invalidateScopeCache(): void {
+    OrganizationScopeEngine._accessibleIdsCache.clear();
+    OrganizationScopeEngine._cacheVersion = '';
+  }
+
   /**
    * Calculates all organization unit IDs accessible by the user, incorporating tree inheritance.
    * If a user is assigned to a parent node (e.g. Region or Sector), they automatically inherit
@@ -12,6 +20,17 @@ export class OrganizationScopeEngine {
    */
   static getAccessibleOrgUnitIds(user: AppUser, companyId?: string): string[] {
     const targetCompanyId = companyId || user.company_id || 'comp-1';
+    const currentVersion = OrganizationEngine.getUnitsVersionKey();
+    if (OrganizationScopeEngine._cacheVersion !== currentVersion) {
+      OrganizationScopeEngine._accessibleIdsCache.clear();
+      OrganizationScopeEngine._cacheVersion = currentVersion;
+    }
+    const cacheKey = `${user.id || ''}_${user.role || ''}_${user.org_unit_id || ''}_${(user.assigned_org_unit_ids || []).join(',')}_${user.region_id || ''}_${user.station_id || ''}_${targetCompanyId}`;
+    const cached = OrganizationScopeEngine._accessibleIdsCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const allUnits = OrganizationEngine.getOrganizationUnits(targetCompanyId);
 
     // Full administrative or company-wide scope
@@ -19,7 +38,9 @@ export class OrganizationScopeEngine {
     const hasNoRestrictedScope = !user.org_unit_id && (!user.assigned_org_unit_ids || user.assigned_org_unit_ids.length === 0) && !user.region_id && !user.station_id;
 
     if (isFullAdmin || hasNoRestrictedScope) {
-      return allUnits.map(u => u.id);
+      const result = allUnits.map(u => u.id);
+      OrganizationScopeEngine._accessibleIdsCache.set(cacheKey, result);
+      return result;
     }
 
     const assignedUnitIds = new Set<string>();
@@ -84,7 +105,9 @@ export class OrganizationScopeEngine {
       }
     });
 
-    return Array.from(accessibleIds);
+    const result = Array.from(accessibleIds);
+    OrganizationScopeEngine._accessibleIdsCache.set(cacheKey, result);
+    return result;
   }
 
   /**
@@ -139,6 +162,10 @@ export class OrganizationScopeEngine {
       if (accessibleUnitIds.includes(target.region_id) || accessibleUnitIds.includes(`legacy-region-${target.region_id}`)) {
         return true;
       }
+      const resolvedUnit = OrganizationEngine.resolveOrgUnitForEntity({ region_id: target.region_id }, targetCompanyId);
+      if (resolvedUnit && accessibleUnitIds.includes(resolvedUnit.id)) {
+        return true;
+      }
       const matchingRegionUnits = allUnits.filter(u =>
         u.id === target.region_id ||
         u.code === target.region_id ||
@@ -153,6 +180,10 @@ export class OrganizationScopeEngine {
 
     if (target.station_id) {
       if (accessibleUnitIds.includes(target.station_id) || accessibleUnitIds.includes(`legacy-station-${target.station_id}`)) {
+        return true;
+      }
+      const resolvedUnit = OrganizationEngine.resolveOrgUnitForEntity({ station_id: target.station_id }, targetCompanyId);
+      if (resolvedUnit && accessibleUnitIds.includes(resolvedUnit.id)) {
         return true;
       }
       const matchingStationUnits = allUnits.filter(u =>

@@ -10,6 +10,24 @@ export class LogsModule {
     return StorageEngine.getStored<ActivityLog[]>('logs', DEFAULT_LOGS);
   }
 
+  static getPaginatedLogs(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (log: ActivityLog) => boolean,
+    sortFn?: (a: ActivityLog, b: ActivityLog) => number
+  ): { data: ActivityLog[]; total: number; page: number; pageSize: number; totalPages: number } {
+    return StorageEngine.getStoredPaginated<ActivityLog>('logs', page, pageSize, filterFn, sortFn);
+  }
+
+  static async getPaginatedLogsIDB(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (log: ActivityLog) => boolean,
+    sortFn?: (a: ActivityLog, b: ActivityLog) => number
+  ): Promise<{ data: ActivityLog[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    return StorageEngine.getPaginatedIDB<ActivityLog>('logs', page, pageSize, filterFn, sortFn);
+  }
+
   static addLog(
     userId: string,
     userName: string,
@@ -68,6 +86,24 @@ export class LogsModule {
 
   static getAuditLogs(): AuditLog[] {
     return StorageEngine.getStored<AuditLog[]>('AuditLogs', DEFAULT_AUDIT_LOGS);
+  }
+
+  static getPaginatedAuditLogs(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (log: AuditLog) => boolean,
+    sortFn?: (a: AuditLog, b: AuditLog) => number
+  ): { data: AuditLog[]; total: number; page: number; pageSize: number; totalPages: number } {
+    return StorageEngine.getStoredPaginated<AuditLog>('AuditLogs', page, pageSize, filterFn, sortFn);
+  }
+
+  static async getPaginatedAuditLogsIDB(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (log: AuditLog) => boolean,
+    sortFn?: (a: AuditLog, b: AuditLog) => number
+  ): Promise<{ data: AuditLog[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    return StorageEngine.getPaginatedIDB<AuditLog>('AuditLogs', page, pageSize, filterFn, sortFn);
   }
 
   static addAuditLog(auditLog: AuditLog): void {

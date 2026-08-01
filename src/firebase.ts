@@ -21,6 +21,7 @@ import {
 import { AppUser, ExpenseCategory, Transaction, ActivityLog, CustodyConfig, Region, Station, Company, Expense, CashVoucher, TransactionHistory, Notification, AuditLog, SystemPermission, SystemRole, DeletedTransaction, SignupRequest, OrganizationUnit } from './types';
 import { hashPassword } from './lib/hash';
 import { OfflineQueueEngine } from './db/offlineQueue';
+import { StorageEngine } from './db/storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyA2I_2GIEfQhawBL2KhXyxD6CwTLJR-jFw",
@@ -795,7 +796,12 @@ function updateLocalAndNotify(key: string, data: any) {
     } catch (e) {}
     console.log(`[DEBUG_LOG] 9. Elements in LocalStorage [${key}] after updateLocalAndNotify():`, countAfter);
 
-    window.dispatchEvent(new Event('custody_db_updated'));
+    StorageEngine.cache[key] = data;
+    window.dispatchEvent(
+      new CustomEvent('custody_db_updated', {
+        detail: { key, value: data }
+      })
+    );
   } else {
     console.log(`[DEBUG_LOG] 9. No change in LocalStorage [${key}]. Remained at:`, countBefore);
   }

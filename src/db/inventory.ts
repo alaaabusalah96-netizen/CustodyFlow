@@ -172,7 +172,67 @@ const DEFAULT_MOVEMENTS: StockMovement[] = [
   }
 ];
 
+export interface StockLookupIndex {
+  byProductWarehouse: Map<string, number>;
+  byProductBinWarehouse: Map<string, number>;
+  byProductBin: Map<string, number>;
+  byBin: Map<string, number>;
+  byWarehouse: Map<string, number>;
+}
+
 export class InventoryModule {
+  private static cachedStockIndex: StockLookupIndex | null = null;
+  private static stockIndexVersionKey: string = '';
+
+  static clearStockLookupIndex(): void {
+    InventoryModule.cachedStockIndex = null;
+    InventoryModule.stockIndexVersionKey = '';
+  }
+
+  static getStockLookupIndex(): StockLookupIndex {
+    const movements = InventoryModule.getStockMovements();
+    const currentVersionKey = `${movements.length}_${movements[0]?.id || ''}_${movements[movements.length - 1]?.id || ''}_${movements[0]?.current_balance_after || ''}_${movements[movements.length - 1]?.current_balance_after || ''}`;
+    if (InventoryModule.cachedStockIndex && InventoryModule.stockIndexVersionKey === currentVersionKey) {
+      return InventoryModule.cachedStockIndex;
+    }
+
+    const byProductWarehouse = new Map<string, number>();
+    const byProductBinWarehouse = new Map<string, number>();
+    const byProductBin = new Map<string, number>();
+    const byBin = new Map<string, number>();
+    const byWarehouse = new Map<string, number>();
+
+    for (const m of movements) {
+      const qty = m.qty_change || 0;
+      if (m.product_id && m.warehouse_id) {
+        const key = `${m.product_id}___${m.warehouse_id}`;
+        byProductWarehouse.set(key, (byProductWarehouse.get(key) || 0) + qty);
+      }
+      if (m.product_id && m.bin_id) {
+        const keyBinWh = `${m.product_id}___${m.bin_id}___${m.warehouse_id || ''}`;
+        byProductBinWarehouse.set(keyBinWh, (byProductBinWarehouse.get(keyBinWh) || 0) + qty);
+        const keyBin = `${m.product_id}___${m.bin_id}`;
+        byProductBin.set(keyBin, (byProductBin.get(keyBin) || 0) + qty);
+      }
+      if (m.bin_id) {
+        byBin.set(m.bin_id, (byBin.get(m.bin_id) || 0) + qty);
+      }
+      if (m.warehouse_id) {
+        byWarehouse.set(m.warehouse_id, (byWarehouse.get(m.warehouse_id) || 0) + qty);
+      }
+    }
+
+    InventoryModule.cachedStockIndex = {
+      byProductWarehouse,
+      byProductBinWarehouse,
+      byProductBin,
+      byBin,
+      byWarehouse,
+    };
+    InventoryModule.stockIndexVersionKey = currentVersionKey;
+    return InventoryModule.cachedStockIndex;
+  }
+
   // Warehouses
   static getWarehouses(targetCompanyId?: string): Warehouse[] {
     const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
@@ -318,24 +378,21 @@ export class InventoryModule {
 
   // Stock tracking at Bin Level
   static getBinProductStock(productId: string, binId: string, warehouseId?: string): number {
-    const movements = InventoryModule.getStockMovements();
-    return movements
-      .filter(m => m.product_id === productId && m.bin_id === binId && (!warehouseId || m.warehouse_id === warehouseId))
-      .reduce((sum, m) => sum + m.qty_change, 0);
+    const index = InventoryModule.getStockLookupIndex();
+    if (warehouseId) {
+      return index.byProductBinWarehouse.get(`${productId}___${binId}___${warehouseId}`) || 0;
+    }
+    return index.byProductBin.get(`${productId}___${binId}`) || 0;
   }
 
   static getBinTotalStock(binId: string): number {
-    const movements = InventoryModule.getStockMovements();
-    return movements
-      .filter(m => m.bin_id === binId)
-      .reduce((sum, m) => sum + m.qty_change, 0);
+    const index = InventoryModule.getStockLookupIndex();
+    return index.byBin.get(binId) || 0;
   }
 
   static getWarehouseTotalStock(warehouseId: string): number {
-    const movements = InventoryModule.getStockMovements();
-    return movements
-      .filter(m => m.warehouse_id === warehouseId)
-      .reduce((sum, m) => sum + m.qty_change, 0);
+    const index = InventoryModule.getStockLookupIndex();
+    return index.byWarehouse.get(warehouseId) || 0;
   }
 
   // Relocation: Move stock internally between bins in the same warehouse
@@ -573,6 +630,34 @@ export class InventoryModule {
     return list.filter(d => d.tenantId === companyId);
   }
 
+  static getPaginatedInventoryDocuments(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (doc: InventoryDocument) => boolean,
+    sortFn?: (a: InventoryDocument, b: InventoryDocument) => number
+  ): { data: InventoryDocument[]; total: number; page: number; pageSize: number; totalPages: number } {
+    const companyId = CompaniesModule.getSelectedCompanyId();
+    const scopedFilter = (d: InventoryDocument): boolean => {
+      if (companyId && d.tenantId !== companyId) return false;
+      return filterFn ? filterFn(d) : true;
+    };
+    return StorageEngine.getStoredPaginated<InventoryDocument>('inventory_documents', page, pageSize, scopedFilter, sortFn);
+  }
+
+  static async getPaginatedInventoryDocumentsIDB(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (doc: InventoryDocument) => boolean,
+    sortFn?: (a: InventoryDocument, b: InventoryDocument) => number
+  ): Promise<{ data: InventoryDocument[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    const companyId = CompaniesModule.getSelectedCompanyId();
+    const scopedFilter = (d: InventoryDocument): boolean => {
+      if (companyId && d.tenantId !== companyId) return false;
+      return filterFn ? filterFn(d) : true;
+    };
+    return StorageEngine.getPaginatedIDB<InventoryDocument>('inventory_documents', page, pageSize, scopedFilter, sortFn);
+  }
+
   static saveInventoryDocuments(list: InventoryDocument[]): void {
     const all = StorageEngine.getStored<InventoryDocument[]>('inventory_documents', []);
     const companyId = CompaniesModule.getSelectedCompanyId();
@@ -586,11 +671,40 @@ export class InventoryModule {
   static getStockMovements(): StockMovement[] {
     const companyId = CompaniesModule.getSelectedCompanyId();
     const list = StorageEngine.getStored<StockMovement[]>('stock_movements', DEFAULT_MOVEMENTS);
-    if (!companyId) return list;
+    if (!companyId) return [...list];
     return list.filter(m => m.company_id === companyId);
   }
 
+  static getPaginatedStockMovements(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (m: StockMovement) => boolean,
+    sortFn?: (a: StockMovement, b: StockMovement) => number
+  ): { data: StockMovement[]; total: number; page: number; pageSize: number; totalPages: number } {
+    const companyId = CompaniesModule.getSelectedCompanyId();
+    const scopedFilter = (m: StockMovement): boolean => {
+      if (companyId && m.company_id !== companyId) return false;
+      return filterFn ? filterFn(m) : true;
+    };
+    return StorageEngine.getStoredPaginated<StockMovement>('stock_movements', page, pageSize, scopedFilter, sortFn);
+  }
+
+  static async getPaginatedStockMovementsIDB(
+    page: number = 1,
+    pageSize: number = 20,
+    filterFn?: (m: StockMovement) => boolean,
+    sortFn?: (a: StockMovement, b: StockMovement) => number
+  ): Promise<{ data: StockMovement[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    const companyId = CompaniesModule.getSelectedCompanyId();
+    const scopedFilter = (m: StockMovement): boolean => {
+      if (companyId && m.company_id !== companyId) return false;
+      return filterFn ? filterFn(m) : true;
+    };
+    return StorageEngine.getPaginatedIDB<StockMovement>('stock_movements', page, pageSize, scopedFilter, sortFn);
+  }
+
   static saveStockMovements(list: StockMovement[]): void {
+    InventoryModule.clearStockLookupIndex();
     const all = StorageEngine.getStored<StockMovement[]>('stock_movements', DEFAULT_MOVEMENTS);
     const companyId = CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(m => m.company_id !== companyId);
@@ -778,10 +892,8 @@ export class InventoryModule {
    * Helper to compute real-time product stock within a warehouse.
    */
   static getProductStock(productId: string, warehouseId: string): number {
-    const movements = InventoryModule.getStockMovements();
-    return movements
-      .filter(m => m.product_id === productId && m.warehouse_id === warehouseId)
-      .reduce((sum, m) => sum + m.qty_change, 0);
+    const index = InventoryModule.getStockLookupIndex();
+    return index.byProductWarehouse.get(`${productId}___${warehouseId}`) || 0;
   }
 
   /**

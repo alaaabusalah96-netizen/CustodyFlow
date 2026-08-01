@@ -8,6 +8,7 @@ import { CostCenterEngine } from '../db/costCenterEngine';
 import WarehouseTreeSelect from '../components/WarehouseTreeSelect';
 import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
 import { EnterpriseReportEngine } from '../lib/enterprise/report_engine';
+import { PaginationToolbar, usePaginatedList } from '../components/PaginationToolbar';
 import { translations, Language, Theme, Transaction, Station } from '../types';
 import { 
   FileText, 
@@ -108,7 +109,16 @@ export default function Reports({ language, theme }: ReportsProps) {
 
   const [reportData, setReportData] = useState<Transaction[]>(() => getInitialFilteredList());
   const [hasGenerated, setHasGenerated] = useState(true);
-  const [reportsLimit, setReportsLimit] = useState(15);
+
+  const {
+    items: paginatedReportData,
+    totalItems,
+    totalPages,
+    currentPage,
+    pageSize,
+    setCurrentPage,
+    setPageSize,
+  } = usePaginatedList(reportData, 15);
 
   // Generate Report Handler with Dynamic 6-Dimensional Filtering
   const handleGenerate = () => {
@@ -448,7 +458,7 @@ export default function Reports({ language, theme }: ReportsProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {reportData.slice(0, reportsLimit).map((tx) => {
+                {paginatedReportData.map((tx) => {
                   const st = allStations.find(s => s.id === tx.station_id);
                   return (
                     <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20">
@@ -485,15 +495,18 @@ export default function Reports({ language, theme }: ReportsProps) {
             </table>
           </div>
 
-          {reportData.length > reportsLimit && (
-            <div className="flex justify-center p-4 border-t border-slate-100 dark:border-slate-800/40 bg-slate-50/50 dark:bg-slate-800/5">
-              <button
-                onClick={() => setReportsLimit(prev => prev + 15)}
-                className="px-4 py-2 text-xs font-bold bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
-              >
-                <span>{isRtl ? 'عرض المزيد من الحركات' : 'Load More Records'}</span>
-                <span className="text-[10px] opacity-75">({reportData.length - reportsLimit} {isRtl ? 'متبقي' : 'remaining'})</span>
-              </button>
+          {reportData.length > 0 && (
+            <div className="p-3 border-t border-slate-100 dark:border-slate-800/40 bg-slate-50/50 dark:bg-slate-800/5">
+              <PaginationToolbar
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                language={language}
+                theme={theme}
+              />
             </div>
           )}
         </div>
