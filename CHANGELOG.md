@@ -2093,4 +2093,75 @@ Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded clea
 **Test & Validation Result:**
 Pass - Executed full unit test suite `npm test -- --run` (168/168 tests passing across 29 test files).
 
+---
+
+## v67-inventory-optional-company-id-signature: Refactor addWarehouse & addProduct Signatures Without Type Casting
+**Date/Time:** 2026-08-01 06:01:00 UTC
+**Files Changed:**
+- `src/db/inventory.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+- Refactored `InventoryModule.addWarehouse` and `InventoryModule.addProduct` signatures in `src/db/inventory.ts` from `Omit<Warehouse, 'id' | 'company_id'>` to `Omit<Warehouse, 'id'> & { company_id?: string }` (and similarly for `Product`).
+- Removed `(warehouse as any)` / `(product as any)` type casting and replaced with direct `warehouse.company_id` / `product.company_id` property access.
+- Verified all 168 unit and integration tests across 29 test files pass cleanly (`npm test -- --run`).
+
+**Test & Validation Result:**
+Pass - Executed full unit test suite `npm test -- --run` (168/168 tests passing across 29 test files).
+
+---
+
+## v68-pepper-fail-open-production-hardening: Tighten Server Pepper Checks in Production Mode
+**Date/Time:** 2026-08-01 06:15:30 UTC
+**Files Changed:**
+- `src/lib/server_hash.ts`
+- `server.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+- Updated `getActiveServerPepper()` in `src/lib/server_hash.ts` to consider `process.env.NODE_ENV === 'production'` in addition to `process.env.STRICT_PROD_SECURITY === 'true'` when evaluating `isStrictProdSecurity`.
+- Updated `startServer()` in `server.ts` so that when `APP_PEPPER` is unset in a production-like environment (`NODE_ENV === 'production'` or `STRICT_PROD_SECURITY === 'true'`), the server logs a critical security error and refuses to start via `process.exit(1)`.
+- Verified all 168 unit and integration tests across 29 test files continue to pass cleanly (`npm test -- --run`).
+
+**Test & Validation Result:**
+Pass - Executed full unit test suite `npm test -- --run` (168/168 tests passing across 29 test files).
+
+---
+
+## v69-deployment-docs-sanitize-api-key: Sanitize Hardcoded Firebase API Key in DEPLOYMENT.md
+**Date/Time:** 2026-08-01 06:19:00 UTC
+**Files Changed:**
+- `DEPLOYMENT.md`
+- `CHANGELOG.md`
+
+**Summary:**
+- Replaced the hardcoded example `apiKey` string in `DEPLOYMENT.md` with `<القيمة الفعلية موجودة في src/firebase.ts — لا تُكتب هنا>`.
+- Left non-secret project identifiers (`authDomain`, `storageBucket`, etc.) unchanged in `DEPLOYMENT.md`.
+- No code files were modified.
+
+**Test & Validation Result:**
+Pass - Documentation-only update; verified changes via diff inspection.
+
+---
+
+## v70-security-helmet-and-deps-cleanup: Add Helmet Security Headers Middleware & Remove Unused DB Dependencies
+**Date/Time:** 2026-08-01 06:24:00 UTC
+**Files Changed:**
+- `package.json`
+- `package-lock.json`
+- `server.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+- Added `"helmet": "^8.0.0"` to `dependencies` in `package.json` in alphabetical order.
+- Added `import helmet from "helmet";` and integrated permissive `app.use(helmet(...))` security headers middleware in `server.ts` right after `const app = express();` and before other middlewares.
+- Removed unused database dependencies (`drizzle-kit`, `drizzle-orm`, `pg`, `@types/pg`) from `package.json` and updated `package-lock.json`.
+- Verified all 168 unit and integration tests across 29 test files pass cleanly (`npm test -- --run`) and production build succeeds (`compile_applet`).
+
+**Test & Validation Result:**
+Pass - Executed `npm test -- --run` (168/168 tests passing across 29 test files) and `compile_applet` (build succeeded cleanly).
+
+
+
+
 

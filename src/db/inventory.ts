@@ -319,9 +319,9 @@ export class InventoryModule {
     list.forEach(w => dbSetDoc('warehouses', w.id, w));
   }
 
-  static addWarehouse(warehouse: Omit<Warehouse, 'id' | 'company_id'>): Warehouse {
+  static addWarehouse(warehouse: Omit<Warehouse, 'id'> & { company_id?: string }): Warehouse {
     const list = InventoryModule.getWarehouses();
-    const companyId = (warehouse as any).company_id || CompaniesModule.getSelectedCompanyId();
+    const companyId = warehouse.company_id || CompaniesModule.getSelectedCompanyId();
     const newW: Warehouse = {
       ...warehouse,
       id: `wh-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
@@ -610,9 +610,9 @@ export class InventoryModule {
     list.forEach(p => dbSetDoc('products', p.id, p));
   }
 
-  static addProduct(product: Omit<Product, 'id' | 'company_id'>): Product {
+  static addProduct(product: Omit<Product, 'id'> & { company_id?: string }): Product {
     const list = InventoryModule.getProducts();
-    const companyId = (product as any).company_id || CompaniesModule.getSelectedCompanyId();
+    const companyId = product.company_id || CompaniesModule.getSelectedCompanyId();
     const newP: Product = {
       ...product,
       id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation

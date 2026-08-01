@@ -17,7 +17,8 @@ export function getActiveServerPepper(): string {
   const envPepper = typeof process !== 'undefined' ? process.env?.APP_PEPPER : undefined;
   if (!envPepper) {
     const isStrictProdSecurity =
-      typeof process !== 'undefined' && process?.env?.STRICT_PROD_SECURITY === 'true';
+      typeof process !== 'undefined' &&
+      (process?.env?.STRICT_PROD_SECURITY === 'true' || process?.env?.NODE_ENV === 'production');
     if (isStrictProdSecurity) {
       throw new Error(
         'CRITICAL SECURITY ERROR: APP_PEPPER environment variable is not set. Refusing to start or serve authentication without a secure secret pepper.'

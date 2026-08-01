@@ -198,12 +198,33 @@ async function sendOtpEmail(email: string, otp: string, isLogin: boolean = false
   }
 }
 
+import helmet from "helmet";
+
 async function startServer() {
   const app = express();
+  app.use(helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        // Permissive مبدئيًا للسماح لأصول الواجهة الحالية (Vite/inline scripts أثناء dev) بالعمل من غير كسر —
+        // هيتم تشديدها تدريجيًا لاحقًا بعد مراجعة كل الـ external assets. راجع docs/production-checklist.md
+        "script-src": ["'self'", "'unsafe-inline'"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "img-src": ["'self'", "data:", "https:"],
+        "connect-src": ["'self'", "https:"]
+      }
+    },
+    crossOriginEmbedderPolicy: false
+  }));
   const PORT = 3000;
 
+  const isProductionLike = process.env.NODE_ENV === 'production' || process.env.STRICT_PROD_SECURITY === 'true';
   if (!process.env.APP_PEPPER) {
-    console.error("CRITICAL SECURITY NOTICE: APP_PEPPER environment variable is not set. Authentication routes (/api/auth/*) will fail-loud until APP_PEPPER is configured.");
+    if (isProductionLike) {
+      console.error("CRITICAL SECURITY ERROR: APP_PEPPER environment variable is not set in a production/strict environment. Refusing to start.");
+      process.exit(1);
+    }
+    console.warn("[Security Notice] APP_PEPPER is not set. Server will start in non-strict/dev mode with a fallback pepper — do NOT use this in production.");
   }
 
   // Trust first proxy in Cloud Run / Nginx container environment for rate limiter IP resolution

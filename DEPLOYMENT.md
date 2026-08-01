@@ -55,7 +55,7 @@ import { getAuth } from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA2I_2GIEfQhawBL2KhXyxD6CwTLJR-jFw",
+  apiKey: "<القيمة الفعلية موجودة في src/firebase.ts — لا تُكتب هنا>",
   authDomain: "custodyflow.firebaseapp.com",
   projectId: "custodyflow",
   storageBucket: "custodyflow.firebasestorage.app",
