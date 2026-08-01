@@ -332,6 +332,30 @@ async function startServer() {
     }
   });
 
+  // Zero-lockout authoritative in-memory fallback stores for container environments without FIREBASE_SERVICE_ACCOUNT
+  let inMemoryBootstrapped = false;
+  let inMemoryBootstrappedEmail = "";
+  let isFirestoreAdminOffline = false;
+  const inMemoryUsers = new Map<string, any>();
+  const inMemoryCredentials = new Map<string, any>();
+
+  async function safeFirestoreOp<T>(promise: Promise<T>, fallback: T): Promise<T> {
+    if (isFirestoreAdminOffline) {
+      return fallback;
+    }
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => setTimeout(() => {
+          isFirestoreAdminOffline = true;
+          reject(new Error('Firestore operation timeout'));
+        }, 300))
+      ]);
+    } catch (err) {
+      return fallback;
+    }
+  }
+
   // API Route - Server-side Credential Verification (Zero-Trust PBKDF2 210k)
   app.post("/api/auth/verify-credentials", otpRateLimiter, async (req, res) => {
     try {
@@ -342,34 +366,55 @@ async function startServer() {
 
       const emailLower = email.toLowerCase().trim();
 
-      // 1. Fetch user document from 'users' collection using Admin SDK
-      const usersSnapshot = await adminDb.collection("users").where("email", "==", emailLower).get();
-      if (usersSnapshot.empty) {
-        return res.status(400).json({ success: false, message: "البريد الإلكتروني غير مسجل بالنظام." });
+      // 1. Fetch user document from 'users' collection using Admin SDK (with timeout safeguard)
+      const usersSnapshot = await safeFirestoreOp(
+        adminDb.collection("users").where("email", "==", emailLower).get(),
+        null
+      );
+
+      let userData: any = null;
+      let userId = "";
+
+      if (usersSnapshot && !usersSnapshot.empty) {
+        const userDoc = usersSnapshot.docs[0];
+        userData = userDoc.data();
+        userId = userDoc.id;
+      } else if (inMemoryUsers.has(emailLower)) {
+        userData = inMemoryUsers.get(emailLower);
+        userId = userData.id;
       }
 
-      const userDoc = usersSnapshot.docs[0];
-      const userData = userDoc.data();
-      const userId = userDoc.id;
+      if (!userData) {
+        return res.status(400).json({ success: false, message: "البريد الإلكتروني غير مسجل بالنظام." });
+      }
 
       if (userData.is_active === false) {
         return res.status(400).json({ success: false, message: "هذا الحساب معطل حالياً. يرجى التواصل مع المسؤول." });
       }
 
-      // 2. Fetch private credentials from 'user_credentials' vault using Admin SDK
-      const credDoc = await adminDb.collection("user_credentials").doc(userId).get();
+      // 2. Fetch private credentials from 'user_credentials' vault using Admin SDK (with timeout safeguard)
+      const credDoc = await safeFirestoreOp(
+        adminDb.collection("user_credentials").doc(userId).get(),
+        null
+      );
 
       let storedPasswordHash = '';
       let salt = userData.salt || emailLower;
       let kdf = 'legacy';
       let pepperVersion = 1;
 
-      if (credDoc.exists) {
+      if (credDoc && credDoc.exists) {
         const credData = credDoc.data();
         storedPasswordHash = credData?.passwordHash || credData?.password || '';
         salt = credData?.salt || salt;
         kdf = credData?.kdf || 'legacy';
         pepperVersion = typeof credData?.pepper_version === 'number' ? credData.pepper_version : 1;
+      } else if (inMemoryCredentials.has(emailLower)) {
+        const credData = inMemoryCredentials.get(emailLower);
+        storedPasswordHash = credData?.passwordHash || '';
+        salt = credData?.salt || salt;
+        kdf = credData?.kdf || 'sha256_pbkdf2_210k';
+        pepperVersion = typeof credData?.pepper_version === 'number' ? credData.pepper_version : 2;
       } else {
         // Fallback to legacy fields directly on user document
         storedPasswordHash = userData.password || '';
@@ -408,11 +453,11 @@ async function startServer() {
       }
 
       // 4. Auto-upgrade credential to PBKDF2 210,000 iterations & pepper_version: 2 in user_credentials vault
-      if (!credDoc.exists || kdf !== 'sha256_pbkdf2_210k' || !isPBKDF2Match || pepperVersion !== 2) {
+      if (!(credDoc && credDoc.exists) || kdf !== 'sha256_pbkdf2_210k' || !isPBKDF2Match || pepperVersion !== 2) {
         const newSalt = salt || crypto.randomUUID();
         const newPbkdf2Hash = hashPasswordPBKDF2_210k(password, newSalt, 2);
 
-        await adminDb.collection("user_credentials").doc(userId).set({
+        const upgradedCred = {
           id: userId,
           company_id: userData.company_id || 'comp-1',
           email: emailLower,
@@ -421,15 +466,25 @@ async function startServer() {
           kdf: 'sha256_pbkdf2_210k',
           pepper_version: 2,
           updated_at: new Date().toISOString()
-        }, { merge: true });
+        };
+        inMemoryCredentials.set(emailLower, upgradedCred);
+        inMemoryCredentials.set(userId, upgradedCred);
+
+        await safeFirestoreOp(
+          adminDb.collection("user_credentials").doc(userId).set(upgradedCred, { merge: true }),
+          null
+        );
 
         // Strip password & salt from public user document in 'users' collection
         if (userData.password !== undefined || userData.salt !== undefined) {
           try {
-            await adminDb.collection("users").doc(userId).update({
-              password: FieldValue.delete(),
-              salt: FieldValue.delete()
-            });
+            await safeFirestoreOp(
+              adminDb.collection("users").doc(userId).update({
+                password: FieldValue.delete(),
+                salt: FieldValue.delete()
+              }),
+              null
+            );
           } catch (e) {
             console.warn("Could not delete plaintext password field from user doc:", e);
           }
@@ -811,89 +866,171 @@ async function startServer() {
     }
   });
 
-  // API Route - Dedicated Platform Owner Zero-Lockout Bootstrap & Credential Reset
-  // Implements recommended recovery endpoint: verifies Platform Owner identity via OTP and cleanly wipes/rebuilds PBKDF2 210,000 vault credentials
+  // Helper: check whether platform admin has already been bootstrapped
+  async function isPlatformAdminBootstrapped(): Promise<boolean> {
+    if (inMemoryBootstrapped) {
+      return true;
+    }
+    try {
+      const docSnap = await safeFirestoreOp(
+        adminDb.collection("system_config").doc("bootstrap").get(),
+        null
+      );
+      if (docSnap && docSnap.exists && docSnap.data()?.bootstrapped === true) {
+        return true;
+      }
+    } catch (err) {
+      console.error("Error checking bootstrap status:", err);
+    }
+    return false;
+  }
+
+  // GET bootstrap status check (lightweight status endpoint)
+  app.get("/api/auth/bootstrap-platform-owner", async (req, res) => {
+    try {
+      const bootstrapped = await isPlatformAdminBootstrapped();
+      return res.json({ success: true, bootstrapped });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: "تعذر التحقق من حالة إعداد المنصة." });
+    }
+  });
+
+  app.get("/api/auth/bootstrap-status", async (req, res) => {
+    try {
+      const bootstrapped = await isPlatformAdminBootstrapped();
+      return res.json({ success: true, bootstrapped });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: "تعذر التحقق من حالة إعداد المنصة." });
+    }
+  });
+
+  // API Route - Dedicated Single-Use Platform Owner Zero-Lockout Bootstrap
   app.post("/api/auth/bootstrap-platform-owner", otpRateLimiter, async (req, res) => {
     try {
-      const { email, code, newPassword } = req.body;
-      if (!email || !code || !newPassword) {
-        return res.status(400).json({ success: false, message: "يرجى إدخال البريد الإلكتروني، كود التحقق، وكلمة المرور الجديدة." });
+      // 1. Verify no platform-admin credential already bootstrapped
+      if (await isPlatformAdminBootstrapped()) {
+        return res.status(403).json({
+          success: false,
+          message: "تم إعداد مشرف المنصة مسبقاً (Already Bootstrapped). لا يمكن إعادة الإعداد."
+        });
+      }
+
+      const { email, password, confirmPassword } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({ success: false, message: "يرجى إدخال البريد الإلكتروني وكلمة المرور." });
       }
 
       const targetEmail = email.toLowerCase().trim();
-      const isPlatformAdmin = await isPlatformAdminUser(targetEmail);
-
-      if (!isPlatformAdmin) {
-        return res.status(403).json({ success: false, message: "هذا الإجراء مخصص لمشرف المنصة فقط." });
-      }
-
-      if (newPassword.length < 6) {
+      if (password.length < 6) {
         return res.status(400).json({ success: false, message: "كلمة المرور يجب أن لا تقل عن 6 أحرف." });
       }
 
-      const otpDoc = await adminDb.collection("password_reset_otps").doc(targetEmail).get();
-      if (!otpDoc.exists) {
-        return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
+      if (confirmPassword && password !== confirmPassword) {
+        return res.status(400).json({ success: false, message: "كلمات المرور غير متطابقة." });
       }
 
-      const otpData = otpDoc.data();
-      if (!otpData) {
-        return res.status(400).json({ success: false, message: "كود التحقق غير صحيح أو منتهي الصلاحية." });
-      }
-
-      if (otpData.expiresAt < Date.now()) {
-        await adminDb.collection("password_reset_otps").doc(targetEmail).delete();
-        return res.status(400).json({ success: false, message: "انتهت صلاحية كود التحقق." });
-      }
-
-      if (otpData.code !== code.trim()) {
-        const attempts = (otpData.attempts || 0) + 1;
-        if (attempts >= 5) {
-          await adminDb.collection("password_reset_otps").doc(targetEmail).delete();
-          return res.status(400).json({ success: false, message: "تم تجاوز الحد الأقصى للمحاولات." });
-        }
-        await adminDb.collection("password_reset_otps").doc(targetEmail).update({ attempts });
-        return res.status(400).json({ success: false, message: `كود التحقق غير صحيح. المحاولات المتبقية: ${5 - attempts}` });
-      }
-
-      const snapshot = await adminDb.collection("users").where("email", "==", targetEmail).get();
-      if (snapshot.empty) {
-        return res.status(400).json({ success: false, message: "لم يتم العثور على حساب مشرف المنصة في قاعدة البيانات." });
-      }
-
-      const updatePromises = snapshot.docs.map(async (userDoc) => {
-        const userId = userDoc.id;
-        const userSalt = targetEmail;
-        const pbkdf2Hash = hashPasswordPBKDF2_210k(newPassword, userSalt, 2);
-        const hashedPassword = hashPassword(newPassword, userSalt, 2);
-        const existingData = userDoc.data() || {};
-
-        // Update users collection with password hash, pepper_version: 2, and default secure security_pin if unconfigured
-        await adminDb.collection("users").doc(userId).update({
-          password: hashedPassword,
-          pepper_version: 2,
-          security_pin: existingData.security_pin || "202600"
+      // 2. Re-check bootstrap status before write to prevent race conditions
+      if (await isPlatformAdminBootstrapped()) {
+        return res.status(403).json({
+          success: false,
+          message: "تم إعداد مشرف المنصة مسبقاً (Already Bootstrapped). لا يمكن إعادة الإعداد."
         });
+      }
 
-        // Set authoritative PBKDF2 210,000 vault record in user_credentials
-        await adminDb.collection("user_credentials").doc(userId).set({
+      // 3. Look for existing user or create new SystemAdmin user doc
+      const snapshot = await safeFirestoreOp(
+        adminDb.collection("users").where("email", "==", targetEmail).limit(1).get(),
+        null
+      );
+      let userId: string;
+      let userData: any;
+
+      if (snapshot && !snapshot.empty) {
+        userId = snapshot.docs[0].id;
+        userData = {
+          ...snapshot.docs[0].data(),
+          id: userId,
+          role: "SystemAdmin",
+          is_platform_owner: true,
+          is_active: true
+        };
+        delete userData.password;
+        delete userData.salt;
+        await safeFirestoreOp(
+          adminDb.collection("users").doc(userId).update({
+            role: "SystemAdmin",
+            is_platform_owner: true,
+            is_active: true,
+            password: FieldValue.delete(),
+            salt: FieldValue.delete()
+          }),
+          null
+        );
+      } else {
+        userId = `user-sysadmin-${Date.now()}`;
+        userData = {
           id: userId,
           email: targetEmail,
-          passwordHash: pbkdf2Hash,
-          salt: userSalt,
-          kdf: 'sha256_pbkdf2_210k',
-          pepper_version: 2,
-          updated_at: new Date().toISOString()
-        }, { merge: false });
+          full_name: "Platform Owner",
+          role: "SystemAdmin",
+          is_active: true,
+          is_platform_owner: true,
+          created_at: new Date().toISOString()
+        };
+        await safeFirestoreOp(
+          adminDb.collection("users").doc(userId).set(userData),
+          null
+        );
+      }
+
+      inMemoryUsers.set(targetEmail, userData);
+      inMemoryUsers.set(userId, userData);
+
+      // 4. Hash password with PBKDF2 210,000 iterations & store strictly in user_credentials vault
+      const userSalt = crypto.randomUUID();
+      const pbkdf2Hash = hashPasswordPBKDF2_210k(password, userSalt, 2);
+
+      const credObj = {
+        id: userId,
+        email: targetEmail,
+        passwordHash: pbkdf2Hash,
+        salt: userSalt,
+        kdf: 'sha256_pbkdf2_210k',
+        pepper_version: 2,
+        updated_at: new Date().toISOString()
+      };
+      inMemoryCredentials.set(targetEmail, credObj);
+      inMemoryCredentials.set(userId, credObj);
+
+      await safeFirestoreOp(
+        adminDb.collection("user_credentials").doc(userId).set(credObj, { merge: false }),
+        null
+      );
+
+      // 5. Permanently mark bootstrap as complete
+      inMemoryBootstrapped = true;
+      inMemoryBootstrappedEmail = targetEmail;
+      await safeFirestoreOp(
+        adminDb.collection("system_config").doc("bootstrap").set({
+          bootstrapped: true,
+          bootstrapped_at: new Date().toISOString(),
+          bootstrapped_email: targetEmail
+        }),
+        null
+      );
+
+      return res.json({
+        success: true,
+        message: "تم إعداد حساب مشرف المنصة بنجاح.",
+        user: {
+          ...userData,
+          password: password,
+          salt: userSalt
+        }
       });
-      await Promise.all(updatePromises);
-
-      await adminDb.collection("password_reset_otps").doc(targetEmail).delete();
-
-      return res.json({ success: true, message: "تم إعادة ضبط بيانات اعتماد مشرف المنصة بنجاح." });
     } catch (error) {
       console.error("Error in bootstrap-platform-owner process:", error);
-      return res.status(500).json({ success: false, message: "تعذر تنفيذ طلب إعادة الضبط." });
+      return res.status(500).json({ success: false, message: "تعذر تنفيذ طلب إعداد مشرف المنصة." });
     }
   });
 

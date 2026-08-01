@@ -434,13 +434,21 @@ export class OrganizationEngine {
       units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
     }
 
+    units = units.map(u => ({
+      ...u,
+      max_accounts_allowed: u.max_accounts_allowed ?? 1
+    }));
+
     if (!companyId) return units;
 
     let filtered = units.filter(u => (u.companyId || u.company_id) === companyId);
     if (filtered.length === 0) {
       OrganizationEngine.autoMigrateLegacyStructure(companyId);
       units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
-      filtered = units.filter(u => (u.companyId || u.company_id) === companyId);
+      filtered = units.map(u => ({
+        ...u,
+        max_accounts_allowed: u.max_accounts_allowed ?? 1
+      })).filter(u => (u.companyId || u.company_id) === companyId);
     }
 
     return filtered;
@@ -448,7 +456,12 @@ export class OrganizationEngine {
 
   static getUnitById(id: string): OrganizationUnit | null {
     const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
-    return units.find(u => u.id === id) || null;
+    const found = units.find(u => u.id === id);
+    if (!found) return null;
+    return {
+      ...found,
+      max_accounts_allowed: found.max_accounts_allowed ?? 1
+    };
   }
 
   static saveUnits(units: OrganizationUnit[]): void {
@@ -529,6 +542,7 @@ export class OrganizationEngine {
     nameEn?: string;
     metadata?: Record<string, any>;
     isActive?: boolean;
+    max_accounts_allowed?: number;
   }): OrganizationUnit {
     const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
     const paths = StorageEngine.getStored<OrganizationPath[]>('organization_paths', []);
@@ -557,6 +571,7 @@ export class OrganizationEngine {
       metadata: params.metadata || {},
       isActive: params.isActive ?? true,
       is_active: params.isActive ?? true,
+      max_accounts_allowed: params.max_accounts_allowed ?? 1,
       createdAt: now,
       updatedAt: now,
     };
@@ -1148,6 +1163,170 @@ export class OrganizationEngine {
   static getUnitsAtLevel(companyId: string, level: number): OrganizationUnit[] {
     const units = OrganizationEngine.getUnits(companyId);
     return units.filter(u => u.level === level);
+  }
+
+  /**
+   * Resolves the exact OrganizationUnit for any user or signup request entity.
+   */
+  static resolveOrgUnitForEntity(
+    entity: { org_unit_id?: string; station_id?: string; region_id?: string; company_id?: string; role?: string },
+    companyId?: string
+  ): OrganizationUnit | null {
+    const targetCompanyId = companyId || entity.company_id;
+    const allUnits = OrganizationEngine.getUnits(targetCompanyId);
+    if (!allUnits || allUnits.length === 0) return null;
+
+    if (entity.org_unit_id) {
+      const byId = allUnits.find(u => u.id === entity.org_unit_id || u.code === entity.org_unit_id);
+      if (byId) return byId;
+    }
+
+    if (entity.station_id) {
+      const byStation = allUnits.find(u =>
+        u.id === `org-unit-station-${entity.station_id}` ||
+        u.id === entity.station_id ||
+        u.metadata?.legacyStationId === entity.station_id
+      );
+      if (byStation) return byStation;
+    }
+
+    if (entity.region_id) {
+      const byRegion = allUnits.find(u =>
+        u.id === `org-unit-region-${entity.region_id}` ||
+        u.id === entity.region_id ||
+        u.metadata?.legacyRegionId === entity.region_id
+      );
+      if (byRegion) return byRegion;
+    }
+
+    if (entity.company_id) {
+      const byCompany = allUnits.find(u =>
+        u.id === `org-unit-company-${entity.company_id}` ||
+        u.metadata?.legacyCompanyId === entity.company_id ||
+        (u.parentId === null && (u.companyId === entity.company_id || u.company_id === entity.company_id))
+      );
+      if (byCompany) return byCompany;
+    }
+
+    return null;
+  }
+
+  /**
+   * Retrieves the current account headcount for a specific organization unit.
+   */
+  static getUnitAccountHeadcount(unitId: string): {
+    activeAccountsCount: number;
+    maxAllowed: number;
+    activeUsers: any[];
+  } {
+    const unit = OrganizationEngine.getUnitById(unitId);
+    const maxAllowed = unit?.max_accounts_allowed ?? 1;
+    const allUsers = UsersModule.getUsers();
+
+    const activeUsers = allUsers.filter(u => {
+      if (u.is_active === false) return false;
+      const resolvedUnit = OrganizationEngine.resolveOrgUnitForEntity(u, unit?.companyId || u.company_id);
+      return resolvedUnit && resolvedUnit.id === unitId;
+    });
+
+    return {
+      activeAccountsCount: activeUsers.length,
+      maxAllowed,
+      activeUsers
+    };
+  }
+
+  /**
+   * Checks whether the active user is at the organizational level directly above
+   * the target unit (or higher administrative authority) to raise headcount.
+   */
+  static canRaiseMaxAccountsAllowed(targetUnit: OrganizationUnit, activeUser?: any | null): {
+    canRaise: boolean;
+    reasonAr?: string;
+    reasonEn?: string;
+  } {
+    if (!activeUser) {
+      return { canRaise: false, reasonAr: 'غير مصرح لك بإجراء هذا التعديل.', reasonEn: 'Unauthorized to modify account limits.' };
+    }
+
+    if (UsersModule.isPlatformOwner(activeUser.email) || activeUser.role === 'SystemAdmin') {
+      return { canRaise: true };
+    }
+
+    if (activeUser.role === 'Admin' && activeUser.company_id === targetUnit.companyId) {
+      return { canRaise: true };
+    }
+
+    if (targetUnit.parentId) {
+      const parentUnit = OrganizationEngine.getUnitById(targetUnit.parentId);
+      if (parentUnit) {
+        const userResolvedUnit = OrganizationEngine.resolveOrgUnitForEntity(activeUser, targetUnit.companyId);
+        if (userResolvedUnit && userResolvedUnit.id === parentUnit.id) {
+          return { canRaise: true };
+        }
+      }
+    }
+
+    return {
+      canRaise: false,
+      reasonAr: 'يمكن فقط للمسؤول المباشر في المستوى التنظيمي الأعلى رفع الحد الأقصى لعدد حسابات هذه الوحدة.',
+      reasonEn: 'Only the administrator at the organizational level directly above this unit can raise its account ceiling.'
+    };
+  }
+
+  /**
+   * Raises max_accounts_allowed by 1 increment (up to hard ceiling of 5).
+   */
+  static raiseMaxAccountsAllowed(unitId: string, activeUser?: any | null): {
+    success: boolean;
+    errorAr?: string;
+    errorEn?: string;
+    unit?: OrganizationUnit;
+  } {
+    const unit = OrganizationEngine.getUnitById(unitId);
+    if (!unit) {
+      return {
+        success: false,
+        errorAr: 'الوحدة التنظيمية غير موجودة.',
+        errorEn: 'Organization unit not found.'
+      };
+    }
+
+    const clearance = OrganizationEngine.canRaiseMaxAccountsAllowed(unit, activeUser);
+    if (!clearance.canRaise) {
+      return {
+        success: false,
+        errorAr: clearance.reasonAr,
+        errorEn: clearance.reasonEn
+      };
+    }
+
+    const currentMax = unit.max_accounts_allowed ?? 1;
+    if (currentMax >= 5) {
+      return {
+        success: false,
+        errorAr: 'الحد الأقصى المطلق لعدد الحسابات في أي وحدة تنظيمية هو 5 حسابات ولا يمكن تجاوزه.',
+        errorEn: 'The absolute maximum headcount ceiling for any organization unit is 5 accounts and cannot be exceeded.'
+      };
+    }
+
+    const nextMax = currentMax + 1;
+    const updated = OrganizationEngine.updateUnit(unitId, {
+      max_accounts_allowed: nextMax
+    });
+
+    if (!updated) {
+      return {
+        success: false,
+        errorAr: 'فشل تحديث الحد الأقصى لعدد الحسابات.',
+        errorEn: 'Failed to update account ceiling.'
+      };
+    }
+
+    return {
+      success: true,
+      unit: updated
+    };
   }
 }
 

@@ -30,9 +30,10 @@ export interface OrganizationUnit {
   nameEn?: string;           // Optional English name
   path: string;              // Materialized path, e.g., "/root-id/child-id"
   level: number;             // Depth level in hierarchy (0 = root)
-  metadata: Record<string, any>; // Arbitrary domain metadata
+  metadata?: Record<string, any>; // Arbitrary domain metadata
   isActive: boolean;         // Unit active flag
   is_active?: boolean;       // Backward compatibility alias
+  max_accounts_allowed?: number; // Per-unit account headcount ceiling (default 1, max 5)
   createdAt?: string;
   updatedAt?: string;
 }

@@ -58,6 +58,8 @@ import { PurchasingBusinessEngine } from './lib/enterprise/purchasing_engine';
 import { AccountingBusinessEngine } from './lib/enterprise/accounting_engine';
 import { CompaniesModule } from './db/companies';
 import { UsersModule } from './db/users';
+import { CustodyService } from './db/custodyService';
+import { getFilteredMenuItems } from './components/Layout';
 
 describe('Phase 16: Enterprise End-to-End Business Flow Validation', () => {
   const companyId = 'comp-e2e-flow-test';
@@ -90,6 +92,14 @@ describe('Phase 16: Enterprise End-to-End Business Flow Validation', () => {
 
     localStorageMock.setItem('custody_active_user', JSON.stringify(mockUser));
     StorageEngine.setStored('selected_company_id', companyId);
+    StorageEngine.setStored('companies', [{
+      id: companyId,
+      name_en: 'E2E Flow Test Company',
+      name_ar: 'شركة اختبار النظام',
+      subscription_plan: 'Enterprise',
+      subscription_status: 'active',
+      is_active: true
+    }]);
     StorageEngine.setStored('purchase_requests', []);
     StorageEngine.setStored('purchase_orders', []);
     StorageEngine.setStored('inventory_documents', []);
@@ -481,8 +491,15 @@ describe('Phase 16: Enterprise End-to-End Business Flow Validation', () => {
       id: 'sysadmin-usr',
       full_name: 'Platform Admin',
       email: 'sysadmin@platform.test',
-      role: 'SystemAdmin',
+      role: 'SystemAdmin' as const,
       company_id: '',
+      permissions: {
+        create_expense: true,
+        settle_voucher: true,
+        manage_users: true,
+        view_reports: true,
+        manage_settings: true
+      },
       is_active: true
     };
     localStorageMock.setItem('custody_active_user', JSON.stringify(mockSystemAdmin));
@@ -492,7 +509,55 @@ describe('Phase 16: Enterprise End-to-End Business Flow Validation', () => {
     expect(selectedCompanyId).toBe('');
     expect(selectedCompanyId).not.toBe('comp-1');
 
-    // 2. Verify login/logout/login-again resilience (same user identity restored consistently)
+    // 2. Verify SystemAdmin menu contains ONLY platform tools and NO operational modules
+    const sysAdminMenuItems = getFilteredMenuItems(mockSystemAdmin as any, 'en').map(i => i.id);
+    expect(sysAdminMenuItems).toContain('super-admin');
+    expect(sysAdminMenuItems).toContain('audit-log');
+    expect(sysAdminMenuItems).toContain('settings');
+    expect(sysAdminMenuItems).toContain('search');
+    expect(sysAdminMenuItems).not.toContain('transactions');
+    expect(sysAdminMenuItems).not.toContain('inventory');
+    expect(sysAdminMenuItems).not.toContain('purchasing');
+    expect(sysAdminMenuItems).not.toContain('accounting');
+    expect(sysAdminMenuItems).not.toContain('Expenses');
+    expect(sysAdminMenuItems).not.toContain('CashVouchers');
+
+    // 3. Verify Company Admin operational access is unaffected by SystemAdmin scope
+    const mockCompanyAdmin = {
+      id: 'usr-admin-e2e',
+      full_name: 'E2E Admin User',
+      email: 'admin.e2e@company.test',
+      role: 'Admin' as const,
+      company_id: companyId,
+      permissions: {
+        create_expense: true,
+        settle_voucher: true,
+        manage_users: true,
+        view_reports: true,
+        manage_settings: true
+      },
+      is_active: true
+    };
+    const adminMenuItems = getFilteredMenuItems(mockCompanyAdmin as any, 'en').map(i => i.id);
+    expect(adminMenuItems).toContain('reconciliation');
+    expect(adminMenuItems).toContain('approvals');
+    expect(adminMenuItems).toContain('inventory');
+    expect(adminMenuItems).toContain('purchasing');
+    expect(adminMenuItems).toContain('accounting');
+
+    // 4. Verify no write in any of the four flows was recorded under literal 'comp-1'
+    const checkNoComp1 = (key: string) => {
+      const items = StorageEngine.getStored<any[]>(key, []);
+      const hasComp1 = items.some(x => x.company_id === 'comp-1');
+      expect(hasComp1).toBe(false);
+    };
+    checkNoComp1('purchase_requests');
+    checkNoComp1('purchase_orders');
+    checkNoComp1('inventory');
+    checkNoComp1('journal_entries');
+    checkNoComp1('CashVouchers');
+
+    // 5. Verify login/logout/login-again resilience (same user identity restored consistently)
     UsersModule.setActiveUser(null);
     expect(UsersModule.getActiveUser()).toBeNull();
 

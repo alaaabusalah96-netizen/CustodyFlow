@@ -1,17 +1,69 @@
-import { AppUser, ExpenseCategory, Transaction, ActivityLog, CustodyConfig, Region, Station, Company, Expense, CashVoucher, TransactionHistory, Notification, AuditLog, SystemPermission, SystemRole } from '../types';
+import { AppUser, ExpenseCategory, Transaction, ActivityLog, CustodyConfig, Region, Station, Company, Expense, CashVoucher, TransactionHistory, Notification, AuditLog, SystemPermission, SystemRole, OrganizationUnit } from '../types';
 
-// Pre-seeded Companies
+// Pre-seeded Companies (5 Egyptian Industries)
 export const DEFAULT_COMPANIES: Company[] = [
-  { id: 'comp-1', name: 'Cairo Poultry (القاهرة للدواجن)', custody_value: 500000.00, is_active: true, subscription_status: 'active', subscription_plan: 'Enterprise', subscription_expiry: '2028-12-31' }
+  { id: 'comp-sewedy-mfg', name: 'El-Sewedy Industrial Group (السويدي للصناعات الهندسية)', custody_value: 1500000.00, is_active: true, subscription_status: 'active', subscription_plan: 'Enterprise', subscription_expiry: '2028-12-31' },
+  { id: 'comp-futtaim-trade', name: 'Al-Futtaim Commercial Trading (الفطيم للتجارة والتوزيع)', custody_value: 800000.00, is_active: true, subscription_status: 'active', subscription_plan: 'Enterprise', subscription_expiry: '2028-12-31' },
+  { id: 'comp-cairo-poultry', name: 'Cairo Poultry Group (القاهرة للإنتاج الداجني والزراعي)', custody_value: 500000.00, is_active: true, subscription_status: 'active', subscription_plan: 'Enterprise', subscription_expiry: '2028-12-31' },
+  { id: 'comp-daltex-holding', name: 'Daltex Agricultural Holding Group (مجموعة دلتاكس القابضة للتنمية الزراعية)', custody_value: 2000000.00, is_active: true, subscription_status: 'active', subscription_plan: 'Enterprise', subscription_expiry: '2028-12-31' },
+  { id: 'comp-carrefour-retail', name: 'Carrefour Egypt Retail Supermarkets (كارفور مصر لتجارة التجزئة)', custody_value: 1200000.00, is_active: true, subscription_status: 'active', subscription_plan: 'Enterprise', subscription_expiry: '2028-12-31' }
 ];
 
 export const DEFAULT_REGIONS: Region[] = [
-  { id: 'reg-1-1', name: 'Eastern Region (المنطقة الشرقية)', code: 'REG-1-EAST', company_id: 'comp-1' }
+  { id: 'reg-cairo-east', name: 'Eastern Region (المنطقة الشرقية)', code: 'REG-CP-EAST', company_id: 'comp-cairo-poultry' },
+  { id: 'reg-sewedy-10th', name: '10th of Ramadan Industrial Zone (منطقة العاشر من رمضان الصناعية)', code: 'REG-SEW-10TH', company_id: 'comp-sewedy-mfg' },
+  { id: 'reg-futtaim-cairo', name: 'Greater Cairo Region (منطقة القاهرة الكبرى)', code: 'REG-FUT-CAI', company_id: 'comp-futtaim-trade' },
+  { id: 'reg-daltex-delta', name: 'Delta Agricultural Zone (منطقة الدلتا الزراعية)', code: 'REG-DLT-DLT', company_id: 'comp-daltex-holding' },
+  { id: 'reg-carrefour-north', name: 'Northern Retail Zone (منطقة التجزئة الشمالية)', code: 'REG-CRF-N', company_id: 'comp-carrefour-retail' }
 ];
 
 export const DEFAULT_STATIONS: Station[] = [
-  { id: 'stn-1-1-1', region_id: 'reg-1-1', station_name: 'Sina 2000 Station (محطة سينا 2000)', station_code: 'STN-1-1-SINA', custody_amount: 250000.00, is_active: true, company_id: 'comp-1' },
-  { id: 'stn-1-1-2', region_id: 'reg-1-1', station_name: 'Al-Qadisiya Station (محطة القادسية)', station_code: 'STN-1-1-QAD', custody_amount: 250000.00, is_active: true, company_id: 'comp-1' }
+  { id: 'stn-cairo-1', region_id: 'reg-cairo-east', station_name: 'Sina 2000 Station (محطة سينا 2000)', station_code: 'STN-CP-SINA', custody_amount: 250000.00, is_active: true, company_id: 'comp-cairo-poultry' },
+  { id: 'stn-cairo-2', region_id: 'reg-cairo-east', station_name: 'Al-Qadisiya Station (محطة القادسية)', station_code: 'STN-CP-QAD', custody_amount: 250000.00, is_active: true, company_id: 'comp-cairo-poultry' },
+  { id: 'stn-sewedy-fac-1', region_id: 'reg-sewedy-10th', station_name: 'Main Cables Factory (مصنع الكابلات الرئيسي)', station_code: 'FAC-SEW-01', custody_amount: 500000.00, is_active: true, company_id: 'comp-sewedy-mfg' },
+  { id: 'stn-futtaim-cai-1', region_id: 'reg-futtaim-cairo', station_name: 'Cairo Main Distribution Branch (فرع القاهرة الرئيسي للتوزيع)', station_code: 'BR-FUT-01', custody_amount: 150000.00, is_active: true, company_id: 'comp-futtaim-trade' },
+  { id: 'stn-daltex-agri-1', region_id: 'reg-daltex-delta', station_name: 'Nubaria Agricultural Sector (قطاع النوبارية الزراعي)', station_code: 'STN-DLT-01', custody_amount: 400000.00, is_active: true, company_id: 'comp-daltex-holding' },
+  { id: 'stn-carrefour-store-1', region_id: 'reg-carrefour-north', station_name: 'Maadi Hypermarket Store (فرع هايبر ماركت المعادي)', station_code: 'STORE-CRF-01', custody_amount: 300000.00, is_active: true, company_id: 'comp-carrefour-retail' }
+];
+
+// Pre-seeded Organization Units across 5 Egyptian Industry Templates (27 total units)
+export const DEFAULT_ORGANIZATION_UNITS: OrganizationUnit[] = [
+  // 1. Industrial/Manufacturing (comp-sewedy-mfg, tpl-manufacturing)
+  { id: 'org-unit-sewedy-hq', companyId: 'comp-sewedy-mfg', parentId: null, typeId: 'out-company', code: 'SEW-CORP', name: 'الشركة الصناعية - السويدي', nameAr: 'الشركة الصناعية - السويدي', nameEn: 'El-Sewedy Industrial Group', path: '/org-unit-sewedy-hq', level: 0, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-sewedy-fac-01', companyId: 'comp-sewedy-mfg', parentId: 'org-unit-sewedy-hq', typeId: 'out-factory', code: 'FAC-SEW-01', name: 'مصنع الإنتاج الرئيسي', nameAr: 'مصنع الإنتاج الرئيسي', nameEn: 'Main Manufacturing Plant', path: '/org-unit-sewedy-hq/org-unit-sewedy-fac-01', level: 1, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-sewedy-dept-prod', companyId: 'comp-sewedy-mfg', parentId: 'org-unit-sewedy-fac-01', typeId: 'out-department', code: 'DEPT-PROD', name: 'إدارة خطوط الإنتاج', nameAr: 'إدارة خطوط الإنتاج', nameEn: 'Production Department', path: '/org-unit-sewedy-hq/org-unit-sewedy-fac-01/org-unit-sewedy-dept-prod', level: 2, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-sewedy-dept-qc', companyId: 'comp-sewedy-mfg', parentId: 'org-unit-sewedy-fac-01', typeId: 'out-department', code: 'DEPT-QC', name: 'إدارة الجودة والرقابة', nameAr: 'إدارة الجودة والرقابة', nameEn: 'Quality Control Department', path: '/org-unit-sewedy-hq/org-unit-sewedy-fac-01/org-unit-sewedy-dept-qc', level: 2, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-sewedy-line-a', companyId: 'comp-sewedy-mfg', parentId: 'org-unit-sewedy-dept-prod', typeId: 'out-unit', code: 'LINE-A', name: 'خط إنتاج أ', nameAr: 'خط إنتاج أ', nameEn: 'Production Line A', path: '/org-unit-sewedy-hq/org-unit-sewedy-fac-01/org-unit-sewedy-dept-prod/org-unit-sewedy-line-a', level: 3, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-sewedy-line-b', companyId: 'comp-sewedy-mfg', parentId: 'org-unit-sewedy-dept-prod', typeId: 'out-unit', code: 'LINE-B', name: 'خط إنتاج ب', nameAr: 'خط إنتاج ب', nameEn: 'Production Line B', path: '/org-unit-sewedy-hq/org-unit-sewedy-fac-01/org-unit-sewedy-dept-prod/org-unit-sewedy-line-b', level: 3, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+
+  // 2. General Trade/Commercial (comp-futtaim-trade, tpl-trading)
+  { id: 'org-unit-futtaim-hq', companyId: 'comp-futtaim-trade', parentId: null, typeId: 'out-company', code: 'FUT-HQ', name: 'المقر الرئيسي للشركة - الفطيم', nameAr: 'المقر الرئيسي للشركة - الفطيم', nameEn: 'Al-Futtaim Commercial HQ', path: '/org-unit-futtaim-hq', level: 0, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-futtaim-sec-sales', companyId: 'comp-futtaim-trade', parentId: 'org-unit-futtaim-hq', typeId: 'out-sector', code: 'SEC-SALES', name: 'قطاع المبيعات والتوزيع', nameAr: 'قطاع المبيعات والتوزيع', nameEn: 'Sales & Distribution Sector', path: '/org-unit-futtaim-hq/org-unit-futtaim-sec-sales', level: 1, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-futtaim-sec-ops', companyId: 'comp-futtaim-trade', parentId: 'org-unit-futtaim-hq', typeId: 'out-sector', code: 'SEC-OPS', name: 'قطاع العمليات واللوجستيات', nameAr: 'قطاع العمليات واللوجستيات', nameEn: 'Operations & Logistics Sector', path: '/org-unit-futtaim-hq/org-unit-futtaim-sec-ops', level: 1, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-futtaim-reg-cairo', companyId: 'comp-futtaim-trade', parentId: 'org-unit-futtaim-sec-sales', typeId: 'out-region', code: 'REG-CAIRO', name: 'منطقة القاهرة الكبرى', nameAr: 'منطقة القاهرة الكبرى', nameEn: 'Greater Cairo Region', path: '/org-unit-futtaim-hq/org-unit-futtaim-sec-sales/org-unit-futtaim-reg-cairo', level: 2, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-futtaim-reg-alex', companyId: 'comp-futtaim-trade', parentId: 'org-unit-futtaim-sec-sales', typeId: 'out-region', code: 'REG-ALEX', name: 'منطقة الإسكندرية والدلتا', nameAr: 'منطقة الإسكندرية والدلتا', nameEn: 'Alexandria & Delta Region', path: '/org-unit-futtaim-hq/org-unit-futtaim-sec-sales/org-unit-futtaim-reg-alex', level: 2, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-futtaim-br-cai', companyId: 'comp-futtaim-trade', parentId: 'org-unit-futtaim-reg-cairo', typeId: 'out-branch', code: 'BR-CAI-01', name: 'فرع القاهرة الرئيسي', nameAr: 'فرع القاهرة الرئيسي', nameEn: 'Cairo Main Branch', path: '/org-unit-futtaim-hq/org-unit-futtaim-sec-sales/org-unit-futtaim-reg-cairo/org-unit-futtaim-br-cai', level: 3, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-futtaim-br-alx', companyId: 'comp-futtaim-trade', parentId: 'org-unit-futtaim-reg-alex', typeId: 'out-branch', code: 'BR-ALX-01', name: 'فرع الإسكندرية الرئيسي', nameAr: 'فرع الإسكندرية الرئيسي', nameEn: 'Alexandria Main Branch', path: '/org-unit-futtaim-hq/org-unit-futtaim-sec-sales/org-unit-futtaim-reg-alex/org-unit-futtaim-br-alx', level: 3, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+
+  // 3. Poultry (comp-cairo-poultry, tpl-poultry) - Includes Part 1 Escalation Demo Unit
+  { id: 'org-unit-cairo-poultry-hq', companyId: 'comp-cairo-poultry', parentId: null, typeId: 'out-company', code: 'CPG-HQ', name: 'شركة الإنتاج الداجني - القاهرة للدواجن', nameAr: 'شركة الإنتاج الداجني - القاهرة للدواجن', nameEn: 'Cairo Poultry Group HQ', path: '/org-unit-cairo-poultry-hq', level: 0, isActive: true, max_accounts_allowed: 3, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-cp-sec-farms', companyId: 'comp-cairo-poultry', parentId: 'org-unit-cairo-poultry-hq', typeId: 'out-sector', code: 'SEC-FARMS', name: 'قطاع المزارع والتربية', nameAr: 'قطاع المزارع والتربية', nameEn: 'Farms & Breeding Sector', path: '/org-unit-cairo-poultry-hq/org-unit-cp-sec-farms', level: 1, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-cp-sec-proc', companyId: 'comp-cairo-poultry', parentId: 'org-unit-cairo-poultry-hq', typeId: 'out-sector', code: 'SEC-PROC', name: 'قطاع المجازر والتصنيع', nameAr: 'قطاع المجازر والتصنيع', nameEn: 'Processing & Slaughterhouse Sector', path: '/org-unit-cairo-poultry-hq/org-unit-cp-sec-proc', level: 1, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-cp-stn-salam', companyId: 'comp-cairo-poultry', parentId: 'org-unit-cp-sec-farms', typeId: 'out-station', code: 'STN-SALAM', name: 'محطة السلام الدواجن', nameAr: 'محطة السلام الدواجن', nameEn: 'El-Salam Station', path: '/org-unit-cairo-poultry-hq/org-unit-cp-sec-farms/org-unit-cp-stn-salam', level: 2, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-cp-farm-1', companyId: 'comp-cairo-poultry', parentId: 'org-unit-cp-stn-salam', typeId: 'out-farm', code: 'FRM-SLM-01', name: 'مزرعة تسمين السلام 1', nameAr: 'مزرعة تسمين السلام 1', nameEn: 'El-Salam Broiler Farm 1', path: '/org-unit-cairo-poultry-hq/org-unit-cp-sec-farms/org-unit-cp-stn-salam/org-unit-cp-farm-1', level: 3, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-cp-farm-2', companyId: 'comp-cairo-poultry', parentId: 'org-unit-cp-stn-salam', typeId: 'out-farm', code: 'FRM-SLM-02', name: 'مزرعة تسمين السلام 2', nameAr: 'مزرعة تسمين السلام 2', nameEn: 'El-Salam Broiler Farm 2', path: '/org-unit-cairo-poultry-hq/org-unit-cp-sec-farms/org-unit-cp-stn-salam/org-unit-cp-farm-2', level: 3, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+
+  // 4. Agriculture / Diversified Conglomerate Holding (comp-daltex-holding, tpl-holding)
+  { id: 'org-unit-daltex-holding', companyId: 'comp-daltex-holding', parentId: null, typeId: 'out-holding', code: 'DLT-HOLD', name: 'المجموعة القابضة - دلتاكس القابضة', nameAr: 'المجموعة القابضة - دلتاكس القابضة', nameEn: 'Daltex Holding Group', path: '/org-unit-daltex-holding', level: 0, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-daltex-sub-agri', companyId: 'comp-daltex-holding', parentId: 'org-unit-daltex-holding', typeId: 'out-company', code: 'COMP-AGRI', name: 'الشركة التابعة للتنمية الزراعية', nameAr: 'الشركة التابعة للتنمية الزراعية', nameEn: 'Agricultural Subsidiary Co', path: '/org-unit-daltex-holding/org-unit-daltex-sub-agri', level: 1, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-daltex-sub-trade', companyId: 'comp-daltex-holding', parentId: 'org-unit-daltex-holding', typeId: 'out-company', code: 'COMP-TRD', name: 'الشركة التابعة للتجارة والاستيراد', nameAr: 'الشركة التابعة للتجارة والاستيراد', nameEn: 'Trading Subsidiary Co', path: '/org-unit-daltex-holding/org-unit-daltex-sub-trade', level: 1, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-daltex-sec-farms', companyId: 'comp-daltex-holding', parentId: 'org-unit-daltex-sub-agri', typeId: 'out-sector', code: 'SEC-AGRI-F', name: 'قطاع الإنتاج الزراعي', nameAr: 'قطاع الإنتاج الزراعي', nameEn: 'Agricultural Sector', path: '/org-unit-daltex-holding/org-unit-daltex-sub-agri/org-unit-daltex-sec-farms', level: 2, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+
+  // 5. Retail Supermarkets (comp-carrefour-retail, tpl-retail)
+  { id: 'org-unit-carrefour-hq', companyId: 'comp-carrefour-retail', parentId: null, typeId: 'out-company', code: 'CRF-HQ', name: 'شركة تجارة التجزئة - كارفور مصر', nameAr: 'شركة تجارة التجزئة - كارفور مصر', nameEn: 'Carrefour Egypt Retail Supermarkets', path: '/org-unit-carrefour-hq', level: 0, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-crf-reg-north', companyId: 'comp-carrefour-retail', parentId: 'org-unit-carrefour-hq', typeId: 'out-region', code: 'REG-N', name: 'قطاع الفروع الشمالية', nameAr: 'قطاع الفروع الشمالية', nameEn: 'Northern Retail Zone', path: '/org-unit-carrefour-hq/org-unit-crf-reg-north', level: 1, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-crf-store-01', companyId: 'comp-carrefour-retail', parentId: 'org-unit-crf-reg-north', typeId: 'out-branch', code: 'STORE-01', name: 'فرع الهايبر ماركت 1', nameAr: 'فرع الهايبر ماركت 1', nameEn: 'Hypermarket Store 1', path: '/org-unit-carrefour-hq/org-unit-crf-reg-north/org-unit-crf-store-01', level: 2, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'org-unit-crf-store-02', companyId: 'comp-carrefour-retail', parentId: 'org-unit-crf-reg-north', typeId: 'out-branch', code: 'STORE-02', name: 'فرع الإكسبريس 2', nameAr: 'فرع الإكسبريس 2', nameEn: 'Express Outlet Store 2', path: '/org-unit-carrefour-hq/org-unit-crf-reg-north/org-unit-crf-store-02', level: 2, isActive: true, max_accounts_allowed: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' }
 ];
 
 // Pre-seeded Categories
@@ -24,7 +76,7 @@ export const DEFAULT_CATEGORIES: ExpenseCategory[] = [
   { id: 'cat-6', name_en: 'Miscellaneous', name_ar: 'مصاريف نثرية أخرى' }
 ];
 
-// Pre-configured Users
+// Pre-configured Users (12 seeded accounts across 5 Egyptian industries)
 export const DEFAULT_USERS: AppUser[] = [
   {
     id: 'user-sysadmin',
@@ -35,23 +87,12 @@ export const DEFAULT_USERS: AppUser[] = [
     is_platform_owner: true,
     password: '123456',
     permissions: {
-      create_expense: true,
-      edit_expense: true,
-      delete_expense: true,
-      create_voucher: true,
-      approve_voucher: true,
-      reject_voucher: true,
-      create_custody: true,
-      edit_custody: true,
-      replace_custody: true,
-      view_reports: true,
-      manage_users: true,
-      manage_companies: true,
-      manage_regions: true,
-      manage_stations: true,
-      manage_roles: true,
-      manage_settings: true,
-      settle_voucher: true
+      create_expense: true, edit_expense: true, delete_expense: true,
+      create_voucher: true, approve_voucher: true, reject_voucher: true,
+      create_custody: true, edit_custody: true, replace_custody: true,
+      view_reports: true, manage_users: true, manage_companies: true,
+      manage_regions: true, manage_stations: true, manage_roles: true,
+      manage_settings: true, settle_voucher: true
     }
   },
   {
@@ -63,23 +104,12 @@ export const DEFAULT_USERS: AppUser[] = [
     is_platform_owner: true,
     password: '123456',
     permissions: {
-      create_expense: true,
-      edit_expense: true,
-      delete_expense: true,
-      create_voucher: true,
-      approve_voucher: true,
-      reject_voucher: true,
-      create_custody: true,
-      edit_custody: true,
-      replace_custody: true,
-      view_reports: true,
-      manage_users: true,
-      manage_companies: true,
-      manage_regions: true,
-      manage_stations: true,
-      manage_roles: true,
-      manage_settings: true,
-      settle_voucher: true
+      create_expense: true, edit_expense: true, delete_expense: true,
+      create_voucher: true, approve_voucher: true, reject_voucher: true,
+      create_custody: true, edit_custody: true, replace_custody: true,
+      view_reports: true, manage_users: true, manage_companies: true,
+      manage_regions: true, manage_stations: true, manage_roles: true,
+      manage_settings: true, settle_voucher: true
     }
   },
   {
@@ -91,140 +121,179 @@ export const DEFAULT_USERS: AppUser[] = [
     is_platform_owner: true,
     password: '123456',
     permissions: {
-      create_expense: true,
-      edit_expense: true,
-      delete_expense: true,
-      create_voucher: true,
-      approve_voucher: true,
-      reject_voucher: true,
-      create_custody: true,
-      edit_custody: true,
-      replace_custody: true,
-      view_reports: true,
-      manage_users: true,
-      manage_companies: true,
-      manage_regions: true,
-      manage_stations: true,
-      manage_roles: true,
-      manage_settings: true,
-      settle_voucher: true
+      create_expense: true, edit_expense: true, delete_expense: true,
+      create_voucher: true, approve_voucher: true, reject_voucher: true,
+      create_custody: true, edit_custody: true, replace_custody: true,
+      view_reports: true, manage_users: true, manage_companies: true,
+      manage_regions: true, manage_stations: true, manage_roles: true,
+      manage_settings: true, settle_voucher: true
+    }
+  },
+  {
+    id: 'user-sewedy-admin',
+    email: 'admin@elsewedy.com',
+    full_name: 'Eng. Ahmed El-Sewedy (م. أحمد السويدي)',
+    role: 'Admin',
+    company_id: 'comp-sewedy-mfg',
+    org_unit_id: 'org-unit-sewedy-hq',
+    is_active: true,
+    password: '123456',
+    permissions: {
+      create_expense: true, edit_expense: true, delete_expense: true,
+      create_voucher: true, approve_voucher: true, reject_voucher: true,
+      create_custody: true, edit_custody: true, replace_custody: true,
+      view_reports: true, manage_users: true, manage_companies: false,
+      manage_regions: true, manage_stations: true, manage_roles: true,
+      manage_settings: true, settle_voucher: true
+    }
+  },
+  {
+    id: 'user-futtaim-admin',
+    email: 'admin@alfuttaim.com',
+    full_name: 'Omar Al-Futtaim (عمر الفطيم)',
+    role: 'Admin',
+    company_id: 'comp-futtaim-trade',
+    org_unit_id: 'org-unit-futtaim-hq',
+    is_active: true,
+    password: '123456',
+    permissions: {
+      create_expense: true, edit_expense: true, delete_expense: true,
+      create_voucher: true, approve_voucher: true, reject_voucher: true,
+      create_custody: true, edit_custody: true, replace_custody: true,
+      view_reports: true, manage_users: true, manage_companies: false,
+      manage_regions: true, manage_stations: true, manage_roles: true,
+      manage_settings: true, settle_voucher: true
     }
   },
   {
     id: 'user-admin',
-    email: 'admin@company.com',
-    full_name: 'Ahmed El-Sayed (أحمد السيد)',
+    email: 'admin@cairopoultry.com',
+    full_name: 'Dr. Hassan Moustafa (د. حسن مصطفى)',
     role: 'Admin',
-    company_id: 'comp-1',
+    company_id: 'comp-cairo-poultry',
+    org_unit_id: 'org-unit-cairo-poultry-hq',
     is_active: true,
     password: '123456',
     permissions: {
-      create_expense: true,
-      edit_expense: true,
-      delete_expense: true,
-      create_voucher: true,
-      approve_voucher: true,
-      reject_voucher: true,
-      create_custody: true,
-      edit_custody: true,
-      replace_custody: true,
-      view_reports: true,
-      manage_users: true,
-      manage_companies: false,
-      manage_regions: true,
-      manage_stations: true,
-      manage_roles: true,
-      manage_settings: true,
-      settle_voucher: true
+      create_expense: true, edit_expense: true, delete_expense: true,
+      create_voucher: true, approve_voucher: true, reject_voucher: true,
+      create_custody: true, edit_custody: true, replace_custody: true,
+      view_reports: true, manage_users: true, manage_companies: false,
+      manage_regions: true, manage_stations: true, manage_roles: true,
+      manage_settings: true, settle_voucher: true
+    }
+  },
+  {
+    id: 'user-cairo-poultry-controller',
+    email: 'controller@cairopoultry.com',
+    full_name: 'Fatma Al-Zahraa - Financial Controller (فاطمة الزهراء)',
+    role: 'Admin',
+    company_id: 'comp-cairo-poultry',
+    org_unit_id: 'org-unit-cairo-poultry-hq',
+    is_active: true,
+    password: '123456',
+    permissions: {
+      create_expense: true, edit_expense: true, delete_expense: true,
+      create_voucher: true, approve_voucher: true, reject_voucher: true,
+      create_custody: true, edit_custody: true, replace_custody: true,
+      view_reports: true, manage_users: true, manage_companies: false,
+      manage_regions: true, manage_stations: true, manage_roles: true,
+      manage_settings: true, settle_voucher: true
+    }
+  },
+  {
+    id: 'user-daltex-admin',
+    email: 'admin@daltex.com',
+    full_name: 'Samir Daltex - Group CEO (سمير دلتاكس)',
+    role: 'Admin',
+    company_id: 'comp-daltex-holding',
+    org_unit_id: 'org-unit-daltex-holding',
+    is_active: true,
+    password: '123456',
+    permissions: {
+      create_expense: true, edit_expense: true, delete_expense: true,
+      create_voucher: true, approve_voucher: true, reject_voucher: true,
+      create_custody: true, edit_custody: true, replace_custody: true,
+      view_reports: true, manage_users: true, manage_companies: false,
+      manage_regions: true, manage_stations: true, manage_roles: true,
+      manage_settings: true, settle_voucher: true
+    }
+  },
+  {
+    id: 'user-carrefour-admin',
+    email: 'admin@carrefour.com.eg',
+    full_name: 'Karim Mansour - Retail Operations Director (كريم منصور)',
+    role: 'Admin',
+    company_id: 'comp-carrefour-retail',
+    org_unit_id: 'org-unit-carrefour-hq',
+    is_active: true,
+    password: '123456',
+    permissions: {
+      create_expense: true, edit_expense: true, delete_expense: true,
+      create_voucher: true, approve_voucher: true, reject_voucher: true,
+      create_custody: true, edit_custody: true, replace_custody: true,
+      view_reports: true, manage_users: true, manage_companies: false,
+      manage_regions: true, manage_stations: true, manage_roles: true,
+      manage_settings: true, settle_voucher: true
     }
   },
   {
     id: 'user-regional-cairo',
-    email: 'regional@company.com',
+    email: 'regional@cairopoultry.com',
     full_name: 'Omar Farouk (عمر فاروق)',
     role: 'RegionalManager',
-    region_id: 'reg-1-1',
-    company_id: 'comp-1',
+    region_id: 'reg-cairo-east',
+    company_id: 'comp-cairo-poultry',
+    org_unit_id: 'org-unit-cp-sec-farms',
     is_active: true,
     password: '123456',
     permissions: {
-      create_expense: false,
-      edit_expense: false,
-      delete_expense: false,
-      create_voucher: false,
-      approve_voucher: true,
-      reject_voucher: true,
-      create_custody: false,
-      edit_custody: false,
-      replace_custody: true,
-      view_reports: true,
-      manage_users: false,
-      manage_companies: false,
-      manage_regions: false,
-      manage_stations: false,
-      manage_roles: false,
-      manage_settings: false,
-      settle_voucher: false
+      create_expense: false, edit_expense: false, delete_expense: false,
+      create_voucher: false, approve_voucher: true, reject_voucher: true,
+      create_custody: false, edit_custody: false, replace_custody: true,
+      view_reports: true, manage_users: false, manage_companies: false,
+      manage_regions: false, manage_stations: false, manage_roles: false,
+      manage_settings: false, settle_voucher: false
     }
   },
   {
     id: 'user-regular',
-    email: 'cashier@company.com',
+    email: 'cashier@cairopoultry.com',
     full_name: 'Mariam Ali (مريم علي)',
     role: 'StationAdmin',
-    station_id: 'stn-1-1-1',
-    region_id: 'reg-1-1',
-    company_id: 'comp-1',
+    station_id: 'stn-cairo-1',
+    region_id: 'reg-cairo-east',
+    company_id: 'comp-cairo-poultry',
+    org_unit_id: 'org-unit-cp-stn-salam',
     is_active: true,
     password: '123456',
     permissions: {
-      create_expense: true,
-      edit_expense: true,
-      delete_expense: false,
-      create_voucher: true,
-      approve_voucher: false,
-      reject_voucher: false,
-      create_custody: false,
-      edit_custody: false,
-      replace_custody: false,
-      view_reports: true,
-      manage_users: false,
-      manage_companies: false,
-      manage_regions: false,
-      manage_stations: false,
-      manage_roles: false,
-      manage_settings: false,
-      settle_voucher: true
+      create_expense: true, edit_expense: true, delete_expense: false,
+      create_voucher: true, approve_voucher: false, reject_voucher: false,
+      create_custody: false, edit_custody: false, replace_custody: false,
+      view_reports: true, manage_users: false, manage_companies: false,
+      manage_regions: false, manage_stations: false, manage_roles: false,
+      manage_settings: false, settle_voucher: true
     }
   },
   {
     id: 'user-regular-2',
-    email: 'cashier2@company.com',
+    email: 'cashier2@cairopoultry.com',
     full_name: 'Tarek Sayed (طارق سيد)',
     role: 'StationAdmin',
-    station_id: 'stn-1-1-2',
-    region_id: 'reg-1-1',
-    company_id: 'comp-1',
+    station_id: 'stn-cairo-2',
+    region_id: 'reg-cairo-east',
+    company_id: 'comp-cairo-poultry',
+    org_unit_id: 'org-unit-cp-stn-salam',
     is_active: true,
     password: '123456',
     permissions: {
-      create_expense: true,
-      edit_expense: true,
-      delete_expense: false,
-      create_voucher: true,
-      approve_voucher: false,
-      reject_voucher: false,
-      create_custody: false,
-      edit_custody: false,
-      replace_custody: false,
-      view_reports: true,
-      manage_users: false,
-      manage_companies: false,
-      manage_regions: false,
-      manage_stations: false,
-      manage_roles: false,
-      manage_settings: false,
-      settle_voucher: true
+      create_expense: true, edit_expense: true, delete_expense: false,
+      create_voucher: true, approve_voucher: false, reject_voucher: false,
+      create_custody: false, edit_custody: false, replace_custody: false,
+      view_reports: true, manage_users: false, manage_companies: false,
+      manage_regions: false, manage_stations: false, manage_roles: false,
+      manage_settings: false, settle_voucher: true
     }
   }
 ];
@@ -244,8 +313,8 @@ export const generateDefaultTransactions = (): Transaction[] => {
       created_by: 'user-regular',
       created_at: '2026-07-01T09:30:00Z',
       updated_at: '2026-07-01T09:30:00Z',
-      station_id: 'stn-1-1-1',
-      company_id: 'comp-1'
+      station_id: 'stn-cairo-1',
+      company_id: 'comp-cairo-poultry'
     },
     {
       id: 'tx-sina-2',
@@ -259,8 +328,8 @@ export const generateDefaultTransactions = (): Transaction[] => {
       created_by: 'user-regular',
       created_at: '2026-07-02T10:15:00Z',
       updated_at: '2026-07-02T10:15:00Z',
-      station_id: 'stn-1-1-1',
-      company_id: 'comp-1'
+      station_id: 'stn-cairo-1',
+      company_id: 'comp-cairo-poultry'
     },
     {
       id: 'tx-sina-3',
@@ -276,8 +345,8 @@ export const generateDefaultTransactions = (): Transaction[] => {
       created_by: 'user-regular',
       created_at: '2026-07-03T11:00:00Z',
       updated_at: '2026-07-04T12:00:00Z',
-      station_id: 'stn-1-1-1',
-      company_id: 'comp-1'
+      station_id: 'stn-cairo-1',
+      company_id: 'comp-cairo-poultry'
     },
     {
       id: 'tx-sina-4',
@@ -293,8 +362,8 @@ export const generateDefaultTransactions = (): Transaction[] => {
       created_by: 'user-regular',
       created_at: '2026-07-04T13:30:00Z',
       updated_at: '2026-07-05T10:00:00Z',
-      station_id: 'stn-1-1-1',
-      company_id: 'comp-1'
+      station_id: 'stn-cairo-1',
+      company_id: 'comp-cairo-poultry'
     },
     {
       id: 'tx-sina-5',
@@ -310,8 +379,8 @@ export const generateDefaultTransactions = (): Transaction[] => {
       created_by: 'user-regular',
       created_at: '2026-07-05T09:00:00Z',
       updated_at: '2026-07-05T14:30:00Z',
-      station_id: 'stn-1-1-1',
-      company_id: 'comp-1'
+      station_id: 'stn-cairo-1',
+      company_id: 'comp-cairo-poultry'
     },
     {
       id: 'tx-qad-1',
@@ -325,8 +394,8 @@ export const generateDefaultTransactions = (): Transaction[] => {
       created_by: 'user-regular-2',
       created_at: '2026-07-01T08:45:00Z',
       updated_at: '2026-07-01T08:45:00Z',
-      station_id: 'stn-1-1-2',
-      company_id: 'comp-1'
+      station_id: 'stn-cairo-2',
+      company_id: 'comp-cairo-poultry'
     },
     {
       id: 'tx-qad-2',
@@ -340,8 +409,8 @@ export const generateDefaultTransactions = (): Transaction[] => {
       created_by: 'user-regular-2',
       created_at: '2026-07-02T11:15:00Z',
       updated_at: '2026-07-02T11:15:00Z',
-      station_id: 'stn-1-1-2',
-      company_id: 'comp-1'
+      station_id: 'stn-cairo-2',
+      company_id: 'comp-cairo-poultry'
     },
     {
       id: 'tx-qad-3',
@@ -355,8 +424,8 @@ export const generateDefaultTransactions = (): Transaction[] => {
       created_by: 'user-regular-2',
       created_at: '2026-07-03T12:00:00Z',
       updated_at: '2026-07-03T12:00:00Z',
-      station_id: 'stn-1-1-2',
-      company_id: 'comp-1'
+      station_id: 'stn-cairo-2',
+      company_id: 'comp-cairo-poultry'
     },
     {
       id: 'tx-qad-4',
@@ -372,8 +441,8 @@ export const generateDefaultTransactions = (): Transaction[] => {
       created_by: 'user-regular-2',
       created_at: '2026-07-04T10:00:00Z',
       updated_at: '2026-07-04T15:00:00Z',
-      station_id: 'stn-1-1-2',
-      company_id: 'comp-1'
+      station_id: 'stn-cairo-2',
+      company_id: 'comp-cairo-poultry'
     },
     {
       id: 'tx-qad-5',
@@ -389,8 +458,8 @@ export const generateDefaultTransactions = (): Transaction[] => {
       created_by: 'user-regular-2',
       created_at: '2026-07-05T09:30:00Z',
       updated_at: '2026-07-05T13:00:00Z',
-      station_id: 'stn-1-1-2',
-      company_id: 'comp-1'
+      station_id: 'stn-cairo-2',
+      company_id: 'comp-cairo-poultry'
     }
   ];
 };
@@ -417,8 +486,8 @@ export const DEFAULT_CONFIG: CustodyConfig = {
 export const DEFAULT_EXPENSES: Expense[] = [
   {
     id: 'exp-1',
-    station_id: 'stn-1-1-1',
-    company_id: 'comp-1',
+    station_id: 'stn-cairo-1',
+    company_id: 'comp-cairo-poultry',
     category_id: 'cat-4',
     amount: 1540.00,
     description: 'إصلاح طلمبة المياه رقم 3 بمحطة سينا 2000',
@@ -437,8 +506,8 @@ export const DEFAULT_VOUCHERS: CashVoucher[] = [
     id: 'vch-1',
     voucher_no: 'CPV-2026-0001',
     date: '2026-07-03',
-    station_id: 'stn-1-1-1',
-    company_id: 'comp-1',
+    station_id: 'stn-cairo-1',
+    company_id: 'comp-cairo-poultry',
     amount: 1540.00,
     amount_in_words: {
       ar: 'ألف وخمسمائة وأربعون جنيهاً مصرياً لا غير',

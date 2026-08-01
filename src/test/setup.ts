@@ -1,0 +1,45 @@
+import { vi } from 'vitest';
+
+// Enable online mode for offline fallback queue
+if (typeof global !== 'undefined') {
+  Object.defineProperty(global, 'navigator', {
+    value: { onLine: true },
+    configurable: true,
+    writable: true
+  });
+}
+
+vi.mock('firebase/app', () => ({ initializeApp: () => ({}) }));
+vi.mock('firebase/auth', () => ({ getAuth: () => ({}) }));
+vi.mock('firebase/storage', () => ({ getStorage: () => ({}) }));
+vi.mock('firebase/firestore', () => ({
+  initializeFirestore: () => ({}),
+  getFirestore: () => ({}),
+  doc: (db: any, col: any, id: any) => ({ id, path: `${col}/${id}` }),
+  collection: (db: any, col: any) => ({ id: col }),
+  setDoc: () => Promise.resolve(),
+  deleteDoc: () => Promise.resolve(),
+  updateDoc: vi.fn(() => Promise.resolve()),
+  increment: vi.fn((val) => val),
+  onSnapshot: () => (() => {}),
+  writeBatch: () => ({
+    set: () => {},
+    update: () => {},
+    delete: () => {},
+    commit: () => Promise.resolve()
+  }),
+  getDocs: () => Promise.resolve({ empty: true, docs: [] }),
+  getDoc: () => Promise.resolve({ exists: () => false }),
+  query: () => ({}),
+  limit: () => ({}),
+  where: () => ({}),
+  startAfter: () => ({}),
+  orderBy: () => ({}),
+  addDoc: () => Promise.resolve({ id: 'mock-doc-id' }),
+  runTransaction: (db: any, callback: any) => callback({
+    get: () => Promise.resolve({ exists: () => false, data: () => ({}) }),
+    set: () => {},
+    update: () => {}
+  }),
+  serverTimestamp: () => 'MOCK_TIMESTAMP'
+}));

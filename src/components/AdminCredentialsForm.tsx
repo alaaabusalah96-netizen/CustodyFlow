@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB } from '../db';
-import { AppUser, UserPermissions, SignupRequest } from '../types';
+import { AppUser, UserPermissions, SignupRequest, AccountCorrectionRequest } from '../types';
 
 export const PERMISSION_KEYS = [
   { key: 'create_expense', ar: 'إضافة وتسجيل المصروفات', en: 'Create & record expenses' },
@@ -40,9 +40,18 @@ export default function AdminCredentialsForm({
   const [password, setPassword] = useState(initialPassword);
   const [isEditing, setIsEditing] = useState(false);
 
-  const [activeSubTab, setActiveSubTab] = useState<'account' | 'requests'>('account');
+  const [activeSubTab, setActiveSubTab] = useState<'account' | 'requests' | 'corrections'>('account');
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+
+  // Account correction request review states
+  const [rejectingCorrectionId, setRejectingCorrectionId] = useState<string | null>(null);
+  const [correctionRejectReason, setCorrectionRejectReason] = useState('');
+  const [approvingCorrectionId, setApprovingCorrectionId] = useState<string | null>(null);
+  const [correctionNewEmail, setCorrectionNewEmail] = useState('');
+  const [correctionNewName, setCorrectionNewName] = useState('');
+  const [correctionNewPassword, setCorrectionNewPassword] = useState('');
+  const [correctionError, setCorrectionError] = useState('');
 
   const getDefaultPermissions = (): UserPermissions => {
     return CustodyDB.enrichUserPermissions(userRole);
@@ -75,6 +84,20 @@ export default function AdminCredentialsForm({
     }
     if (userRole === 'StationAdmin') {
       return r.role === 'StationAdmin' && r.station_id === stationId;
+    }
+    return false;
+  });
+
+  const pendingCorrections = CustodyDB.getAccountCorrectionRequests().filter(r => {
+    if (r.status !== 'Pending') return false;
+    if (userRole === 'Admin') {
+      return r.targetRole === 'Admin' && r.company_id === companyId;
+    }
+    if (userRole === 'RegionalManager') {
+      return r.targetRole === 'RegionalManager' && r.region_id === regionId;
+    }
+    if (userRole === 'StationAdmin') {
+      return r.targetRole === 'StationAdmin' && r.station_id === stationId;
     }
     return false;
   });
@@ -161,6 +184,104 @@ export default function AdminCredentialsForm({
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('custody_db_updated'));
     }
+  };
+
+  const handleApproveCorrection = async (req: AccountCorrectionRequest) => {
+    setCorrectionError('');
+
+    const res = await CustodyDB.approveAccountCorrectionRequest(req.id, {
+      newEmail: correctionNewEmail.trim() || undefined,
+      newFullName: correctionNewName.trim() || undefined,
+      newPasswordPlain: correctionNewPassword.trim() || undefined,
+      approvedBy: activeUser?.email || 'Admin'
+    });
+
+    if (!res.success) {
+      setCorrectionError(isRtl ? res.messageAr : res.messageEn);
+      return;
+    }
+
+    alert(isRtl ? res.messageAr : res.messageEn);
+    setApprovingCorrectionId(null);
+    setCorrectionNewEmail('');
+    setCorrectionNewName('');
+    setCorrectionNewPassword('');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('custody_db_updated'));
+    }
+  };
+
+  const handleRejectCorrection = async (req: AccountCorrectionRequest) => {
+    if (!correctionRejectReason.trim()) {
+      alert(isRtl ? 'يرجى كتابة سبب الرفض' : 'Please provide a rejection reason.');
+      return;
+    }
+
+    const res = await CustodyDB.rejectAccountCorrectionRequest(
+      req.id,
+      correctionRejectReason.trim(),
+      activeUser?.email || 'Admin'
+    );
+
+    alert(isRtl ? res.messageAr : res.messageEn);
+    setRejectingCorrectionId(null);
+    setCorrectionRejectReason('');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('custody_db_updated'));
+    }
+  };
+
+  const renderSubTabButtons = () => {
+    if (!canSeePendingRequests) return null;
+    return (
+      <div className="flex gap-2.5 border-b border-slate-100 dark:border-slate-800/60 pb-1.5 text-[11px] mb-2">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('account')}
+          className={`font-bold pb-1 px-0.5 transition-all cursor-pointer ${
+            activeSubTab === 'account'
+              ? 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 font-black'
+              : 'text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          {isRtl ? 'الحسابات (Accounts)' : 'Accounts'}
+        </button>
+        <span className="text-slate-300">|</span>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('requests')}
+          className={`font-bold pb-1 px-0.5 flex items-center gap-1 transition-all cursor-pointer ${
+            activeSubTab === 'requests'
+              ? 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 font-black'
+              : 'text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <span>{isRtl ? 'الطلبات المعلقة' : 'Pending Requests'}</span>
+          {pendingRequests.length > 0 && (
+            <span className="bg-rose-500 text-white text-[9px] px-1 rounded-full font-mono">
+              {pendingRequests.length}
+            </span>
+          )}
+        </button>
+        <span className="text-slate-300">|</span>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('corrections')}
+          className={`font-bold pb-1 px-0.5 flex items-center gap-1 transition-all cursor-pointer ${
+            activeSubTab === 'corrections'
+              ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 font-black'
+              : 'text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <span>{isRtl ? 'طلبات تعديل الحسابات' : 'Account Corrections'}</span>
+          {pendingCorrections.length > 0 && (
+            <span className="bg-blue-500 text-white text-[9px] px-1 rounded-full font-mono">
+              {pendingCorrections.length}
+            </span>
+          )}
+        </button>
+      </div>
+    );
   };
 
   if (canSeePendingRequests && activeSubTab === 'requests') {
@@ -271,35 +392,191 @@ export default function AdminCredentialsForm({
     );
   }
 
+  if (canSeePendingRequests && activeSubTab === 'corrections') {
+    return (
+      <div className="space-y-3 mt-2 border-t border-slate-100 dark:border-slate-850 pt-3">
+        {renderSubTabButtons()}
+
+        {pendingCorrections.length === 0 ? (
+          <div className="text-center p-4 text-[10px] text-slate-400 italic">
+            {isRtl ? 'لا توجد طلبات تعديل حسابات معلقة حالياً تحت هذا العنصر الهيكلي.' : 'No pending account correction requests for this item.'}
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {pendingCorrections.map(req => (
+              <div 
+                key={req.id} 
+                className="p-3 rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/40 dark:bg-blue-950/20 text-[11px] space-y-2"
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                      <span>{req.targetUserName}</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-mono">
+                        {req.correctionType === 'password_reset'
+                          ? (isRtl ? 'إعادة تعيين كلمة مرور' : 'Password Reset')
+                          : req.correctionType === 'email_change'
+                          ? (isRtl ? 'تعديل البريد' : 'Email Change')
+                          : (isRtl ? 'تعديل بيانات الحساب' : 'Account Update')}
+                      </span>
+                    </div>
+                    <div className="font-mono text-slate-400 text-[10px]">{req.targetEmail}</div>
+                  </div>
+                  <span className="bg-amber-500/10 text-amber-500 text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+                    {isRtl ? 'قيد المراجعة' : 'Pending'}
+                  </span>
+                </div>
+
+                <div className="text-[10px] text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                  <span className="font-bold text-slate-400 mr-1">{isRtl ? 'سبب التعديل: ' : 'Reason: '}</span>
+                  <span>{req.reason}</span>
+                </div>
+
+                <div className="text-[10px] text-slate-400 flex justify-between items-center">
+                  <span>
+                    {isRtl ? 'تاريخ التقديم: ' : 'Submitted: '}
+                    <span className="font-mono">{new Date(req.created_at).toLocaleDateString()}</span>
+                  </span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-bold text-[9px]">
+                    {isRtl ? '✓ لا يستهلك سقف الحسابات' : '✓ Headcount unaffected'}
+                  </span>
+                </div>
+
+                {approvingCorrectionId === req.id ? (
+                  <div className="space-y-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 shadow-sm">
+                    <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                      {isRtl ? 'تحديث بيانات الحساب واعتماد التعديل (دون إنشاء حساب جديد):' : 'Update account data and approve correction:'}
+                    </div>
+
+                    {correctionError && (
+                      <div className="p-1.5 rounded bg-rose-500/10 text-rose-600 text-[10px]">
+                        {correctionError}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-400 mb-0.5">{isRtl ? 'البريد الإلكتروني' : 'Email'}</label>
+                        <input
+                          type="email"
+                          value={correctionNewEmail}
+                          onChange={(e) => setCorrectionNewEmail(e.target.value)}
+                          placeholder="user@company.com"
+                          className="w-full px-2 py-1 text-[10px] rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-400 mb-0.5">{isRtl ? 'الاسم بالكامل' : 'Full Name'}</label>
+                        <input
+                          type="text"
+                          value={correctionNewName}
+                          onChange={(e) => setCorrectionNewName(e.target.value)}
+                          placeholder="Full Name"
+                          className="w-full px-2 py-1 text-[10px] rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-400 mb-0.5">
+                        {isRtl ? 'كلمة المرور الجديدة (اتركها فارغة إذا لم يطلب تعديلها)' : 'New Password (leave blank if not changing)'}
+                      </label>
+                      <input
+                        type="text"
+                        value={correctionNewPassword}
+                        onChange={(e) => setCorrectionNewPassword(e.target.value)}
+                        placeholder={isRtl ? 'أدخل كلمة مرور جديدة أو اتركها فارغة...' : 'Enter new password or leave blank...'}
+                        className="w-full px-2 py-1 text-[10px] rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                      />
+                    </div>
+
+                    <div className="flex gap-1.5 justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setApprovingCorrectionId(null);
+                          setCorrectionError('');
+                        }}
+                        className="px-2.5 py-1 text-[9px] font-bold rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 cursor-pointer"
+                      >
+                        {isRtl ? 'إلغاء' : 'Cancel'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApproveCorrection(req)}
+                        className="px-2.5 py-1 text-[9px] font-bold rounded bg-emerald-600 text-white hover:bg-emerald-500 cursor-pointer shadow"
+                      >
+                        {isRtl ? 'حفظ واعتماد التعديل ✓' : 'Approve & Save Changes ✓'}
+                      </button>
+                    </div>
+                  </div>
+                ) : rejectingCorrectionId === req.id ? (
+                  <div className="space-y-1.5 p-2 rounded-lg bg-rose-500/5 border border-rose-500/10">
+                    <input
+                      type="text"
+                      placeholder={isRtl ? 'اكتب سبب رفض التعديل هنا...' : 'Enter rejection reason...'}
+                      value={correctionRejectReason}
+                      onChange={(e) => setCorrectionRejectReason(e.target.value)}
+                      className="w-full px-2 py-1 text-[10px] rounded border border-rose-200 dark:border-rose-900 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                    />
+                    <div className="flex gap-1.5 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRejectingCorrectionId(null);
+                          setCorrectionRejectReason('');
+                        }}
+                        className="px-2 py-0.5 text-[9px] font-bold rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 cursor-pointer"
+                      >
+                        {isRtl ? 'إلغاء' : 'Cancel'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRejectCorrection(req)}
+                        className="px-2 py-0.5 text-[9px] font-bold rounded bg-rose-600 text-white hover:bg-rose-500 cursor-pointer"
+                      >
+                        {isRtl ? 'تأكيد الرفض' : 'Confirm Rejection'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/40">
+                    <button
+                      type="button"
+                      onClick={() => setRejectingCorrectionId(req.id)}
+                      className="px-2.5 py-1 text-[9px] font-black rounded-lg text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 cursor-pointer transition-all"
+                    >
+                      {isRtl ? 'رفض الطلب ✕' : 'Reject'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setApprovingCorrectionId(req.id);
+                        setCorrectionNewEmail(req.targetEmail);
+                        setCorrectionNewName(req.targetUserName);
+                        setCorrectionNewPassword('');
+                        setCorrectionError('');
+                      }}
+                      className="px-2.5 py-1 text-[9px] font-black rounded-lg text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 cursor-pointer transition-all"
+                    >
+                      {isRtl ? 'اعتماد التعديل ✓' : 'Approve & Update'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (!isEditing && initialEmail) {
     const activePermsList = PERMISSION_KEYS.filter(p => permissions[p.key as keyof UserPermissions]);
     return (
       <div className="space-y-2 border-t border-slate-100 dark:border-slate-800/60 pt-2.5">
         {/* Switcher tabs */}
-        {canSeePendingRequests && (
-          <div className="flex gap-2.5 border-b border-slate-100 dark:border-slate-800/60 pb-1.5 text-[11px] mb-2">
-            <button
-              type="button"
-              onClick={() => setActiveSubTab('account')}
-              className="font-black text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 pb-1 px-0.5 transition-all cursor-pointer"
-            >
-              {isRtl ? 'الحسابات (Accounts)' : 'Accounts'}
-            </button>
-            <span className="text-slate-300">|</span>
-            <button
-              type="button"
-              onClick={() => setActiveSubTab('requests')}
-              className="font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-all cursor-pointer"
-            >
-              <span>{isRtl ? 'الطلبات المعلقة' : 'Pending Requests'}</span>
-              {pendingRequests.length > 0 && (
-                <span className="bg-rose-500 text-white text-[9px] px-1 rounded-full font-mono">
-                  {pendingRequests.length}
-                </span>
-              )}
-            </button>
-          </div>
-        )}
+        {renderSubTabButtons()}
 
         <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
           <div className="font-mono text-slate-600 dark:text-slate-300">
@@ -345,30 +622,7 @@ export default function AdminCredentialsForm({
   return (
     <div className="space-y-3 mt-2 border-t border-slate-100 dark:border-slate-850 pt-3">
       {/* Switcher tabs */}
-      {canSeePendingRequests && (
-        <div className="flex gap-2.5 border-b border-slate-100 dark:border-slate-800/60 pb-1.5 text-[11px] mb-2">
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('account')}
-            className="font-black text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 pb-1 px-0.5 transition-all cursor-pointer"
-          >
-            {isRtl ? 'الحسابات (Accounts)' : 'Accounts'}
-          </button>
-          <span className="text-slate-300">|</span>
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('requests')}
-            className="font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-all cursor-pointer"
-          >
-            <span>{isRtl ? 'الطلبات المعلقة' : 'Pending Requests'}</span>
-            {pendingRequests.length > 0 && (
-              <span className="bg-rose-500 text-white text-[9px] px-1 rounded-full font-mono">
-                {pendingRequests.length}
-              </span>
-            )}
-          </button>
-        </div>
-      )}
+      {renderSubTabButtons()}
 
       <form onSubmit={handleSave} className="space-y-3">
         <div className="flex flex-wrap items-end gap-2">

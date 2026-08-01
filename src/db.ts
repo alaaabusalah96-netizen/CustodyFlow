@@ -17,7 +17,8 @@ import {
   SystemPermission, 
   SystemRole, 
   DeletedTransaction, 
-  SignupRequest 
+  SignupRequest,
+  AccountCorrectionRequest
 } from './types';
 
 import { seedDatabaseIfEmpty, setupFirebaseSync, dbFetchUserByEmail } from './firebase';
@@ -38,7 +39,8 @@ import {
   DEFAULT_NOTIFICATIONS,
   DEFAULT_AUDIT_LOGS,
   DEFAULT_PERMISSIONS,
-  DEFAULT_ROLES
+  DEFAULT_ROLES,
+  DEFAULT_ORGANIZATION_UNITS
 } from './db/defaults';
 
 import { LogsModule } from './db/logs';
@@ -88,7 +90,8 @@ export class CustodyDB {
       notifications: DEFAULT_NOTIFICATIONS,
       auditLogs: DEFAULT_AUDIT_LOGS,
       permissions: DEFAULT_PERMISSIONS,
-      roles: DEFAULT_ROLES
+      roles: DEFAULT_ROLES,
+      organizationUnits: DEFAULT_ORGANIZATION_UNITS
     }).then(() => {
       setupFirebaseSync();
     }).catch(err => {
@@ -215,12 +218,52 @@ export class CustodyDB {
     return UsersModule.getSignupRequests();
   }
 
+  static validateSignupRequestHeadcount(request: any) {
+    return UsersModule.validateSignupRequestHeadcount(request);
+  }
+
   static async saveSignupRequest(request: SignupRequest): Promise<void> {
     return UsersModule.saveSignupRequest(request);
   }
 
   static async deleteSignupRequest(id: string): Promise<void> {
     return UsersModule.deleteSignupRequest(id);
+  }
+
+  static getAccountCorrectionRequests(): AccountCorrectionRequest[] {
+    return UsersModule.getAccountCorrectionRequests();
+  }
+
+  static async saveAccountCorrectionRequest(request: AccountCorrectionRequest): Promise<void> {
+    return UsersModule.saveAccountCorrectionRequest(request);
+  }
+
+  static async deleteAccountCorrectionRequest(id: string): Promise<void> {
+    return UsersModule.deleteAccountCorrectionRequest(id);
+  }
+
+  static async approveAccountCorrectionRequest(
+    id: string,
+    updates: {
+      newEmail?: string;
+      newFullName?: string;
+      newPasswordPlain?: string;
+      approvedBy?: string;
+    }
+  ) {
+    return UsersModule.approveAccountCorrectionRequest(id, updates);
+  }
+
+  static async rejectAccountCorrectionRequest(
+    id: string,
+    rejectionReason: string,
+    rejectedBy?: string
+  ) {
+    return UsersModule.rejectAccountCorrectionRequest(id, rejectionReason, rejectedBy);
+  }
+
+  static verifyUserPassword(email: string, passwordPlain: string): AppUser | null {
+    return UsersModule.verifyUserPassword(email, passwordPlain);
   }
 
   // Regions

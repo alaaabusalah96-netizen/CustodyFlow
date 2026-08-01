@@ -1,10 +1,11 @@
-import { AppUser, UserRole, UserPermissions, SystemPermission, SystemRole, SignupRequest } from '../types';
+import { AppUser, UserRole, UserPermissions, SystemPermission, SystemRole, SignupRequest, AccountCorrectionRequest } from '../types';
 import { dbSetDoc, dbDeleteDoc, auth } from '../firebase';
 import { StorageEngine } from './storage';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_USERS, DEFAULT_PERMISSIONS, DEFAULT_ROLES } from './defaults';
 import { LogsModule } from './logs';
-import { hashPassword } from '../lib/hash';
+import { hashPassword, legacyStretchedHashPassword1000, legacySinglePassHashPassword, legacyHashPassword } from '../lib/hash';
+import { OrganizationEngine } from './organizationEngine';
 
 export class UsersModule {
   private static hasAutoPromotedInSession = false;
@@ -198,6 +199,31 @@ export class UsersModule {
       StorageEngine.cache['active_user'] = null;
       localStorage.removeItem('custody_active_user');
     }
+  }
+
+  static verifyUserPassword(email: string, passwordPlain: string): AppUser | null {
+    const emailLower = email.toLowerCase().trim();
+    const users = UsersModule.getUsers();
+    const foundUser = users.find(u => u.email?.toLowerCase().trim() === emailLower);
+    if (!foundUser) return null;
+
+    const storedPassword = foundUser.password || '';
+    const userSalt = foundUser.salt || emailLower;
+    const hash10k = hashPassword(passwordPlain, userSalt);
+    const hash1k = legacyStretchedHashPassword1000(passwordPlain, userSalt);
+    const hashSingle = legacySinglePassHashPassword(passwordPlain, userSalt);
+    const legacy = legacyHashPassword(passwordPlain, userSalt);
+
+    if (
+      storedPassword === hash10k ||
+      storedPassword === hash1k ||
+      storedPassword === hashSingle ||
+      storedPassword === legacy ||
+      storedPassword === passwordPlain
+    ) {
+      return foundUser;
+    }
+    return null;
   }
 
   static async saveUsers(users: AppUser[]): Promise<void> {
@@ -449,9 +475,62 @@ export class UsersModule {
     return StorageEngine.getStored<SignupRequest[]>('signup_requests', []);
   }
 
+  /**
+   * Validates per-organization-unit account headcount ceiling before signup request submission.
+   * Enforces the rule that an organization unit cannot exceed its max_accounts_allowed (default 1, max 5).
+   */
+  static validateSignupRequestHeadcount(request: {
+    org_unit_id?: string;
+    station_id?: string;
+    region_id?: string;
+    company_id?: string;
+    role?: string;
+  }): {
+    allowed: boolean;
+    messageAr?: string;
+    messageEn?: string;
+    currentCount: number;
+    maxAllowed: number;
+    unit?: any;
+  } {
+    const unit = OrganizationEngine.resolveOrgUnitForEntity(request, request.company_id);
+
+    if (!unit) {
+      return { allowed: true, currentCount: 0, maxAllowed: 1 };
+    }
+
+    const headcount = OrganizationEngine.getUnitAccountHeadcount(unit.id);
+
+    if (headcount.activeAccountsCount >= headcount.maxAllowed) {
+      return {
+        allowed: false,
+        currentCount: headcount.activeAccountsCount,
+        maxAllowed: headcount.maxAllowed,
+        unit,
+        messageAr: `عذراً، لقد وصلت هذه الوحدة التنظيمية ("${unit.nameAr || unit.name}") إلى الحد الأقصى المسموح به لعدد الحسابات (${headcount.maxAllowed}). يرجى الطلب من المسؤول في المستوى التنظيمي الأعلى رفع الحد أولاً.`,
+        messageEn: `This organization unit ("${unit.nameEn || unit.name}") has reached its maximum allowed number of accounts (${headcount.maxAllowed}). Please ask the administrator at the organizational level above to increase the limit first.`
+      };
+    }
+
+    return {
+      allowed: true,
+      currentCount: headcount.activeAccountsCount,
+      maxAllowed: headcount.maxAllowed,
+      unit
+    };
+  }
+
   static async saveSignupRequest(request: SignupRequest): Promise<void> {
-    // 1. Save locally first (local-first)
     const requests = UsersModule.getSignupRequests();
+    const isExisting = requests.some(r => r.id === request.id);
+    if (!isExisting && request.status === 'Pending') {
+      const validation = UsersModule.validateSignupRequestHeadcount(request);
+      if (!validation.allowed) {
+        throw new Error(validation.messageEn || 'Headcount limit reached for this organization unit.');
+      }
+    }
+
+    // 1. Save locally first (local-first)
     const index = requests.findIndex(r => r.id === request.id);
     if (index > -1) {
       requests[index] = request;
@@ -506,5 +585,169 @@ export class UsersModule {
     }
     
     StorageEngine.setStored('users', updated);
+  }
+
+  static getAccountCorrectionRequests(): AccountCorrectionRequest[] {
+    return StorageEngine.getStored<AccountCorrectionRequest[]>('account_correction_requests', []);
+  }
+
+  static async saveAccountCorrectionRequest(request: AccountCorrectionRequest): Promise<void> {
+    const requests = UsersModule.getAccountCorrectionRequests();
+    const index = requests.findIndex(r => r.id === request.id);
+    if (index > -1) {
+      requests[index] = request;
+    } else {
+      requests.unshift(request);
+    }
+    StorageEngine.setStored('account_correction_requests', requests);
+
+    try {
+      const syncRes = await syncWriteWithOfflineFallback('account_correction_requests', request.id, request);
+      if (!syncRes.success) {
+        console.warn(`[saveAccountCorrectionRequest] Cloud sync deferred/warning: ${syncRes.error}`);
+      }
+    } catch (err: any) {
+      console.warn('[saveAccountCorrectionRequest] Firestore sync failed, saved locally:', err?.message || err);
+    }
+  }
+
+  static async deleteAccountCorrectionRequest(id: string): Promise<void> {
+    const requests = UsersModule.getAccountCorrectionRequests();
+    const filtered = requests.filter(r => r.id !== id);
+    StorageEngine.setStored('account_correction_requests', filtered);
+
+    try {
+      const syncRes = await syncWriteWithOfflineFallback('account_correction_requests', id, null);
+      if (!syncRes.success) {
+        console.warn(`[deleteAccountCorrectionRequest] Cloud delete deferred/warning: ${syncRes.error}`);
+      }
+    } catch (err: any) {
+      console.warn('[deleteAccountCorrectionRequest] Firestore delete failed, deleted locally:', err?.message || err);
+    }
+  }
+
+  static async approveAccountCorrectionRequest(
+    id: string,
+    updates: {
+      newEmail?: string;
+      newFullName?: string;
+      newPasswordPlain?: string;
+      approvedBy?: string;
+    }
+  ): Promise<{ success: boolean; messageAr: string; messageEn: string }> {
+    const requests = UsersModule.getAccountCorrectionRequests();
+    const reqIndex = requests.findIndex(r => r.id === id);
+    if (reqIndex === -1) {
+      return { success: false, messageAr: 'طلب التعديل غير موجود', messageEn: 'Correction request not found' };
+    }
+
+    const request = requests[reqIndex];
+    const users = UsersModule.getUsers();
+    const userIndex = users.findIndex(u =>
+      (request.targetUserId && u.id === request.targetUserId) ||
+      (u.email && u.email.toLowerCase().trim() === request.targetEmail.toLowerCase().trim())
+    );
+
+    if (userIndex === -1) {
+      return {
+        success: false,
+        messageAr: 'الحساب المستهدف غير موجود في قائمة المستخدمين',
+        messageEn: 'Target account not found in active users list'
+      };
+    }
+
+    const targetUser = { ...users[userIndex] };
+    const oldEmail = targetUser.email;
+    const oldName = targetUser.full_name;
+
+    if (updates.newEmail && updates.newEmail.trim()) {
+      targetUser.email = updates.newEmail.toLowerCase().trim();
+    }
+    if (updates.newFullName && updates.newFullName.trim()) {
+      targetUser.full_name = updates.newFullName.trim();
+    }
+    if (updates.newPasswordPlain && updates.newPasswordPlain.trim()) {
+      const salt = targetUser.salt || targetUser.email || oldEmail;
+      const hashed = hashPassword(updates.newPasswordPlain, salt);
+      targetUser.password = hashed;
+      targetUser.salt = salt;
+    }
+
+    users[userIndex] = targetUser;
+    await UsersModule.saveUsers(users);
+
+    const updatedReq: AccountCorrectionRequest = {
+      ...request,
+      status: 'Approved',
+      approved_at: new Date().toISOString(),
+      approved_by: updates.approvedBy || 'Admin'
+    };
+    await UsersModule.saveAccountCorrectionRequest(updatedReq);
+
+    LogsModule.logAudit(
+      'APPROVE_ACCOUNT_CORRECTION',
+      `Approved correction for user ${oldName} (${oldEmail}) -> ${targetUser.full_name} (${targetUser.email})`,
+      {
+        request_id: id,
+        target_user_id: targetUser.id,
+        old_email: oldEmail,
+        new_email: targetUser.email,
+        old_name: oldName,
+        new_name: targetUser.full_name,
+        password_reset: !!(updates.newPasswordPlain && updates.newPasswordPlain.trim())
+      }
+    );
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('custody_db_updated'));
+    }
+
+    return {
+      success: true,
+      messageAr: 'تم اعتماد التعديل وتحديث بيانات الحساب بنجاح',
+      messageEn: 'Account correction approved and user data updated successfully'
+    };
+  }
+
+  static async rejectAccountCorrectionRequest(
+    id: string,
+    rejectionReason: string,
+    rejectedBy?: string
+  ): Promise<{ success: boolean; messageAr: string; messageEn: string }> {
+    const requests = UsersModule.getAccountCorrectionRequests();
+    const reqIndex = requests.findIndex(r => r.id === id);
+    if (reqIndex === -1) {
+      return { success: false, messageAr: 'طلب التعديل غير موجود', messageEn: 'Correction request not found' };
+    }
+
+    const request = requests[reqIndex];
+    const updatedReq: AccountCorrectionRequest = {
+      ...request,
+      status: 'Rejected',
+      rejection_reason: rejectionReason,
+      approved_at: new Date().toISOString(),
+      approved_by: rejectedBy || 'Admin'
+    };
+    await UsersModule.saveAccountCorrectionRequest(updatedReq);
+
+    LogsModule.logAudit(
+      'REJECT_ACCOUNT_CORRECTION',
+      `Rejected correction request for user ${request.targetUserName} (${request.targetEmail}). Reason: ${rejectionReason}`,
+      {
+        request_id: id,
+        target_email: request.targetEmail,
+        rejection_reason: rejectionReason
+      }
+    );
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('custody_db_updated'));
+    }
+
+    return {
+      success: true,
+      messageAr: 'تم رفض طلب تعديل الحساب',
+      messageEn: 'Account correction request rejected'
+    };
   }
 }

@@ -21,6 +21,7 @@ import {
   LayoutGrid
 } from 'lucide-react';
 import { OrganizationEngine, DEFAULT_ORGANIZATION_UNIT_TYPES } from '../db/organizationEngine';
+import { CustodyDB } from '../db';
 import { OrganizationUnit, OrganizationTreeNode, OrganizationTemplate } from '../types/organization';
 import { Language, Theme } from '../types';
 
@@ -219,6 +220,17 @@ export default function OrganizationTreeManager({
     }
   };
 
+  const handleRaiseHeadcount = (unitId: string) => {
+    const activeUser = CustodyDB.getActiveUser();
+    const res = OrganizationEngine.raiseMaxAccountsAllowed(unitId, activeUser);
+    if (!res.success) {
+      alert(isRtl ? res.errorAr : res.errorEn);
+      return;
+    }
+    loadData();
+    if (onStructureChange) onStructureChange();
+  };
+
   // Helper to render unit level badge using plain business language
   const renderUnitLevelBadge = (unit: OrganizationUnit) => {
     if (unit.metadata?.customLevelLabel) {
@@ -260,6 +272,10 @@ export default function OrganizationTreeManager({
         return null;
       }
     }
+
+    const headcount = OrganizationEngine.getUnitAccountHeadcount(node.id);
+    const raiseClearance = OrganizationEngine.canRaiseMaxAccountsAllowed(node, CustodyDB.getActiveUser());
+    const isAtCeiling = headcount.maxAllowed >= 5;
 
     return (
       <div key={node.id} className="relative group/node my-1">
@@ -306,6 +322,13 @@ export default function OrganizationTreeManager({
                   {node.code}
                 </span>
                 {renderUnitLevelBadge(node)}
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                  headcount.activeAccountsCount >= headcount.maxAllowed
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200/50'
+                    : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200/50'
+                }`}>
+                  {isRtl ? `${headcount.activeAccountsCount}/${headcount.maxAllowed} حسابات` : `${headcount.activeAccountsCount}/${headcount.maxAllowed} Accounts`}
+                </span>
               </div>
               <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
                 {node.path}
@@ -315,6 +338,22 @@ export default function OrganizationTreeManager({
 
           {/* Node Actions */}
           <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+            {raiseClearance.canRaise && (
+              <button
+                type="button"
+                onClick={() => handleRaiseHeadcount(node.id)}
+                disabled={isAtCeiling}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 ${
+                  isAtCeiling
+                    ? 'bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600 cursor-not-allowed'
+                    : 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 cursor-pointer'
+                }`}
+                title={isAtCeiling ? (isRtl ? 'الحد الأقصى المطلق 5 حسابات لكل وحدة' : 'Hard ceiling of 5 accounts reached') : (isRtl ? 'رفع الحد الأقصى لعدد الحسابات في هذه الوحدة بمقدار +1' : 'Raise unit account ceiling by +1')}
+              >
+                <Plus size={12} />
+                <span>{isRtl ? '+1 حساب' : '+1 Account'}</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => handleOpenAdd(node.id)}

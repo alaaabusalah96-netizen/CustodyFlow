@@ -18,7 +18,7 @@ import {
   startAfter,
   orderBy
 } from 'firebase/firestore';
-import { AppUser, ExpenseCategory, Transaction, ActivityLog, CustodyConfig, Region, Station, Company, Expense, CashVoucher, TransactionHistory, Notification, AuditLog, SystemPermission, SystemRole, DeletedTransaction, SignupRequest } from './types';
+import { AppUser, ExpenseCategory, Transaction, ActivityLog, CustodyConfig, Region, Station, Company, Expense, CashVoucher, TransactionHistory, Notification, AuditLog, SystemPermission, SystemRole, DeletedTransaction, SignupRequest, OrganizationUnit } from './types';
 import { hashPassword } from './lib/hash';
 import { OfflineQueueEngine } from './db/offlineQueue';
 
@@ -172,6 +172,7 @@ export async function seedDatabaseIfEmpty(defaults: {
   auditLogs?: AuditLog[];
   permissions?: SystemPermission[];
   roles?: SystemRole[];
+  organizationUnits?: OrganizationUnit[];
 }) {
   console.log('[DEBUG_LOG] 3. Before executing seedDatabaseIfEmpty');
   try {
@@ -203,7 +204,8 @@ export async function seedDatabaseIfEmpty(defaults: {
       const collectionsToClear = [
         'companies', 'regions', 'stations', 'users', 'transactions', 'logs',
         'Expenses', 'CashVouchers', 'TransactionHistory', 'Notifications', 
-        'AuditLogs', 'Permissions', 'Roles', 'deleted_transactions', 'company_sequences'
+        'AuditLogs', 'Permissions', 'Roles', 'deleted_transactions', 'company_sequences',
+        'organization_units'
       ];
 
       for (const colName of collectionsToClear) {
@@ -297,6 +299,15 @@ export async function seedDatabaseIfEmpty(defaults: {
         stationsBatch.set(doc(db, 'stations', s.id), s);
       });
       await stationsBatch.commit();
+
+      // Seed organization units
+      if (defaults.organizationUnits && defaults.organizationUnits.length > 0) {
+        const orgUnitsBatch = writeBatch(db);
+        defaults.organizationUnits.forEach(u => {
+          orgUnitsBatch.set(doc(db, 'organization_units', u.id), u);
+        });
+        await orgUnitsBatch.commit();
+      }
 
       // Mark v7 status as the absolute final step, locking the database under specific rules
       const finalBatch = writeBatch(db);
@@ -489,7 +500,7 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
 export function subscribeScreenListeners(listenerTypes: string[]): () => void {
   const activeUserStr = localStorage.getItem('custody_active_user');
   const activeUser = activeUserStr ? JSON.parse(activeUserStr) : null;
-  const companyId = localStorage.getItem('custody_selected_company_id') || (activeUser ? activeUser.company_id : 'comp-1') || 'comp-1';
+  const companyId = localStorage.getItem('custody_selected_company_id') || (activeUser ? activeUser.company_id : undefined);
 
   if (!activeUser) {
     return () => {};
@@ -626,7 +637,7 @@ export function setupFirebaseSync() {
       const activeUserStr = localStorage.getItem('custody_active_user');
       const activeUser = activeUserStr ? JSON.parse(activeUserStr) : null;
       
-      const selectedCompanyId = localStorage.getItem('custody_selected_company_id') || (activeUser ? activeUser.company_id : 'comp-1') || 'comp-1';
+      const selectedCompanyId = localStorage.getItem('custody_selected_company_id') || (activeUser ? activeUser.company_id : undefined);
       
       const currentUserId = activeUser ? activeUser.id : null;
       const currentUserRole = activeUser ? activeUser.role : null;

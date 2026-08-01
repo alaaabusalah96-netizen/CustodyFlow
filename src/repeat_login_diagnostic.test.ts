@@ -31,7 +31,7 @@ describe('Part 2: Repeat-Login-Failure Diagnostic Audit', () => {
     expect(saveUsersLines.length).toBeGreaterThanOrEqual(2);
 
     // One of the calls is around line 436 (after ID migration) and is not inside its own try/catch block
-    const idMigrationSaveCall = saveUsersLines.find(l => l.idx > 420 && l.idx < 470);
+    const idMigrationSaveCall = saveUsersLines.find(l => l.idx > 420 && l.idx < 520);
     expect(idMigrationSaveCall).toBeDefined();
   });
 });

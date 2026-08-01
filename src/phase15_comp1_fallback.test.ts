@@ -81,8 +81,8 @@ describe('Phase 15: Stop Silent comp-1 Write Fallback (Custody Paths Only)', () 
       date: '2026-07-31',
       amount: 100,
       description: 'Test expense',
-      company_id: 'comp-1',
-      station_id: 'stn-1-1-1',
+      company_id: 'comp-cairo-poultry',
+      station_id: 'stn-cairo-1',
       category_id: 'cat-6'
     });
     expect(added.errors || []).toEqual([]);

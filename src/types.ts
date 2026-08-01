@@ -18,6 +18,8 @@ export interface Company {
   merged_into_company_id?: string;
   use_custom_template?: boolean;
   custom_template_image?: string;
+  currency?: string;
+  max_accounts_allowed?: number;
 }
 
 export interface UserPermissions {
@@ -574,6 +576,7 @@ export interface SignupRequest {
   company_id: string;
   region_id?: string;
   station_id?: string;
+  org_unit_id?: string;
   password?: string;
   created_at: string;
   status: 'Pending' | 'Approved' | 'Rejected';
@@ -582,7 +585,29 @@ export interface SignupRequest {
   organizationId?: string;
 }
 
+export interface AccountCorrectionRequest {
+  id: string;
+  targetEmail: string;
+  targetUserId: string;
+  targetUserName: string;
+  targetRole: UserRole;
+  company_id: string;
+  region_id?: string;
+  station_id?: string;
+  org_unit_id?: string;
+  correctionType: 'password_reset' | 'email_change' | 'username_change' | 'other';
+  reason: string;
+  created_at: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  rejection_reason?: string;
+  approved_at?: string;
+  approved_by?: string;
+  tenantId?: string;
+  organizationId?: string;
+}
+
 export * from './types/enterprise';
+export * from './types/organization';
 
 
 

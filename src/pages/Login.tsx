@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { CustodyDB } from '../db';
-import { translations, Language, Theme, AppUser, UserRole, SignupRequest } from '../types';
+import { translations, Language, Theme, AppUser, UserRole, SignupRequest, AccountCorrectionRequest } from '../types';
 import { auth, dbDeleteDoc } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { Coins, ShieldAlert, User, Lock, ArrowRight, Languages, UserPlus, LogIn, CheckCircle2, Building, Mail, KeyRound, RefreshCw, ExternalLink, Inbox } from 'lucide-react';
+import { Coins, ShieldAlert, User, Lock, ArrowRight, Languages, UserPlus, LogIn, CheckCircle2, Building, Mail, KeyRound, RefreshCw, ExternalLink, Inbox, UserCog } from 'lucide-react';
 import SMTPConfigModal from '../components/SMTPConfigModal';
 import kemitLogo from '../assets/images/kemit_logo_1784280480891.jpg';
 
@@ -46,6 +46,12 @@ export default function Login({
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [showMailboxSimulator, setShowMailboxSimulator] = useState(false);
 
+  // Account Correction Request States
+  const [authTab, setAuthTab] = useState<'login' | 'signup' | 'correction'>('login');
+  const [correctionTargetEmail, setCorrectionTargetEmail] = useState('');
+  const [correctionType, setCorrectionType] = useState<'password_reset' | 'email_change' | 'username_change' | 'other'>('password_reset');
+  const [correctionReason, setCorrectionReason] = useState('');
+
   // Admin Login Verification States
   const [isAdminLoginVerifyMode, setIsAdminLoginVerifyMode] = useState(false);
   const [adminLoginOtp, setAdminLoginOtp] = useState('');
@@ -57,6 +63,14 @@ export default function Login({
   // SMTP Configuration States
   const [showSmtpModal, setShowSmtpModal] = useState(false);
   const [smtpConfiguredStatus, setSmtpConfiguredStatus] = useState<{ configured: boolean; host?: string; user?: string } | null>(null);
+
+  // Bootstrap Platform Owner States
+  const [isBootstrapMode, setIsBootstrapMode] = useState(false);
+  const [bootstrapStatus, setBootstrapStatus] = useState<boolean | null>(null);
+  const [bootstrapEmail, setBootstrapEmail] = useState('');
+  const [bootstrapPassword, setBootstrapPassword] = useState('');
+  const [bootstrapConfirmPassword, setBootstrapConfirmPassword] = useState('');
+  const [isBootstrapping, setIsBootstrapping] = useState(false);
 
   // Firebase Auth Warning State
   const [showFirebaseAuthWarning, setShowFirebaseAuthWarning] = useState(false);
@@ -91,8 +105,24 @@ export default function Login({
       });
   };
 
+  const refreshBootstrapStatus = () => {
+    fetch('/api/auth/bootstrap-status')
+      .then(async res => {
+        if (!res.ok) return;
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data && typeof data.bootstrapped === 'boolean') {
+            setBootstrapStatus(data.bootstrapped);
+          }
+        }
+      })
+      .catch(() => {});
+  };
+
   React.useEffect(() => {
     refreshSmtpStatus();
+    refreshBootstrapStatus();
   }, [showSmtpModal]);
 
   const companies = CustodyDB.getCompanies();
@@ -199,7 +229,7 @@ export default function Login({
     }
 
     try {
-      const res = await fetch('/api/auth/bootstrap-platform-owner', {
+      const res = await fetch('/api/auth/reset-password/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: resetEmail, code: resetCode, newPassword })
@@ -216,7 +246,7 @@ export default function Login({
             return { 
               ...u, 
               password: CustodyDB.hashPassword(newPassword, userSalt),
-              security_pin: u.security_pin || '202600',
+              security_pin: u.security_pin,
               pepper_version: 2
             };
           }
@@ -238,6 +268,61 @@ export default function Login({
       }
     } catch (err) {
       setError(isRtl ? 'تعذر تنفيذ الطلب.' : 'The request could not be processed.');
+    }
+  };
+
+  const handleBootstrapPlatformOwner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (!bootstrapEmail || !bootstrapPassword || !bootstrapConfirmPassword) {
+      setError(isRtl ? 'يرجى تعبئة جميع الحقول المطلوبة.' : 'Please fill in all required fields.');
+      return;
+    }
+
+    if (bootstrapPassword.length < 6) {
+      setError(isRtl ? 'كلمة المرور يجب أن لا تقل عن 6 أحرف.' : 'Password must be at least 6 characters.');
+      return;
+    }
+
+    if (bootstrapPassword !== bootstrapConfirmPassword) {
+      setError(isRtl ? 'كلمات المرور غير متطابقة.' : 'Passwords do not match.');
+      return;
+    }
+
+    setIsBootstrapping(true);
+    try {
+      const res = await fetch('/api/auth/bootstrap-platform-owner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: bootstrapEmail,
+          password: bootstrapPassword,
+          confirmPassword: bootstrapConfirmPassword
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setBootstrapStatus(true);
+        setIsBootstrapMode(false);
+        setEmail(bootstrapEmail);
+        setPassword(bootstrapPassword);
+        if (data.user) {
+          CustodyDB.upsertLocalUser(data.user);
+        }
+        setSuccess(
+          isRtl
+            ? '🎉 تم إعداد حساب مشرف المنصة بنجاح! تم تعبئة البيانات تلقائياً، يمكنك الآن الضغط على "تسجيل الدخول".'
+            : '🎉 Platform owner account bootstrapped successfully! Credentials auto-filled, you can now click "Sign In".'
+        );
+      } else {
+        setError(data.message || (isRtl ? 'تعذر إعداد حساب مشرف المنصة.' : 'Failed to bootstrap platform owner account.'));
+      }
+    } catch (err) {
+      setError(isRtl ? 'حدث خطأ في الاتصال بالخادم.' : 'Server connection error.');
+    } finally {
+      setIsBootstrapping(false);
     }
   };
 
@@ -645,6 +730,12 @@ export default function Login({
         status: 'Pending'
       };
 
+      const headcountCheck = CustodyDB.validateSignupRequestHeadcount(newRequest);
+      if (!headcountCheck.allowed) {
+        setError(isRtl ? headcountCheck.messageAr || 'تم الوصول للحد الأقصى للحسابات' : headcountCheck.messageEn || 'Headcount limit reached');
+        return;
+      }
+
       try {
         await CustodyDB.saveSignupRequest(newRequest);
       } catch (e) {
@@ -662,6 +753,58 @@ export default function Login({
     setPassword('');
     setSelectedRegionId('');
     setSelectedStationId('');
+    setIsRegisterMode(false);
+  };
+
+  const handleCorrectionRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    const targetEmailClean = correctionTargetEmail.toLowerCase().trim();
+    if (!targetEmailClean || !correctionReason.trim()) {
+      setError(isRtl ? 'يرجى إدخال البريد الإلكتروني المسجل وسبب طلب التعديل' : 'Please enter the registered email and the reason for correction');
+      return;
+    }
+
+    const users = CustodyDB.getUsers();
+    const targetUser = users.find(u => u.email && u.email.toLowerCase().trim() === targetEmailClean);
+    if (!targetUser) {
+      setError(isRtl ? 'لا يوجد حساب مسجل بهذا البريد الإلكتروني في المنظومة' : 'No registered account found with this email address');
+      return;
+    }
+
+    const newRequest: AccountCorrectionRequest = {
+      id: `correction-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      targetEmail: targetEmailClean,
+      targetUserId: targetUser.id,
+      targetUserName: targetUser.full_name || targetEmailClean,
+      targetRole: targetUser.role,
+      company_id: targetUser.company_id || '',
+      region_id: targetUser.region_id,
+      station_id: targetUser.station_id,
+      org_unit_id: targetUser.org_unit_id,
+      correctionType: correctionType,
+      reason: correctionReason.trim(),
+      created_at: new Date().toISOString(),
+      status: 'Pending'
+    };
+
+    try {
+      await CustodyDB.saveAccountCorrectionRequest(newRequest);
+    } catch (err) {
+      console.warn('Correction request deferred/saved locally:', err);
+    }
+
+    setSuccess(
+      isRtl
+        ? 'تم تقديم طلب تعديل بيانات الحساب بنجاح! سيتم مراجعته واعتماده من قبل المسؤول المختص دون التأثير على سقف الحسابات.'
+        : 'Account correction request submitted successfully! It will be reviewed by your administrator without affecting account headcount.'
+    );
+
+    setCorrectionTargetEmail('');
+    setCorrectionReason('');
+    setAuthTab('login');
     setIsRegisterMode(false);
   };
 
@@ -711,43 +854,97 @@ export default function Login({
         <div className={`p-6 rounded-3xl border shadow-xl ${
           theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-slate-100'
         }`}>
+          {/* Unbootstrapped Platform Owner Notice */}
+          {bootstrapStatus === false && !isBootstrapMode && (
+            <div className="p-4 mb-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs leading-relaxed space-y-3 shadow-sm">
+              <div className="flex items-start gap-2 font-bold text-emerald-600 dark:text-emerald-400 text-sm">
+                <ShieldAlert size={18} className="shrink-0 mt-0.5 animate-pulse text-emerald-500" />
+                <span>
+                  {isRtl
+                    ? '✨ إعداد حساب مشرف المنصة لأول مرة (Platform Owner Bootstrap)'
+                    : '✨ Zero-Lockout Platform Owner Bootstrap Available'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-normal">
+                {isRtl
+                  ? 'لم يتم إعداد حساب مشرف المنصة بعد. يتيح لك هذا الإعداد لمرة واحدة فقط إنشاء حساب أدمن المنصة بصلاحية SystemAdmin وتشفير PBKDF2 210,000 آمن.'
+                  : 'Platform owner account has not been bootstrapped yet. This single-use setup creates the authoritative SystemAdmin account with PBKDF2 210,000 stretching.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBootstrapMode(true);
+                  setError('');
+                  setSuccess('');
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <KeyRound size={14} />
+                <span>{isRtl ? 'إعداد حساب مشرف المنصة الآن 🔐' : 'Bootstrap Platform Owner Account Now 🔐'}</span>
+              </button>
+            </div>
+          )}
+
           {/* Mode Switcher */}
-          <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl mb-6">
+          <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl mb-6">
             <button
+              type="button"
               onClick={() => {
+                setAuthTab('login');
                 setIsRegisterMode(false);
                 setError('');
                 setSuccess('');
               }}
-              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                !isRegisterMode 
-                  ? 'bg-emerald-600 text-white shadow' 
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                authTab === 'login' && !isRegisterMode
+                  ? 'bg-emerald-600 text-white shadow'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
-              <LogIn size={14} />
+              <LogIn size={13} />
               <span>{isRtl ? 'تسجيل الدخول' : 'Sign In'}</span>
             </button>
             <button
+              type="button"
               onClick={() => {
+                setAuthTab('signup');
                 setIsRegisterMode(true);
                 setError('');
                 setSuccess('');
               }}
-              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                isRegisterMode 
-                  ? 'bg-emerald-600 text-white shadow' 
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                authTab === 'signup' || isRegisterMode
+                  ? 'bg-emerald-600 text-white shadow'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
-              <UserPlus size={14} />
+              <UserPlus size={13} />
               <span>{isRtl ? 'طلب تسجيل جديد' : 'Sign Up'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthTab('correction');
+                setIsRegisterMode(false);
+                setError('');
+                setSuccess('');
+              }}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                authTab === 'correction'
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <UserCog size={13} />
+              <span>{isRtl ? 'طلب تعديل حساب' : 'Correction'}</span>
             </button>
           </div>
 
           <h3 className="font-bold text-sm text-slate-500 uppercase tracking-wider mb-5 pb-2 border-b border-slate-100 dark:border-slate-800">
-            {isRegisterMode 
-              ? (isRtl ? 'إنشاء ملف مالي جديد بالمنظومة' : 'Request Security Profile Credentials') 
+            {authTab === 'correction'
+              ? (isRtl ? 'طلب تعديل بيانات حساب (بريد/كلمة مرور/اسم)' : 'Account Correction Request')
+              : (isRegisterMode || authTab === 'signup')
+              ? (isRtl ? 'إنشاء ملف مالي جديد بالمنظومة' : 'Request Security Profile Credentials')
               : t.loginTitle
             }
           </h3>
@@ -814,7 +1011,84 @@ export default function Login({
           )}
 
           {/* Forms */}
-          {isAdminLoginVerifyMode ? (
+          {isBootstrapMode ? (
+            /* Single-Use Platform Owner Bootstrap Form */
+            <form onSubmit={handleBootstrapPlatformOwner} className="space-y-4 animate-fade-in">
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs leading-relaxed">
+                {isRtl
+                  ? 'يرجى إدخال البريد الإلكتروني وكلمة المرور القوية التي ترغب في تعيينها لحساب مشرف المنصة (SystemAdmin). هذا الإجراء متاح لمرة واحدة فقط.'
+                  : 'Enter the email address and strong password for the initial Platform Owner (SystemAdmin) account. This action is single-use only.'
+                }
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+                  <Mail size={12} />
+                  <span>{isRtl ? 'البريد الإلكتروني لمشرف المنصة' : 'Platform Owner Email'}</span>
+                </label>
+                <input
+                  type="email"
+                  placeholder="admin@platform.com"
+                  value={bootstrapEmail}
+                  onChange={(e) => setBootstrapEmail(e.target.value)}
+                  className={`w-full px-4 py-2.5 rounded-xl border text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${
+                    theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200'
+                  }`}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+                  <KeyRound size={12} />
+                  <span>{isRtl ? 'كلمة المرور الجديدة' : 'New Password'}</span>
+                </label>
+                <input
+                  type="password"
+                  placeholder="******"
+                  value={bootstrapPassword}
+                  onChange={(e) => setBootstrapPassword(e.target.value)}
+                  className={`w-full px-4 py-2.5 rounded-xl border text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${
+                    theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200'
+                  }`}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+                  <KeyRound size={12} />
+                  <span>{isRtl ? 'تأكيد كلمة المرور' : 'Confirm Password'}</span>
+                </label>
+                <input
+                  type="password"
+                  placeholder="******"
+                  value={bootstrapConfirmPassword}
+                  onChange={(e) => setBootstrapConfirmPassword(e.target.value)}
+                  className={`w-full px-4 py-2.5 rounded-xl border text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${
+                    theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200'
+                  }`}
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isBootstrapping}
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <span>{isBootstrapping ? (isRtl ? 'جاري الإعداد...' : 'Bootstrapping...') : (isRtl ? 'إعداد الحساب وتأكيد كلمة المرور 🔐' : 'Bootstrap Account 🔐')}</span>
+                <ArrowRight size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBootstrapMode(false);
+                  setError('');
+                  setSuccess('');
+                }}
+                className="w-full text-center text-xs text-slate-400 hover:text-slate-300 transition-all font-bold mt-2 cursor-pointer"
+              >
+                {isRtl ? '← إلغاء والعودة' : '← Cancel'}
+              </button>
+            </form>
+          ) : isAdminLoginVerifyMode ? (
             /* Admin Login 2FA OTP Form */
             <form onSubmit={handleVerifyAdminLogin} className="space-y-4 animate-fade-in">
               <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-xl text-xs leading-relaxed">
@@ -1033,7 +1307,82 @@ export default function Login({
                 {isRtl ? '← إلغاء والعودة لصفحة الدخول' : '← Cancel and go back to Login'}
               </button>
             </div>
-          ) : isRegisterMode ? (
+          ) : authTab === 'correction' ? (
+            /* Account Correction Request Form */
+            <form onSubmit={handleCorrectionRequest} className="space-y-4">
+              {/* Registered Email */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+                  <Mail size={12} />
+                  <span>{isRtl ? 'البريد الإلكتروني المسجل في الحساب' : 'Registered Account Email'}</span>
+                </label>
+                <input
+                  type="email"
+                  placeholder="user@company.com"
+                  value={correctionTargetEmail}
+                  onChange={(e) => setCorrectionTargetEmail(e.target.value)}
+                  className={`w-full px-4 py-2.5 rounded-xl border text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${
+                    theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200'
+                  }`}
+                  required
+                />
+              </div>
+
+              {/* Correction Needed */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+                  <UserCog size={12} />
+                  <span>{isRtl ? 'نوع التعديل المطلوب' : 'Correction Needed'}</span>
+                </label>
+                <select
+                  value={correctionType}
+                  onChange={(e) => setCorrectionType(e.target.value as any)}
+                  className={`w-full px-4 py-2.5 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${
+                    theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200'
+                  }`}
+                >
+                  <option value="password_reset">{isRtl ? 'إعادة تعيين كلمة المرور (Password Reset)' : 'Password Reset'}</option>
+                  <option value="email_change">{isRtl ? 'تعديل البريد الإلكتروني (Email Change)' : 'Email Change'}</option>
+                  <option value="username_change">{isRtl ? 'تعديل اسم المستخدم / الاسم بالكامل' : 'Username / Full Name Change'}</option>
+                  <option value="other">{isRtl ? 'تعديلات أخرى / متعددة (Other / Multiple)' : 'Other / Multiple'}</option>
+                </select>
+              </div>
+
+              {/* Reason */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+                  <span>{isRtl ? 'سبب التعديل والتوضيح للمسؤول' : 'Reason / Details for Administrator'}</span>
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder={
+                    isRtl
+                      ? 'مثال: نسيت كلمة المرور، أو تم تغيير اسم الفرع، أو يوجد خطأ إملائي في البريد الإلكتروني...'
+                      : 'e.g., forgot password, email typo, account disabled...'
+                  }
+                  value={correctionReason}
+                  onChange={(e) => setCorrectionReason(e.target.value)}
+                  className={`w-full px-4 py-2.5 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${
+                    theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200'
+                  }`}
+                  required
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {isRtl
+                    ? '* ملاحظة: سيقوم المسؤول المختص بمراجعة الطلب واعتماد التعديل دون الحاجة لإنشاء حساب جديد أو زيادة سقف الحسابات.'
+                    : '* Note: Your administrator will review and apply the change without creating a new account or affecting headcount limits.'}
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all shadow-md shadow-blue-600/10 hover:shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>{isRtl ? 'إرسال طلب التعديل للمراجعة' : 'Submit Correction Request'}</span>
+                <ArrowRight size={14} />
+              </button>
+            </form>
+          ) : isRegisterMode || authTab === 'signup' ? (
             /* Registration Request Form */
             <form onSubmit={handleRegister} className="space-y-4">
               {/* Full Name */}
@@ -1259,11 +1608,27 @@ export default function Login({
               {/* Sign-in trigger */}
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-md shadow-emerald-600/10 hover:shadow-lg flex items-center justify-center gap-1.5"
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-md shadow-emerald-600/10 hover:shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <span>{t.login}</span>
                 <ArrowRight size={14} />
               </button>
+
+              <div className="flex justify-center items-center pt-1 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthTab('correction');
+                    setIsRegisterMode(false);
+                    setError('');
+                    setSuccess('');
+                  }}
+                  className="text-blue-600 dark:text-blue-400 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <UserCog size={13} />
+                  <span>{isRtl ? 'هل نسيت كلمة المرور / تود تعديل بيانات حسابك؟' : 'Forgot password / Request account correction?'}</span>
+                </button>
+              </div>
             </form>
           )}
         </div>

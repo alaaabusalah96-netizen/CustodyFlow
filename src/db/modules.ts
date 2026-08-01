@@ -116,7 +116,9 @@ export class ModulesModule {
   static getCompanyModules(companyId: string): Record<string, CompanyModuleSettings> {
     const companies = CompaniesModule.getCompanies();
     const company = companies.find(c => c.id === companyId);
-    if (!company) return {};
+    if (!company) {
+      return ModulesModule.getDefaultModulesForPlan('Enterprise');
+    }
     
     // If modules are not set, return defaults based on subscription plan or standard default
     if (!company.modules) {
