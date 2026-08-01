@@ -4,6 +4,17 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## TEMPORARY — SMTP Removal + Legacy Accounts Wipe
+**Date:** 2026-08-02
+**Summary:**
+- Removed SMTP entirely (nodemailer, SMTPConfigModal, /api/auth/smtp-config*, env SMTP_*).
+- Cleared DEFAULT_USERS credential seeds; AUTH_BYPASS remains the only entry path via dev-bypass-user.
+- Added local one-time wipe of users/signup caches on boot under AUTH_BYPASS.
+- Added POST /api/dev/wipe-auth-data to delete Firebase auth collections (users, user_credentials, signup_requests, password_reset_otps, admin_login_otps, system_config/smtp).
+- Real professional auth will be implemented later after product features are complete.
+
+---
+
 ## Phase 1: Credential Security Remediation
 **Date/Time:** 2026-07-23 00:50:00 UTC
 **Files Changed:**

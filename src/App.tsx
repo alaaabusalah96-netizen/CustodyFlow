@@ -38,8 +38,39 @@ import ApprovalInbox from './components/ApprovalInbox';
 /** TEMP AUTH BYPASS — remove when real auth is rebuilt */
 const AUTH_BYPASS_ENABLED = true;
 
+function wipeLegacyAuthLocalState() {
+  if (typeof window === 'undefined') return;
+  if (!(window as any).__AUTH_BYPASS__) return;
+  const FLAG = 'custody_auth_wipe_v1_done';
+  if (localStorage.getItem(FLAG) === '1') return;
+
+  const keysToClear = [
+    'custody_active_user',
+    'users',
+    'signup_requests',
+    'account_correction_requests',
+    'password_reset_otps',
+  ];
+
+  try {
+    keysToClear.forEach(k => {
+      localStorage.removeItem(k);
+      localStorage.removeItem(`custody_${k}`);
+    });
+    try {
+      const { StorageEngine } = require('./db/storage');
+      ['users', 'signup_requests', 'active_user', 'account_correction_requests'].forEach((k: string) => {
+        try { StorageEngine.setStored(k, k === 'users' ? [] : (k === 'active_user' ? null : [])); } catch {}
+      });
+    } catch {}
+  } catch {}
+
+  localStorage.setItem(FLAG, '1');
+}
+
 if (typeof window !== 'undefined') {
   (window as any).__AUTH_BYPASS__ = AUTH_BYPASS_ENABLED;
+  wipeLegacyAuthLocalState();
 }
 
 const DEV_BYPASS_USER: AppUser = {

@@ -79,223 +79,22 @@ export const DEFAULT_CATEGORIES: ExpenseCategory[] = [
 // Pre-configured Users (12 seeded accounts across 5 Egyptian industries)
 export const DEFAULT_USERS: AppUser[] = [
   {
-    id: 'user-sysadmin',
-    email: 'admin@kemit-erp.com',
-    full_name: 'Alaa Abu Salah (علاء أبو صلاح)',
+    id: 'dev-bypass-user',
+    email: 'dev@local',
+    full_name: 'Dev Bypass (مؤقت)',
     role: 'SystemAdmin',
     is_active: true,
     is_platform_owner: true,
-    // password removed under temporary auth bypass
+    company_id: '',
     permissions: {
       create_expense: true, edit_expense: true, delete_expense: true,
       create_voucher: true, approve_voucher: true, reject_voucher: true,
       create_custody: true, edit_custody: true, replace_custody: true,
       view_reports: true, manage_users: true, manage_companies: true,
       manage_regions: true, manage_stations: true, manage_roles: true,
-      manage_settings: true, settle_voucher: true
-    }
+      manage_settings: true, settle_voucher: true,
+    },
   },
-  {
-    id: 'user-sysadmin-gmail',
-    email: 'alaaabusalah96@gmail.com',
-    full_name: 'Alaa Abu Salah (علاء أبو صلاح)',
-    role: 'SystemAdmin',
-    is_active: true,
-    is_platform_owner: true,
-    // password removed under temporary auth bypass
-    permissions: {
-      create_expense: true, edit_expense: true, delete_expense: true,
-      create_voucher: true, approve_voucher: true, reject_voucher: true,
-      create_custody: true, edit_custody: true, replace_custody: true,
-      view_reports: true, manage_users: true, manage_companies: true,
-      manage_regions: true, manage_stations: true, manage_roles: true,
-      manage_settings: true, settle_voucher: true
-    }
-  },
-  {
-    id: 'user-sysadmin-cbc',
-    email: 'alaa@cbc.com',
-    full_name: 'Alaa Abu Salah (علاء أبو صلاح)',
-    role: 'SystemAdmin',
-    is_active: true,
-    is_platform_owner: true,
-    // password removed under temporary auth bypass
-    permissions: {
-      create_expense: true, edit_expense: true, delete_expense: true,
-      create_voucher: true, approve_voucher: true, reject_voucher: true,
-      create_custody: true, edit_custody: true, replace_custody: true,
-      view_reports: true, manage_users: true, manage_companies: true,
-      manage_regions: true, manage_stations: true, manage_roles: true,
-      manage_settings: true, settle_voucher: true
-    }
-  },
-  {
-    id: 'user-sewedy-admin',
-    email: 'admin@elsewedy.com',
-    full_name: 'Eng. Ahmed El-Sewedy (م. أحمد السويدي)',
-    role: 'Admin',
-    company_id: 'comp-sewedy-mfg',
-    org_unit_id: 'org-unit-sewedy-hq',
-    is_active: true,
-    // password removed under temporary auth bypass
-    permissions: {
-      create_expense: true, edit_expense: true, delete_expense: true,
-      create_voucher: true, approve_voucher: true, reject_voucher: true,
-      create_custody: true, edit_custody: true, replace_custody: true,
-      view_reports: true, manage_users: true, manage_companies: false,
-      manage_regions: true, manage_stations: true, manage_roles: true,
-      manage_settings: true, settle_voucher: true
-    }
-  },
-  {
-    id: 'user-futtaim-admin',
-    email: 'admin@alfuttaim.com',
-    full_name: 'Omar Al-Futtaim (عمر الفطيم)',
-    role: 'Admin',
-    company_id: 'comp-futtaim-trade',
-    org_unit_id: 'org-unit-futtaim-hq',
-    is_active: true,
-    // password removed under temporary auth bypass
-    permissions: {
-      create_expense: true, edit_expense: true, delete_expense: true,
-      create_voucher: true, approve_voucher: true, reject_voucher: true,
-      create_custody: true, edit_custody: true, replace_custody: true,
-      view_reports: true, manage_users: true, manage_companies: false,
-      manage_regions: true, manage_stations: true, manage_roles: true,
-      manage_settings: true, settle_voucher: true
-    }
-  },
-  {
-    id: 'user-admin',
-    email: 'admin@cairopoultry.com',
-    full_name: 'Dr. Hassan Moustafa (د. حسن مصطفى)',
-    role: 'Admin',
-    company_id: 'comp-cairo-poultry',
-    org_unit_id: 'org-unit-cairo-poultry-hq',
-    is_active: true,
-    // password removed under temporary auth bypass
-    permissions: {
-      create_expense: true, edit_expense: true, delete_expense: true,
-      create_voucher: true, approve_voucher: true, reject_voucher: true,
-      create_custody: true, edit_custody: true, replace_custody: true,
-      view_reports: true, manage_users: true, manage_companies: false,
-      manage_regions: true, manage_stations: true, manage_roles: true,
-      manage_settings: true, settle_voucher: true
-    }
-  },
-  {
-    id: 'user-cairo-poultry-controller',
-    email: 'controller@cairopoultry.com',
-    full_name: 'Fatma Al-Zahraa - Financial Controller (فاطمة الزهراء)',
-    role: 'Admin',
-    company_id: 'comp-cairo-poultry',
-    org_unit_id: 'org-unit-cairo-poultry-hq',
-    is_active: true,
-    // password removed under temporary auth bypass
-    permissions: {
-      create_expense: true, edit_expense: true, delete_expense: true,
-      create_voucher: true, approve_voucher: true, reject_voucher: true,
-      create_custody: true, edit_custody: true, replace_custody: true,
-      view_reports: true, manage_users: true, manage_companies: false,
-      manage_regions: true, manage_stations: true, manage_roles: true,
-      manage_settings: true, settle_voucher: true
-    }
-  },
-  {
-    id: 'user-daltex-admin',
-    email: 'admin@daltex.com',
-    full_name: 'Samir Daltex - Group CEO (سمير دلتاكس)',
-    role: 'Admin',
-    company_id: 'comp-daltex-holding',
-    org_unit_id: 'org-unit-daltex-holding',
-    is_active: true,
-    // password removed under temporary auth bypass
-    permissions: {
-      create_expense: true, edit_expense: true, delete_expense: true,
-      create_voucher: true, approve_voucher: true, reject_voucher: true,
-      create_custody: true, edit_custody: true, replace_custody: true,
-      view_reports: true, manage_users: true, manage_companies: false,
-      manage_regions: true, manage_stations: true, manage_roles: true,
-      manage_settings: true, settle_voucher: true
-    }
-  },
-  {
-    id: 'user-carrefour-admin',
-    email: 'admin@carrefour.com.eg',
-    full_name: 'Karim Mansour - Retail Operations Director (كريم منصور)',
-    role: 'Admin',
-    company_id: 'comp-carrefour-retail',
-    org_unit_id: 'org-unit-carrefour-hq',
-    is_active: true,
-    // password removed under temporary auth bypass
-    permissions: {
-      create_expense: true, edit_expense: true, delete_expense: true,
-      create_voucher: true, approve_voucher: true, reject_voucher: true,
-      create_custody: true, edit_custody: true, replace_custody: true,
-      view_reports: true, manage_users: true, manage_companies: false,
-      manage_regions: true, manage_stations: true, manage_roles: true,
-      manage_settings: true, settle_voucher: true
-    }
-  },
-  {
-    id: 'user-regional-cairo',
-    email: 'regional@cairopoultry.com',
-    full_name: 'Omar Farouk (عمر فاروق)',
-    role: 'RegionalManager',
-    region_id: 'reg-cairo-east',
-    company_id: 'comp-cairo-poultry',
-    org_unit_id: 'org-unit-cp-sec-farms',
-    is_active: true,
-    // password removed under temporary auth bypass
-    permissions: {
-      create_expense: false, edit_expense: false, delete_expense: false,
-      create_voucher: false, approve_voucher: true, reject_voucher: true,
-      create_custody: false, edit_custody: false, replace_custody: true,
-      view_reports: true, manage_users: false, manage_companies: false,
-      manage_regions: false, manage_stations: false, manage_roles: false,
-      manage_settings: false, settle_voucher: false
-    }
-  },
-  {
-    id: 'user-regular',
-    email: 'cashier@cairopoultry.com',
-    full_name: 'Mariam Ali (مريم علي)',
-    role: 'StationAdmin',
-    station_id: 'stn-cairo-1',
-    region_id: 'reg-cairo-east',
-    company_id: 'comp-cairo-poultry',
-    org_unit_id: 'org-unit-cp-stn-salam',
-    is_active: true,
-    // password removed under temporary auth bypass
-    permissions: {
-      create_expense: true, edit_expense: true, delete_expense: false,
-      create_voucher: true, approve_voucher: false, reject_voucher: false,
-      create_custody: false, edit_custody: false, replace_custody: false,
-      view_reports: true, manage_users: false, manage_companies: false,
-      manage_regions: false, manage_stations: false, manage_roles: false,
-      manage_settings: false, settle_voucher: true
-    }
-  },
-  {
-    id: 'user-regular-2',
-    email: 'cashier2@cairopoultry.com',
-    full_name: 'Tarek Sayed (طارق سيد)',
-    role: 'StationAdmin',
-    station_id: 'stn-cairo-2',
-    region_id: 'reg-cairo-east',
-    company_id: 'comp-cairo-poultry',
-    org_unit_id: 'org-unit-cp-stn-salam',
-    is_active: true,
-    // password removed under temporary auth bypass
-    permissions: {
-      create_expense: true, edit_expense: true, delete_expense: false,
-      create_voucher: true, approve_voucher: false, reject_voucher: false,
-      create_custody: false, edit_custody: false, replace_custody: false,
-      view_reports: true, manage_users: false, manage_companies: false,
-      manage_regions: false, manage_stations: false, manage_roles: false,
-      manage_settings: false, settle_voucher: true
-    }
-  }
 ];
 
 // Pre-seeded Transactions

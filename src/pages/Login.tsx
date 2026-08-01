@@ -4,7 +4,6 @@ import { translations, Language, Theme, AppUser, UserRole, SignupRequest, Accoun
 import { auth, dbDeleteDoc } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithCustomToken } from 'firebase/auth';
 import { Coins, ShieldAlert, User, Lock, ArrowRight, Languages, UserPlus, LogIn, CheckCircle2, Building, Mail, KeyRound, RefreshCw, ExternalLink, Inbox, UserCog } from 'lucide-react';
-import SMTPConfigModal from '../components/SMTPConfigModal';
 import kemitLogo from '../assets/images/kemit_logo_1784280480891.jpg';
 
 interface LoginProps {
@@ -60,10 +59,6 @@ export default function Login({
   const [adminSelectedSecurityPin, setAdminSelectedSecurityPin] = useState('');
   const [resetSecurityPin, setResetSecurityPin] = useState('');
 
-  // SMTP Configuration States
-  const [showSmtpModal, setShowSmtpModal] = useState(false);
-  const [smtpConfiguredStatus, setSmtpConfiguredStatus] = useState<{ configured: boolean; host?: string; user?: string } | null>(null);
-
   // Bootstrap Platform Owner States
   const [isBootstrapMode, setIsBootstrapMode] = useState(false);
   const [bootstrapStatus, setBootstrapStatus] = useState<boolean | null>(null);
@@ -117,23 +112,6 @@ export default function Login({
     };
   }, []);
 
-  const refreshSmtpStatus = () => {
-    fetch('/api/auth/smtp-config')
-      .then(async res => {
-        if (!res.ok) return;
-        const contentType = res.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const data = await res.json();
-          if (data.success) {
-            setSmtpConfiguredStatus(data);
-          }
-        }
-      })
-      .catch(() => {
-        // Silently ignore network/boot errors during initial SMTP status check
-      });
-  };
-
   const refreshBootstrapStatus = () => {
     fetch('/api/auth/bootstrap-status')
       .then(async res => {
@@ -150,9 +128,8 @@ export default function Login({
   };
 
   React.useEffect(() => {
-    refreshSmtpStatus();
     refreshBootstrapStatus();
-  }, [showSmtpModal]);
+  }, []);
 
   const companies = CustodyDB.getCompanies();
   const activeCompanies = companies.filter(c => c.is_active !== false && c.subscription_status === 'active');
@@ -853,6 +830,16 @@ export default function Login({
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'ar' : 'en');
   };
+
+  const AUTH_BYPASS_ENABLED =
+    typeof window !== 'undefined' && (window as any).__AUTH_BYPASS__ === true;
+  if (AUTH_BYPASS_ENABLED) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
+      </div>
+    );
+  }
 
   return (
     <div 
@@ -1675,45 +1662,6 @@ export default function Login({
           )}
         </div>
       </div>
-
-      {/* SMTP Configuration Button & Status */}
-      <div className="mt-4 flex flex-col items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setShowSmtpModal(true)}
-          className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-            theme === 'dark' 
-              ? 'bg-indigo-950/40 hover:bg-[#1e1b4b]/80 border-indigo-500/20 text-indigo-300' 
-              : 'bg-indigo-50 hover:bg-indigo-100 border-indigo-100 text-indigo-700'
-          }`}
-        >
-          <Mail size={12} />
-          <span>{isRtl ? 'إعدادات خادم البريد الإلكتروني SMTP 📬' : 'Configure SMTP Email Server 📬'}</span>
-        </button>
-
-        {smtpConfiguredStatus && smtpConfiguredStatus.configured ? (
-          <span className="text-[10px] font-mono text-emerald-500 flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            {isRtl 
-              ? `البريد مفعّل: ${smtpConfiguredStatus.user} (${smtpConfiguredStatus.host})` 
-              : `SMTP Active: ${smtpConfiguredStatus.user} (${smtpConfiguredStatus.host})`}
-          </span>
-        ) : (
-          <span className="text-[10px] font-mono text-amber-500 flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-            {isRtl ? 'تنبيه: لم يتم تكوين إعدادات البريد SMTP بعد' : 'Warning: SMTP Mailer is not configured yet'}
-          </span>
-        )}
-      </div>
-
-      {/* SMTP Configuration Modal */}
-      <SMTPConfigModal
-        isOpen={showSmtpModal}
-        onClose={() => setShowSmtpModal(false)}
-        theme={theme}
-        isRtl={isRtl}
-        onConfigUpdated={refreshSmtpStatus}
-      />
 
       {/* Footer copyright */}
       <div className="text-[10px] font-mono text-slate-400 mt-6">

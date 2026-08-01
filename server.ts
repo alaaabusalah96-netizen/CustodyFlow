@@ -17,7 +17,6 @@ import {
 import { initializeApp as initializeAdminApp, getApps as getAdminApps, cert as adminCert, App as AdminApp } from "firebase-admin/app";
 import { getFirestore as getFirestoreAdmin, FieldValue } from "firebase-admin/firestore";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
-import nodemailer from "nodemailer";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import { runTenantMigrationUp, runTenantMigrationDown } from "./src/migrations/tenantMigration";
@@ -95,107 +94,8 @@ function getAdminApp(): AdminApp {
 const adminApp = getAdminApp();
 const adminDb = getFirestoreAdmin(adminApp, DATABASE_ID);
 
-async function getSmtpConfig() {
-  const envHost = process.env.SMTP_HOST;
-  const envPort = process.env.SMTP_PORT;
-  const envUser = process.env.SMTP_USER;
-  const envPass = process.env.SMTP_PASS;
-  const envFrom = process.env.SMTP_FROM;
-
-  if (envHost && envUser && envPass) {
-    return {
-      host: envHost,
-      port: parseInt(envPort || "587"),
-      user: envUser,
-      pass: envPass,
-      from: envFrom || `"KEMIT ERP Security" <${envUser}>`
-    };
-  }
-
-  // Fallback: Read from Firestore using Admin SDK
-  try {
-    const configDoc = await adminDb.collection("system_config").doc("smtp").get();
-    if (configDoc.exists) {
-      const data = configDoc.data();
-      if (data && data.host && data.user && data.pass) {
-        return {
-          host: data.host,
-          port: parseInt(data.port || "587"),
-          user: data.user,
-          pass: data.pass.trim().replace(/\s+/g, ''),
-          from: data.from || `"KEMIT ERP Security" <${data.user}>`
-        };
-      }
-    }
-  } catch (err) {
-    console.error("Error reading SMTP config from Firestore:", err);
-  }
-
-  return null;
-}
-
 async function sendOtpEmail(email: string, otp: string, isLogin: boolean = false) {
-  const config = await getSmtpConfig();
-  if (!config) {
-    console.warn("SMTP credentials are not configured. Email could not be dispatched. Configure SMTP_HOST, SMTP_USER, SMTP_PASS or save config in Firestore.");
-    return;
-  }
-
-  const transporter = nodemailer.createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.port === 465,
-    auth: {
-      user: config.user,
-      pass: config.pass
-    }
-  });
-
-  const subject = isLogin 
-    ? "رمز تأكيد تسجيل الدخول - KEMIT ERP" 
-    : "رمز إعادة تعيين كلمة المرور - KEMIT ERP";
-  
-  const text = isLogin
-    ? `أهلاً بك، رمز تأكيد تسجيل الدخول الخاص بك هو: ${otp}. هذا الرمز صالح لمدة 15 دقيقة.`
-    : `أهلاً بك، رمز إعادة تعيين كلمة المرور الخاص بك هو: ${otp}. هذا الرمز صالح لمدة 15 دقيقة.`;
-
-  const html = `
-    <div style="direction: rtl; text-align: right; font-family: sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-      <h2 style="color: #059669;">منصة KEMIT ERP</h2>
-      <p style="font-size: 14px; color: #334155;">أهلاً بك،</p>
-      <p style="font-size: 14px; color: #334155;">
-        ${isLogin 
-          ? "تلقينا طلباً لتأكيد تسجيل الدخول إلى حساب أدمن المنصة." 
-          : "تلقينا طلباً لإعادة تعيين كلمة المرور لحساب أدمن المنصة."}
-      </p>
-      <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; text-align: center; margin: 20px 0; border: 1px solid #cbd5e1;">
-        <span style="font-size: 12px; color: #64748b; display: block; margin-bottom: 5px;">رمز التحقق الخاص بك (OTP)</span>
-        <strong style="font-size: 28px; letter-spacing: 4px; color: #059669; font-family: monospace;">${otp}</strong>
-      </div>
-      <p style="font-size: 12px; color: #64748b;">هذا الرمز صالح لمدة 15 دقيقة فقط للاستخدام لمرة واحدة.</p>
-      <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-      <p style="font-size: 11px; color: #94a3b8;">هذا البريد تم إرساله تلقائياً، يرجى عدم الرد عليه.</p>
-    </div>
-  `;
-
-  try {
-    await transporter.sendMail({
-      from: config.from,
-      to: email,
-      subject,
-      text,
-      html
-    });
-    console.log(`OTP email sent successfully to target address.`);
-  } catch (err: any) {
-    console.error("Error sending email via nodemailer:", err);
-    if (err && err.message && (err.message.includes("535") || err.message.includes("Username and Password not accepted"))) {
-      console.warn("\n💡 تلميح أمان واستكشاف الأخطاء (SMTP Security Tip):\n" +
-        "إذا كنت تستخدم بريد Gmail لإرسال الرسائل (smtp.gmail.com)، يرجى التأكد من:\n" +
-        "1. تفعيل التحقق بخطوتين (2-Step Verification) in Google account.\n" +
-        "2. إنشاء 'كلمة مرور تطبيق' (App Password) مخصصة من إعدادات حساب Google واستخدامها بدلاً من كلمة المرور العادية للحساب.\n");
-    }
-  }
+  console.log(`[AUTH_BYPASS] OTP email sending disabled under temporary auth bypass. email: ${email}`);
 }
 
 import helmet from "helmet";
@@ -1265,178 +1165,75 @@ async function startServer() {
     }
   });
 
-  // GET SMTP config status
-  app.get("/api/auth/smtp-config", async (req, res) => {
+  /**
+   * TEMPORARY one-time wipe of auth-related Firestore collections.
+   * POST /api/dev/wipe-auth-data
+   * Header: X-Wipe-Token: <must match process.env.AUTH_WIPE_TOKEN or "wipe-dev-now">
+   * Body optional: { confirm: "WIPE_AUTH_DATA" }
+   *
+   * Deletes documents in:
+   * - users
+   * - user_credentials
+   * - signup_requests
+   * - password_reset_otps
+   * - admin_login_otps
+   * - system_config/smtp (document)
+   *
+   * Does NOT delete companies, transactions, inventory, org units, etc.
+   * Remove this route when real auth is rebuilt.
+   */
+  app.post("/api/dev/wipe-auth-data", async (req, res) => {
     try {
-      const config = await getSmtpConfig();
-      if (config) {
-        // Mask the user email for security
-        const parts = config.user.split("@");
-        const maskedUser = parts.length === 2 
-          ? `${parts[0].substring(0, Math.min(3, parts[0].length))}***@${parts[1]}` 
-          : "***";
-        return res.json({
-          success: true,
-          configured: true,
-          host: config.host,
-          user: maskedUser
-        });
+      const token = req.header("X-Wipe-Token") || "";
+      const expected = process.env.AUTH_WIPE_TOKEN || "wipe-dev-now";
+      if (token !== expected) {
+        return res.status(403).json({ success: false, message: "Invalid wipe token" });
       }
-      return res.json({
-        success: true,
-        configured: false
-      });
-    } catch (error) {
-      return res.status(500).json({ success: false, message: "تعذر الحصول على حالة SMTP." });
-    }
-  });
-
-  // POST save SMTP config
-  app.post("/api/auth/smtp-config", requireAdminOrSystemAdminAuth, async (req, res) => {
-    try {
-      const { 
-        adminEmail, 
-        adminPassword, 
-        securityPin, 
-        smtpHost, 
-        smtpPort, 
-        smtpUser, 
-        smtpPass 
-      } = req.body;
-
-      if (!adminEmail || !adminPassword || !securityPin || !smtpHost || !smtpPort || !smtpUser || !smtpPass) {
-        return res.status(400).json({ success: false, message: "جميع الحقول مطلوبة لإتمام عملية الحفظ." });
+      if (req.body?.confirm !== "WIPE_AUTH_DATA") {
+        return res.status(400).json({ success: false, message: 'Body must include confirm: "WIPE_AUTH_DATA"' });
       }
 
-      const targetEmail = adminEmail.toLowerCase().trim();
-      const isPlatformAdmin = await isPlatformAdminUser(targetEmail);
+      const collections = [
+        "users",
+        "user_credentials",
+        "signup_requests",
+        "password_reset_otps",
+        "admin_login_otps",
+      ];
 
-      if (!isPlatformAdmin) {
-        return res.status(403).json({ success: false, message: "هذا الإجراء متاح فقط لأدمن منصة KEMIT ERP." });
-      }
-
-      // Verify credentials with Firestore users collection using Admin SDK
-      const snapshot = await adminDb.collection("users").where("email", "==", targetEmail).get();
-
-      if (snapshot.empty) {
-        return res.status(400).json({ success: false, message: "بيانات الأدمن غير مسجلة في النظام." });
-      }
-
-      const userData = snapshot.docs[0].data();
-      const storedPassword = userData.password || '';
-      const storedPin = userData.security_pin || '';
-      const pepperVersion = typeof userData.pepper_version === 'number' ? userData.pepper_version : 1;
-
-      const enteredHashSalted = hashPassword(adminPassword, targetEmail, pepperVersion);
-      const enteredHashLegacy = hashPassword(adminPassword, '', pepperVersion);
-      const allowPlaintextFallback = process.env.STRICT_PROD_SECURITY !== 'true' || process.env.ALLOW_PLAINTEXT_DEV_FALLBACK === 'true';
-      const isPlainMatch = allowPlaintextFallback && storedPassword !== '' && storedPassword === adminPassword;
-      const isLegacyHashMatch = storedPassword !== '' && storedPassword === enteredHashLegacy;
-      const isSaltedHashMatch = storedPassword !== '' && storedPassword === enteredHashSalted;
-      const isMatch = isPlainMatch || isLegacyHashMatch || isSaltedHashMatch;
-
-      if (storedPassword !== '' && !isMatch) {
-        return res.status(400).json({ success: false, message: "كلمة المرور غير صحيحة لحساب أدمن المنصة." });
-      }
-
-      // Auto migrate legacy password to secure salted hash on Firestore using Admin SDK
-      if (storedPassword !== '' && (isPlainMatch || isLegacyHashMatch || pepperVersion !== 2)) {
-        try {
-          const newHash = hashPassword(adminPassword, targetEmail, 2);
-          await adminDb.collection("users").doc(snapshot.docs[0].id).update({
-            password: newHash,
-            pepper_version: 2
-          });
-        } catch (migErr) {
-          console.warn("Failed to auto-migrate platform admin password on SMTP save:", migErr);
+      const deleted: Record<string, number> = {};
+      for (const col of collections) {
+        const snap = await adminDb.collection(col).get();
+        let count = 0;
+        const batchSize = 400;
+        let batch = adminDb.batch();
+        let ops = 0;
+        for (const doc of snap.docs) {
+          batch.delete(doc.ref);
+          ops++;
+          count++;
+          if (ops >= batchSize) {
+            await batch.commit();
+            batch = adminDb.batch();
+            ops = 0;
+          }
         }
+        if (ops > 0) await batch.commit();
+        deleted[col] = count;
       }
 
-      if (storedPin !== '' && storedPin !== securityPin.trim()) {
-        return res.status(400).json({ success: false, message: "كود الأمان PIN غير صحيح." });
+      // Remove SMTP config doc if present
+      try {
+        await adminDb.collection("system_config").doc("smtp").delete();
+        deleted["system_config/smtp"] = 1;
+      } catch {
+        deleted["system_config/smtp"] = 0;
       }
 
-      // Save to Firestore with cleaned password (spaces removed) using Admin SDK
-      const cleanPass = smtpPass.trim().replace(/\s+/g, '');
-      await adminDb.collection("system_config").doc("smtp").set({
-        host: smtpHost.trim(),
-        port: parseInt(smtpPort),
-        user: smtpUser.trim(),
-        pass: cleanPass,
-        from: `"KEMIT ERP Security" <${smtpUser.trim()}>`,
-        updatedAt: Date.now()
-      });
-
-      return res.json({ 
-        success: true, 
-        message: "تم حفظ إعدادات البريد الإلكتروني (SMTP) بنجاح والاتصال آمن." 
-      });
-    } catch (error) {
-      console.error("Error saving SMTP config:", error);
-      return res.status(500).json({ success: false, message: "حدث خطأ أثناء حفظ الإعدادات." });
-    }
-  });
-
-  // POST test SMTP connection
-  app.post("/api/auth/smtp-config/test", requireAdminOrSystemAdminAuth, async (req, res) => {
-    try {
-      const { smtpHost, smtpPort, smtpUser, smtpPass } = req.body;
-
-      if (!smtpHost || !smtpPort || !smtpUser || !smtpPass) {
-        return res.status(400).json({ success: false, message: "جميع حقول خادم SMTP مطلوبة للاختبار." });
-      }
-
-      const cleanPass = smtpPass.trim().replace(/\s+/g, '');
-      const portNum = parseInt(smtpPort);
-
-      const transporter = nodemailer.createTransport({
-        host: smtpHost.trim(),
-        port: portNum,
-        secure: portNum === 465,
-        auth: {
-          user: smtpUser.trim(),
-          pass: cleanPass
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000
-      });
-
-      // Try verifying the connection
-      await transporter.verify();
-
-      // Send actual test mail to the user
-      await transporter.sendMail({
-        from: `"KEMIT ERP Security Test" <${smtpUser.trim()}>`,
-        to: smtpUser.trim(),
-        subject: "رسالة تجريبية - KEMIT ERP SMTP Test",
-        text: "إذا كنت تقرأ هذه الرسالة، فهذا يعني أن إعدادات خادم البريد (SMTP) الخاصة بك تعمل بشكل صحيح تماماً! تهانينا 🎉",
-        html: `
-          <div style="direction: rtl; text-align: right; font-family: sans-serif; padding: 20px; border: 1px solid #059669; border-radius: 8px;">
-            <h2 style="color: #059669;">تهانينا! 🎉</h2>
-            <p style="font-size: 14px; color: #334155;">خادم البريد الإلكتروني الخاص بك يعمل بشكل ممتاز والاتصال آمن.</p>
-            <p style="font-size: 13px; color: #64748b;">تم إرسال هذه الرسالة كاختبار لتأكيد صلاحية كلمة المرور والمنفذ.</p>
-          </div>
-        `
-      });
-
-      return res.json({
-        success: true,
-        message: "تم اختبار الاتصال وإرسال بريد تجريبي بنجاح! يرجى مراجعة بريدك الإلكتروني للتأكد."
-      });
-    } catch (error: any) {
-      console.error("Error testing SMTP connection:", error);
-      let errMsg = error.message || "حدث خطأ غير معروف.";
-      if (errMsg.includes("535") || errMsg.includes("Username and Password not accepted")) {
-        errMsg = "فشل تسجيل الدخول (535): اسم المستخدم أو كلمة مرور التطبيق غير صحيحة. يرجى مراجعة الـ App Password ذو الـ 16 حرفاً وتأكيد خلوه من الأخطاء.";
-      } else if (errMsg.includes("ETIMEDOUT") || errMsg.includes("TIMEOUT")) {
-        errMsg = "انتهت مهلة الاتصال بالخادم. يرجى التحقق من الخادم والمنفذ (Port) والاتصال بالشبكة.";
-      } else if (errMsg.includes("ECONNREFUSED")) {
-        errMsg = "تم رفض الاتصال من الخادم. يرجى التحقق من صحة عنوان الخادم والمنفذ.";
-      }
-      return res.status(500).json({
-        success: false,
-        message: `فشل الاختبار: ${errMsg}`
-      });
+      return res.json({ success: true, deleted, message: "Auth-related collections wiped." });
+    } catch (err: any) {
+      console.error("wipe-auth-data failed:", err);
+      return res.status(500).json({ success: false, message: err?.message || "wipe failed" });
     }
   });
 
