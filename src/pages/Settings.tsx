@@ -1450,24 +1450,24 @@ export default function Settings({ language, theme }: SettingsProps) {
                           {/* Scoped privileges checkmarks */}
                           <div className="grid grid-cols-2 gap-x-2 gap-y-1 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[9px] text-slate-400">
                             <div className="flex items-center gap-1">
-                              <ShieldCheck size={11} className={u.permissions.manage_settings ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
-                              <span className={u.permissions.manage_settings ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>Manage settings</span>
+                              <ShieldCheck size={11} className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).manage_settings ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
+                              <span className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).manage_settings ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>Manage settings</span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <ShieldCheck size={11} className={u.permissions.create_expense ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
-                              <span className={u.permissions.create_expense ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>Create expenses</span>
+                              <ShieldCheck size={11} className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).create_expense ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
+                              <span className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).create_expense ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>Create expenses</span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <ShieldCheck size={11} className={u.permissions.settle_voucher ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
-                              <span className={u.permissions.settle_voucher ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>Settle vouchers</span>
+                              <ShieldCheck size={11} className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).settle_voucher ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
+                              <span className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).settle_voucher ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>Settle vouchers</span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <ShieldCheck size={11} className={u.permissions.delete_expense ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
-                              <span className={u.permissions.delete_expense ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>Delete expenses</span>
+                              <ShieldCheck size={11} className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).delete_expense ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
+                              <span className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).delete_expense ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>Delete expenses</span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <ShieldCheck size={11} className={u.permissions.replace_custody ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
-                              <span className={u.permissions.replace_custody ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>
+                              <ShieldCheck size={11} className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).replace_custody ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
+                              <span className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).replace_custody ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>
                                 {isRtl ? 'استعاضة العهدة' : 'Replenish custody'}
                               </span>
                             </div>

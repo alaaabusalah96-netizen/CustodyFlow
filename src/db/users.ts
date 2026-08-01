@@ -133,8 +133,13 @@ export class UsersModule {
   }
 
   static getActiveUser(): AppUser | null {
-    if (StorageEngine.cache['active_user'] !== undefined) {
-      return StorageEngine.cache['active_user'];
+    if (StorageEngine.cache['active_user'] !== undefined && StorageEngine.cache['active_user'] !== null) {
+      const cached = StorageEngine.cache['active_user'];
+      cached.permissions = UsersModule.enrichUserPermissions(cached.role, cached.permissions);
+      return cached;
+    }
+    if (StorageEngine.cache['active_user'] === null) {
+      return null;
     }
     let userStr: string | null = null;
     try {
@@ -182,11 +187,15 @@ export class UsersModule {
 
   static setActiveUser(user: AppUser | null): void {
     if (user) {
-      StorageEngine.cache['active_user'] = user;
-      localStorage.setItem('custody_active_user', JSON.stringify(user));
-      LogsModule.addLog(user.id, user.full_name, 'Login Session', `User logged in with role ${user.role}.`);
-      LogsModule.logAudit('USER_LOGIN', `User ${user.full_name} logged in with role ${user.role}.`, {
-        after: { id: user.id, full_name: user.full_name, email: user.email, role: user.role }
+      const enrichedUser: AppUser = {
+        ...user,
+        permissions: UsersModule.enrichUserPermissions(user.role, user.permissions)
+      };
+      StorageEngine.cache['active_user'] = enrichedUser;
+      localStorage.setItem('custody_active_user', JSON.stringify(enrichedUser));
+      LogsModule.addLog(enrichedUser.id, enrichedUser.full_name, 'Login Session', `User logged in with role ${enrichedUser.role}.`);
+      LogsModule.logAudit('USER_LOGIN', `User ${enrichedUser.full_name} logged in with role ${enrichedUser.role}.`, {
+        after: { id: enrichedUser.id, full_name: enrichedUser.full_name, email: enrichedUser.email, role: enrichedUser.role }
       });
     } else {
       const current = UsersModule.getActiveUser();

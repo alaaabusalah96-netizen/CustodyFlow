@@ -65,10 +65,8 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const isSandboxProject = firebaseConfig.projectId === "refined-garage-5nzsc";
-export const db = isSandboxProject
-  ? initializeFirestore(app, { experimentalForceLongPolling: true }, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe")
-  : initializeFirestore(app, { experimentalForceLongPolling: true });
+const DATABASE_ID = "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe";
+export const db = initializeFirestore(app, { experimentalForceLongPolling: true }, DATABASE_ID);
 export const auth = getAuth(app);
 ```
 

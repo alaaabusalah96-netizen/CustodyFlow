@@ -33,10 +33,8 @@ const firebaseConfig = {
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
-const isSandboxProject = firebaseConfig.projectId === "refined-garage-5nzsc";
-const db = isSandboxProject
-  ? getFirestore(firebaseApp, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe")
-  : getFirestore(firebaseApp);
+const DATABASE_ID = "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe";
+const db = getFirestore(firebaseApp, DATABASE_ID);
 
 // Initialize Firebase Admin SDK
 function getAdminApp(): AdminApp {
@@ -95,9 +93,7 @@ function getAdminApp(): AdminApp {
 }
 
 const adminApp = getAdminApp();
-const adminDb = isSandboxProject
-  ? getFirestoreAdmin(adminApp, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe")
-  : getFirestoreAdmin(adminApp);
+const adminDb = getFirestoreAdmin(adminApp, DATABASE_ID);
 
 async function getSmtpConfig() {
   const envHost = process.env.SMTP_HOST;
@@ -332,29 +328,6 @@ async function startServer() {
     }
   });
 
-  // Zero-lockout authoritative in-memory fallback stores for container environments without FIREBASE_SERVICE_ACCOUNT
-  let inMemoryBootstrapped = false;
-  let inMemoryBootstrappedEmail = "";
-  let isFirestoreAdminOffline = false;
-  const inMemoryUsers = new Map<string, any>();
-  const inMemoryCredentials = new Map<string, any>();
-
-  async function safeFirestoreOp<T>(promise: Promise<T>, fallback: T): Promise<T> {
-    if (isFirestoreAdminOffline) {
-      return fallback;
-    }
-    try {
-      return await Promise.race([
-        promise,
-        new Promise<T>((_, reject) => setTimeout(() => {
-          isFirestoreAdminOffline = true;
-          reject(new Error('Firestore operation timeout'));
-        }, 300))
-      ]);
-    } catch (err) {
-      return fallback;
-    }
-  }
 
   // API Route - Server-side Credential Verification (Zero-Trust PBKDF2 210k)
   app.post("/api/auth/verify-credentials", otpRateLimiter, async (req, res) => {
@@ -366,55 +339,35 @@ async function startServer() {
 
       const emailLower = email.toLowerCase().trim();
 
-      // 1. Fetch user document from 'users' collection using Admin SDK (with timeout safeguard)
-      const usersSnapshot = await safeFirestoreOp(
-        adminDb.collection("users").where("email", "==", emailLower).get(),
-        null
-      );
+      // 1. Fetch user document from 'users' collection using Admin SDK
+      const usersSnapshot = await adminDb.collection("users").where("email", "==", emailLower).get();
 
-      let userData: any = null;
-      let userId = "";
-
-      if (usersSnapshot && !usersSnapshot.empty) {
-        const userDoc = usersSnapshot.docs[0];
-        userData = userDoc.data();
-        userId = userDoc.id;
-      } else if (inMemoryUsers.has(emailLower)) {
-        userData = inMemoryUsers.get(emailLower);
-        userId = userData.id;
-      }
-
-      if (!userData) {
+      if (usersSnapshot.empty) {
         return res.status(400).json({ success: false, message: "البريد الإلكتروني غير مسجل بالنظام." });
       }
+
+      const userDoc = usersSnapshot.docs[0];
+      const userData = userDoc.data();
+      const userId = userDoc.id;
 
       if (userData.is_active === false) {
         return res.status(400).json({ success: false, message: "هذا الحساب معطل حالياً. يرجى التواصل مع المسؤول." });
       }
 
-      // 2. Fetch private credentials from 'user_credentials' vault using Admin SDK (with timeout safeguard)
-      const credDoc = await safeFirestoreOp(
-        adminDb.collection("user_credentials").doc(userId).get(),
-        null
-      );
+      // 2. Fetch private credentials from 'user_credentials' vault using Admin SDK
+      const credDoc = await adminDb.collection("user_credentials").doc(userId).get();
 
       let storedPasswordHash = '';
       let salt = userData.salt || emailLower;
       let kdf = 'legacy';
       let pepperVersion = 1;
 
-      if (credDoc && credDoc.exists) {
+      if (credDoc.exists) {
         const credData = credDoc.data();
         storedPasswordHash = credData?.passwordHash || credData?.password || '';
         salt = credData?.salt || salt;
         kdf = credData?.kdf || 'legacy';
         pepperVersion = typeof credData?.pepper_version === 'number' ? credData.pepper_version : 1;
-      } else if (inMemoryCredentials.has(emailLower)) {
-        const credData = inMemoryCredentials.get(emailLower);
-        storedPasswordHash = credData?.passwordHash || '';
-        salt = credData?.salt || salt;
-        kdf = credData?.kdf || 'sha256_pbkdf2_210k';
-        pepperVersion = typeof credData?.pepper_version === 'number' ? credData.pepper_version : 2;
       } else {
         // Fallback to legacy fields directly on user document
         storedPasswordHash = userData.password || '';
@@ -453,11 +406,11 @@ async function startServer() {
       }
 
       // 4. Auto-upgrade credential to PBKDF2 210,000 iterations & pepper_version: 2 in user_credentials vault
-      if (!(credDoc && credDoc.exists) || kdf !== 'sha256_pbkdf2_210k' || !isPBKDF2Match || pepperVersion !== 2) {
+      if (!credDoc.exists || kdf !== 'sha256_pbkdf2_210k' || !isPBKDF2Match || pepperVersion !== 2) {
         const newSalt = salt || crypto.randomUUID();
         const newPbkdf2Hash = hashPasswordPBKDF2_210k(password, newSalt, 2);
 
-        const upgradedCred = {
+        await adminDb.collection("user_credentials").doc(userId).set({
           id: userId,
           company_id: userData.company_id || 'comp-1',
           email: emailLower,
@@ -466,25 +419,15 @@ async function startServer() {
           kdf: 'sha256_pbkdf2_210k',
           pepper_version: 2,
           updated_at: new Date().toISOString()
-        };
-        inMemoryCredentials.set(emailLower, upgradedCred);
-        inMemoryCredentials.set(userId, upgradedCred);
-
-        await safeFirestoreOp(
-          adminDb.collection("user_credentials").doc(userId).set(upgradedCred, { merge: true }),
-          null
-        );
+        }, { merge: true });
 
         // Strip password & salt from public user document in 'users' collection
         if (userData.password !== undefined || userData.salt !== undefined) {
           try {
-            await safeFirestoreOp(
-              adminDb.collection("users").doc(userId).update({
-                password: FieldValue.delete(),
-                salt: FieldValue.delete()
-              }),
-              null
-            );
+            await adminDb.collection("users").doc(userId).update({
+              password: FieldValue.delete(),
+              salt: FieldValue.delete()
+            });
           } catch (e) {
             console.warn("Could not delete plaintext password field from user doc:", e);
           }
@@ -495,13 +438,40 @@ async function startServer() {
       const { password: _, salt: __, ...publicUser } = userData;
       publicUser.id = userId;
 
+      // Ensure permissions object is present and complete for the user's role
+      const role = publicUser.role || 'ReconciliationUser';
+      const isSystemAdminRole = role === 'SystemAdmin';
+      const isAdminRole = role === 'Admin';
+      const isRegionalRole = role === 'RegionalManager';
+      const isStationRole = role === 'StationAdmin';
+      const currentPerms = publicUser.permissions || {};
+      publicUser.permissions = {
+        create_expense: (isAdminRole || isSystemAdminRole) ? false : (currentPerms.create_expense ?? (isSystemAdminRole || isStationRole)),
+        edit_expense: currentPerms.edit_expense ?? (isSystemAdminRole || isAdminRole || isStationRole),
+        delete_expense: currentPerms.delete_expense ?? (isSystemAdminRole || isAdminRole),
+        create_voucher: (isAdminRole || isSystemAdminRole) ? false : (currentPerms.create_voucher ?? (isSystemAdminRole || isStationRole)),
+        approve_voucher: currentPerms.approve_voucher ?? (isSystemAdminRole || isAdminRole || isRegionalRole),
+        reject_voucher: currentPerms.reject_voucher ?? (isSystemAdminRole || isAdminRole || isRegionalRole),
+        create_custody: currentPerms.create_custody ?? (isSystemAdminRole || isAdminRole),
+        edit_custody: currentPerms.edit_custody ?? (isSystemAdminRole || isAdminRole),
+        replace_custody: currentPerms.replace_custody ?? (isSystemAdminRole || isAdminRole || isRegionalRole),
+        view_reports: currentPerms.view_reports ?? true,
+        manage_users: currentPerms.manage_users ?? (isSystemAdminRole || isAdminRole),
+        manage_companies: currentPerms.manage_companies ?? isSystemAdminRole,
+        manage_regions: currentPerms.manage_regions ?? (isSystemAdminRole || isAdminRole),
+        manage_stations: currentPerms.manage_stations ?? (isSystemAdminRole || isAdminRole),
+        manage_roles: currentPerms.manage_roles ?? (isSystemAdminRole || isAdminRole),
+        manage_settings: currentPerms.manage_settings ?? (isSystemAdminRole || isAdminRole),
+        settle_voucher: (isAdminRole || isSystemAdminRole) ? false : (currentPerms.settle_voucher ?? (isSystemAdminRole || isStationRole)),
+      };
+
       return res.json({
         success: true,
         user: publicUser
       });
     } catch (err: any) {
       console.error("Error in verify-credentials endpoint:", err);
-      return res.status(500).json({ success: false, message: "حدث خطأ أثناء الاتصال بالسيرفر للمصادقة." });
+      return res.status(500).json({ success: false, message: "تعذر الاتصال بقاعدة البيانات، يرجى المحاولة لاحقًا." });
     }
   });
 
@@ -868,19 +838,14 @@ async function startServer() {
 
   // Helper: check whether platform admin has already been bootstrapped
   async function isPlatformAdminBootstrapped(): Promise<boolean> {
-    if (inMemoryBootstrapped) {
-      return true;
-    }
     try {
-      const docSnap = await safeFirestoreOp(
-        adminDb.collection("system_config").doc("bootstrap").get(),
-        null
-      );
-      if (docSnap && docSnap.exists && docSnap.data()?.bootstrapped === true) {
+      const docSnap = await adminDb.collection("system_config").doc("bootstrap").get();
+      if (docSnap.exists && docSnap.data()?.bootstrapped === true) {
         return true;
       }
     } catch (err) {
       console.error("Error checking bootstrap status:", err);
+      throw err;
     }
     return false;
   }
@@ -891,7 +856,8 @@ async function startServer() {
       const bootstrapped = await isPlatformAdminBootstrapped();
       return res.json({ success: true, bootstrapped });
     } catch (error) {
-      return res.status(500).json({ success: false, message: "تعذر التحقق من حالة إعداد المنصة." });
+      console.error("Error in GET bootstrap-platform-owner:", error);
+      return res.status(500).json({ success: false, message: "تعذر الاتصال بقاعدة البيانات، يرجى المحاولة لاحقًا." });
     }
   });
 
@@ -900,7 +866,8 @@ async function startServer() {
       const bootstrapped = await isPlatformAdminBootstrapped();
       return res.json({ success: true, bootstrapped });
     } catch (error) {
-      return res.status(500).json({ success: false, message: "تعذر التحقق من حالة إعداد المنصة." });
+      console.error("Error in GET bootstrap-status:", error);
+      return res.status(500).json({ success: false, message: "تعذر الاتصال بقاعدة البيانات، يرجى المحاولة لاحقًا." });
     }
   });
 
@@ -938,14 +905,11 @@ async function startServer() {
       }
 
       // 3. Look for existing user or create new SystemAdmin user doc
-      const snapshot = await safeFirestoreOp(
-        adminDb.collection("users").where("email", "==", targetEmail).limit(1).get(),
-        null
-      );
+      const snapshot = await adminDb.collection("users").where("email", "==", targetEmail).limit(1).get();
       let userId: string;
       let userData: any;
 
-      if (snapshot && !snapshot.empty) {
+      if (!snapshot.empty) {
         userId = snapshot.docs[0].id;
         userData = {
           ...snapshot.docs[0].data(),
@@ -956,16 +920,13 @@ async function startServer() {
         };
         delete userData.password;
         delete userData.salt;
-        await safeFirestoreOp(
-          adminDb.collection("users").doc(userId).update({
-            role: "SystemAdmin",
-            is_platform_owner: true,
-            is_active: true,
-            password: FieldValue.delete(),
-            salt: FieldValue.delete()
-          }),
-          null
-        );
+        await adminDb.collection("users").doc(userId).update({
+          role: "SystemAdmin",
+          is_platform_owner: true,
+          is_active: true,
+          password: FieldValue.delete(),
+          salt: FieldValue.delete()
+        });
       } else {
         userId = `user-sysadmin-${Date.now()}`;
         userData = {
@@ -977,14 +938,8 @@ async function startServer() {
           is_platform_owner: true,
           created_at: new Date().toISOString()
         };
-        await safeFirestoreOp(
-          adminDb.collection("users").doc(userId).set(userData),
-          null
-        );
+        await adminDb.collection("users").doc(userId).set(userData);
       }
-
-      inMemoryUsers.set(targetEmail, userData);
-      inMemoryUsers.set(userId, userData);
 
       // 4. Hash password with PBKDF2 210,000 iterations & store strictly in user_credentials vault
       const userSalt = crypto.randomUUID();
@@ -999,25 +954,15 @@ async function startServer() {
         pepper_version: 2,
         updated_at: new Date().toISOString()
       };
-      inMemoryCredentials.set(targetEmail, credObj);
-      inMemoryCredentials.set(userId, credObj);
 
-      await safeFirestoreOp(
-        adminDb.collection("user_credentials").doc(userId).set(credObj, { merge: false }),
-        null
-      );
+      await adminDb.collection("user_credentials").doc(userId).set(credObj, { merge: false });
 
       // 5. Permanently mark bootstrap as complete
-      inMemoryBootstrapped = true;
-      inMemoryBootstrappedEmail = targetEmail;
-      await safeFirestoreOp(
-        adminDb.collection("system_config").doc("bootstrap").set({
-          bootstrapped: true,
-          bootstrapped_at: new Date().toISOString(),
-          bootstrapped_email: targetEmail
-        }),
-        null
-      );
+      await adminDb.collection("system_config").doc("bootstrap").set({
+        bootstrapped: true,
+        bootstrapped_at: new Date().toISOString(),
+        bootstrapped_email: targetEmail
+      });
 
       return res.json({
         success: true,
@@ -1030,7 +975,7 @@ async function startServer() {
       });
     } catch (error) {
       console.error("Error in bootstrap-platform-owner process:", error);
-      return res.status(500).json({ success: false, message: "تعذر تنفيذ طلب إعداد مشرف المنصة." });
+      return res.status(500).json({ success: false, message: "تعذر الاتصال بقاعدة البيانات، يرجى المحاولة لاحقًا." });
     }
   });
 

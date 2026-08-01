@@ -33,10 +33,8 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const isSandboxProject = firebaseConfig.projectId === "refined-garage-5nzsc";
-export const db = isSandboxProject
-  ? initializeFirestore(app, { experimentalForceLongPolling: true }, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe")
-  : initializeFirestore(app, { experimentalForceLongPolling: true });
+const DATABASE_ID = "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe";
+export const db = initializeFirestore(app, { experimentalForceLongPolling: true }, DATABASE_ID);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
@@ -344,14 +342,15 @@ export function clearActiveUnsubscribes() {
   activeUnsubscribes = [];
 }
 
-function rebuildListeners(activeUser: AppUser | null, companyId: string) {
+function rebuildListeners(activeUser: AppUser | null, rawCompanyId?: string | null) {
+  const companyId = rawCompanyId || (activeUser ? activeUser.company_id : '') || '';
   console.log('[DEBUG_LOG] 5. Before running rebuildListeners(). ActiveUser ID:', activeUser?.id, 'Company ID:', companyId);
   clearActiveUnsubscribes();
 
   console.log(`Rebuilding Firestore listeners. Active user: ${activeUser?.email || 'Guest'}, Selected company: ${companyId}`);
 
   // 1. Sync Companies (SaaS Multi-tenant / Scoped)
-  const qCompanies = activeUser && activeUser.role === 'SystemAdmin'
+  const qCompanies = !activeUser || activeUser.role === 'SystemAdmin' || !companyId || companyId === 'all'
     ? query(collection(db, 'companies'), limit(100))
     : query(collection(db, 'companies'), where('id', '==', companyId));
 
@@ -393,8 +392,12 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
     return;
   }
 
+  const isSystemAdminAll = activeUser.role === 'SystemAdmin' && (!companyId || companyId === 'all');
+
   // 4. Sync Regions (Scoped to current company)
-  const qRegions = query(collection(db, 'regions'), where('company_id', '==', companyId));
+  const qRegions = isSystemAdminAll
+    ? query(collection(db, 'regions'), limit(100))
+    : query(collection(db, 'regions'), where('company_id', '==', companyId));
   const unsubRegions = onSnapshot(qRegions, (snapshot) => {
     const data: Region[] = [];
     snapshot.forEach(doc => {
@@ -407,7 +410,9 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
   activeUnsubscribes.push(unsubRegions);
 
   // 5. Sync Stations (Scoped to current company)
-  const qStations = query(collection(db, 'stations'), where('company_id', '==', companyId));
+  const qStations = isSystemAdminAll
+    ? query(collection(db, 'stations'), limit(100))
+    : query(collection(db, 'stations'), where('company_id', '==', companyId));
   const unsubStations = onSnapshot(qStations, (snapshot) => {
     const data: Station[] = [];
     snapshot.forEach(doc => {
@@ -469,7 +474,9 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
   activeUnsubscribes.push(unsubUsers);
 
   // 7. Sync Notifications with limit (Smart Cache: 50 items max)
-  const qNotifications = query(collection(db, 'Notifications'), where('company_id', '==', companyId), limit(50));
+  const qNotifications = isSystemAdminAll
+    ? query(collection(db, 'Notifications'), limit(50))
+    : query(collection(db, 'Notifications'), where('company_id', '==', companyId), limit(50));
   const unsubNotifications = onSnapshot(qNotifications, (snapshot) => {
     const data: Notification[] = [];
     snapshot.forEach(doc => {
@@ -483,7 +490,9 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
   activeUnsubscribes.push(unsubNotifications);
 
   // 8. Sync Company Sequences
-  const qSequences = query(collection(db, 'company_sequences'), where('company_id', '==', companyId));
+  const qSequences = isSystemAdminAll
+    ? query(collection(db, 'company_sequences'), limit(100))
+    : query(collection(db, 'company_sequences'), where('company_id', '==', companyId));
   const unsubSequences = onSnapshot(qSequences, (snapshot) => {
     const data: any[] = [];
     snapshot.forEach(doc => {
@@ -500,7 +509,7 @@ function rebuildListeners(activeUser: AppUser | null, companyId: string) {
 export function subscribeScreenListeners(listenerTypes: string[]): () => void {
   const activeUserStr = localStorage.getItem('custody_active_user');
   const activeUser = activeUserStr ? JSON.parse(activeUserStr) : null;
-  const companyId = localStorage.getItem('custody_selected_company_id') || (activeUser ? activeUser.company_id : undefined);
+  const companyId = localStorage.getItem('custody_selected_company_id') || (activeUser ? activeUser.company_id : '') || '';
 
   if (!activeUser) {
     return () => {};
@@ -527,7 +536,9 @@ export function subscribeScreenListeners(listenerTypes: string[]): () => void {
         }, (error) => handleFirestoreError(error, OperationType.GET, 'transactions'));
         unsubs.push(unsub);
       } else if (type === 'logs') {
-        const qLogs = query(collection(db, 'logs'), where('company_id', '==', companyId), limit(100));
+        const qLogs = isSystemAdminAll
+          ? query(collection(db, 'logs'), limit(100))
+          : query(collection(db, 'logs'), where('company_id', '==', companyId), limit(100));
         const unsub = onSnapshot(qLogs, (snapshot) => {
           const data: ActivityLog[] = [];
           snapshot.forEach(doc => data.push(doc.data() as ActivityLog));
@@ -538,6 +549,8 @@ export function subscribeScreenListeners(listenerTypes: string[]): () => void {
       } else if (type === 'Expenses') {
         const qExpenses = isStationAdmin && activeUser.station_id
           ? query(collection(db, 'Expenses'), where('company_id', '==', companyId), where('station_id', '==', activeUser.station_id), limit(150))
+          : isSystemAdminAll
+          ? query(collection(db, 'Expenses'), limit(150))
           : query(collection(db, 'Expenses'), where('company_id', '==', companyId), limit(150));
         const unsub = onSnapshot(qExpenses, (snapshot) => {
           const data: Expense[] = [];
@@ -549,6 +562,8 @@ export function subscribeScreenListeners(listenerTypes: string[]): () => void {
       } else if (type === 'CashVouchers') {
         const qVouchers = isStationAdmin && activeUser.station_id
           ? query(collection(db, 'CashVouchers'), where('company_id', '==', companyId), where('station_id', '==', activeUser.station_id), limit(150))
+          : isSystemAdminAll
+          ? query(collection(db, 'CashVouchers'), limit(150))
           : query(collection(db, 'CashVouchers'), where('company_id', '==', companyId), limit(150));
         const unsub = onSnapshot(qVouchers, (snapshot) => {
           const data: CashVoucher[] = [];
@@ -558,7 +573,9 @@ export function subscribeScreenListeners(listenerTypes: string[]): () => void {
         }, (error) => handleFirestoreError(error, OperationType.GET, 'CashVouchers'));
         unsubs.push(unsub);
       } else if (type === 'TransactionHistory') {
-        const qHistory = query(collection(db, 'TransactionHistory'), where('company_id', '==', companyId), limit(150));
+        const qHistory = isSystemAdminAll
+          ? query(collection(db, 'TransactionHistory'), limit(150))
+          : query(collection(db, 'TransactionHistory'), where('company_id', '==', companyId), limit(150));
         const unsub = onSnapshot(qHistory, (snapshot) => {
           const data: TransactionHistory[] = [];
           snapshot.forEach(doc => data.push(doc.data() as TransactionHistory));
@@ -568,7 +585,9 @@ export function subscribeScreenListeners(listenerTypes: string[]): () => void {
         unsubs.push(unsub);
       } else if (type === 'AuditLogs') {
         if (activeUser.role === 'SystemAdmin' || activeUser.role === 'Admin') {
-          const qAudit = query(collection(db, 'AuditLogs'), where('company_id', '==', companyId), limit(100));
+          const qAudit = isSystemAdminAll
+            ? query(collection(db, 'AuditLogs'), limit(100))
+            : query(collection(db, 'AuditLogs'), where('company_id', '==', companyId), limit(100));
           const unsub = onSnapshot(qAudit, (snapshot) => {
             const data: AuditLog[] = [];
             snapshot.forEach(doc => data.push(doc.data() as AuditLog));
@@ -578,7 +597,9 @@ export function subscribeScreenListeners(listenerTypes: string[]): () => void {
           unsubs.push(unsub);
         }
       } else if (type === 'deleted_transactions') {
-        const qDeleted = query(collection(db, 'deleted_transactions'), where('company_id', '==', companyId), limit(100));
+        const qDeleted = isSystemAdminAll
+          ? query(collection(db, 'deleted_transactions'), limit(100))
+          : query(collection(db, 'deleted_transactions'), where('company_id', '==', companyId), limit(100));
         const unsub = onSnapshot(qDeleted, (snapshot) => {
           const data: DeletedTransaction[] = [];
           snapshot.forEach(doc => data.push(doc.data() as DeletedTransaction));
@@ -587,7 +608,9 @@ export function subscribeScreenListeners(listenerTypes: string[]): () => void {
         }, (error) => handleFirestoreError(error, OperationType.GET, 'deleted_transactions'));
         unsubs.push(unsub);
       } else if (type === 'journal_entries') {
-        const qJournal = query(collection(db, 'journal_entries'), where('company_id', '==', companyId), limit(200));
+        const qJournal = isSystemAdminAll
+          ? query(collection(db, 'journal_entries'), limit(200))
+          : query(collection(db, 'journal_entries'), where('company_id', '==', companyId), limit(200));
         const unsub = onSnapshot(qJournal, (snapshot) => {
           const data: any[] = [];
           snapshot.forEach(doc => data.push(doc.data()));
@@ -637,7 +660,7 @@ export function setupFirebaseSync() {
       const activeUserStr = localStorage.getItem('custody_active_user');
       const activeUser = activeUserStr ? JSON.parse(activeUserStr) : null;
       
-      const selectedCompanyId = localStorage.getItem('custody_selected_company_id') || (activeUser ? activeUser.company_id : undefined);
+      const selectedCompanyId = localStorage.getItem('custody_selected_company_id') || (activeUser ? activeUser.company_id : '') || '';
       
       const currentUserId = activeUser ? activeUser.id : null;
       const currentUserRole = activeUser ? activeUser.role : null;
@@ -684,9 +707,10 @@ export async function dbFetchPaginated<T>(
   lastDocId?: string
 ): Promise<{ data: T[]; lastDocId?: string; hasMore: boolean }> {
   try {
+    const safeCompanyId = companyId || '';
     let q = query(
       collection(db, collectionName),
-      where('company_id', '==', companyId),
+      where('company_id', '==', safeCompanyId),
       limit(limitVal)
     );
     
@@ -845,9 +869,10 @@ export async function fetchTransactionsOnDemand(
   pageSize: number = 20, 
   lastDoc: any = null
 ) {
+  const safeCompanyId = companyId || '';
   let q = query(
     collection(db, 'transactions'),
-    where('company_id', '==', companyId),
+    where('company_id', '==', safeCompanyId),
     orderBy('created_at', 'desc'),
     limit(pageSize)
   );

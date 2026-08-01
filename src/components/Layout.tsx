@@ -118,8 +118,9 @@ export function getFilteredMenuItems(activeUser: AppUser | null, language: Langu
     }
     
     if (item.permission) {
-      const permKey = item.permission as keyof typeof activeUser.permissions;
-      return activeUser.permissions[permKey];
+      const perms = activeUser.permissions || CustodyDB.enrichUserPermissions(activeUser.role);
+      const permKey = item.permission as keyof typeof perms;
+      return perms[permKey] ?? true;
     }
     return true;
   });

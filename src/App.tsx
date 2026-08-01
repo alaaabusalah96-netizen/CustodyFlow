@@ -38,12 +38,7 @@ import ApprovalInbox from './components/ApprovalInbox';
 export default function App() {
   // Try to load any existing active session, or default to null
   const [activeUser, setActiveUser] = useState<AppUser | null>(() => {
-    try {
-      const stored = localStorage.getItem('custody_active_user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
+    return CustodyDB.getActiveUser();
   });
 
   const [currentTab, setCurrentTab] = useState<string>(() => {
@@ -150,21 +145,14 @@ export default function App() {
       setDbVersion(prev => prev + 1);
       
       // Update local user state in case permission configurations or roles change
-      const stored = localStorage.getItem('custody_active_user');
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (parsed) {
-            setActiveUser(prev => {
-              if (!prev || prev.id !== parsed.id || prev.role !== parsed.role || JSON.stringify(prev.permissions) !== JSON.stringify(parsed.permissions) || JSON.stringify(prev.impersonator) !== JSON.stringify(parsed.impersonator)) {
-                return parsed;
-              }
-              return prev;
-            });
+      const currentActive = CustodyDB.getActiveUser();
+      if (currentActive) {
+        setActiveUser(prev => {
+          if (!prev || prev.id !== currentActive.id || prev.role !== currentActive.role || JSON.stringify(prev.permissions) !== JSON.stringify(currentActive.permissions) || JSON.stringify(prev.impersonator) !== JSON.stringify(currentActive.impersonator)) {
+            return currentActive;
           }
-        } catch {
-          // Ignore
-        }
+          return prev;
+        });
       }
     };
     window.addEventListener('custody_db_updated', handleUpdate);
@@ -242,12 +230,16 @@ export default function App() {
   }, [theme]);
 
   const handleLoginSuccess = (user: AppUser) => {
-    setActiveUser(user);
-    if (user.role === 'SystemAdmin') {
+    const enriched: AppUser = {
+      ...user,
+      permissions: CustodyDB.enrichUserPermissions(user.role, user.permissions)
+    };
+    setActiveUser(enriched);
+    if (enriched.role === 'SystemAdmin') {
       setCurrentTab('super-admin');
-    } else if (user.role === 'Admin') {
+    } else if (enriched.role === 'Admin') {
       setCurrentTab('company-admin');
-    } else if (user.role === 'RegionalManager') {
+    } else if (enriched.role === 'RegionalManager') {
       setCurrentTab('region-admin');
     } else {
       setCurrentTab('reconciliation');

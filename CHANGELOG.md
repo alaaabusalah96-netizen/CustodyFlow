@@ -1649,17 +1649,232 @@ Pass - Executed `npm test -- --run` with 156/156 tests passing across 26 test fi
 **Test & Validation Result:**
 Pass - Tested `POST /api/auth/bootstrap-platform-owner` and `POST /api/auth/verify-credentials` via curl, both returning HTTP 200 OK in under 300 milliseconds. Verified single-use lockout returning HTTP 403. Executed unit tests (`platform_admin_bootstrap.test.ts`), 5/5 tests passing in 292ms. Compiled production bundle (`compile_applet`) successfully with zero errors. Firebase project ID verified strictly locked to `custodyflow`.
 
+---
 
+## Remediation Plan - Remove In-Memory Firestore Fallback
+**Date/Time:** 2026-08-01 00:24:00 UTC
+**Files Changed:**
+- `server.ts`
+- `CHANGELOG.md`
 
+**Summary:**
+Removed all in-memory Firestore fallback symbols (`isFirestoreAdminOffline`, `inMemoryUsers`, `inMemoryCredentials`, `inMemoryBootstrapped`, and `safeFirestoreOp`) from `server.ts` and restored every wrapped call to direct Firestore Admin SDK operations. Confirmed that frontend UI auto-fill in `src/pages/Login.tsx` is independent of the in-memory backend system and remains intact for user convenience. Updated authentication endpoints to return clear retry-safe 5xx Arabic error messages (`تعذر الاتصال بقاعدة البيانات، يرجى المحاولة لاحقًا`) when Firestore database connection throws an error.
 
+### Pre-Work Audit Findings
+1. **Audit Quotes**: Located all usages of `safeFirestoreOp`, `isFirestoreAdminOffline`, `inMemoryUsers`, `inMemoryCredentials`, and `inMemoryBootstrapped` in `server.ts` (lines 335-357, 370-385, 396-418, 470-488, 870-886, 940-945, 959-968, 980-983, 986-987, 1002-1008, 1011-1020).
+2. **Preview Workaround Confirmation**: Confirmed that `isFirestoreAdminOffline` and the in-memory fallback stores were added specifically to work around preview container environments lacking real `FIREBASE_SERVICE_ACCOUNT` credentials or experiencing network latency, rather than solving any production requirement.
+3. **UI Auto-Fill Independence (`src/pages/Login.tsx`)**: Confirmed that `handleBootstrapPlatformOwner` calling `setPassword(bootstrapPassword)` and auto-syncing `CustodyDB.upsertLocalUser(data.user)` in `src/pages/Login.tsx` is a frontend UI convenience feature independent of the backend in-memory fallback system; therefore, it has been preserved as a separate decision without removal.
 
+### Actual Diffs (`server.ts`)
+```diff
+--- a/server.ts
++++ b/server.ts
+@@ -335,23 +335,0 @@
+-  // Zero-lockout authoritative in-memory fallback stores for container environments without FIREBASE_SERVICE_ACCOUNT
+-  let inMemoryBootstrapped = false;
+-  let inMemoryBootstrappedEmail = "";
+-  let isFirestoreAdminOffline = false;
+-  const inMemoryUsers = new Map<string, any>();
+-  const inMemoryCredentials = new Map<string, any>();
+-
+-  async function safeFirestoreOp<T>(promise: Promise<T>, fallback: T): Promise<T> {
+-    if (isFirestoreAdminOffline) {
+-      return fallback;
+-    }
+-    try {
+-      return await Promise.race([
+-        promise,
+-        new Promise<T>((_, reject) => setTimeout(() => {
+-          isFirestoreAdminOffline = true;
+-          reject(new Error('Firestore operation timeout'));
+-        }, 300))
+-      ]);
+-    } catch (err) {
+-      return fallback;
+-    }
+-  }
+@@ -370,17 +347,10 @@
+-      // 1. Fetch user document from 'users' collection using Admin SDK (with timeout safeguard)
+-      const usersSnapshot = await safeFirestoreOp(
+-        adminDb.collection("users").where("email", "==", emailLower).get(),
+-        null
+-      );
+-
+-      let userData: any = null;
+-      let userId = "";
+-
+-      if (usersSnapshot && !usersSnapshot.empty) {
+-        const userDoc = usersSnapshot.docs[0];
+-        userData = userDoc.data();
+-        userId = userDoc.id;
+-      } else if (inMemoryUsers.has(emailLower)) {
+-        userData = inMemoryUsers.get(emailLower);
+-        userId = userData.id;
+-      }
++      // 1. Fetch user document from 'users' collection using Admin SDK
++      const usersSnapshot = await adminDb.collection("users").where("email", "==", emailLower).get();
++
++      if (usersSnapshot.empty) {
++        return res.status(400).json({ success: false, message: "البريد الإلكتروني غير مسجل بالنظام." });
++      }
++
++      const userDoc = usersSnapshot.docs[0];
++      const userData = userDoc.data();
++      const userId = userDoc.id;
+@@ -396,25 +366,17 @@
+-      // 2. Fetch private credentials from 'user_credentials' vault using Admin SDK (with timeout safeguard)
+-      const credDoc = await safeFirestoreOp(
+-        adminDb.collection("user_credentials").doc(userId).get(),
+-        null
+-      );
++      // 2. Fetch private credentials from 'user_credentials' vault using Admin SDK
++      const credDoc = await adminDb.collection("user_credentials").doc(userId).get();
+...
+-      if (credDoc && credDoc.exists) {
++      if (credDoc.exists) {
+         const credData = credDoc.data();
+         storedPasswordHash = credData?.passwordHash || credData?.password || '';
+...
+-      } else if (inMemoryCredentials.has(emailLower)) {
+-        const credData = inMemoryCredentials.get(emailLower);
+-        storedPasswordHash = credData?.passwordHash || '';
+-        salt = credData?.salt || salt;
+-        kdf = credData?.kdf || 'sha256_pbkdf2_210k';
+-        pepperVersion = typeof credData?.pepper_version === 'number' ? credData.pepper_version : 2;
+@@ -470,19 +432,10 @@
+-        inMemoryCredentials.set(emailLower, upgradedCred);
+-        inMemoryCredentials.set(userId, upgradedCred);
+-
+-        await safeFirestoreOp(
+-          adminDb.collection("user_credentials").doc(userId).set(upgradedCred, { merge: true }),
+-          null
+-        );
++        await adminDb.collection("user_credentials").doc(userId).set(upgradedCred, { merge: true });
+...
+-            await safeFirestoreOp(
+-              adminDb.collection("users").doc(userId).update({
+-                password: FieldValue.delete(),
+-                salt: FieldValue.delete()
+-              }),
+-              null
+-            );
++            await adminDb.collection("users").doc(userId).update({
++              password: FieldValue.delete(),
++              salt: FieldValue.delete()
++            });
+@@ -871,11 +824,4 @@
+-    if (inMemoryBootstrapped) {
+-      return true;
+-    }
+     try {
+-      const docSnap = await safeFirestoreOp(
+-        adminDb.collection("system_config").doc("bootstrap").get(),
+-        null
+-      );
+-      if (docSnap && docSnap.exists && docSnap.data()?.bootstrapped === true) {
++      const docSnap = await adminDb.collection("system_config").doc("bootstrap").get();
++      if (docSnap.exists && docSnap.data()?.bootstrapped === true) {
+@@ -941,60 +887,41 @@
+-      const snapshot = await safeFirestoreOp(
+-        adminDb.collection("users").where("email", "==", targetEmail).limit(1).get(),
+-        null
+-      );
++      const snapshot = await adminDb.collection("users").where("email", "==", targetEmail).limit(1).get();
+...
+-      if (snapshot && !snapshot.empty) {
++      if (!snapshot.empty) {
+...
+-        await safeFirestoreOp(
+-          adminDb.collection("users").doc(userId).update({
+...
+-          }),
+-          null
+-        );
++        await adminDb.collection("users").doc(userId).update({
+...
+-        await safeFirestoreOp(
+-          adminDb.collection("users").doc(userId).set(userData),
+-          null
+-        );
++        await adminDb.collection("users").doc(userId).set(userData);
+...
+-      inMemoryUsers.set(targetEmail, userData);
+-      inMemoryUsers.set(userId, userData);
+...
+-      inMemoryCredentials.set(targetEmail, credObj);
+-      inMemoryCredentials.set(userId, credObj);
+-
+-      await safeFirestoreOp(
+-        adminDb.collection("user_credentials").doc(userId).set(credObj, { merge: false }),
+-        null
+-      );
++      await adminDb.collection("user_credentials").doc(userId).set(credObj, { merge: false });
+...
+-      inMemoryBootstrapped = true;
+-      inMemoryBootstrappedEmail = targetEmail;
+-      await safeFirestoreOp(
+-        adminDb.collection("system_config").doc("bootstrap").set({
+-          bootstrapped: true,
+-          bootstrapped_at: new Date().toISOString(),
+-          bootstrapped_email: targetEmail
+-        }),
+-        null
+-      );
++      await adminDb.collection("system_config").doc("bootstrap").set({
++        bootstrapped: true,
++        bootstrapped_at: new Date().toISOString(),
++        bootstrapped_email: targetEmail
++      });
+```
 
+**Test & Validation Result:**
+Pass - Executed `npm test -- --run` with 156/156 tests passing across 26 test files (100% pass rate). `compile_applet` and `lint_applet` passed cleanly with zero errors. Verified `GET /api/auth/bootstrap-status` returning directly from Firestore without any in-memory fallback. Firebase project ID verified strictly locked to `custodyflow`.
 
+---
 
+## v56-firestore-database-id-connection-fix: Explicit Database ID Connection for Production Platform Owner Bootstrap
+**Date/Time:** 2026-07-31 23:04:00 UTC
+**Files Changed:**
+- `server.ts`
+- `src/firebase.ts`
+- `DEPLOYMENT.md`
+- `CHANGELOG.md`
 
+**Summary:**
+1. **Root Cause Analysis (Unpublished changes & Bootstrap Not Saving in Production)**:
+   - Investigated why the published/shared app was showing "There are unpublished changes. Click republish to update the app" and why saving the platform owner from the temporary bootstrap screen did not persist or hide the screen after refresh in published mode.
+   - Found that `server.ts` and `src/firebase.ts` conditioned passing the Firestore database ID `"ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe"` on `isSandboxProject = firebaseConfig.projectId === "refined-garage-5nzsc"`. Because the project ID is `"custodyflow"`, this condition evaluated to `false` and Firestore fell back to the default `(default)` database instead of `"ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe"`.
+2. **Explicit Database ID Binding (`server.ts`, `src/firebase.ts`, `DEPLOYMENT.md`)**:
+   - Replaced conditional database selection with explicit constant `DATABASE_ID = "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe"`.
+   - Both client (`getFirestore` / `initializeFirestore`) and server (`adminDb = getFirestoreAdmin(adminApp, DATABASE_ID)`) now always connect to the correct Firestore database ID in all environments.
 
+**Test & Validation Result:**
+Pass - Executed `compile_applet` (build succeeded cleanly) and ran 100% of unit test suites (156/156 tests passing across 26 test files). Restarted dev server to apply the updated backend connection. All Firebase operations strictly target project `custodyflow` and database ID `ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe`.
 
+---
 
+## v57-user-permissions-enrichment-and-null-safety-fix: Complete Null-Safety & Auto-Enrichment for User Permissions
+**Date/Time:** 2026-07-31 23:58:00 UTC
+**Files Changed:**
+- `server.ts`
+- `src/db/users.ts`
+- `src/App.tsx`
+- `src/components/Layout.tsx`
+- `src/pages/Settings.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+1. **Root Cause Analysis (`TypeError: Cannot read properties of undefined (reading 'manage_settings')`)**:
+   - Diagnosed runtime crash where `u.permissions.manage_settings` or `activeUser.permissions[permKey]` threw `TypeError` when a user account (e.g. initial `SystemAdmin` or a user from local/cloud storage) was loaded without an explicit `permissions` object.
+2. **Server-Side & Client-Side Enrichment (`server.ts`, `src/db/users.ts`, `src/App.tsx`)**:
+   - In `/api/auth/verify-credentials` (`server.ts`), added server-side role-default permission enrichment so any returned user object always has a fully defined `permissions` record matching their role.
+   - Updated `UsersModule.getActiveUser()`, `UsersModule.setActiveUser()`, and `handleLoginSuccess` in `App.tsx` to pass all loaded users through `UsersModule.enrichUserPermissions()`, guaranteeing `permissions` is never undefined.
+3. **UI Null-Safety & Fallback Checks (`Layout.tsx`, `Settings.tsx`)**:
+   - Updated `Layout.tsx` navigation permission evaluation to use `activeUser.permissions || CustodyDB.enrichUserPermissions(activeUser.role)`.
+   - Updated `Settings.tsx` checkmarks table (`manage_settings`, `create_expense`, `settle_voucher`, etc.) to use `u.permissions || CustodyDB.enrichUserPermissions(u.role)`.
+
+**Test & Validation Result:**
+Pass - Executed `lint_applet` (0 errors) and `compile_applet` (build succeeded cleanly). Restarted dev server (`restart_dev_server`) so server-side credential verification changes take immediate effect. Verified `projectId` remains locked to `custodyflow`.
 
 
 
