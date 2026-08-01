@@ -2357,6 +2357,26 @@ Mechanically extracted the Workflow Rules & Settings tab (`activeTab === 'settin
 **Test & Validation Result:**
 Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passed, 196/196 tests passed) and applet compilation (`compile_applet` -> build succeeded cleanly with 0 TypeScript errors).
 
+---
+
+## UI Refactoring: Mechanical Extraction of Purchasing Vendors Tab
+**Date/Time:** 2026-08-01 18:58:50 UTC
+**Files Changed:**
+- `src/components/purchasing/PurchasingVendorsTab.tsx` (Created)
+- `src/pages/Purchasing.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+Mechanically extracted the Vendors Directory & AP Ledger tab (`activeTab === 'vendors'`) from `src/pages/Purchasing.tsx` into a standalone modular component `src/components/purchasing/PurchasingVendorsTab.tsx` without any change in logic, behavior, conditions, Arabic/English copy, or styling.
+- Created `PurchasingVendorsTab` with `PurchasingVendorsTabProps` interface matching exactly 5 external props: `isRtl`, `companyId`, `vendors`, `setShowAddVendor`, and `setSelectedVendorForStatement`.
+- Kept conditional single quotes (`'vendors'`) and all original formatting untouched.
+- Replaced the original 90-line JSX block in `src/pages/Purchasing.tsx` with `<PurchasingVendorsTab {...props} />` and imported `PurchasingVendorsTab`.
+- Verified no other tabs (`requests`, `rfq`, `orders`, `config`) were modified.
+
+**Test & Validation Result:**
+Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passed, 196/196 tests passed) and applet compilation (`compile_applet` -> build succeeded cleanly with 0 TypeScript errors).
+
+
 
 
 
