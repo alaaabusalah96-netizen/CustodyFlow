@@ -76,6 +76,7 @@ describe('Phase 13: Purchasing Module Organization Unit Migration & Integration'
       name: 'مستودع القاهرة المركزية',
       type_id: 'wt-central',
       org_unit_id: cairoUnit.id,
+      company_id: companyId,
       is_active: true,
       receiving_approval_workflow: false
     });

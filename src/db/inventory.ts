@@ -321,7 +321,7 @@ export class InventoryModule {
 
   static addWarehouse(warehouse: Omit<Warehouse, 'id' | 'company_id'>): Warehouse {
     const list = InventoryModule.getWarehouses();
-    const companyId = CompaniesModule.getSelectedCompanyId();
+    const companyId = (warehouse as any).company_id || CompaniesModule.getSelectedCompanyId();
     const newW: Warehouse = {
       ...warehouse,
       id: `wh-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
@@ -612,7 +612,7 @@ export class InventoryModule {
 
   static addProduct(product: Omit<Product, 'id' | 'company_id'>): Product {
     const list = InventoryModule.getProducts();
-    const companyId = CompaniesModule.getSelectedCompanyId();
+    const companyId = (product as any).company_id || CompaniesModule.getSelectedCompanyId();
     const newP: Product = {
       ...product,
       id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
@@ -961,7 +961,10 @@ export class InventoryModule {
     binId?: string
   ): void {
     const wh = StorageEngine.getStored<Warehouse[]>('warehouses', []).find(w => w.id === warehouseId);
-    const companyId = wh?.company_id || CompaniesModule.getSelectedCompanyId() || 'comp-1';
+    const companyId = wh?.company_id || CompaniesModule.getSelectedCompanyId();
+    if (!companyId) {
+      throw new Error('لا يمكن تسجيل حركة مخزون بدون شركة محددة / Cannot record stock movement without a company context.');
+    }
     const currentStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
     const current_balance_after = currentStock + qtyChange;
     const org_unit_id = InventoryModule.resolveWarehouseOrgUnit(warehouseId, companyId);
@@ -1773,7 +1776,11 @@ export class InventoryModule {
         return; // Auto accounting GL entry generation disabled by company workflow
       }
 
-      const companyId = doc.tenantId || 'comp-1';
+      if (!doc.tenantId) {
+        console.error(`[postAccountingEntryForDoc] Auto accounting journal entry aborted: missing tenantId on document ${doc.id}`);
+        return;
+      }
+      const companyId = doc.tenantId;
       const products = InventoryModule.getProducts();
 
       // Calculate total document monetary value

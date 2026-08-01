@@ -2074,3 +2074,23 @@ Pass - Executed `compile_applet` (build succeeded cleanly) and full unit test su
 **Test & Validation Result:**
 Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded cleanly), and full unit test suite `npm test -- --run` (168/168 tests passing across 29 test files).
 
+---
+
+## v66-purchasing-warehouse-tenant-isolation: Inventory Company ID Fallback & Multi-Tenant Warehouse Isolation
+**Date/Time:** 2026-08-01 05:51:00 UTC
+**Files Changed:**
+- `src/db/inventory.ts`
+- `src/lib/enterprise/purchasing_engine.ts`
+- `src/purchasing_migration.test.ts`
+- `CHANGELOG.md`
+
+**Summary:**
+- Updated `InventoryModule.addWarehouse` and `InventoryModule.addProduct` in `src/db/inventory.ts` to check `(warehouse as any).company_id` / `(product as any).company_id` first before falling back to `CompaniesModule.getSelectedCompanyId()`, ensuring explicit tenant contexts are preserved when creating warehouses and products in multi-tenant tests and background jobs.
+- Updated `PurchasingBusinessEngine.processEvent` in `src/lib/enterprise/purchasing_engine.ts` to scope warehouse lookup via `InventoryModule.getWarehouses(companyId)` when processing goods receipt events (`PO_RECEIVED`).
+- Added explicit `company_id: companyId` to `testWarehouse` definition in `src/purchasing_migration.test.ts`.
+- Verified all 168 unit and integration tests across 29 test files pass cleanly (`npm test -- --run`).
+
+**Test & Validation Result:**
+Pass - Executed full unit test suite `npm test -- --run` (168/168 tests passing across 29 test files).
+
+

@@ -407,12 +407,20 @@ async function startServer() {
 
       // 4. Auto-upgrade credential to PBKDF2 210,000 iterations & pepper_version: 2 in user_credentials vault
       if (!credDoc.exists || kdf !== 'sha256_pbkdf2_210k' || !isPBKDF2Match || pepperVersion !== 2) {
+        if (!userData.company_id) {
+          console.error("[verify-credentials] Auto-upgrade aborted: user record is missing company_id for userId:", userId, "email:", emailLower);
+          return res.status(422).json({
+            success: false,
+            message: "بيانات المستخدم غير مكتملة (لا توجد شركة مرتبطة) / User record is missing a company assignment. Contact support."
+          });
+        }
+
         const newSalt = salt || crypto.randomUUID();
         const newPbkdf2Hash = hashPasswordPBKDF2_210k(password, newSalt, 2);
 
         await adminDb.collection("user_credentials").doc(userId).set({
           id: userId,
-          company_id: userData.company_id || 'comp-1',
+          company_id: userData.company_id,
           email: emailLower,
           passwordHash: newPbkdf2Hash,
           salt: newSalt,
@@ -496,6 +504,16 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "معلمات غير كافية لحفظ الاعتمادات." });
       }
 
+      const requester = (req as any).user;
+      const isSystemAdmin = requester?.role === 'SystemAdmin';
+      const resolvedCompanyId = isSystemAdmin ? companyId : requester?.company_id;
+      if (!resolvedCompanyId) {
+        return res.status(422).json({
+          success: false,
+          message: "بيانات الشركة غير مكتملة / Missing or invalid company context for credentials."
+        });
+      }
+
       const emailLower = (email || '').toLowerCase().trim();
       const userSalt = salt || crypto.randomUUID();
       const newPbkdf2Hash = hashPasswordPBKDF2_210k(password, userSalt, 2);
@@ -503,7 +521,7 @@ async function startServer() {
       // Save strictly to user_credentials collection using Admin SDK
       await adminDb.collection("user_credentials").doc(userId).set({
         id: userId,
-        company_id: companyId || 'comp-1',
+        company_id: resolvedCompanyId,
         email: emailLower,
         passwordHash: newPbkdf2Hash,
         salt: userSalt,

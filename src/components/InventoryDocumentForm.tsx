@@ -169,8 +169,8 @@ export default function InventoryDocumentForm({
 
   // Combine real & sample purchase orders
   const availablePurchaseOrders = useMemo(() => {
-    const companyId = activeUser?.company_id || 'comp-1';
-    const realPOs = PurchasingBusinessEngine.getPurchaseOrders(companyId);
+    const companyId = activeUser?.company_id;
+    const realPOs = companyId ? PurchasingBusinessEngine.getPurchaseOrders(companyId) : [];
     const existingNumbers = new Set(realPOs.map(p => p.poNumber));
     const uniqueSamples = samplePurchaseOrders.filter(p => !existingNumbers.has(p.poNumber));
     return [...realPOs, ...uniqueSamples];

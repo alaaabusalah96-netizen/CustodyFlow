@@ -41,7 +41,12 @@ export class LogsModule {
     const logs = LogsModule.getLogs();
     const activeUser = StorageEngine.getStored<any>('active_user', null);
     const savedCompanyId = typeof localStorage !== 'undefined' ? localStorage.getItem('custody_selected_company_id') : null;
-    const resolvedCompanyId = companyId || activeUser?.company_id || savedCompanyId || 'comp-1';
+    const resolvedCompanyId = companyId || activeUser?.company_id || savedCompanyId;
+
+    if (!resolvedCompanyId) {
+      console.warn('[Logs] Activity log dropped: no company context available.');
+      return;
+    }
 
     const newLog: ActivityLog = {
       id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,

@@ -696,7 +696,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           PurchasingBusinessEngine.savePurchaseOrders(allPOs);
 
           // 2. Automate stock receiving in specified Warehouse!
-          const whs = InventoryModule.getWarehouses();
+          const whs = InventoryModule.getWarehouses(companyId);
           const targetWh = whs.find(w => w.id === warehouseId);
           if (!targetWh) throw new Error('Target delivery warehouse not found');
 
