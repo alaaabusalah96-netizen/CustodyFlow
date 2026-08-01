@@ -85,7 +85,7 @@ export const DEFAULT_USERS: AppUser[] = [
     role: 'SystemAdmin',
     is_active: true,
     is_platform_owner: true,
-    password: '123456',
+    // password removed under temporary auth bypass
     permissions: {
       create_expense: true, edit_expense: true, delete_expense: true,
       create_voucher: true, approve_voucher: true, reject_voucher: true,
@@ -102,7 +102,7 @@ export const DEFAULT_USERS: AppUser[] = [
     role: 'SystemAdmin',
     is_active: true,
     is_platform_owner: true,
-    password: '123456',
+    // password removed under temporary auth bypass
     permissions: {
       create_expense: true, edit_expense: true, delete_expense: true,
       create_voucher: true, approve_voucher: true, reject_voucher: true,
@@ -119,7 +119,7 @@ export const DEFAULT_USERS: AppUser[] = [
     role: 'SystemAdmin',
     is_active: true,
     is_platform_owner: true,
-    password: '123456',
+    // password removed under temporary auth bypass
     permissions: {
       create_expense: true, edit_expense: true, delete_expense: true,
       create_voucher: true, approve_voucher: true, reject_voucher: true,
@@ -137,7 +137,7 @@ export const DEFAULT_USERS: AppUser[] = [
     company_id: 'comp-sewedy-mfg',
     org_unit_id: 'org-unit-sewedy-hq',
     is_active: true,
-    password: '123456',
+    // password removed under temporary auth bypass
     permissions: {
       create_expense: true, edit_expense: true, delete_expense: true,
       create_voucher: true, approve_voucher: true, reject_voucher: true,
@@ -155,7 +155,7 @@ export const DEFAULT_USERS: AppUser[] = [
     company_id: 'comp-futtaim-trade',
     org_unit_id: 'org-unit-futtaim-hq',
     is_active: true,
-    password: '123456',
+    // password removed under temporary auth bypass
     permissions: {
       create_expense: true, edit_expense: true, delete_expense: true,
       create_voucher: true, approve_voucher: true, reject_voucher: true,
@@ -173,7 +173,7 @@ export const DEFAULT_USERS: AppUser[] = [
     company_id: 'comp-cairo-poultry',
     org_unit_id: 'org-unit-cairo-poultry-hq',
     is_active: true,
-    password: '123456',
+    // password removed under temporary auth bypass
     permissions: {
       create_expense: true, edit_expense: true, delete_expense: true,
       create_voucher: true, approve_voucher: true, reject_voucher: true,
@@ -191,7 +191,7 @@ export const DEFAULT_USERS: AppUser[] = [
     company_id: 'comp-cairo-poultry',
     org_unit_id: 'org-unit-cairo-poultry-hq',
     is_active: true,
-    password: '123456',
+    // password removed under temporary auth bypass
     permissions: {
       create_expense: true, edit_expense: true, delete_expense: true,
       create_voucher: true, approve_voucher: true, reject_voucher: true,
@@ -209,7 +209,7 @@ export const DEFAULT_USERS: AppUser[] = [
     company_id: 'comp-daltex-holding',
     org_unit_id: 'org-unit-daltex-holding',
     is_active: true,
-    password: '123456',
+    // password removed under temporary auth bypass
     permissions: {
       create_expense: true, edit_expense: true, delete_expense: true,
       create_voucher: true, approve_voucher: true, reject_voucher: true,
@@ -227,7 +227,7 @@ export const DEFAULT_USERS: AppUser[] = [
     company_id: 'comp-carrefour-retail',
     org_unit_id: 'org-unit-carrefour-hq',
     is_active: true,
-    password: '123456',
+    // password removed under temporary auth bypass
     permissions: {
       create_expense: true, edit_expense: true, delete_expense: true,
       create_voucher: true, approve_voucher: true, reject_voucher: true,
@@ -246,7 +246,7 @@ export const DEFAULT_USERS: AppUser[] = [
     company_id: 'comp-cairo-poultry',
     org_unit_id: 'org-unit-cp-sec-farms',
     is_active: true,
-    password: '123456',
+    // password removed under temporary auth bypass
     permissions: {
       create_expense: false, edit_expense: false, delete_expense: false,
       create_voucher: false, approve_voucher: true, reject_voucher: true,
@@ -266,7 +266,7 @@ export const DEFAULT_USERS: AppUser[] = [
     company_id: 'comp-cairo-poultry',
     org_unit_id: 'org-unit-cp-stn-salam',
     is_active: true,
-    password: '123456',
+    // password removed under temporary auth bypass
     permissions: {
       create_expense: true, edit_expense: true, delete_expense: false,
       create_voucher: true, approve_voucher: false, reject_voucher: false,
@@ -286,7 +286,7 @@ export const DEFAULT_USERS: AppUser[] = [
     company_id: 'comp-cairo-poultry',
     org_unit_id: 'org-unit-cp-stn-salam',
     is_active: true,
-    password: '123456',
+    // password removed under temporary auth bypass
     permissions: {
       create_expense: true, edit_expense: true, delete_expense: false,
       create_voucher: true, approve_voucher: false, reject_voucher: false,

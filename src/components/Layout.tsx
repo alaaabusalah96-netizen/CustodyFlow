@@ -85,8 +85,16 @@ export function getFilteredMenuItems(activeUser: AppUser | null, language: Langu
       return false;
     }
     
+    // TEMP AUTH BYPASS: show ALL menu items for DEV user
+    const authBypass =
+      typeof window !== 'undefined' &&
+      (window as any).__AUTH_BYPASS__ === true;
+
+    // Prefer reading a shared flag if exported; otherwise detect by user id
+    const isBypassUser = activeUser?.id === 'dev-bypass-user' || authBypass;
+
     // Explicitly hide operational module entries from SystemAdmin (SaaS / Platform Tools only)
-    if (activeUser.role === 'SystemAdmin') {
+    if (activeUser.role === 'SystemAdmin' && !isBypassUser) {
       const operationalModuleIds = [
         'new-expense',
         'voucher',

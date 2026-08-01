@@ -35,32 +35,71 @@ const FleetManagement = lazy(() => import('./pages/FleetManagement'));
 const HRPayroll = lazy(() => import('./pages/HRPayroll'));
 import ApprovalInbox from './components/ApprovalInbox';
 
+/** TEMP AUTH BYPASS — remove when real auth is rebuilt */
+const AUTH_BYPASS_ENABLED = true;
+
+if (typeof window !== 'undefined') {
+  (window as any).__AUTH_BYPASS__ = AUTH_BYPASS_ENABLED;
+}
+
+const DEV_BYPASS_USER: AppUser = {
+  id: 'dev-bypass-user',
+  email: 'dev@local',
+  full_name: 'Dev Bypass (مؤقت)',
+  role: 'SystemAdmin',
+  is_active: true,
+  is_platform_owner: true,
+  company_id: '', // empty = platform level
+  permissions: {
+    create_expense: true,
+    edit_expense: true,
+    delete_expense: true,
+    create_voucher: true,
+    approve_voucher: true,
+    reject_voucher: true,
+    create_custody: true,
+    edit_custody: true,
+    replace_custody: true,
+    view_reports: true,
+    manage_users: true,
+    manage_companies: true,
+    manage_regions: true,
+    manage_stations: true,
+    manage_roles: true,
+    manage_settings: true,
+    settle_voucher: true,
+  },
+};
+
 export default function App() {
   // Try to load any existing active session, or default to null
   const [activeUser, setActiveUser] = useState<AppUser | null>(() => {
+    if (AUTH_BYPASS_ENABLED) {
+      try {
+        CustodyDB.setActiveUser(DEV_BYPASS_USER);
+      } catch {
+        // ignore storage errors during bootstrap
+      }
+      return DEV_BYPASS_USER;
+    }
     return CustodyDB.getActiveUser();
   });
 
   const [currentTab, setCurrentTab] = useState<string>(() => {
+    if (AUTH_BYPASS_ENABLED) return 'super-admin';
     try {
       const stored = localStorage.getItem('custody_active_user');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed) {
-          if (parsed.role === 'SystemAdmin') {
-            return 'super-admin';
-          }
-          if (parsed.role === 'Admin') {
-            return 'company-admin';
-          }
-          if (parsed.role === 'RegionalManager') {
-            return 'region-admin';
-          }
-          if (parsed.role !== 'Admin' && parsed.role !== 'SystemAdmin') {
-            return 'reconciliation';
-          }
+          if (parsed.role === 'SystemAdmin') return 'super-admin';
+          if (parsed.role === 'Admin') return 'company-admin';
+          if (parsed.role === 'RegionalManager') return 'region-admin';
+          if (parsed.role !== 'Admin' && parsed.role !== 'SystemAdmin') return 'reconciliation';
         }
       }
+      const lastHome = localStorage.getItem('custody_last_home_tab');
+      if (lastHome) return lastHome;
     } catch {
       // ignore
     }
@@ -163,6 +202,14 @@ export default function App() {
 
   // Monitor Firebase auth state to ensure session validity and multi-tenancy sync
   useEffect(() => {
+    if (AUTH_BYPASS_ENABLED) {
+      if (!CustodyDB.getActiveUser()) {
+        CustodyDB.setActiveUser(DEV_BYPASS_USER);
+        setActiveUser(DEV_BYPASS_USER);
+      }
+      return () => {};
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         const stored = localStorage.getItem('custody_active_user');
@@ -235,18 +282,35 @@ export default function App() {
       permissions: CustodyDB.enrichUserPermissions(user.role, user.permissions)
     };
     setActiveUser(enriched);
+
+    // Always set the correct home tab synchronously BEFORE first paint of renderPage().
+    let homeTab = 'reconciliation';
     if (enriched.role === 'SystemAdmin') {
-      setCurrentTab('super-admin');
+      homeTab = 'super-admin';
     } else if (enriched.role === 'Admin') {
-      setCurrentTab('company-admin');
+      homeTab = 'company-admin';
     } else if (enriched.role === 'RegionalManager') {
-      setCurrentTab('region-admin');
-    } else {
-      setCurrentTab('reconciliation');
+      homeTab = 'region-admin';
+    }
+    setCurrentTab(homeTab);
+
+    // Persist preferred tab so hard refresh / close-reopen does not land on a wrong operational screen.
+    try {
+      localStorage.setItem('custody_last_home_tab', homeTab);
+    } catch {
+      // ignore
     }
   };
 
   const handleLogout = () => {
+    if (AUTH_BYPASS_ENABLED) {
+      // TEMP: logout is disabled; re-assert DEV user
+      CustodyDB.setActiveUser(DEV_BYPASS_USER);
+      setActiveUser(DEV_BYPASS_USER);
+      setCurrentTab('super-admin');
+      setSelectedPendingTx(null);
+      return;
+    }
     CustodyDB.setActiveUser(null);
     setActiveUser(null);
     setSelectedPendingTx(null);
@@ -271,7 +335,15 @@ export default function App() {
             : 'Access restricted: This role (Company Admin / SaaS Super Admin) is restricted from directly accessing this screen to maintain segregation of duties and financial integrity.'}
         </p>
         <button 
-          onClick={() => setCurrentTab(activeUser?.role === 'SystemAdmin' ? 'super-admin' : (activeUser?.role === 'Admin' ? 'reports' : 'reconciliation'))} 
+          onClick={() => setCurrentTab(
+            activeUser?.role === 'SystemAdmin'
+              ? 'super-admin'
+              : activeUser?.role === 'Admin'
+                ? 'company-admin'
+                : activeUser?.role === 'RegionalManager'
+                  ? 'region-admin'
+                  : 'reconciliation'
+          )} 
           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
         >
           {isRtl ? 'العودة للصفحة الرئيسية' : 'Return to Home'}
@@ -282,8 +354,60 @@ export default function App() {
 
   // Main Page Router Dispatcher
   const renderPage = () => {
-    if (activeUser?.company_id && !ModulesModule.isScreenEnabledForCompany(activeUser.company_id, currentTab)) {
+    // Platform SystemAdmin must never be blocked from SaaS/platform screens by company module flags.
+    // Also never block pure platform tabs even if company modules map is incomplete.
+    const platformTabs = new Set([
+      'super-admin',
+      'audit-log',
+      'settings',
+      'search',
+    ]);
+
+    const isSystemAdminUser =
+      activeUser?.role === 'SystemAdmin' && !activeUser?.impersonator;
+
+    if (
+      !AUTH_BYPASS_ENABLED &&
+      activeUser?.company_id &&
+      !platformTabs.has(currentTab) &&
+      !isSystemAdminUser &&
+      !ModulesModule.isScreenEnabledForCompany(activeUser.company_id, currentTab)
+    ) {
       return renderAccessDenied();
+    }
+
+    // If a pure SystemAdmin somehow lands on an operational tab, auto-redirect home instead of Access Denied.
+    if (!AUTH_BYPASS_ENABLED && isSystemAdminUser) {
+      const operationalTabs = new Set([
+        'dashboard',
+        'reconciliation',
+        'new-expense',
+        'pending',
+        'voucher',
+        'under-settlement',
+        'inventory',
+        'purchasing',
+        'accounting',
+        'sales_ar',
+        'pos',
+        'crm',
+        'fixed_assets',
+        'fleet',
+        'hr_payroll',
+        'stations',
+        'station-details',
+        'region-admin',
+        'company-admin',
+        'approvals',
+        'reports',
+      ]);
+      if (operationalTabs.has(currentTab)) {
+        // Force SaaS home; do not show Access Denied first.
+        if (currentTab !== 'super-admin') {
+          setTimeout(() => setCurrentTab('super-admin'), 0);
+        }
+        // Fall through to super-admin case below after state update; meanwhile render super-admin shell safely.
+      }
     }
 
     switch (currentTab) {
@@ -325,7 +449,7 @@ export default function App() {
           />
         );
       case 'new-expense':
-        if ((activeUser?.role === 'Admin' || activeUser?.role === 'SystemAdmin') && !activeUser?.impersonator) {
+        if (!AUTH_BYPASS_ENABLED && (activeUser?.role === 'Admin' || activeUser?.role === 'SystemAdmin') && !activeUser?.impersonator) {
           return renderAccessDenied();
         }
         return (
@@ -345,7 +469,7 @@ export default function App() {
           />
         );
       case 'voucher':
-        if ((activeUser?.role === 'Admin' || activeUser?.role === 'SystemAdmin') && !activeUser?.impersonator) {
+        if (!AUTH_BYPASS_ENABLED && (activeUser?.role === 'Admin' || activeUser?.role === 'SystemAdmin') && !activeUser?.impersonator) {
           return renderAccessDenied();
         }
         return (
@@ -366,7 +490,7 @@ export default function App() {
           />
         );
       case 'reconciliation':
-        if (activeUser?.role === 'SystemAdmin' && !activeUser?.impersonator) {
+        if (!AUTH_BYPASS_ENABLED && activeUser?.role === 'SystemAdmin' && !activeUser?.impersonator) {
           return renderAccessDenied();
         }
         return (
@@ -579,8 +703,21 @@ export default function App() {
     );
   };
 
-  // If user is not logged in, force Login screen
+  // TEMP AUTH BYPASS: never force Login screen
   if (!activeUser) {
+    if (AUTH_BYPASS_ENABLED) {
+      // Recover instantly if state was cleared
+      try {
+        CustodyDB.setActiveUser(DEV_BYPASS_USER);
+      } catch {}
+      // Fall through after setting; next render will have activeUser
+      setActiveUser(DEV_BYPASS_USER);
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+        </div>
+      );
+    }
     return (
       <Suspense fallback={
         <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900">

@@ -353,6 +353,37 @@ async function startServer() {
   // API Route - Server-side Credential Verification (Zero-Trust PBKDF2 210k)
   app.post("/api/auth/verify-credentials", otpRateLimiter, async (req, res) => {
     try {
+      // TEMP AUTH BYPASS — accept any credentials and return a fixed platform user.
+      // Controlled by env AUTH_BYPASS=true (default true in non-production for this temporary phase).
+      const authBypass =
+        process.env.AUTH_BYPASS === 'true' ||
+        process.env.AUTH_BYPASS === '1' ||
+        (process.env.NODE_ENV !== 'production' && process.env.AUTH_BYPASS !== 'false');
+
+      if (authBypass) {
+        return res.json({
+          success: true,
+          user: {
+            id: 'dev-bypass-user',
+            email: (req.body?.email || 'dev@local').toLowerCase(),
+            full_name: 'Dev Bypass (مؤقت)',
+            role: 'SystemAdmin',
+            is_active: true,
+            is_platform_owner: true,
+            company_id: '',
+            permissions: {
+              create_expense: true, edit_expense: true, delete_expense: true,
+              create_voucher: true, approve_voucher: true, reject_voucher: true,
+              create_custody: true, edit_custody: true, replace_custody: true,
+              view_reports: true, manage_users: true, manage_companies: true,
+              manage_regions: true, manage_stations: true, manage_roles: true,
+              manage_settings: true, settle_voucher: true,
+            },
+          },
+          // no customToken needed under bypass
+        });
+      }
+
       const { email, password } = req.body;
       if (!email || !password) {
         return res.status(400).json({ success: false, message: "يرجى إدخال البريد الإلكتروني وكلمة المرور." });
@@ -443,28 +474,34 @@ async function startServer() {
       }
 
       // 4. Auto-upgrade credential to PBKDF2 210,000 iterations & pepper_version: 2 in user_credentials vault
+      // IMPORTANT: Never block a successful password match because company_id is missing.
+      // Platform owners / SystemAdmins frequently have no company_id. Aborting here caused
+      // "wrong password" on first login and success after close/reopen.
       if (!credDoc.exists || kdf !== 'sha256_pbkdf2_210k' || !isPBKDF2Match || pepperVersion !== 2) {
-        if (!userData.company_id) {
-          console.error("[verify-credentials] Auto-upgrade aborted: user record is missing company_id for userId:", userId, "email:", emailLower);
-          return res.status(422).json({
-            success: false,
-            message: "بيانات المستخدم غير مكتملة (لا توجد شركة مرتبطة) / User record is missing a company assignment. Contact support."
-          });
+        if (!userData.company_id && !isPlatformAdmin) {
+          console.warn(
+            "[verify-credentials] Auto-upgrade skipped (no company_id) for non-platform userId:",
+            userId,
+            "email:",
+            emailLower
+          );
+          // Still allow login with the already-verified password; do not return 422.
+        } else {
+          const newSalt = salt || crypto.randomUUID();
+          const newPbkdf2Hash = hashPasswordPBKDF2_210k(password, newSalt, 2);
+          const resolvedCompanyId = userData.company_id || (isPlatformAdmin ? 'platform' : '');
+
+          await adminDb.collection("user_credentials").doc(userId).set({
+            id: userId,
+            company_id: resolvedCompanyId,
+            email: emailLower,
+            passwordHash: newPbkdf2Hash,
+            salt: newSalt,
+            kdf: 'sha256_pbkdf2_210k',
+            pepper_version: 2,
+            updated_at: new Date().toISOString()
+          }, { merge: true });
         }
-
-        const newSalt = salt || crypto.randomUUID();
-        const newPbkdf2Hash = hashPasswordPBKDF2_210k(password, newSalt, 2);
-
-        await adminDb.collection("user_credentials").doc(userId).set({
-          id: userId,
-          company_id: userData.company_id,
-          email: emailLower,
-          passwordHash: newPbkdf2Hash,
-          salt: newSalt,
-          kdf: 'sha256_pbkdf2_210k',
-          pepper_version: 2,
-          updated_at: new Date().toISOString()
-        }, { merge: true });
 
         // Strip password & salt from public user document in 'users' collection
         if (userData.password !== undefined || userData.salt !== undefined) {

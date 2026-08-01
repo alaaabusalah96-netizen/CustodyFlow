@@ -76,6 +76,35 @@ export default function Login({
   const [showFirebaseAuthWarning, setShowFirebaseAuthWarning] = useState(false);
 
   React.useEffect(() => {
+    // TEMP AUTH BYPASS: if Login ever mounts, immediately "succeed" with DEV user
+    const AUTH_BYPASS_ENABLED =
+      typeof window !== 'undefined' && (window as any).__AUTH_BYPASS__ === true;
+    if (!AUTH_BYPASS_ENABLED) return;
+
+    const devUser = {
+      id: 'dev-bypass-user',
+      email: 'dev@local',
+      full_name: 'Dev Bypass (مؤقت)',
+      role: 'SystemAdmin' as const,
+      is_active: true,
+      is_platform_owner: true,
+      company_id: '',
+      permissions: {
+        create_expense: true, edit_expense: true, delete_expense: true,
+        create_voucher: true, approve_voucher: true, reject_voucher: true,
+        create_custody: true, edit_custody: true, replace_custody: true,
+        view_reports: true, manage_users: true, manage_companies: true,
+        manage_regions: true, manage_stations: true, manage_roles: true,
+        manage_settings: true, settle_voucher: true,
+      },
+    };
+    try {
+      CustodyDB.setActiveUser(devUser as any);
+    } catch {}
+    onLoginSuccess(devUser as any);
+  }, [onLoginSuccess]);
+
+  React.useEffect(() => {
     const handleWarning = () => {
       setShowFirebaseAuthWarning(true);
     };
@@ -418,6 +447,12 @@ export default function Login({
         CustodyDB.upsertLocalUser(authenticatedUser);
         CustodyDB.setActiveUser(authenticatedUser);
         onLoginSuccess(authenticatedUser);
+        return;
+      }
+
+      // Explicit server rejection (wrong password / inactive / incomplete) — show server message and STOP.
+      if (authData && authData.success === false && authData.message) {
+        setError(authData.message);
         return;
       }
     } catch (serverAuthErr) {

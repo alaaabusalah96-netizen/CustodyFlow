@@ -74,7 +74,11 @@ export class UsersModule {
       if (existingIdx === -1) {
         users = [...users, defUser];
         hasAddedMissingAdmin = true;
-      } else if (!users[existingIdx].password && defUser.password) {
+      } else if (
+        !(typeof window !== 'undefined' && (window as any).__AUTH_BYPASS__ === true) &&
+        !users[existingIdx].password &&
+        defUser.password
+      ) {
         const updatedUser = { ...users[existingIdx], password: defUser.password };
         const newUsers = [...users];
         newUsers[existingIdx] = updatedUser;
@@ -133,6 +137,26 @@ export class UsersModule {
   }
 
   static getActiveUser(): AppUser | null {
+    const authBypass =
+      typeof window !== 'undefined' && (window as any).__AUTH_BYPASS__ === true;
+    if (authBypass) {
+      const cached = StorageEngine.cache['active_user'];
+      if (cached && cached.id === 'dev-bypass-user') return cached as AppUser;
+      // If nothing cached, synthesize DEV user without requiring password fields
+      const devUser: AppUser = {
+        id: 'dev-bypass-user',
+        email: 'dev@local',
+        full_name: 'Dev Bypass (مؤقت)',
+        role: 'SystemAdmin',
+        is_active: true,
+        is_platform_owner: true,
+        company_id: '',
+        permissions: UsersModule.enrichUserPermissions('SystemAdmin'),
+      };
+      StorageEngine.cache['active_user'] = devUser;
+      return devUser;
+    }
+
     if (StorageEngine.cache['active_user'] !== undefined && StorageEngine.cache['active_user'] !== null) {
       const cached = StorageEngine.cache['active_user'];
       cached.permissions = UsersModule.enrichUserPermissions(cached.role, cached.permissions);
@@ -560,19 +584,35 @@ export class UsersModule {
   }
 
   static async deleteSignupRequest(id: string): Promise<void> {
-    // 1. Update local storage first (local-first)
+    // 1. Update local storage first (local-first) — remove immediately so UI cannot re-show it
     const requests = UsersModule.getSignupRequests();
     const filtered = requests.filter(r => r.id !== id);
     StorageEngine.setStored('signup_requests', filtered);
 
-    // 2. Sync deletion to Firestore without throwing on failure
+    // 2. Sync deletion to Firestore. Retry once. Never re-insert the deleted id from a failed path.
+    const attemptDelete = async () => {
+      return await syncWriteWithOfflineFallback('signup_requests', id, null);
+    };
+
     try {
-      const syncRes = await syncWriteWithOfflineFallback('signup_requests', id, null);
+      let syncRes = await attemptDelete();
       if (!syncRes.success) {
         console.warn(`[deleteSignupRequest] Cloud delete deferred/warning: ${syncRes.error}`);
+        // one quiet retry
+        await new Promise(r => setTimeout(r, 400));
+        syncRes = await attemptDelete();
+        if (!syncRes.success) {
+          console.warn(`[deleteSignupRequest] Cloud delete retry failed: ${syncRes.error}`);
+        }
       }
     } catch (err: any) {
       console.warn('[deleteSignupRequest] Firestore delete failed, deleted locally:', err?.message || err);
+    }
+
+    // 3. Ensure local list still does not contain this id after any async listener race
+    const after = UsersModule.getSignupRequests().filter(r => r.id !== id);
+    if (after.length !== UsersModule.getSignupRequests().length) {
+      StorageEngine.setStored('signup_requests', after);
     }
   }
 

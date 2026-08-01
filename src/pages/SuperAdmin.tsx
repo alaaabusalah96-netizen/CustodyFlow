@@ -474,26 +474,120 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
   };
 
   const handleApproveSignupRequest = async (req: SignupRequest) => {
-    const newUser: AppUser = {
-      id: `user-approved-${req.role.toLowerCase()}-${Date.now()}`,
-      email: req.email.toLowerCase().trim(),
-      full_name: req.full_name,
-      role: req.role,
-      company_id: req.company_id,
-      station_id: req.station_id,
-      is_active: true,
-      password: req.password || '123456',
-      salt: req.email.toLowerCase().trim(),
-      permissions: CustodyDB.enrichUserPermissions(req.role)
-    };
+    try {
+      const emailLower = (req.email || '').toLowerCase().trim();
+      if (!emailLower) {
+        alert(isRtl ? 'البريد الإلكتروني غير صالح في الطلب.' : 'Invalid email on signup request.');
+        return;
+      }
 
-    const usersList = CustodyDB.getUsers();
-    usersList.push(newUser);
-    await CustodyDB.saveUsers(usersList);
-    await CustodyDB.deleteSignupRequest(req.id);
-    CustodyDB.logAudit('APPROVE_SIGNUP_REQUEST', `Approved signup for ${req.full_name} (${req.email}) as ${req.role}`);
-    alert(isRtl ? 'تم قبول طلب التسجيل وتفعيل الحساب بنجاح!' : 'Signup request approved successfully!');
-    handleRefreshData();
+      // Prevent duplicate approval if user already exists
+      const existingUsers = CustodyDB.getUsers();
+      const already = existingUsers.find(u => (u.email || '').toLowerCase().trim() === emailLower);
+      if (already) {
+        // Still force-delete the request so it does not reappear after reload
+        await CustodyDB.deleteSignupRequest(req.id);
+        // Mark status Approved locally in case listener is slow
+        const remaining = CustodyDB.getSignupRequests().filter(r => r.id !== req.id);
+        // (deleteSignupRequest already updates storage; this is a safety no-op)
+        void remaining;
+        alert(isRtl ? 'هذا البريد مسجّل مسبقاً. تم إزالة طلب التسجيل.' : 'User already exists. Signup request removed.');
+        handleRefreshData();
+        return;
+      }
+
+      const plainPassword = (req.password && String(req.password).trim()) || 'ChangeMe123!';
+      const newUserId = `user-approved-${req.role.toLowerCase()}-${Date.now()}`;
+      const salt = emailLower;
+
+      const newUser: AppUser = {
+        id: newUserId,
+        email: emailLower,
+        full_name: req.full_name,
+        role: req.role,
+        company_id: req.company_id,
+        station_id: req.station_id,
+        region_id: req.region_id,
+        org_unit_id: req.org_unit_id,
+        is_active: true,
+        // Do NOT leave a long-lived plaintext password on the public user doc.
+        // Temporary local hash for offline resilience; vault is source of truth.
+        password: CustodyDB.hashPassword ? CustodyDB.hashPassword(plainPassword, salt) : undefined,
+        salt,
+        permissions: CustodyDB.enrichUserPermissions(req.role),
+      };
+
+      const usersList = [...existingUsers, newUser];
+      await CustodyDB.saveUsers(usersList);
+
+      // Persist credentials into the zero-trust vault via server (PBKDF2 + pepper_version 2)
+      try {
+        const active = CustodyDB.getActiveUser?.() || null;
+        let idToken = '';
+        try {
+          // @ts-ignore - firebase auth currentUser may exist
+          const { auth } = await import('../firebase');
+          idToken = (await auth.currentUser?.getIdToken?.()) || '';
+        } catch {
+          idToken = '';
+        }
+
+        if (idToken) {
+          const resp = await fetch('/api/auth/save-credentials', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({
+              userId: newUserId,
+              companyId: req.company_id || '',
+              email: emailLower,
+              password: plainPassword,
+              salt,
+            }),
+          });
+          if (!resp.ok) {
+            console.warn('[approve-signup] save-credentials failed', await resp.text());
+          }
+        } else {
+          console.warn('[approve-signup] No idToken available; credentials vault write skipped');
+        }
+      } catch (credErr) {
+        console.warn('[approve-signup] vault write error:', credErr);
+      }
+
+      // Hard-delete the signup request (local + cloud). If cloud fails, mark status Approved
+      // so a re-hydrated document does not show as Pending again.
+      await CustodyDB.deleteSignupRequest(req.id);
+
+      // Safety: if request somehow still present locally, mark it Approved instead of Pending
+      try {
+        const stillThere = CustodyDB.getSignupRequests().find(r => r.id === req.id);
+        if (stillThere) {
+          await CustodyDB.saveSignupRequest({
+            ...stillThere,
+            status: 'Approved' as any,
+          });
+        }
+      } catch {
+        // ignore
+      }
+
+      CustodyDB.logAudit(
+        'APPROVE_SIGNUP_REQUEST',
+        `Approved signup for ${req.full_name} (${emailLower}) as ${req.role}`
+      );
+      alert(isRtl ? 'تم قبول طلب التسجيل وتفعيل الحساب بنجاح!' : 'Signup request approved successfully!');
+      handleRefreshData();
+    } catch (err: any) {
+      console.error('[approve-signup] failed:', err);
+      alert(
+        isRtl
+          ? `فشل قبول الطلب: ${err?.message || 'خطأ غير معروف'}`
+          : `Failed to approve request: ${err?.message || 'Unknown error'}`
+      );
+    }
   };
 
   const handleRejectSignupRequest = async (id: string, email: string) => {
@@ -631,7 +725,10 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
           </div>
           <div className="mt-4 flex items-baseline justify-between">
             <span className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 font-mono">
-              {CustodyDB.getSignupRequests().filter(r => r.status === 'Pending' || (r.status as any) === 'pending').length}
+              {CustodyDB.getSignupRequests().filter(r => {
+                const s = String(r.status || '').toLowerCase();
+                return s === 'pending';
+              }).length}
             </span>
             <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">
               {isRtl ? 'في انتظار الموافقة' : 'Pending'}
@@ -642,7 +739,10 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
 
       {/* Interactive Pending Signup Requests Banner/List for SuperAdmin */}
       {(() => {
-        const pendingReqs = CustodyDB.getSignupRequests().filter(r => r.status === 'Pending' || (r.status as any) === 'pending');
+        const pendingReqs = CustodyDB.getSignupRequests().filter(r => {
+          const s = String(r.status || '').toLowerCase();
+          return s === 'pending';
+        });
         if (pendingReqs.length === 0) return null;
         return (
           <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 space-y-3">

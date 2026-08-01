@@ -2395,9 +2395,43 @@ Mechanically extracted the Purchase Requests tab (`activeTab === 'requests'`) fr
 **Test & Validation Result:**
 Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passed, 196/196 tests passed) and applet compilation (`compile_applet` -> build succeeded cleanly with 0 TypeScript errors).
 
+---
 
+## Bug Fixes: Login Access Denied + Intermittent Wrong Password + Signup Approval Persistence
+**Date/Time:** 2026-08-01 20:25:00 UTC
+**Files Changed:**
+- `src/App.tsx`
+- `server.ts`
+- `src/pages/Login.tsx`
+- `src/pages/SuperAdmin.tsx`
+- `src/db/users.ts`
+- `CHANGELOG.md`
 
+**Summary:**
+1. **FIX 1 (`src/App.tsx`) — SystemAdmin Access Gating & Redirection:**
+   - Softened global `renderPage` gate: platform tabs (`super-admin`, `audit-log`, `settings`, `search`) and users with role `SystemAdmin` (not impersonating) are never blocked by `ModulesModule.isScreenEnabledForCompany`.
+   - Added automatic redirect from operational tabs to `super-admin` for pure SystemAdmin accounts so they never land on Access Denied.
+   - Hardened `handleLoginSuccess` to synchronously set `currentTab` (`super-admin` for `SystemAdmin`, `company-admin` for `Admin`, `region-admin` for `RegionalManager`, `reconciliation` for others) before first render and persist `custody_last_home_tab` to `localStorage`.
+   - Updated `currentTab` initial state initializer to prioritize stored role home tab or `custody_last_home_tab`.
+   - Fixed `renderAccessDenied` button to route each role to its correct home tab.
 
+2. **FIX 2 (`server.ts` & `src/pages/Login.tsx`) — Auto-Upgrade & Server Auth:**
+   - In `server.ts` (`/api/auth/verify-credentials`), never abort PBKDF2 credential auto-upgrade with 422 when `company_id` is missing for platform admin accounts (`userData.company_id || (isPlatformAdmin ? 'platform' : '')`).
+   - In `src/pages/Login.tsx`, added explicit server rejection check after `authRes.json()` so `authData.success === false && authData.message` immediately halts login with the server error message instead of falling back to local hash verification.
+
+3. **FIX 3 (`src/pages/SuperAdmin.tsx` & `src/db/users.ts`) — Signup Request Approval & Deletion Persistence:**
+   - In `src/pages/SuperAdmin.tsx`, updated `handleApproveSignupRequest` to prevent duplicate approvals, persist credentials to the zero-trust server vault via `/api/auth/save-credentials` (`salt: emailLower`), hard-delete the request (`await CustodyDB.deleteSignupRequest(req.id)`), and mark status `Approved` locally as a safety fallback.
+   - Updated Pending signup requests counters and banners (`lines ~634, ~645`) to strictly filter by `r.status === 'pending'` (case-insensitive).
+   - In `src/db/users.ts` (`deleteSignupRequest`), immediately removed the request from local storage (`signup_requests`) and added one retry attempt for `syncWriteWithOfflineFallback('signup_requests', id, null)`.
+
+**Test & Validation Result:**
+Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passed, 196/196 tests passed) and applet compilation (`compile_applet` -> build succeeded cleanly with 0 TypeScript errors).
+
+---
+
+## TEMPORARY — Auth Bypass (No Login)
+**Date:** 2026-08-01
+**Summary:** Disabled all login screens, password verification, and legacy hash migration paths. App boots directly as a local SystemAdmin DEV user (`dev-bypass-user`). Controlled by `AUTH_BYPASS_ENABLED` in `src/App.tsx` and `AUTH_BYPASS` on the server. This is reversible; real auth will be rebuilt later after wiping all accounts.
 
 
 
