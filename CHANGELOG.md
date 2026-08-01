@@ -2302,6 +2302,25 @@ Mechanically extracted the Documents tab (`activeTab === 'documents'`) from `src
 **Test & Validation Result:**
 Pass - Executed automated test suite (`npm test -- --run` -> 196/196 tests passing across 31 test suites) and applet compilation (`compile_applet` -> build succeeded cleanly).
 
+---
+
+## UI Refactoring: Mechanical Extraction of Inventory Reports Tab
+**Date/Time:** 2026-08-01 18:04:30 UTC
+**Files Changed:**
+- `src/components/inventory/InventoryReportsTab.tsx` (Created)
+- `src/pages/Inventory.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+Mechanically extracted the Reports tab (`activeTab === 'reports'`) from `src/pages/Inventory.tsx` into a standalone modular component `src/components/inventory/InventoryReportsTab.tsx` without any change in logic, behavior, conditions, Arabic/English copy, or styling.
+- Created `InventoryReportsTab` with `InventoryReportsTabProps` interface matching all 18 external variables, functions, state setters, and report datasets used by the tab.
+- Exported `ReportType` from `src/pages/Inventory.tsx` and imported `InventoryReportsTab`.
+- Replaced the original 445-line JSX block in `src/pages/Inventory.tsx` with `<InventoryReportsTab {...props} />`.
+
+**Test & Validation Result:**
+Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passed, 196/196 tests passed) and applet compilation (`compile_applet` -> build succeeded cleanly with 0 TypeScript errors).
+
+
 
 
 
