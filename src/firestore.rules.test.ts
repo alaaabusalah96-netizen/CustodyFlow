@@ -3,23 +3,35 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Phase 3.1: Firestore Security Rules Automated Verification Suite
+ * Phase 3.1: Firestore Security Rules — Logic-Parity & Structural Checks (NOT full behavioral coverage)
  *
- * This test suite validates the security policies defined in `/firestore.rules` for Kemit ERP (CustodyFlow):
- * 1. Zero-Trust Private Authentication Vault (`/user_credentials/{id}`):
- *    - Asserts direct client SDK read/write is unconditionally denied (`allow read, write: if false;`).
- * 2. Cross-Tenant Isolation (`isSameCompanyRead` & `isSameCompanyWrite`):
- *    - Asserts Company A users cannot access or modify Company B records (`company_id`).
- *    - Asserts SystemAdmin users can inspect across companies for support/audit.
- * 3. Organization Unit Scoping (`isOrgScopedRead` & `isOrgScopedWrite`):
- *    - Asserts standard users restricted to their assigned `org_unit_id` cannot access sibling warehouse/department records.
- *    - Asserts CompanyAdmin users retain company-wide access across departments.
- * 4. Self-Update Privilege Escalation Defense (`isUserSelfUpdateSafe`):
- *    - Asserts users cannot mutate sensitive identity/role attributes (`role`, `company_id`, `permissions`, `is_platform_owner`).
+ * IMPORTANT LIMITATION — READ BEFORE TRUSTING THIS SUITE AS "RULES ARE TESTED":
+ * The permission logic below (evaluateCompanyRead, evaluateOrgScopedWrite, etc.) is a MANUAL
+ * TypeScript REIMPLEMENTATION of the intended /firestore.rules behavior. It is NOT an AST parser
+ * and does NOT execute the real Firestore Rules engine. These tests verify that the reimplemented
+ * TypeScript logic is internally consistent with itself and with the documented intent — they do
+ * NOT verify that the actual firestore.rules file enforces that behavior at runtime.
  *
- * NOTE ON ENVIRONMENT EXECUTION MODE:
- * - When Java and the Firebase Firestore Emulator are active locally, this suite can integrate with `@firebase/rules-unit-testing`.
- * - In CI / container environments without Java, this suite evaluates the rules syntax and security invariants against an AST policy validator to guarantee deterministic test execution without container runtime dependencies.
+ * Concretely: if a future edit to firestore.rules introduces a bug (e.g. changes `==` to `!=` in
+ * a security condition), this suite will very likely still pass, because it never reads that
+ * condition's runtime behavior — it only string-matches for the presence of function names
+ * (see "Rules Structure" describe block below) and independently re-implements the expected logic.
+ *
+ * WHAT THIS SUITE DOES COVER:
+ * - Structural presence of required security helper functions in the raw rules text.
+ * - Internal consistency of the intended security model (company isolation, org-unit scoping,
+ *   self-update privilege escalation defense) as a specification / regression-guard for the
+ *   TypeScript reimplementation itself.
+ *
+ * WHAT THIS SUITE DOES NOT COVER:
+ * - Actual runtime evaluation of firestore.rules by the Firestore Rules engine.
+ * - Any guarantee that firestore.rules matches this reimplementation today or after future edits.
+ *
+ * TO GET REAL BEHAVIORAL COVERAGE:
+ * Integrate `@firebase/rules-unit-testing` against a live Firestore Emulator (requires Java in the
+ * execution environment) and replace/augment the mock evaluator calls below with actual
+ * `assertSucceeds` / `assertFails` calls against `initializeTestEnvironment()`. This is tracked as
+ * the follow-up task for Phase 3.1 completion.
  */
 
 interface MockAuthContext {

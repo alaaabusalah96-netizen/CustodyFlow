@@ -2285,6 +2285,23 @@ Pass - Executed `npm test -- src/legacy_hash_deprecation.test.ts --run` (7/7 tes
 **Test & Validation Result:**
 Pass - Executed `lint_applet` (0 errors) and `compile_applet` (production build succeeded cleanly).
 
+---
+
+## UI Refactoring: Mechanical Extraction of Inventory Documents Tab
+**Date/Time:** 2026-08-01 17:44:00 UTC
+**Files Changed:**
+- `src/components/inventory/InventoryDocumentsTab.tsx` (Created)
+- `src/pages/Inventory.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+Mechanically extracted the Documents tab (`activeTab === 'documents'`) from `src/pages/Inventory.tsx` into a standalone modular component `src/components/inventory/InventoryDocumentsTab.tsx` without any change in logic, behavior, conditions, Arabic/English copy, or styling.
+- Created `InventoryDocumentsTab` with `InventoryDocumentsTabProps` interface matching all 26 external variables, functions, and state setters used by the tab.
+- Replaced the original 440-line JSX block in `src/pages/Inventory.tsx` with `<InventoryDocumentsTab {...props} />` and imported the new component.
+
+**Test & Validation Result:**
+Pass - Executed automated test suite (`npm test -- --run` -> 196/196 tests passing across 31 test suites) and applet compilation (`compile_applet` -> build succeeded cleanly).
+
 
 
 
