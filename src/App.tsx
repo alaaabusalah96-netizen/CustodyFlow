@@ -64,7 +64,7 @@ export default function App() {
     } catch {
       // ignore
     }
-    return 'reports';
+    return 'reconciliation';
   });
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const [language, setLanguage] = useState<Language>('ar');

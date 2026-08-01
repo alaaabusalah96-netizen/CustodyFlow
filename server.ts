@@ -465,9 +465,22 @@ async function startServer() {
         settle_voucher: (isAdminRole || isSystemAdminRole) ? false : (currentPerms.settle_voucher ?? (isSystemAdminRole || isStationRole)),
       };
 
+      let customToken: string | null = null;
+      try {
+        const adminAuth = getAdminAuth(getAdminApp());
+        customToken = await adminAuth.createCustomToken(userId);
+      } catch (tokenErr: any) {
+        console.warn(
+          "[verify-credentials] createCustomToken failed; continuing without customToken:",
+          tokenErr?.message || tokenErr
+        );
+        customToken = null;
+      }
+
       return res.json({
         success: true,
-        user: publicUser
+        user: publicUser,
+        customToken
       });
     } catch (err: any) {
       console.error("Error in verify-credentials endpoint:", err);

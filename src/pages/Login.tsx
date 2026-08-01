@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { CustodyDB } from '../db';
 import { translations, Language, Theme, AppUser, UserRole, SignupRequest, AccountCorrectionRequest } from '../types';
 import { auth, dbDeleteDoc } from '../firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithCustomToken } from 'firebase/auth';
 import { Coins, ShieldAlert, User, Lock, ArrowRight, Languages, UserPlus, LogIn, CheckCircle2, Building, Mail, KeyRound, RefreshCw, ExternalLink, Inbox, UserCog } from 'lucide-react';
 import SMTPConfigModal from '../components/SMTPConfigModal';
 import kemitLogo from '../assets/images/kemit_logo_1784280480891.jpg';
@@ -402,10 +402,17 @@ export default function Login({
       if (authData.success && authData.user) {
         let authenticatedUser = authData.user as AppUser;
 
-        // Sync with Firebase Authentication
-        const firebaseUser = password ? await syncWithFirebaseAuth(emailLower, password) : null;
-        if (firebaseUser) {
-          authenticatedUser = { ...authenticatedUser, id: firebaseUser.uid };
+        // Prefer server-issued Firebase custom token (password already verified server-side).
+        // Do NOT call syncWithFirebaseAuth on this successful server path.
+        if (authData.customToken) {
+          try {
+            await signInWithCustomToken(auth, authData.customToken);
+          } catch (tokenSignInErr: any) {
+            console.warn(
+              '[Login] signInWithCustomToken failed after successful server verify; continuing with app session only:',
+              tokenSignInErr?.code || tokenSignInErr?.message || tokenSignInErr
+            );
+          }
         }
 
         CustodyDB.upsertLocalUser(authenticatedUser);

@@ -1922,6 +1922,39 @@ Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded clea
 **Test & Validation Result:**
 Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded cleanly), and full unit test suite `npm test -- --run` (156/156 tests passing across 26 test files).
 
+---
+
+## v61-change-default-tab-fallback: Change Default Tab Fallback from Reports to Reconciliation
+**Date/Time:** 2026-08-01 01:52:00 UTC
+**Files Changed:**
+- `src/App.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+- In `src/App.tsx`, updated the `currentTab` useState initializer's fallback return value from `'reports'` to `'reconciliation'`.
+- Left all role-based conditional tab selections (`'super-admin'`, `'company-admin'`, `'region-admin'`, `'reconciliation'`) above the fallback untouched.
+
+**Test & Validation Result:**
+Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded cleanly), and full unit test suite `npm test -- --run` (156/156 tests passing across 26 test files).
+
+---
+
+## v62-custom-token-after-verify-credentials: Issue Firebase Custom Token After Successful verify-credentials
+**Date/Time:** 2026-08-01 01:58:00 UTC
+**Files Changed:**
+- `server.ts`
+- `src/pages/Login.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+- In `server.ts`, inside the `verify-credentials` success path, added custom token generation via `getAdminAuth(getAdminApp()).createCustomToken(userId)` wrapped in a try/catch. If generation fails, it logs a warning and returns `customToken: null` alongside `success: true` and `user`.
+- In `src/pages/Login.tsx`, added `signInWithCustomToken` to the `'firebase/auth'` imports.
+- In `src/pages/Login.tsx`, replaced the `syncWithFirebaseAuth` call on the successful server authentication path (`if (authData.success && authData.user)`) with a try/catch block attempting `signInWithCustomToken(auth, authData.customToken)` when `authData.customToken` is present, leaving offline fallback and existing `syncWithFirebaseAuth` logic untouched.
+
+**Test & Validation Result:**
+Pass - Executed `lint_applet` (0 errors), `compile_applet` (build succeeded cleanly), and full unit test suite `npm test -- --run` (156/156 tests passing across 26 test files).
+
+
 
 
 
