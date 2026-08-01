@@ -83,6 +83,7 @@ describe('Phase 13: Purchasing Module Organization Unit Migration & Integration'
 
     // 4. Setup Product
     testProduct = InventoryModule.addProduct({
+      company_id: companyId,
       code: 'PRD-RAW-01',
       name: 'مواد خام بلاستيك',
       unit: 'كجم',

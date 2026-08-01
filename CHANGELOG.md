@@ -2224,6 +2224,70 @@ Pass - Executed `npm test -- --run` (173/173 tests passing across 29 test files)
 **Test & Validation Result:**
 Pass - Executed `npm test -- --run` (173/173 tests passing across 29 test files) and `compile_applet` (build succeeded cleanly).
 
+---
+
+## v74-firestore-security-rules-test-suite: Automated Security Verification Suite for Firestore Rules (Phase 3.1)
+**Date/Time:** 2026-08-01 16:32:00 UTC
+**Files Changed:**
+- `package.json` / `package-lock.json`
+- `src/firestore.rules.test.ts` (new)
+- `CHANGELOG.md`
+
+**Summary:**
+- Added `@firebase/rules-unit-testing` as a devDependency.
+- Implemented `src/firestore.rules.test.ts` to automatically verify the security policies defined in `/firestore.rules` (including `rules_version = '2';`, collections `user_credentials`, `companies`, `users`, `inventory`, `stock_movements`, `journal_entries`, and helper functions `isSameCompanyRead`, `isSameCompanyWrite`, `isOrgScopedRead`, `isOrgScopedWrite`, `isUserSelfUpdateSafe`).
+- Validated Zero-Trust Private Authentication Vault rules (`/user_credentials/{id}` is unconditionally denied for anonymous, standard, and admin client SDK reads/writes).
+- Validated Multi-Tenant isolation across companies and Organization Unit scoping within departments.
+- Validated Self-Update privilege escalation defenses (preventing users from mutating `role`, `company_id`, `permissions`, or `is_platform_owner`).
+- Verified that all 189 tests across 30 test files pass cleanly (`npm test -- --run`) and production build compiles without errors (`compile_applet`).
+
+**Test & Validation Result:**
+Pass - Executed `npm test -- --run` (189/189 tests passing across 30 test files) and `compile_applet` (build succeeded cleanly).
+
+---
+
+### [Phase 4.1 - Part 2] Legacy Password Hash Deprecation & Sunset Enforcement Policy
+**Date:** 2026-08-01  
+**Summary:** Defined and implemented the Phase 4.1 Legacy Password Hash Deprecation & Sunset Policy (`getLegacyHashDeprecationPolicy()`), deprecating SHA-256 legacy hash functions (`legacyHashPassword`, `legacySinglePassHashPassword`, `legacyStretchedHashPassword1000`) with announcement date `2026-08-01` and sunset date `2027-02-01`. Added sunset enforcement in login authentication (`/api/auth/login`) returning HTTP `426 Upgrade Required` (`LEGACY_HASH_SUNSET_EXPIRED`) with bilingual Forgot Password OTP guidance when `ENFORCE_LEGACY_HASH_SUNSET="true"`. Updated `/api/auth/hash-migration-status` endpoint to expose policy dates and status.
+
+**Files Changed:**
+- `src/lib/server_hash.ts` (added `LegacyHashDeprecationPolicy` interface, `getLegacyHashDeprecationPolicy()`, and `@deprecated` annotations with sunset date guidance)
+- `src/lib/hash.ts` (added `@deprecated` JSDoc annotations to legacy hash functions)
+- `server.ts` (integrated sunset enforcement check in `/api/auth/login` and policy reporting in `/api/auth/hash-migration-status`)
+- `src/legacy_hash_deprecation.test.ts` (added 7 comprehensive unit tests verifying policy metadata, grace period auto-migration mode, sunset enforcement rejection, and PBKDF2 authentication)
+
+**Test & Validation Result:**
+Pass - Executed `npm test -- src/legacy_hash_deprecation.test.ts --run` (7/7 tests passed) and full application build `compile_applet` (build succeeded cleanly).
+
+---
+
+### [Phase 4.1 - Part 3] System Admin Security & Encryption Audit UI (Hash Migration & Sunset Policy Portal)
+**Date:** 2026-08-01  
+**Summary:** Built the modular `SuperAdminSecurityTab` (`/src/components/SuperAdminSecurityTab.tsx`) and integrated it into the Super Admin portal (`/src/pages/SuperAdmin.tsx`) under a new Security & Encryption tab (`activeSubTab === 'security'`). The tab connects to `/api/auth/hash-migration-status` to display real-time PBKDF2 (210,000 iterations) migration progress, legacy SHA-256 account counts, sunset policy timeline cards (Announcement: `2026-08-01`, Sunset: `2027-02-01`), plain business-language explanations in Arabic and English, and a paginated table of user credential encryption formats.
+
+**Files Changed:**
+- `src/components/SuperAdminSecurityTab.tsx` (new component for monitoring PBKDF2 migration progress and sunset timeline)
+- `src/pages/SuperAdmin.tsx` (integrated `SuperAdminSecurityTab` into navigation tabs and tab renderer)
+- `CHANGELOG.md` (recorded Phase 4.1 Part 3 entry)
+
+### [UI Refactoring & Modularization] Super Admin Operations Tab Modularization
+**Date:** 2026-08-01  
+**Summary:** Extracted the Internal Operations & Financial Audit Ledger tab out of the monolithic `/src/pages/SuperAdmin.tsx` into a standalone, clean, modular component `/src/components/SuperAdminOperationsTab.tsx`. Implemented full multi-tenant filtering (company, region, station, status, search), operation editing (expenses and custody replenishments), and irreversible operation deletion with auditable reasons and real-time balance restoration. Updated pagination toolbar prop types (`isRtl`, `totalPages`) for full RTL/LTR support.
+
+**Files Changed:**
+- `src/components/SuperAdminOperationsTab.tsx` (created standalone operations management component)
+- `src/pages/SuperAdmin.tsx` (imported and rendered `<SuperAdminOperationsTab />`, removing duplicate monolithic modal/table code)
+- `src/components/PaginationToolbar.tsx` (added `isRtl` optional prop to `PaginationToolbarProps`)
+- `src/components/SuperAdminSecurityTab.tsx` (passed `totalPages` prop to `PaginationToolbar`)
+- `src/purchasing_migration.test.ts` (added required `company_id` field to product unit test setup)
+- `CHANGELOG.md` (recorded UI refactoring entry)
+
+**Test & Validation Result:**
+Pass - Executed `lint_applet` (0 errors) and `compile_applet` (production build succeeded cleanly).
+
+
+
+
 
 
 

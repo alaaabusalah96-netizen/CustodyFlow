@@ -140,7 +140,54 @@ export function hashPassword(password: string, salt: string = '', pepperVersion:
   return currentHash;
 }
 
+export interface LegacyHashDeprecationPolicy {
+  announcementDate: string;
+  sunsetDate: string;
+  deprecatedHashFunctions: string[];
+  deprecatedPepperVersions: number[];
+  targetAlgorithm: string;
+  targetPepperVersion: number;
+  enforceSunset: boolean;
+  gracePeriodActive: boolean;
+  messageAr: string;
+  messageEn: string;
+}
+
 /**
+ * Returns the official Kemit ERP (CustodyFlow) Phase 4.1 Legacy Password Hash Deprecation & Removal Policy.
+ * - During the grace period (announcementDate until sunsetDate, or when ENFORCE_LEGACY_HASH_SUNSET != 'true'),
+ *   legacy SHA-256 hashes (legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000)
+ *   are accepted on login and automatically upgraded to PBKDF2 210,000 iterations (pepper_version: 2).
+ * - After sunsetDate or when ENFORCE_LEGACY_HASH_SUNSET is set to 'true', legacy hashes are rejected
+ *   and users are directed to reset their password via the Forgot Password OTP flow.
+ */
+export function getLegacyHashDeprecationPolicy(): LegacyHashDeprecationPolicy {
+  const enforceSunset = process.env.ENFORCE_LEGACY_HASH_SUNSET === 'true';
+  return {
+    announcementDate: '2026-08-01',
+    sunsetDate: '2027-02-01',
+    deprecatedHashFunctions: [
+      'legacyHashPassword',
+      'legacySinglePassHashPassword',
+      'legacyStretchedHashPassword1000'
+    ],
+    deprecatedPepperVersions: [1, 3],
+    targetAlgorithm: 'PBKDF2-HMAC-SHA256 (210,000 iterations)',
+    targetPepperVersion: 2,
+    enforceSunset,
+    gracePeriodActive: !enforceSunset,
+    messageAr: enforceSunset
+      ? 'انتهت صلاحية تشفير كلمة المرور القديم (SHA-256) بموجب سياسة أمان النظام. يرجى إعادة تعيين كلمة المرور عبر خيار نسيت كلمة المرور.'
+      : 'فترة الهجرة التلقائية نشطة: يتم تحديث الحسابات القديمة تلقائياً إلى تشفير PBKDF2 عند تسجيل الدخول الناجح.',
+    messageEn: enforceSunset
+      ? 'Legacy password encryption (SHA-256) has expired under system security policy. Please reset your password via Forgot Password.'
+      : 'Auto-migration grace period active: Legacy accounts are upgraded to PBKDF2 automatically upon successful login.'
+  };
+}
+
+/**
+ * @deprecated Since Phase 4.1 (2026-08-01). Will be removed after Sunset Date (2027-02-01).
+ * Accounts matching this format are automatically upgraded to PBKDF2 210,000 iterations upon login.
  * 1,000-pass stretched hash function used for smooth auto-migration of accounts hashed during v1 stretching.
  */
 export function legacyStretchedHashPassword1000(password: string, salt: string = '', pepperVersion: number = 2): string {
@@ -157,6 +204,8 @@ export function legacyStretchedHashPassword1000(password: string, salt: string =
 }
 
 /**
+ * @deprecated Since Phase 4.1 (2026-08-01). Will be removed after Sunset Date (2027-02-01).
+ * Accounts matching this format are automatically upgraded to PBKDF2 210,000 iterations upon login.
  * Pre-stretching hash function used for checking legacy accounts during login.
  */
 export function legacySinglePassHashPassword(password: string, salt: string = '', pepperVersion: number = 2): string {
@@ -169,6 +218,8 @@ export function legacySinglePassHashPassword(password: string, salt: string = ''
 }
 
 /**
+ * @deprecated Since Phase 4.1 (2026-08-01). Will be removed after Sunset Date (2027-02-01).
+ * Accounts matching this format are automatically upgraded to PBKDF2 210,000 iterations upon login.
  * Original legacy hash function for backward-compatibility checks and smooth password auto-migration.
  */
 export function legacyHashPassword(password: string, salt: string = ''): string {

@@ -21,7 +21,7 @@ import nodemailer from "nodemailer";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import { runTenantMigrationUp, runTenantMigrationDown } from "./src/migrations/tenantMigration";
-import { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, getPepperByVersion, hashPasswordPBKDF2_210k } from "./src/lib/server_hash";
+import { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, getPepperByVersion, hashPasswordPBKDF2_210k, getLegacyHashDeprecationPolicy } from "./src/lib/server_hash";
 
 const firebaseConfig = {
   projectId: "custodyflow",
@@ -426,6 +426,22 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "كلمة المرور غير صحيحة." });
       }
 
+      // Phase 4.1 Part 2: Evaluate Legacy Hash Deprecation & Sunset Enforcement Policy
+      const deprecationPolicy = getLegacyHashDeprecationPolicy();
+      const isLegacyOnlyMatch = !isPBKDF2Match && !is10kMatch && (is1kMatch || isSinglePassMatch || isOldEmailSaltMatch || isLegacyUnsaltedMatch || isPlainMatch || pepperVersion !== 2);
+      if (isLegacyOnlyMatch && deprecationPolicy.enforceSunset) {
+        return res.status(426).json({
+          success: false,
+          code: "LEGACY_HASH_SUNSET_EXPIRED",
+          messageAr: deprecationPolicy.messageAr,
+          messageEn: deprecationPolicy.messageEn,
+          message: deprecationPolicy.messageAr
+        });
+      }
+      if (isLegacyOnlyMatch) {
+        console.log(`[LegacyHashDeprecationPolicy] Grace period active (${deprecationPolicy.announcementDate} -> ${deprecationPolicy.sunsetDate}): Auto-migrating legacy password hash to PBKDF2 210,000 iterations for userId: ${userId}`);
+      }
+
       // 4. Auto-upgrade credential to PBKDF2 210,000 iterations & pepper_version: 2 in user_credentials vault
       if (!credDoc.exists || kdf !== 'sha256_pbkdf2_210k' || !isPBKDF2Match || pepperVersion !== 2) {
         if (!userData.company_id) {
@@ -713,6 +729,7 @@ async function startServer() {
         }
       });
 
+      const deprecationPolicy = getLegacyHashDeprecationPolicy();
       return res.json({
         success: true,
         totalCredentials: credsSnap.docs.length,
@@ -720,8 +737,9 @@ async function startServer() {
         transientV2Count,
         pbkdf2Count,
         details,
-        messageAr: `حالة التشفير: ${pbkdf2Count} حساب محدث (PBKDF2)، ${legacyCount + transientV2Count} حساب يحتاج هجرة تلقائية عند تسجيل الدخول.`,
-        messageEn: `Encryption status: ${pbkdf2Count} upgraded (PBKDF2), ${legacyCount + transientV2Count} pending auto-migration upon login.`
+        deprecationPolicy,
+        messageAr: `حالة التشفير: ${pbkdf2Count} حساب محدث (PBKDF2)، ${legacyCount + transientV2Count} حساب يحتاج هجرة تلقائية عند تسجيل الدخول. (انتهاء صلاحية التشفير القديم: ${deprecationPolicy.sunsetDate})`,
+        messageEn: `Encryption status: ${pbkdf2Count} upgraded (PBKDF2), ${legacyCount + transientV2Count} pending auto-migration upon login. (Legacy Sunset Date: ${deprecationPolicy.sunsetDate})`
       });
     } catch (err: any) {
       console.error("Error in hash-migration-status:", err);

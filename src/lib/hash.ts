@@ -93,6 +93,8 @@ export function hashPassword(password: string, salt: string = '', _pepperVersion
 }
 
 /**
+ * @deprecated Since Phase 4.1 (2026-08-01). Will be removed after Sunset Date (2027-02-01).
+ * Accounts matching this format are automatically upgraded to PBKDF2 210,000 iterations upon login.
  * 1,000-pass stretched hash function used for smooth auto-migration of accounts hashed during v1 stretching.
  */
 export function legacyStretchedHashPassword1000(password: string, salt: string = '', _pepperVersion: number = 2): string {
@@ -108,6 +110,8 @@ export function legacyStretchedHashPassword1000(password: string, salt: string =
 }
 
 /**
+ * @deprecated Since Phase 4.1 (2026-08-01). Will be removed after Sunset Date (2027-02-01).
+ * Accounts matching this format are automatically upgraded to PBKDF2 210,000 iterations upon login.
  * Pre-stretching hash function used for checking legacy accounts during login.
  */
 export function legacySinglePassHashPassword(password: string, salt: string = '', _pepperVersion: number = 2): string {
@@ -119,6 +123,8 @@ export function legacySinglePassHashPassword(password: string, salt: string = ''
 }
 
 /**
+ * @deprecated Since Phase 4.1 (2026-08-01). Will be removed after Sunset Date (2027-02-01).
+ * Accounts matching this format are automatically upgraded to PBKDF2 210,000 iterations upon login.
  * Original legacy hash function for backward-compatibility checks and smooth password auto-migration.
  */
 export function legacyHashPassword(password: string, salt: string = ''): string {

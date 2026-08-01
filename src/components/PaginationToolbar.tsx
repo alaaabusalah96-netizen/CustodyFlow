@@ -83,6 +83,7 @@ export interface PaginationToolbarProps {
   onPageSizeChange?: (pageSize: number) => void;
   pageSizeOptions?: number[];
   language?: Language;
+  isRtl?: boolean;
   theme?: Theme;
   className?: string;
 }
@@ -96,10 +97,11 @@ export const PaginationToolbar: React.FC<PaginationToolbarProps> = ({
   onPageSizeChange,
   pageSizeOptions = [10, 15, 20, 50, 100],
   language = 'ar',
+  isRtl: propIsRtl,
   theme = 'light',
   className = '',
 }) => {
-  const isRtl = language === 'ar';
+  const isRtl = propIsRtl !== undefined ? propIsRtl : language === 'ar';
 
   const startIndex = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const endIndex = Math.min(currentPage * pageSize, totalItems);
