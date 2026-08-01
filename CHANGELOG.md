@@ -2376,6 +2376,25 @@ Mechanically extracted the Vendors Directory & AP Ledger tab (`activeTab === 've
 **Test & Validation Result:**
 Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passed, 196/196 tests passed) and applet compilation (`compile_applet` -> build succeeded cleanly with 0 TypeScript errors).
 
+---
+
+## UI Refactoring: Mechanical Extraction of Purchasing Requests Tab
+**Date/Time:** 2026-08-01 19:31:00 UTC
+**Files Changed:**
+- `src/components/purchasing/PurchasingRequestsTab.tsx` (Created)
+- `src/pages/Purchasing.tsx`
+- `CHANGELOG.md`
+
+**Summary:**
+Mechanically extracted the Purchase Requests tab (`activeTab === 'requests'`) from `src/pages/Purchasing.tsx` into a standalone modular component `src/components/purchasing/PurchasingRequestsTab.tsx` without any change in logic, behavior, conditions, Arabic/English copy, or styling.
+- Created `PurchasingRequestsTab` with `PurchasingRequestsTabProps` interface matching exactly 11 external props: `isRtl`, `requests`, `orgUnits`, `setShowCreatePR`, `setPrintPR`, `handleRejectPR`, `handleApprovePR`, `setRfqSourcePrId`, `setShowCreateRFQ`, `setActiveTab`, and `handleConvertPRToPO`.
+- Kept conditional single quotes (`'requests'`) and all original formatting untouched.
+- Replaced the original JSX block in `src/pages/Purchasing.tsx` with `<PurchasingRequestsTab {...props} />` and imported `PurchasingRequestsTab`.
+- Verified no other tabs (`rfq`, `orders`, `vendors`, `config`) were modified.
+
+**Test & Validation Result:**
+Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passed, 196/196 tests passed) and applet compilation (`compile_applet` -> build succeeded cleanly with 0 TypeScript errors).
+
 
 
 
