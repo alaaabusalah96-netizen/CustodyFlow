@@ -928,8 +928,8 @@ export default function Settings({ language, theme }: SettingsProps) {
                 <form onSubmit={handleVerifyAdminEmailCode} className="space-y-4 text-xs">
                   <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-xl text-[11px] leading-relaxed">
                     {isRtl 
-                      ? 'تم توليد كود تحقق سري ومحاكاة إرساله إلى بريدك alaaabusalah96@gmail.com بنجاح! يرجى نسخ الرمز المعروض بالأسفل وإدخاله هنا.' 
-                      : 'Security verification code has been dispatched to alaaabusalah96@gmail.com. Please copy the code below.'
+                      ? `تم توليد كود تحقق سري ومحاكاة إرساله إلى بريدك ${currentUser.email || 'user@domain.com'} بنجاح! يرجى نسخ الرمز المعروض بالأسفل وإدخاله هنا.` 
+                      : `Security verification code has been dispatched to ${currentUser.email || 'user@domain.com'}. Please copy the code below.`
                     }
                   </div>
 
@@ -1002,7 +1002,7 @@ export default function Settings({ language, theme }: SettingsProps) {
                 <div className="mt-4 p-3 rounded-xl border border-indigo-500/20 bg-slate-900/90 text-slate-300 text-[11px] leading-relaxed">
                   <div className="flex items-center gap-1.5 text-indigo-400 font-bold border-b border-slate-800 pb-1.5 mb-1.5 uppercase tracking-wider text-[9px]">
                     <Inbox size={12} />
-                    <span>{isRtl ? 'علبة الوارد الافتراضية لأدمن المنصة' : 'Virtual Mail Inbox (alaaabusalah96@gmail.com)'}</span>
+                    <span>{isRtl ? 'علبة الوارد الافتراضية للمنصة' : `Virtual Mail Inbox (${currentUser.email || 'user@domain.com'})`}</span>
                   </div>
                   <p className="text-slate-200 font-bold">{isRtl ? '🔐 رمز الأمان السري لإعادة تعيين كلمة مرور KEMIT ERP' : '🔐 KEMIT ERP Security OTP'}</p>
                   <p className="mt-1 text-slate-400">{isRtl ? 'الرمز المؤقت لتحديث حسابك بالكامل هو:' : 'Your master account OTP token is:'}</p>
