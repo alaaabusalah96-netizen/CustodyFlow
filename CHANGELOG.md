@@ -4,6 +4,16 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## TEMPORARY — Dead Auth Path Cleanup
+**Date:** 2026-08-02
+**Summary:**
+- Stripped Login.tsx bootstrap / signup / password-reset / correction UI; under AUTH_BYPASS only spinner + auto DEV session.
+- Removed server routes: reset-password/*, bootstrap-platform-owner, related OTP recovery endpoints.
+- Removed hardcoded admin@kemit-erp.com and default password 123456 injection from users.ts.
+- AUTH_BYPASS, DEV user, and /api/dev/wipe-auth-data unchanged. Professional auth deferred.
+
+---
+
 ## TEMPORARY — SMTP Removal + Legacy Accounts Wipe
 **Date:** 2026-08-02
 **Summary:**

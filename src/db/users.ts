@@ -19,8 +19,8 @@ export class UsersModule {
 
     const envOwner = (typeof process !== 'undefined' && process.env && process.env.PLATFORM_OWNER_EMAIL)
       ? process.env.PLATFORM_OWNER_EMAIL.toLowerCase().trim()
-      : 'admin@kemit-erp.com';
-    if (cleaned === envOwner) {
+      : '';
+    if (envOwner && cleaned === envOwner) {
       return true;
     }
 
@@ -99,11 +99,7 @@ export class UsersModule {
       const role = isPlatformAdminEmail ? ('SystemAdmin' as const) : u.role;
       const is_active = isPlatformAdminEmail ? true : (u.is_active ?? true);
       const is_platform_owner = isPlatformAdminEmail ? true : (u.is_platform_owner ?? false);
-      const bypassAuth = typeof window !== 'undefined' && (window as any).__AUTH_BYPASS__ === true;
-      const allowDefaultAdminPassword = !bypassAuth && (process.env.STRICT_PROD_SECURITY !== 'true' || (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.DEV));
-      const password = bypassAuth ? '' : ((isPlatformAdminEmail && (!u.password || u.password.trim() === ''))
-        ? (allowDefaultAdminPassword ? '123456' : '')
-        : u.password);
+      const password = u.password || '';
       
       const currentRole = u.role;
       const currentIsActive = u.is_active ?? true;

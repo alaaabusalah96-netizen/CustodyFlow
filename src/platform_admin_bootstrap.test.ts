@@ -2,38 +2,38 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('Phase 18: Zero-Lockout Dedicated Platform Owner Bootstrap & PBKDF2 210,000 Single-Use Lock', () => {
+describe('Dead-Auth Cleanup & AUTH_BYPASS Verification', () => {
   const serverCode = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf-8');
   const loginCode = fs.readFileSync(path.join(process.cwd(), 'src/pages/Login.tsx'), 'utf-8');
 
-  it('1. server.ts provides single-use bootstrap-status and bootstrap-platform-owner endpoints', () => {
-    expect(serverCode).toContain('/api/auth/bootstrap-platform-owner');
-    expect(serverCode).toContain('/api/auth/bootstrap-status');
-    expect(serverCode).toContain('isPlatformAdminBootstrapped()');
-    expect(serverCode).toContain('system_config');
-    expect(serverCode).toContain('bootstrapped: true');
+  it('1. server.ts no longer contains legacy bootstrap or reset-password endpoints', () => {
+    expect(serverCode).not.toContain('/api/auth/bootstrap-platform-owner');
+    expect(serverCode).not.toContain('/api/auth/bootstrap-status');
+    expect(serverCode).not.toContain('/api/auth/reset-password/request');
+    expect(serverCode).not.toContain('/api/auth/reset-password/verify');
+    expect(serverCode).not.toContain('/api/auth/reset-password/confirm');
   });
 
-  it('2. server.ts enforces single-use lock by rejecting bootstrap requests if already bootstrapped', () => {
-    expect(serverCode).toContain('تم إعداد مشرف المنصة مسبقاً (Already Bootstrapped)');
-    expect(serverCode).toContain('res.status(403)');
+  it('2. server.ts provides /api/dev/wipe-auth-data endpoint for cleaning legacy auth collections', () => {
+    expect(serverCode).toContain('/api/dev/wipe-auth-data');
+    expect(serverCode).toContain('X-Wipe-Token');
+    expect(serverCode).toContain('WIPE_AUTH_DATA');
   });
 
-  it('3. server.ts hashes platform admin password with authoritative PBKDF2 210,000 stretching and stores in user_credentials vault', () => {
-    expect(serverCode).toContain('hashPasswordPBKDF2_210k(password, userSalt, 2)');
-    expect(serverCode).toContain("kdf: 'sha256_pbkdf2_210k'");
-    expect(serverCode).toContain('user_credentials');
+  it('3. Login.tsx supports minimal AUTH_BYPASS spinner and dev user session', () => {
+    expect(loginCode).toContain('__AUTH_BYPASS__');
+    expect(loginCode).toContain('dev-bypass-user');
+    expect(loginCode).toContain('animate-spin');
   });
 
-  it('4. Login.tsx displays zero-lockout bootstrap banner when bootstrapStatus === false', () => {
-    expect(loginCode).toContain('Zero-Lockout Platform Owner Bootstrap Available');
-    expect(loginCode).toContain('إعداد حساب مشرف المنصة لأول مرة (Platform Owner Bootstrap)');
-    expect(loginCode).toContain('handleBootstrapPlatformOwner');
+  it('4. Login.tsx shows neutral rebuild message when bypass is not active', () => {
+    expect(loginCode).toContain('نظام الدخول قيد إعادة البناء');
+    expect(loginCode).toContain('Auth will be rebuilt later');
   });
 
-  it('5. Login.tsx provides form for setting SystemAdmin email and confirming password securely', () => {
-    expect(loginCode).toContain('Platform Owner Email');
-    expect(loginCode).toContain('bootstrapConfirmPassword');
-    expect(loginCode).toContain('كلمات المرور غير متطابقة.');
+  it('5. Login.tsx does not contain legacy bootstrap or signup forms', () => {
+    expect(loginCode).not.toContain('bootstrapEmail');
+    expect(loginCode).not.toContain('isRegisterMode');
+    expect(loginCode).not.toContain('isResetMode');
   });
 });
