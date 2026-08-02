@@ -198,29 +198,32 @@ export async function seedDatabaseIfEmpty(defaults: {
     }
 
     if (!alreadySeededV7) {
-      console.log('Force-clearing old database and seeding v7...');
-
-      const collectionsToClear = [
-        'companies', 'regions', 'stations', 'users', 'transactions', 'logs',
-        'Expenses', 'CashVouchers', 'TransactionHistory', 'Notifications', 
-        'AuditLogs', 'Permissions', 'Roles', 'deleted_transactions', 'company_sequences',
-        'organization_units'
-      ];
-
-      for (const colName of collectionsToClear) {
-        try {
-          const snap = await getDocs(collection(db, colName));
-          if (!snap.empty) {
-            const batch = writeBatch(db);
-            snap.docs.forEach(d => {
-              batch.delete(doc(db, colName, d.id));
-            });
-            await batch.commit();
-          }
-        } catch (err) {
-          console.error(`Error clearing collection ${colName}:`, err);
+      // Check if database already has companies or users
+      let hasExistingData = false;
+      try {
+        const companiesSnap = await getDocs(query(collection(db, 'companies'), limit(1)));
+        const usersSnap = await getDocs(query(collection(db, 'users'), limit(1)));
+        if (!companiesSnap.empty || !usersSnap.empty) {
+          hasExistingData = true;
         }
+      } catch (err) {
+        console.log('Skipping seed check due to permissions/offline:', err);
+        return;
       }
+
+      if (hasExistingData) {
+        console.log('Database already contains data. Marking v7 status without overwriting existing records.');
+        try {
+          const finalBatch = writeBatch(db);
+          finalBatch.set(doc(db, 'system_meta', 'seed_status_v7'), { seeded: true, timestamp: new Date().toISOString() });
+          await finalBatch.commit();
+        } catch (e) {
+          console.warn('Could not write seed_status_v7 doc:', e);
+        }
+        return;
+      }
+
+      console.log('Database is empty. Seeding initial v7 defaults...');
 
       // First batch for primary seed data
       const batch = writeBatch(db);

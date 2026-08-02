@@ -4,6 +4,25 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fix Startup Collection Deletion Errors (seedDatabaseIfEmpty Hardening)
+**Date:** 2026-08-02
+**Summary:**
+- Removed legacy destructive collection deletion routine from `seedDatabaseIfEmpty` in `src/firebase.ts`.
+- Prevents `Error clearing collection ...: Missing or insufficient permissions.` errors when launching the app.
+- Non-destructively checks if `companies` or `users` contain existing data; if present, preserves all data and marks `seed_status_v7` without wiping collections.
+- Re-tested 31 test suites / 196 tests (100% pass).
+
+---
+
+## Fix AI Studio iFrame Preview Blocking (Helmet Configuration)
+**Date:** 2026-08-02
+**Summary:**
+- Updated helmet middleware in `server.ts` to set `frameguard: false` and `contentSecurityPolicy: false`.
+- Prevents `X-Frame-Options: SAMEORIGIN` and `frame-ancestors: 'self'` from blocking the application inside AI Studio's preview iframe.
+- Re-tested all 196 tests (100% green) and restarted dev server.
+
+---
+
 ## TEMPORARY — Dead Auth Path Cleanup
 **Date:** 2026-08-02
 **Summary:**

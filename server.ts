@@ -100,17 +100,8 @@ import helmet from "helmet";
 async function startServer() {
   const app = express();
   app.use(helmet({
-    contentSecurityPolicy: {
-      useDefaults: true,
-      directives: {
-        // Permissive مبدئيًا للسماح لأصول الواجهة الحالية (Vite/inline scripts أثناء dev) بالعمل من غير كسر —
-        // هيتم تشديدها تدريجيًا لاحقًا بعد مراجعة كل الـ external assets. راجع docs/production-checklist.md
-        "script-src": ["'self'", "'unsafe-inline'"],
-        "style-src": ["'self'", "'unsafe-inline'"],
-        "img-src": ["'self'", "data:", "https:"],
-        "connect-src": ["'self'", "https:"]
-      }
-    },
+    contentSecurityPolicy: false, // Allow AI Studio iframe preview and Vite development inline/eval scripts
+    frameguard: false, // Allow embedding in AI Studio preview iframe
     crossOriginEmbedderPolicy: false
   }));
   const PORT = 3000;
