@@ -238,15 +238,18 @@ async function startServer() {
   });
 
 
+  const isAIStudioPreview = process.env.K_SERVICE?.startsWith('ais-') || Boolean(process.env.NG_ALLOWED_HOSTS);
+  if (process.env.NODE_ENV === 'production' && !isAIStudioPreview && (process.env.AUTH_BYPASS === 'true' || process.env.AUTH_BYPASS === '1')) {
+    throw new Error("CRITICAL: AUTH_BYPASS is enabled in a production environment. Refusing to start.");
+  }
+
   // API Route - Server-side Credential Verification (Zero-Trust PBKDF2 210k)
   app.post("/api/auth/verify-credentials", otpRateLimiter, async (req, res) => {
     try {
       // TEMP AUTH BYPASS — accept any credentials and return a fixed platform user.
-      // Controlled by env AUTH_BYPASS=true (default true in non-production for this temporary phase).
       const authBypass =
         process.env.AUTH_BYPASS === 'true' ||
-        process.env.AUTH_BYPASS === '1' ||
-        (process.env.NODE_ENV !== 'production' && process.env.AUTH_BYPASS !== 'false');
+        process.env.AUTH_BYPASS === '1';
 
       if (authBypass) {
         return res.json({

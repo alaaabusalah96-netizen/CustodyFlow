@@ -4,6 +4,26 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Surgical Fix: Server-Side AUTH_BYPASS Production Fail-Fast Guard
+**Date:** 2026-08-03
+**Files Changed:** `server.ts`, `.env.example`, `CHANGELOG.md`
+**Summary:**
+- Added a Fail-Fast check directly above `/api/auth/verify-credentials` in `server.ts` that throws `"CRITICAL: AUTH_BYPASS is enabled in a production environment. Refusing to start."` if `NODE_ENV === 'production'` and `AUTH_BYPASS` is set to `'true'` or `'1'`.
+- Restricted `authBypass` condition in `/api/auth/verify-credentials` to strictly require explicit `AUTH_BYPASS === 'true' || AUTH_BYPASS === '1'` regardless of `NODE_ENV`.
+- Updated `.env.example` to set `AUTH_BYPASS=false` while keeping the original temporary comment.
+- **Test Result:** All 31 test suites and 196 unit tests passed (100% green).
+
+---
+**Date:** 2026-08-03
+**Summary:**
+- Updated `vite.config.ts` to add a hard build-time guard preventing `VITE_AUTH_BYPASS='true'` from ever being compiled in production mode (`FATAL BUILD ERROR: VITE_AUTH_BYPASS cannot be enabled in production mode!`).
+- Replaced static `AUTH_BYPASS_ENABLED = true` in `src/App.tsx` with conditional environment-aware evaluation (`VITE_AUTH_BYPASS === 'true'` or dev mode default).
+- Added explicit `VITE_AUTH_BYPASS=false` documentation to `.env.example`.
+- Confirmed zero impact on local development while making production bypass impossible.
+- Verified all 31 test suites / 196 unit tests pass (100% green).
+
+---
+
 ## Fix Startup Collection Deletion Errors (seedDatabaseIfEmpty Hardening)
 **Date:** 2026-08-02
 **Summary:**
