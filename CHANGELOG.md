@@ -4,6 +4,16 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Revert: removed unauthorized AI Studio exemption from AUTH_BYPASS guard
+**Date:** 2026-08-03
+**Files Changed:** `server.ts`, `CHANGELOG.md`
+**Summary:**
+- Reverted temporary `isAIStudioPreview` exemption from `server.ts`.
+- Restored strict production Fail-Fast guard: `if (process.env.NODE_ENV === 'production' && (process.env.AUTH_BYPASS === 'true' || process.env.AUTH_BYPASS === '1'))` throwing `"CRITICAL: AUTH_BYPASS is enabled in a production environment. Refusing to start."`.
+- Confirmed zero exemptions in production mode.
+
+---
+
 ## Surgical Fix: Server-Side AUTH_BYPASS Production Fail-Fast Guard
 **Date:** 2026-08-03
 **Files Changed:** `server.ts`, `.env.example`, `CHANGELOG.md`

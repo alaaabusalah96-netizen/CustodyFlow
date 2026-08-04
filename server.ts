@@ -238,8 +238,7 @@ async function startServer() {
   });
 
 
-  const isAIStudioPreview = process.env.K_SERVICE?.startsWith('ais-') || Boolean(process.env.NG_ALLOWED_HOSTS);
-  if (process.env.NODE_ENV === 'production' && !isAIStudioPreview && (process.env.AUTH_BYPASS === 'true' || process.env.AUTH_BYPASS === '1')) {
+  if (process.env.NODE_ENV === 'production' && (process.env.AUTH_BYPASS === 'true' || process.env.AUTH_BYPASS === '1')) {
     throw new Error("CRITICAL: AUTH_BYPASS is enabled in a production environment. Refusing to start.");
   }
 
