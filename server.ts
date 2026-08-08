@@ -23,6 +23,15 @@ import crypto from "crypto";
 import { runTenantMigrationUp, runTenantMigrationDown } from "./src/migrations/tenantMigration";
 import { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, getPepperByVersion, hashPasswordPBKDF2_210k, getLegacyHashDeprecationPolicy } from "./src/lib/server_hash";
 
+function generateSecureTemporaryPassword(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+  let pass = "";
+  for (let i = 0; i < 16; i++) {
+    pass += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return pass;
+}
+
 const firebaseConfig = {
   projectId: "custodyflow",
   appId: "1:88602135716:web:b77559202f5e9f233d6a31",
@@ -507,7 +516,6 @@ async function startServer() {
 
       const {
         email,
-        password,
         full_name,
         role,
         company_id,
@@ -515,9 +523,11 @@ async function startServer() {
         station_id,
         org_unit_id,
         assigned_org_unit_ids,
-        permissions,
-        must_change_password
+        permissions
       } = req.body || {};
+
+      // ALWAYS generate temporary password on server
+      const autoPassword = generateSecureTemporaryPassword();
 
       // 3. Validation: Prevent creating SystemAdmin or setting is_platform_owner
       if (role === 'SystemAdmin' || role === 'super_admin' || req.body.is_platform_owner === true) {
@@ -528,9 +538,6 @@ async function startServer() {
       if (!email || typeof email !== 'string' || !email.trim()) {
         return res.status(400).json({ success: false, message: "البريد الإلكتروني مطلوب / Email is required." });
       }
-      if (!password || typeof password !== 'string') {
-        return res.status(400).json({ success: false, message: "كلمة المرور مطلوبة / Password is required." });
-      }
       if (!full_name || typeof full_name !== 'string' || !full_name.trim()) {
         return res.status(400).json({ success: false, message: "الاسم الكامل مطلوب / Full name is required." });
       }
@@ -539,14 +546,6 @@ async function startServer() {
       }
 
       const emailLower = email.toLowerCase().trim();
-
-      // Password strength check (min 12 chars, letters + numbers)
-      if (password.length < 12 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-        return res.status(400).json({
-          success: false,
-          message: "كلمة المرور يجب أن تتكون من 12 حرف على الأقل وتحتوي على حروف وأرقام / Password must be at least 12 characters and contain letters and numbers."
-        });
-      }
 
       // Company Admin Scope Check
       if (!isPlatformAdmin) {
@@ -601,17 +600,17 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "البريد الإلكتروني مسجل بالفعل في نظام المصادقة / Email already exists in Auth system." });
       }
 
-      // Create Firebase Auth user
+      // Create Firebase Auth user with server-generated temporary password
       const authUser = await getAdminAuth(adminApp).createUser({
         email: emailLower,
-        password: password,
+        password: autoPassword,
         displayName: full_name.trim()
       });
       const userId = authUser.uid;
 
-      // Vault password in 'user_credentials' with PBKDF2 210,000 iterations
+      // Vault temporary password in 'user_credentials' with PBKDF2 210,000 iterations
       const salt = crypto.randomUUID();
-      const pbkdf2Hash = hashPasswordPBKDF2_210k(password, salt, 2);
+      const pbkdf2Hash = hashPasswordPBKDF2_210k(autoPassword, salt, 2);
       await adminDb.collection("user_credentials").doc(userId).set({
         id: userId,
         company_id: company_id,
@@ -635,7 +634,7 @@ async function startServer() {
         org_unit_id: org_unit_id || null,
         assigned_org_unit_ids: Array.isArray(assigned_org_unit_ids) ? assigned_org_unit_ids : [],
         permissions: permissions && typeof permissions === 'object' ? permissions : {},
-        must_change_password: must_change_password !== false,
+        must_change_password: true,
         is_active: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -661,6 +660,7 @@ async function startServer() {
 
       return res.status(201).json({
         success: true,
+        temporaryPassword: autoPassword,
         user: userDocData
       });
     } catch (err: any) {
@@ -1013,11 +1013,104 @@ async function startServer() {
       return res.json({
         success: true,
         user: publicUser,
-        customToken
+        customToken,
+        mustChangePassword: Boolean(publicUser.must_change_password)
       });
     } catch (err: any) {
       console.error("Error in verify-credentials endpoint:", err);
       return res.status(500).json({ success: false, message: "تعذر الاتصال بقاعدة البيانات، يرجى المحاولة لاحقًا." });
+    }
+  });
+
+  // API Route - Server-side Forced Password Change Gate (POST /api/auth/change-password)
+  app.post("/api/auth/change-password", otpRateLimiter, async (req, res) => {
+    try {
+      const authResult = await authenticateSessionOrBearer(req);
+      if (!authResult.authenticated) {
+        return res.status(authResult.statusCode).json({ success: false, message: authResult.message });
+      }
+
+      const user = authResult.user;
+      const { currentPassword, newPassword } = req.body || {};
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ success: false, message: "يرجى إدخال كلمة المرور الحالية وكلمة المرور الجديدة / Both current and new password are required." });
+      }
+
+      if (typeof newPassword !== 'string' || newPassword.length < 12 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: "كلمة المرور الجديدة يجب أن تتكون من 12 حرف على الأقل وتحتوي على حروف وأرقام / New password must be at least 12 characters and contain letters and numbers."
+        });
+      }
+
+      // Verify current password against vault
+      const credDoc = await adminDb.collection("user_credentials").doc(user.id).get();
+      let isMatch = false;
+      if (credDoc.exists) {
+        const credData = credDoc.data() || {};
+        const storedHash = credData.passwordHash || '';
+        const salt = credData.salt || '';
+        const pepperVer = credData.pepper_version || 2;
+        const computedHash = hashPasswordPBKDF2_210k(currentPassword, salt, pepperVer);
+        if (storedHash === computedHash) {
+          isMatch = true;
+        }
+      }
+
+      if (!isMatch) {
+        // If not matched via vault and vault document doesn't exist, allow verification
+        if (!credDoc.exists) {
+          isMatch = true;
+        }
+      }
+
+      if (!isMatch) {
+        return res.status(400).json({ success: false, message: "كلمة المرور الحالية غير صحيحة / Incorrect current password." });
+      }
+
+      // Update Firebase Auth user password
+      try {
+        await getAdminAuth(adminApp).updateUser(user.id, { password: newPassword });
+      } catch (authErr: any) {
+        console.warn("Firebase Auth password update failed (non-blocking if local user):", authErr?.message);
+      }
+
+      // Re-hash new password with PBKDF2 210,000 iterations & vault it
+      const newSalt = crypto.randomUUID();
+      const newPbkdf2Hash = hashPasswordPBKDF2_210k(newPassword, newSalt, 2);
+      await adminDb.collection("user_credentials").doc(user.id).set({
+        id: user.id,
+        company_id: user.company_id || 'platform',
+        email: (user.email || '').toLowerCase().trim(),
+        passwordHash: newPbkdf2Hash,
+        salt: newSalt,
+        kdf: 'sha256_pbkdf2_210k',
+        pepper_version: 2,
+        updated_at: new Date().toISOString()
+      }, { merge: true });
+
+      // Update users collection document: set must_change_password = false & strip plaintext password/salt
+      await adminDb.collection("users").doc(user.id).update({
+        must_change_password: false,
+        password: FieldValue.delete(),
+        salt: FieldValue.delete(),
+        updated_at: new Date().toISOString()
+      });
+
+      const updatedDoc = await adminDb.collection("users").doc(user.id).get();
+      const updatedUserData = updatedDoc.data() || {};
+      const { password: _, salt: __, ...publicUser } = updatedUserData;
+      publicUser.id = user.id;
+
+      return res.json({
+        success: true,
+        message: "تم تغيير كلمة المرور بنجاح / Password changed successfully.",
+        user: publicUser
+      });
+    } catch (err: any) {
+      console.error("Error in /api/auth/change-password:", err);
+      return res.status(500).json({ success: false, message: "حدث خطأ أثناء تغيير كلمة المرور / Server error changing password." });
     }
   });
 

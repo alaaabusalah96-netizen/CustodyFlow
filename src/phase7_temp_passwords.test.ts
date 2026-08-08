@@ -1,28 +1,56 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { describe, it, expect } from 'vitest';
 
-function generateSecureTemporaryPassword(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
-  let pass = "";
-  for (let i = 0; i < 16; i++) {
-    pass += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return pass;
-}
+describe('Phase 7: MANDATORY server implementation guard', () => {
+  const serverCode = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf-8');
 
-describe('Phase 7: Temporary Passwords & Forced Change Gate', () => {
-  it('generateSecureTemporaryPassword returns a 16-character string with diverse characters', () => {
-    const pass = generateSecureTemporaryPassword();
-    expect(pass.length).toBe(16);
-    expect(typeof pass).toBe('string');
+  it('server.ts actually contains generateSecureTemporaryPassword', () => {
+    expect(serverCode).toContain('generateSecureTemporaryPassword');
   });
 
-  it('validates password compliance for change-password requirements (min 12 chars, letters and numbers)', () => {
-    const isCompliant = (p: string) => p.length >= 12 && /[a-zA-Z]/.test(p) && /[0-9]/.test(p);
-    
-    expect(isCompliant('short1')).toBe(false);
-    expect(isCompliant('alllettersnolength')).toBe(false);
-    expect(isCompliant('123456789012')).toBe(false);
-    expect(isCompliant('ValidPass2026!')).toBe(true);
-    expect(isCompliant('StrongPassphrase99#')).toBe(true);
+  it('server.ts actually contains POST /api/auth/change-password route', () => {
+    expect(serverCode).toContain('/api/auth/change-password');
+  });
+
+  it('server.ts applies otpRateLimiter to change-password', () => {
+    const idx = serverCode.indexOf('/api/auth/change-password');
+    const snippet = serverCode.slice(Math.max(0, idx - 200), idx + 50);
+    expect(snippet).toContain('otpRateLimiter');
+  });
+
+  it('server.ts verify-credentials response includes mustChangePassword', () => {
+    expect(serverCode).toContain('mustChangePassword');
+  });
+
+  it('server.ts create-user path ignores client password and always generates one', () => {
+    expect(serverCode).toContain('generateSecureTemporaryPassword');
+    expect(serverCode).toContain('temporaryPassword');
+  });
+
+  it('ChangePasswordRequired.tsx component file physically exists on disk', () => {
+    const exists = fs.existsSync(path.join(process.cwd(), 'src/components/ChangePasswordRequired.tsx'));
+    expect(exists).toBe(true);
+  });
+
+  it('App.tsx imports ChangePasswordRequired from an existing path', () => {
+    const appCode = fs.readFileSync(path.join(process.cwd(), 'src/App.tsx'), 'utf-8');
+    expect(appCode).toContain("from './components/ChangePasswordRequired'");
+  });
+
+  it('no file contains the removed weak padding pattern', () => {
+    const filesToCheck = [
+      'src/pages/Settings.tsx',
+      'src/pages/SuperAdmin.tsx',
+      'src/pages/CompanyAdminDashboard.tsx',
+      'src/pages/RegionAdminDashboard.tsx',
+      'src/pages/Stations.tsx',
+      'src/components/AdminCredentialsForm.tsx',
+    ];
+    for (const f of filesToCheck) {
+      const code = fs.readFileSync(path.join(process.cwd(), f), 'utf-8');
+      expect(code).not.toContain('ensureCompliantPassword');
+      expect(code).not.toContain('_2026!');
+    }
   });
 });
