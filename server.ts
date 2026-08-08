@@ -435,6 +435,402 @@ async function startServer() {
     }
   });
 
+  // Helper for Authenticating requests via Session Cookie or Bearer Token
+  async function authenticateSessionOrBearer(req: express.Request): Promise<{ authenticated: boolean; statusCode: number; message: string; user?: any }> {
+    let uid: string | null = null;
+
+    // 1. Check Session Cookie
+    const sessionCookie = req.cookies?.session;
+    if (sessionCookie) {
+      try {
+        const decoded = await getAdminAuth(adminApp).verifySessionCookie(sessionCookie, true);
+        uid = decoded.uid;
+      } catch (_) {
+        // Invalid or expired session cookie
+      }
+    }
+
+    // 2. Check Bearer Token if session cookie is missing/invalid
+    if (!uid) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const idToken = authHeader.substring(7).trim();
+        if (idToken) {
+          try {
+            const decoded = await getAdminAuth(adminApp).verifyIdToken(idToken);
+            uid = decoded.uid;
+          } catch (_) {
+            // Invalid Bearer token
+          }
+        }
+      }
+    }
+
+    if (!uid) {
+      return { authenticated: false, statusCode: 401, message: "Unauthorized: Missing or invalid authentication token or session cookie." };
+    }
+
+    try {
+      const userDoc = await adminDb.collection("users").doc(uid).get();
+      if (!userDoc.exists) {
+        return { authenticated: false, statusCode: 403, message: "Forbidden: Authenticated user record not found." };
+      }
+
+      const userData = userDoc.data();
+      if (!userData || userData.is_active === false) {
+        return { authenticated: false, statusCode: 403, message: "Forbidden: User account is inactive." };
+      }
+
+      return { authenticated: true, statusCode: 200, message: "Authorized", user: userData };
+    } catch (err: any) {
+      console.error("Auth check error in authenticateSessionOrBearer:", err);
+      return { authenticated: false, statusCode: 500, message: "Server error during authentication check." };
+    }
+  }
+
+  // API Route - Unified Secure User Provisioning Endpoint (POST /api/admin/users)
+  app.post("/api/admin/users", async (req, res) => {
+    try {
+      // 1. AuthN
+      const authResult = await authenticateSessionOrBearer(req);
+      if (!authResult.authenticated) {
+        return res.status(authResult.statusCode).json({ success: false, message: authResult.message });
+      }
+
+      const creator = authResult.user;
+      const isPlatformAdmin = await isPlatformAdminUser(creator.email, creator);
+
+      // 2. AuthZ
+      if (!isPlatformAdmin && creator.role !== "Admin") {
+        return res.status(403).json({ success: false, message: "Forbidden: Insufficient privileges to manage users / غير مصرح لك بإدارة المستخدمين." });
+      }
+
+      const {
+        email,
+        password,
+        full_name,
+        role,
+        company_id,
+        region_id,
+        station_id,
+        org_unit_id,
+        assigned_org_unit_ids,
+        permissions,
+        must_change_password
+      } = req.body || {};
+
+      // 3. Validation: Prevent creating SystemAdmin or setting is_platform_owner
+      if (role === 'SystemAdmin' || role === 'super_admin' || req.body.is_platform_owner === true) {
+        return res.status(403).json({ success: false, message: "لا يمكن إنشاء حساب مدير نظام من هذا المسار / Cannot create SystemAdmin or Platform Owner via this endpoint." });
+      }
+
+      // Required fields validation
+      if (!email || typeof email !== 'string' || !email.trim()) {
+        return res.status(400).json({ success: false, message: "البريد الإلكتروني مطلوب / Email is required." });
+      }
+      if (!password || typeof password !== 'string') {
+        return res.status(400).json({ success: false, message: "كلمة المرور مطلوبة / Password is required." });
+      }
+      if (!full_name || typeof full_name !== 'string' || !full_name.trim()) {
+        return res.status(400).json({ success: false, message: "الاسم الكامل مطلوب / Full name is required." });
+      }
+      if (!role || typeof role !== 'string' || !role.trim()) {
+        return res.status(400).json({ success: false, message: "الدور الوظيفي مطلوب / Role is required." });
+      }
+
+      const emailLower = email.toLowerCase().trim();
+
+      // Password strength check (min 12 chars, letters + numbers)
+      if (password.length < 12 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+        return res.status(400).json({
+          success: false,
+          message: "كلمة المرور يجب أن تتكون من 12 حرف على الأقل وتحتوي على حروف وأرقام / Password must be at least 12 characters and contain letters and numbers."
+        });
+      }
+
+      // Company Admin Scope Check
+      if (!isPlatformAdmin) {
+        if (!company_id || company_id !== creator.company_id) {
+          return res.status(403).json({ success: false, message: "غير مصرح لك بإضافة مستخدم لشركة أخرى / Admin cannot create user for another company." });
+        }
+      } else {
+        if (!company_id || typeof company_id !== 'string' || !company_id.trim()) {
+          return res.status(400).json({ success: false, message: "معرف الشركة مطلوب / company_id is required." });
+        }
+      }
+
+      // Role-specific binding requirements
+      if (role === 'Admin' && !company_id) {
+        return res.status(400).json({ success: false, message: "معرف الشركة مطلوب لدور مدير الشركة / company_id is required for Admin." });
+      }
+      if (role === 'RegionalManager' && (!region_id || typeof region_id !== 'string' || !region_id.trim())) {
+        return res.status(400).json({ success: false, message: "المنطقة مطلوبة لهذا الدور / region_id is required for RegionalManager." });
+      }
+      if (role === 'StationAdmin' && (!station_id || typeof station_id !== 'string' || !station_id.trim())) {
+        return res.status(400).json({ success: false, message: "المحطة مطلوبة لهذا الدور / station_id is required for StationAdmin." });
+      }
+
+      // Region/Station belong to company check
+      if (region_id) {
+        const regDoc = await adminDb.collection("regions").doc(region_id).get();
+        if (!regDoc.exists || regDoc.data()?.company_id !== company_id) {
+          return res.status(400).json({ success: false, message: "المنطقة غير موجودة أو لا تنتمي للشركة المحجوزة / Region does not belong to company." });
+        }
+      }
+      if (station_id) {
+        const stDoc = await adminDb.collection("stations").doc(station_id).get();
+        if (!stDoc.exists || stDoc.data()?.company_id !== company_id) {
+          return res.status(400).json({ success: false, message: "المحطة غير موجودة أو لا تنتمي للشركة المحجوزة / Station does not belong to company." });
+        }
+      }
+
+      // Unique email check in Firestore 'users' collection
+      const existingUserSnap = await adminDb.collection("users").where("email", "==", emailLower).limit(1).get();
+      if (!existingUserSnap.empty) {
+        return res.status(400).json({ success: false, message: "البريد الإلكتروني مسجل بالفعل / Email already exists." });
+      }
+
+      // Unique email check in Firebase Auth
+      let existingAuthUser = null;
+      try {
+        existingAuthUser = await getAdminAuth(adminApp).getUserByEmail(emailLower);
+      } catch (_) {
+        // Expected if user does not exist
+      }
+      if (existingAuthUser) {
+        return res.status(400).json({ success: false, message: "البريد الإلكتروني مسجل بالفعل في نظام المصادقة / Email already exists in Auth system." });
+      }
+
+      // Create Firebase Auth user
+      const authUser = await getAdminAuth(adminApp).createUser({
+        email: emailLower,
+        password: password,
+        displayName: full_name.trim()
+      });
+      const userId = authUser.uid;
+
+      // Vault password in 'user_credentials' with PBKDF2 210,000 iterations
+      const salt = crypto.randomUUID();
+      const pbkdf2Hash = hashPasswordPBKDF2_210k(password, salt, 2);
+      await adminDb.collection("user_credentials").doc(userId).set({
+        id: userId,
+        company_id: company_id,
+        email: emailLower,
+        passwordHash: pbkdf2Hash,
+        salt: salt,
+        kdf: 'sha256_pbkdf2_210k',
+        pepper_version: 2,
+        updated_at: new Date().toISOString()
+      });
+
+      // Construct 'users' document WITHOUT plaintext password field
+      const userDocData = {
+        id: userId,
+        email: emailLower,
+        full_name: full_name.trim(),
+        role: role.trim(),
+        company_id: company_id,
+        region_id: region_id || null,
+        station_id: station_id || null,
+        org_unit_id: org_unit_id || null,
+        assigned_org_unit_ids: Array.isArray(assigned_org_unit_ids) ? assigned_org_unit_ids : [],
+        permissions: permissions && typeof permissions === 'object' ? permissions : {},
+        must_change_password: must_change_password !== false,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      await adminDb.collection("users").doc(userId).set(userDocData);
+
+      // Audit Log
+      try {
+        await adminDb.collection("audit_logs").add({
+          action: "user_provisioned",
+          performed_by: creator.id || creator.email,
+          performed_by_email: creator.email,
+          target_user_id: userId,
+          target_email: emailLower,
+          company_id: company_id,
+          timestamp: new Date().toISOString(),
+          details: { role, full_name, region_id, station_id, org_unit_id }
+        });
+      } catch (auditErr) {
+        console.warn("Audit log write failed during user creation:", auditErr);
+      }
+
+      return res.status(201).json({
+        success: true,
+        user: userDocData
+      });
+    } catch (err: any) {
+      console.error("Error creating user in /api/admin/users:", err);
+      return res.status(500).json({ success: false, message: err?.message || "Internal server error creating user." });
+    }
+  });
+
+  // API Route - Unified Secure User Update Endpoint (PATCH /api/admin/users/:id)
+  app.patch("/api/admin/users/:id", async (req, res) => {
+    try {
+      const authResult = await authenticateSessionOrBearer(req);
+      if (!authResult.authenticated) {
+        return res.status(authResult.statusCode).json({ success: false, message: authResult.message });
+      }
+
+      const creator = authResult.user;
+      const isPlatformAdmin = await isPlatformAdminUser(creator.email, creator);
+
+      if (!isPlatformAdmin && creator.role !== "Admin") {
+        return res.status(403).json({ success: false, message: "Forbidden: Insufficient privileges / غير مصرح لك بتحديث المستخدمين." });
+      }
+
+      const targetUserId = req.params.id;
+      if (!targetUserId) {
+        return res.status(400).json({ success: false, message: "Target user ID is required." });
+      }
+
+      const targetDoc = await adminDb.collection("users").doc(targetUserId).get();
+      if (!targetDoc.exists) {
+        return res.status(404).json({ success: false, message: "المستخدم غير موجود / User not found." });
+      }
+
+      const targetData = targetDoc.data() || {};
+      const isTargetPlatformAdmin = await isPlatformAdminUser(targetData.email, targetData);
+
+      // SystemAdmin / Platform Owner protection
+      if (isTargetPlatformAdmin && !isPlatformAdmin) {
+        return res.status(403).json({ success: false, message: "غير مصرح لك بتعديل بيانات مدير النظام / Cannot modify SystemAdmin user." });
+      }
+
+      const {
+        full_name,
+        role,
+        company_id,
+        region_id,
+        station_id,
+        org_unit_id,
+        assigned_org_unit_ids,
+        permissions,
+        is_active,
+        must_change_password,
+        password
+      } = req.body || {};
+
+      // Cannot promote to SystemAdmin via this endpoint
+      if (role === 'SystemAdmin' || role === 'super_admin' || req.body.is_platform_owner === true) {
+        return res.status(403).json({ success: false, message: "لا يمكن الترقية إلى مدير نظام عبر هذا المسار / Cannot promote to SystemAdmin via this endpoint." });
+      }
+
+      // Company Admin Scope Check
+      if (!isPlatformAdmin) {
+        if (targetData.company_id !== creator.company_id) {
+          return res.status(403).json({ success: false, message: "غير مصرح لك بتعديل مستخدم ينتمي لشركة أخرى / Admin cannot edit user from another company." });
+        }
+        if (company_id !== undefined && company_id !== creator.company_id) {
+          return res.status(403).json({ success: false, message: "غير مصرح لك بنقل مستخدم لشركة أخرى / Admin cannot move user to another company." });
+        }
+      }
+
+      const effectiveCompanyId = company_id !== undefined ? company_id : targetData.company_id;
+      const effectiveRole = role !== undefined ? role : targetData.role;
+      const effectiveRegionId = region_id !== undefined ? region_id : targetData.region_id;
+      const effectiveStationId = station_id !== undefined ? station_id : targetData.station_id;
+
+      // Role-specific binding validation on effective values
+      if (effectiveRole === 'RegionalManager' && !effectiveRegionId) {
+        return res.status(400).json({ success: false, message: "المنطقة مطلوبة لهذا الدور / region_id is required for RegionalManager." });
+      }
+      if (effectiveRole === 'StationAdmin' && !effectiveStationId) {
+        return res.status(400).json({ success: false, message: "المحطة مطلوبة لهذا الدور / station_id is required for StationAdmin." });
+      }
+
+      // Validate region/station belong to company if changed or set
+      if (region_id) {
+        const regDoc = await adminDb.collection("regions").doc(region_id).get();
+        if (!regDoc.exists || regDoc.data()?.company_id !== effectiveCompanyId) {
+          return res.status(400).json({ success: false, message: "المنطقة غير موجودة أو لا تنتمي للشركة / Region does not belong to company." });
+        }
+      }
+      if (station_id) {
+        const stDoc = await adminDb.collection("stations").doc(station_id).get();
+        if (!stDoc.exists || stDoc.data()?.company_id !== effectiveCompanyId) {
+          return res.status(400).json({ success: false, message: "المحطة غير موجودة أو لا تنتمي للشركة / Station does not belong to company." });
+        }
+      }
+
+      // Password reset if password string provided
+      if (password !== undefined && password !== null && password !== "") {
+        if (typeof password !== 'string' || password.length < 12 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+          return res.status(400).json({
+            success: false,
+            message: "كلمة المرور يجب أن تتكون من 12 حرف على الأقل وتحتوي على حروف وأرقام / Password must be at least 12 characters long and contain letters and numbers."
+          });
+        }
+
+        // Update password in Firebase Auth
+        await getAdminAuth(adminApp).updateUser(targetUserId, { password });
+
+        // Update vault
+        const salt = crypto.randomUUID();
+        const pbkdf2Hash = hashPasswordPBKDF2_210k(password, salt, 2);
+        await adminDb.collection("user_credentials").doc(targetUserId).set({
+          id: targetUserId,
+          company_id: effectiveCompanyId,
+          email: targetData.email,
+          passwordHash: pbkdf2Hash,
+          salt: salt,
+          kdf: 'sha256_pbkdf2_210k',
+          pepper_version: 2,
+          updated_at: new Date().toISOString()
+        }, { merge: true });
+      }
+
+      // Build updates for users doc
+      const updates: any = {
+        updated_at: new Date().toISOString()
+      };
+      if (full_name !== undefined) updates.full_name = String(full_name).trim();
+      if (role !== undefined) updates.role = String(role).trim();
+      if (company_id !== undefined) updates.company_id = company_id;
+      if (region_id !== undefined) updates.region_id = region_id;
+      if (station_id !== undefined) updates.station_id = station_id;
+      if (org_unit_id !== undefined) updates.org_unit_id = org_unit_id;
+      if (assigned_org_unit_ids !== undefined) updates.assigned_org_unit_ids = Array.isArray(assigned_org_unit_ids) ? assigned_org_unit_ids : [];
+      if (permissions !== undefined) updates.permissions = permissions;
+      if (is_active !== undefined) updates.is_active = Boolean(is_active);
+      if (must_change_password !== undefined) updates.must_change_password = Boolean(must_change_password);
+
+      await adminDb.collection("users").doc(targetUserId).update(updates);
+
+      const updatedDoc = await adminDb.collection("users").doc(targetUserId).get();
+      const updatedUser = updatedDoc.data();
+
+      // Audit Log
+      try {
+        await adminDb.collection("audit_logs").add({
+          action: "user_updated",
+          performed_by: creator.id || creator.email,
+          performed_by_email: creator.email,
+          target_user_id: targetUserId,
+          target_email: targetData.email,
+          company_id: effectiveCompanyId,
+          timestamp: new Date().toISOString(),
+          details: { updated_fields: Object.keys(updates), password_reset: Boolean(password) }
+        });
+      } catch (auditErr) {
+        console.warn("Audit log write failed during user update:", auditErr);
+      }
+
+      return res.json({
+        success: true,
+        user: updatedUser
+      });
+    } catch (err: any) {
+      console.error("Error updating user in /api/admin/users/:id:", err);
+      return res.status(500).json({ success: false, message: err?.message || "Internal server error updating user." });
+    }
+  });
+
   // API Route - Server-side Credential Verification (Zero-Trust PBKDF2 210k)
   app.post("/api/auth/verify-credentials", otpRateLimiter, async (req, res) => {
     try {

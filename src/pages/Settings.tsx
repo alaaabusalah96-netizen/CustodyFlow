@@ -474,11 +474,27 @@ export default function Settings({ language, theme }: SettingsProps) {
     triggerToast(isRtl ? 'تم حذف المحطة.' : 'Station deleted.');
   };
 
+  // Helper to fetch authorization headers for secure user admin API
+  const getAuthHeaders = async () => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    } catch (err) {
+      console.warn('Failed to retrieve ID token:', err);
+    }
+    return headers;
+  };
+
   // --- USERS ACTIONS ---
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (currentUser.role !== 'SystemAdmin') {
-      alert(isRtl ? '⚠️ هذه الصلاحية حصرية لأدمن المنصة فقط!' : '⚠️ This privilege is exclusive to Platform Admins.');
+    if (currentUser.role !== 'SystemAdmin' && currentUser.role !== 'Admin' && !currentUser.permissions?.manage_users) {
+      alert(isRtl ? '⚠️ هذه الصلاحية حصرية لإدارة المنصة والشركة فقط!' : '⚠️ Privilege restricted to Platform & Company Admins.');
       return;
     }
     if (!newUserName.trim() || !newUserEmail.trim()) return;
@@ -495,32 +511,66 @@ export default function Settings({ language, theme }: SettingsProps) {
       view_reports: true
     };
 
-    const companyId = CustodyDB.getSelectedCompanyId();
+    const companyId = currentUser.company_id || CustodyDB.getSelectedCompanyId() || '';
+    const tempPassword = `TempPass${Math.floor(100000 + Math.random() * 900000)}!`;
 
-    const newUser: AppUser = {
-      id: `user-${Date.now()}`,
-      email: newUserEmail.trim(),
+    const payload = {
+      email: newUserEmail.trim().toLowerCase(),
+      password: tempPassword,
       full_name: newUserName.trim(),
       role: newUserRole,
-      permissions,
       company_id: companyId,
-      is_active: true,
-      password: '123456',
-      org_unit_id: newUserOrgUnitId || undefined,
-      assigned_org_unit_ids: newUserAssignedOrgUnitIds.length > 0 ? newUserAssignedOrgUnitIds : undefined,
-      ...(isStationAdmin && newUserStationId ? { station_id: newUserStationId } : {}),
-      ...(isRegional && newUserRegionId ? { region_id: newUserRegionId } : {})
+      region_id: isRegional ? (newUserRegionId || null) : null,
+      station_id: isStationAdmin ? (newUserStationId || null) : null,
+      org_unit_id: newUserOrgUnitId || null,
+      assigned_org_unit_ids: newUserAssignedOrgUnitIds.length > 0 ? newUserAssignedOrgUnitIds : [],
+      permissions: permissions,
+      must_change_password: true
     };
 
-    const allUsers = CustodyDB.getUsers();
-    await CustodyDB.saveUsers([...allUsers, newUser]);
-    setUsers(CustodyDB.getScopedUsers());
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: await getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
 
-    setNewUserName('');
-    setNewUserEmail('');
-    setNewUserOrgUnitId('');
-    setNewUserAssignedOrgUnitIds([]);
-    triggerToast(isRtl ? 'تم إضافة الملف المالي للمستخدم بنجاح.' : 'New user created successfully.');
+      if (!res.ok || !data.success) {
+        const errMsg = data.message || (isRtl ? 'فشل إنشاء حساب المستخدم' : 'Failed to create user');
+        alert(`⚠️ ${errMsg}`);
+        return;
+      }
+
+      if (data.user) {
+        const allUsers = CustodyDB.getUsers();
+        const existingIdx = allUsers.findIndex(u => u.id === data.user.id);
+        if (existingIdx >= 0) {
+          allUsers[existingIdx] = data.user;
+        } else {
+          allUsers.push(data.user);
+        }
+        await CustodyDB.saveUsers(allUsers);
+      }
+      setUsers(CustodyDB.getScopedUsers());
+
+      setNewUserName('');
+      setNewUserEmail('');
+      setNewUserOrgUnitId('');
+      setNewUserAssignedOrgUnitIds([]);
+      setNewUserStationId('');
+      setNewUserRegionId('');
+
+      alert(isRtl
+        ? `✅ تم إنشاء وتوثيق حساب الموظف بنجاح!\n\nكلمة المرور المؤقتة هي: ${tempPassword}\n\nيرجى تسليمها للموظف لاستخدامها عند تسجيل الدخول لأول مرة.`
+        : `✅ User account created and provisioned successfully!\n\nTemporary Password: ${tempPassword}\n\nPlease share this temporary password with the user.`
+      );
+
+      triggerToast(isRtl ? 'تم إضافة وتوثيق حساب المستخدم بنجاح.' : 'New user created successfully.');
+    } catch (err: any) {
+      alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
+    }
   };
 
   const handleStartEditUser = (u: AppUser) => {
@@ -555,33 +605,51 @@ export default function Settings({ language, theme }: SettingsProps) {
   };
 
   const handleSaveEditUser = async (id: string) => {
-    if (currentUser.role !== 'SystemAdmin') {
-      alert(isRtl ? '⚠️ هذه الصلاحية حصرية لأدمن المنصة فقط!' : '⚠️ This privilege is exclusive to Platform Admins.');
+    if (currentUser.role !== 'SystemAdmin' && currentUser.role !== 'Admin' && !currentUser.permissions?.manage_users) {
+      alert(isRtl ? '⚠️ هذه الصلاحية حصرية لإدارة المنصة والشركة فقط!' : '⚠️ Privilege restricted to Platform & Company Admins.');
       return;
     }
     if (!editUserFullName.trim()) return;
 
-    const allUsers = CustodyDB.getUsers();
-    const updatedUsers = allUsers.map(u => {
-      if (u.id === id) {
-        return {
-          ...u,
-          full_name: editUserFullName.trim(),
-          role: editUserRole,
-          permissions: editUserPermissions,
-          org_unit_id: editUserOrgUnitId || undefined,
-          assigned_org_unit_ids: editUserAssignedOrgUnitIds.length > 0 ? editUserAssignedOrgUnitIds : undefined,
-          station_id: editUserRole === 'StationAdmin' ? editUserStationId || undefined : undefined,
-          region_id: editUserRole === 'RegionalManager' ? editUserRegionId || undefined : undefined
-        };
-      }
-      return u;
-    });
+    const targetUser = users.find(u => u.id === id);
+    const companyId = targetUser?.company_id || currentUser.company_id || CustodyDB.getSelectedCompanyId() || '';
 
-    await CustodyDB.saveUsers(updatedUsers);
-    setUsers(CustodyDB.getScopedUsers());
-    setEditingUserId(null);
-    triggerToast(isRtl ? 'تم تحديث أدوار وصلاحيات الموظف بنجاح.' : 'User permissions successfully updated.');
+    const payload = {
+      full_name: editUserFullName.trim(),
+      role: editUserRole,
+      company_id: companyId,
+      region_id: editUserRole === 'RegionalManager' ? (editUserRegionId || null) : null,
+      station_id: editUserRole === 'StationAdmin' ? (editUserStationId || null) : null,
+      org_unit_id: editUserOrgUnitId || null,
+      assigned_org_unit_ids: editUserAssignedOrgUnitIds.length > 0 ? editUserAssignedOrgUnitIds : [],
+      permissions: editUserPermissions,
+    };
+
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: 'PATCH',
+        headers: await getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        const errMsg = data.message || (isRtl ? 'فشل تحديث بيانات المستخدم' : 'Failed to update user');
+        alert(`⚠️ ${errMsg}`);
+        return;
+      }
+
+      if (data.user) {
+        const allUsers = CustodyDB.getUsers().map(u => u.id === id ? { ...u, ...data.user } : u);
+        await CustodyDB.saveUsers(allUsers);
+      }
+      setUsers(CustodyDB.getScopedUsers());
+      setEditingUserId(null);
+      triggerToast(isRtl ? 'تم تحديث أدوار وصلاحيات الموظف بنجاح.' : 'User permissions successfully updated.');
+    } catch (err: any) {
+      alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
+    }
   };
 
   const handleDeleteUser = async (id: string) => {
@@ -1163,24 +1231,37 @@ export default function Settings({ language, theme }: SettingsProps) {
                                 ? (chosenStation?.region_id || '') 
                                 : mapping.regionId;
 
-                              const allDbUsers = CustodyDB.getUsers();
-                              const updatedDbUsers = allDbUsers.map(u => {
-                                if (u.id === pendingUser.id) {
-                                  return {
-                                    ...u,
-                                    is_active: true,
-                                    org_unit_id: mapping.org_unit_id || undefined,
-                                    station_id: pendingUser.role === 'StationAdmin' ? mapping.stationId : undefined,
-                                    region_id: mappedRegionId || undefined,
-                                    permissions: CustodyDB.enrichUserPermissions(u.role)
-                                  };
-                                }
-                                return u;
-                              });
+                              const payload = {
+                                is_active: true,
+                                org_unit_id: mapping.org_unit_id || null,
+                                station_id: pendingUser.role === 'StationAdmin' ? (mapping.stationId || null) : null,
+                                region_id: mappedRegionId || null,
+                                permissions: CustodyDB.enrichUserPermissions(pendingUser.role)
+                              };
 
-                              await CustodyDB.saveUsers(updatedDbUsers);
-                              setUsers(CustodyDB.getScopedUsers());
-                              triggerToast(isRtl ? `تم تفعيل حساب الموظف ${pendingUser.full_name} بنجاح.` : `User account for ${pendingUser.full_name} successfully activated.`);
+                              try {
+                                const res = await fetch(`/api/admin/users/${pendingUser.id}`, {
+                                  method: 'PATCH',
+                                  headers: await getAuthHeaders(),
+                                  credentials: 'include',
+                                  body: JSON.stringify(payload)
+                                });
+                                const data = await res.json();
+
+                                if (!res.ok || !data.success) {
+                                  alert(`⚠️ ${data.message || (isRtl ? 'فشل تفعيل حساب الموظف' : 'Failed to activate user')}`);
+                                  return;
+                                }
+
+                                if (data.user) {
+                                  const allDbUsers = CustodyDB.getUsers().map(u => u.id === pendingUser.id ? { ...u, ...data.user } : u);
+                                  await CustodyDB.saveUsers(allDbUsers);
+                                }
+                                setUsers(CustodyDB.getScopedUsers());
+                                triggerToast(isRtl ? `تم تفعيل حساب الموظف ${pendingUser.full_name} بنجاح.` : `User account for ${pendingUser.full_name} successfully activated.`);
+                              } catch (err: any) {
+                                alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
+                              }
                             }}
                             className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black hover:shadow-md transition-all cursor-pointer"
                           >

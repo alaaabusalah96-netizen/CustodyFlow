@@ -4,6 +4,56 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Auth: Phase 2 - Settings.tsx User Creation/Editing Migration
+**Date:** 2026-08-08
+**Files Changed:** `src/pages/Settings.tsx`, `src/settings_user_migration.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **User Creation Migration (`handleAddUser`)**:
+  - Replaced direct `CustodyDB.saveUsers` plaintext password creation with `POST /api/admin/users`.
+  - Passwords are no longer hardcoded as `'123456'`. Instead, a secure temporary password compliant with strength rules (>= 12 chars, letters, numbers, symbols) is auto-generated and sent to the endpoint.
+  - Sends authorization headers using `auth.currentUser.getIdToken()` (Bearer token) alongside session cookies (`credentials: 'include'`).
+  - Displays the temporary password once to the admin upon successful creation so it can be provided to the user.
+  - Refreshes local user list from database state on success.
+  - Displays bilingual error messages on API errors without writing any user or plaintext password to `CustodyDB`.
+- **User Edit Migration (`handleSaveEditUser`)**:
+  - Replaced `CustodyDB.saveUsers` update with `PATCH /api/admin/users/:id`.
+  - Sends full profile details (name, role, company_id, region_id, station_id, org_unit_id, assigned_org_unit_ids, permissions).
+  - Handles API error responses safely without plaintext fallbacks.
+- **Pending User Approval Migration**:
+  - Replaced `CustodyDB.saveUsers` pending user activation with `PATCH /api/admin/users/:id` (`is_active: true`).
+- **Authorization Scope**:
+  - Restricted actions to `SystemAdmin`, `Admin`, or users with `manage_users` permission.
+  - Preserved UI layout, fields, and workflow in `Settings.tsx`.
+- **Testing & Verification**:
+  - Created `src/settings_user_migration.test.ts`.
+  - All 33 test files and 209 unit tests passed 100% green. Production build verified clean.
+
+---
+
+## Auth: Phase 1 - Unified Secure User Provisioning API
+**Date:** 2026-08-08
+**Files Changed:** `server.ts`, `src/user_provisioning_api.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Dual AuthN (`authenticateSessionOrBearer`)**: Validates request via `req.cookies.session` or `Authorization: Bearer <idToken>`. Returns authenticated user record or 401/403.
+- **Unified Provisioning Endpoint (`POST /api/admin/users`)**:
+  - AuthZ: SystemAdmin / Platform Owner (any company) or Company Admin (their own company_id only).
+  - Validations:
+    - Rejects SystemAdmin / super_admin / platform owner creation (403).
+    - Requires `email`, `password`, `full_name`, `role`.
+    - Enforces min 12 chars password strength with letters and numbers.
+    - Role-based bindings: `Admin` requires `company_id`, `RegionalManager` requires `company_id` + `region_id`, `StationAdmin` requires `company_id` + `station_id`.
+    - Verifies region/station belong to `company_id`.
+    - Checks email uniqueness across both Firestore `users` and Firebase Auth.
+  - Persistence: Creates Firebase Auth user, vaults credentials in `user_credentials` with PBKDF2 210,000 iterations (salt + pepper v2), writes `users` doc without plaintext password or hash, and logs audit record in `audit_logs`.
+- **Unified Update Endpoint (`PATCH /api/admin/users/:id`)**:
+  - AuthZ: SystemAdmin / Platform Owner or Company Admin within their company scope.
+  - Validations: Prevents modifying SystemAdmin/Platform Owner records by non-platform admins and blocks promotion to SystemAdmin/Platform Owner. Validates role bindings on effective values.
+  - Password Reset: Re-hashes password in `user_credentials` vault and updates Firebase Auth.
+  - Persistence: Updates `users` doc with updated timestamp and logs audit record.
+- **Testing & Verification**: Created `src/user_provisioning_api.test.ts`. All 32 test suites and 203 unit tests passed 100% green. Build and linting clean. UI screens remain untouched for subsequent incremental migration phases.
+
+---
+
 ## Auth: Session Cookie Layer (Phase 2)
 **Date:** 2026-08-08
 **Files Changed:** `package.json`, `server.ts`, `src/pages/Login.tsx`, `src/pages/FirstRunSetup.tsx`, `src/App.tsx`, `src/platform_admin_bootstrap.test.ts`, `CHANGELOG.md`
