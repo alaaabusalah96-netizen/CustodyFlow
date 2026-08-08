@@ -33,108 +33,56 @@ const CRM = lazy(() => import('./pages/CRM'));
 const FixedAssets = lazy(() => import('./pages/FixedAssets'));
 const FleetManagement = lazy(() => import('./pages/FleetManagement'));
 const HRPayroll = lazy(() => import('./pages/HRPayroll'));
+const FirstRunSetup = lazy(() => import('./pages/FirstRunSetup'));
 import ApprovalInbox from './components/ApprovalInbox';
-
-/** TEMP AUTH BYPASS — remove when real auth is rebuilt */
-const AUTH_BYPASS_ENABLED = true;
-
-function wipeLegacyAuthLocalState() {
-  if (typeof window === 'undefined') return;
-  if (!(window as any).__AUTH_BYPASS__) return;
-  const FLAG = 'custody_auth_wipe_v1_done';
-  if (localStorage.getItem(FLAG) === '1') return;
-
-  const keysToClear = [
-    'custody_active_user',
-    'users',
-    'signup_requests',
-    'account_correction_requests',
-    'password_reset_otps',
-  ];
-
-  try {
-    keysToClear.forEach(k => {
-      localStorage.removeItem(k);
-      localStorage.removeItem(`custody_${k}`);
-    });
-    try {
-      const { StorageEngine } = require('./db/storage');
-      ['users', 'signup_requests', 'active_user', 'account_correction_requests'].forEach((k: string) => {
-        try { StorageEngine.setStored(k, k === 'users' ? [] : (k === 'active_user' ? null : [])); } catch {}
-      });
-    } catch {}
-  } catch {}
-
-  localStorage.setItem(FLAG, '1');
-}
-
-if (typeof window !== 'undefined') {
-  (window as any).__AUTH_BYPASS__ = AUTH_BYPASS_ENABLED;
-  wipeLegacyAuthLocalState();
-}
-
-const DEV_BYPASS_USER: AppUser = {
-  id: 'dev-bypass-user',
-  email: 'dev@local',
-  full_name: 'Dev Bypass (مؤقت)',
-  role: 'SystemAdmin',
-  is_active: true,
-  is_platform_owner: true,
-  company_id: '', // empty = platform level
-  permissions: {
-    create_expense: true,
-    edit_expense: true,
-    delete_expense: true,
-    create_voucher: true,
-    approve_voucher: true,
-    reject_voucher: true,
-    create_custody: true,
-    edit_custody: true,
-    replace_custody: true,
-    view_reports: true,
-    manage_users: true,
-    manage_companies: true,
-    manage_regions: true,
-    manage_stations: true,
-    manage_roles: true,
-    manage_settings: true,
-    settle_voucher: true,
-  },
-};
 
 export default function App() {
   // Try to load any existing active session, or default to null
   const [activeUser, setActiveUser] = useState<AppUser | null>(() => {
-    if (AUTH_BYPASS_ENABLED) {
-      try {
-        CustodyDB.setActiveUser(DEV_BYPASS_USER);
-      } catch {
-        // ignore storage errors during bootstrap
-      }
-      return DEV_BYPASS_USER;
-    }
     return CustodyDB.getActiveUser();
   });
 
+  const [hasPlatformOwner, setHasPlatformOwner] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!activeUser) {
+      let isMounted = true;
+      fetch('/api/auth/platform-status')
+        .then((res) => res.json())
+        .then((data) => {
+          if (isMounted) {
+            setHasPlatformOwner(data?.hasPlatformOwner ?? true);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to check platform status:', err);
+          if (isMounted) {
+            setHasPlatformOwner(true);
+          }
+        });
+      return () => { isMounted = false; };
+    }
+  }, [activeUser]);
+
   const [currentTab, setCurrentTab] = useState<string>(() => {
-    if (AUTH_BYPASS_ENABLED) return 'super-admin';
     try {
       const stored = localStorage.getItem('custody_active_user');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed) {
-          if (parsed.role === 'SystemAdmin') return 'super-admin';
-          if (parsed.role === 'Admin') return 'company-admin';
+          const storedTab = localStorage.getItem('custody_active_tab');
+          if (storedTab) return storedTab;
+          if (parsed.role === 'SystemAdmin' && !parsed.impersonator) return 'super-admin';
+          if (parsed.role === 'Admin') return 'dashboard';
           if (parsed.role === 'RegionalManager') return 'region-admin';
-          if (parsed.role !== 'Admin' && parsed.role !== 'SystemAdmin') return 'reconciliation';
+          if (parsed.role === 'StationAdmin') return 'reconciliation';
+          return 'dashboard';
         }
       }
-      const lastHome = localStorage.getItem('custody_last_home_tab');
-      if (lastHome) return lastHome;
     } catch {
       // ignore
     }
-    return 'reconciliation';
+    return 'dashboard';
   });
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const [language, setLanguage] = useState<Language>('ar');
@@ -233,14 +181,6 @@ export default function App() {
 
   // Monitor Firebase auth state to ensure session validity and multi-tenancy sync
   useEffect(() => {
-    if (AUTH_BYPASS_ENABLED) {
-      if (!CustodyDB.getActiveUser()) {
-        CustodyDB.setActiveUser(DEV_BYPASS_USER);
-        setActiveUser(DEV_BYPASS_USER);
-      }
-      return () => {};
-    }
-
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         const stored = localStorage.getItem('custody_active_user');
@@ -334,14 +274,6 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    if (AUTH_BYPASS_ENABLED) {
-      // TEMP: logout is disabled; re-assert DEV user
-      CustodyDB.setActiveUser(DEV_BYPASS_USER);
-      setActiveUser(DEV_BYPASS_USER);
-      setCurrentTab('super-admin');
-      setSelectedPendingTx(null);
-      return;
-    }
     CustodyDB.setActiveUser(null);
     setActiveUser(null);
     setSelectedPendingTx(null);
@@ -398,7 +330,6 @@ export default function App() {
       activeUser?.role === 'SystemAdmin' && !activeUser?.impersonator;
 
     if (
-      !AUTH_BYPASS_ENABLED &&
       activeUser?.company_id &&
       !platformTabs.has(currentTab) &&
       !isSystemAdminUser &&
@@ -408,7 +339,7 @@ export default function App() {
     }
 
     // If a pure SystemAdmin somehow lands on an operational tab, auto-redirect home instead of Access Denied.
-    if (!AUTH_BYPASS_ENABLED && isSystemAdminUser) {
+    if (isSystemAdminUser) {
       const operationalTabs = new Set([
         'dashboard',
         'reconciliation',
@@ -480,7 +411,7 @@ export default function App() {
           />
         );
       case 'new-expense':
-        if (!AUTH_BYPASS_ENABLED && (activeUser?.role === 'Admin' || activeUser?.role === 'SystemAdmin') && !activeUser?.impersonator) {
+        if ((activeUser?.role === 'Admin' || activeUser?.role === 'SystemAdmin') && !activeUser?.impersonator) {
           return renderAccessDenied();
         }
         return (
@@ -500,7 +431,7 @@ export default function App() {
           />
         );
       case 'voucher':
-        if (!AUTH_BYPASS_ENABLED && (activeUser?.role === 'Admin' || activeUser?.role === 'SystemAdmin') && !activeUser?.impersonator) {
+        if ((activeUser?.role === 'Admin' || activeUser?.role === 'SystemAdmin') && !activeUser?.impersonator) {
           return renderAccessDenied();
         }
         return (
@@ -521,7 +452,7 @@ export default function App() {
           />
         );
       case 'reconciliation':
-        if (!AUTH_BYPASS_ENABLED && activeUser?.role === 'SystemAdmin' && !activeUser?.impersonator) {
+        if (activeUser?.role === 'SystemAdmin' && !activeUser?.impersonator) {
           return renderAccessDenied();
         }
         return (
@@ -734,33 +665,36 @@ export default function App() {
     );
   };
 
-  // TEMP AUTH BYPASS: never force Login screen
   if (!activeUser) {
-    if (AUTH_BYPASS_ENABLED) {
-      // Recover instantly if state was cleared
-      try {
-        CustodyDB.setActiveUser(DEV_BYPASS_USER);
-      } catch {}
-      // Fall through after setting; next render will have activeUser
-      setActiveUser(DEV_BYPASS_USER);
+    if (hasPlatformOwner === null) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
         </div>
       );
     }
+
     return (
       <Suspense fallback={
         <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
         </div>
       }>
-        <Login
-          language={language}
-          setLanguage={setLanguage}
-          theme={theme}
-          onLoginSuccess={handleLoginSuccess}
-        />
+        {hasPlatformOwner === false ? (
+          <FirstRunSetup
+            language={language}
+            setLanguage={setLanguage}
+            theme={theme}
+            onLoginSuccess={handleLoginSuccess}
+          />
+        ) : (
+          <Login
+            language={language}
+            setLanguage={setLanguage}
+            theme={theme}
+            onLoginSuccess={handleLoginSuccess}
+          />
+        )}
         {renderPwaBanner()}
       </Suspense>
     );

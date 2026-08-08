@@ -4,6 +4,32 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fix: removed hardcoded fallback owner email
+**Date:** 2026-08-04
+**Files Changed:** `server.ts`, `CHANGELOG.md`
+**Summary:**
+- **Strict Server Environment Check**: Removed fallback default email string (`"admin@your-domain.com"`) from `POST /api/auth/bootstrap-platform-owner` in `server.ts`.
+- **Fail-Loud Behavior**: Enforced explicit check for `process.env.PLATFORM_OWNER_EMAIL`. If not set, the server logs a critical error and returns HTTP 500 with `"Platform owner email is not configured on the server."`
+
+---
+
+## Auth: First-Run Platform Owner Setup
+**Date:** 2026-08-04
+**Files Changed:** `server.ts`, `src/App.tsx`, `src/pages/FirstRunSetup.tsx`, `src/platform_admin_bootstrap.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Status Endpoint (`GET /api/auth/platform-status`)**: Added zero-trust status check endpoint querying Firestore live for any existing `SystemAdmin`, `super_admin`, or `is_platform_owner: true` user. Returns strictly `{ hasPlatformOwner: boolean }` without sensitive data.
+- **Bootstrap Endpoint (`POST /api/auth/bootstrap-platform-owner`)**: Added first-run setup endpoint with multi-layered security:
+  1. Live DB check: rejects immediately with 403 if any platform owner/admin user exists.
+  2. Strict Email Validation: rejects with 400 if submitted email does not match `PLATFORM_OWNER_EMAIL` environment variable.
+  3. Strict Password Strength: enforces minimum 12 characters containing both letters and numbers.
+  4. Rate Limiting: protected via `otpRateLimiter`.
+  5. Zero-Trust Encryption: hashes credentials using standard PBKDF2 210,000 iterations + Pepper + Salt, creates user in Firebase Auth & Firestore `users` collection (`role: SystemAdmin`, `is_platform_owner: true`, `company_id: null`), and returns `customToken`.
+- **Frontend First-Run UI (`src/pages/FirstRunSetup.tsx`)**: Created clean dedicated first-run setup view with email, password, confirm password fields, show/hide toggle, RTL/LTR language switcher, and explicit instructional message ("أول مرة تفتح فيها المنصة — اختار كلمة سر حساب المدير الأساسي").
+- **Dynamic App Entry (`src/App.tsx`)**: Integrated live platform status check on app load when `!activeUser`. Renders `FirstRunSetup.tsx` when `hasPlatformOwner === false`, otherwise renders standard `Login.tsx`.
+- **Automated Tests**: Updated `src/platform_admin_bootstrap.test.ts`. All 31 test suites and 195 unit tests passed (100% green). Production build compiled cleanly.
+
+---
+
 ## Revert: removed unauthorized AI Studio exemption from AUTH_BYPASS guard
 **Date:** 2026-08-03
 **Files Changed:** `server.ts`, `CHANGELOG.md`
@@ -11,6 +37,21 @@ All major architectural changes across the 24-phase modernization plan are recor
 - Reverted temporary `isAIStudioPreview` exemption from `server.ts`.
 - Restored strict production Fail-Fast guard: `if (process.env.NODE_ENV === 'production' && (process.env.AUTH_BYPASS === 'true' || process.env.AUTH_BYPASS === '1'))` throwing `"CRITICAL: AUTH_BYPASS is enabled in a production environment. Refusing to start."`.
 - Confirmed zero exemptions in production mode.
+
+---
+
+## Auth System: Full Cleanup & Rebuild (Phase 1 & Phase 2 Complete)
+**Date:** 2026-08-04
+**Files Changed:** `server.ts`, `src/App.tsx`, `src/pages/Login.tsx`, `src/db/users.ts`, `src/components/Layout.tsx`, `.env.example`, `src/platform_admin_bootstrap.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Firebase Auth Cleanup**: Deleted all test/dev users from Firebase Authentication.
+- **Firestore Collections Audit**: Verified all auth collections (`users`, `user_credentials`, `signup_requests`, `account_correction_requests`, `password_reset_otps`, `admin_login_otps`) are completely empty.
+- **Bypass & Dev Code Removal**: Removed `AUTH_BYPASS_ENABLED`, `DEV_BYPASS_USER`, `__AUTH_BYPASS__`, and associated auto-login/auto-promote hooks across `src/App.tsx`, `src/pages/Login.tsx`, `src/db/users.ts`, and `src/components/Layout.tsx`.
+- **Server Endpoint Hardening**: Removed `AUTH_BYPASS` checks from `/api/auth/verify-credentials` in `server.ts`. Removed `/api/dev/wipe-auth-data` endpoint completely. Disabled plaintext password fallback explicitly (`allowPlaintextFallback = false`). Retained PBKDF2 210,000 iterations, pepper, salt, rate limiting (`otpRateLimiter`), and custom token issuance.
+- **Fresh Login Screen (Phase 2)**: Rebuilt `src/pages/Login.tsx` from scratch with email & password input fields (with show/hide password toggle), language switcher (Ar/En), loading state with spinner during request, user-friendly error handling ("بيانات الدخول غير صحيحة"), and client-side `signInWithCustomToken(auth, customToken)` integration upon successful verification.
+- **Message Removal**: Completely removed the temporary text `"Auth will be rebuilt later / نظام الدخول قيد إعادة البناء"` from `Login.tsx`.
+- **Environment & Tests**: Removed `AUTH_BYPASS` and `AUTH_WIPE_TOKEN` from `.env.example` while preserving `STRICT_PROD_SECURITY="true"`. Updated unit tests in `src/platform_admin_bootstrap.test.ts`.
+- **Test & Build Verification**: All 31 test suites and 195 unit tests passed (100% green). Production build compiled cleanly via `compile_applet`.
 
 ---
 

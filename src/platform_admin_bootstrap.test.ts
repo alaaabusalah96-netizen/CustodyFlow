@@ -2,38 +2,41 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('Dead-Auth Cleanup & AUTH_BYPASS Verification', () => {
+describe('Auth & First-Run Platform Owner Bootstrap Rules', () => {
   const serverCode = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf-8');
   const loginCode = fs.readFileSync(path.join(process.cwd(), 'src/pages/Login.tsx'), 'utf-8');
+  const appCode = fs.readFileSync(path.join(process.cwd(), 'src/App.tsx'), 'utf-8');
+  const firstRunCode = fs.readFileSync(path.join(process.cwd(), 'src/pages/FirstRunSetup.tsx'), 'utf-8');
 
-  it('1. server.ts no longer contains legacy bootstrap or reset-password endpoints', () => {
-    expect(serverCode).not.toContain('/api/auth/bootstrap-platform-owner');
-    expect(serverCode).not.toContain('/api/auth/bootstrap-status');
-    expect(serverCode).not.toContain('/api/auth/reset-password/request');
-    expect(serverCode).not.toContain('/api/auth/reset-password/verify');
-    expect(serverCode).not.toContain('/api/auth/reset-password/confirm');
+  it('1. server.ts contains GET /api/auth/platform-status and POST /api/auth/bootstrap-platform-owner', () => {
+    expect(serverCode).toContain('/api/auth/platform-status');
+    expect(serverCode).toContain('/api/auth/bootstrap-platform-owner');
+    expect(serverCode).not.toContain('/api/dev/wipe-auth-data');
   });
 
-  it('2. server.ts provides /api/dev/wipe-auth-data endpoint for cleaning legacy auth collections', () => {
-    expect(serverCode).toContain('/api/dev/wipe-auth-data');
-    expect(serverCode).toContain('X-Wipe-Token');
-    expect(serverCode).toContain('WIPE_AUTH_DATA');
+  it('2. server.ts enforces strict checks on /api/auth/bootstrap-platform-owner', () => {
+    // Rejects if owner/super_admin exists (403)
+    expect(serverCode).toContain('hasOwner');
+    expect(serverCode).toContain('403');
+    // Checks PLATFORM_OWNER_EMAIL match
+    expect(serverCode).toContain('configuredOwnerEmail');
+    // Enforces min 12 chars password strength with letters and numbers
+    expect(serverCode).toContain('password.length < 12');
+    // Uses PBKDF2 210,000 iterations
+    expect(serverCode).toContain('hashPasswordPBKDF2_210k');
   });
 
-  it('3. Login.tsx supports minimal AUTH_BYPASS spinner and dev user session', () => {
-    expect(loginCode).toContain('__AUTH_BYPASS__');
-    expect(loginCode).toContain('dev-bypass-user');
-    expect(loginCode).toContain('animate-spin');
+  it('3. App.tsx checks platform-status live and renders FirstRunSetup when platform has no owner', () => {
+    expect(appCode).toContain('/api/auth/platform-status');
+    expect(appCode).toContain('FirstRunSetup');
+    expect(appCode).toContain('hasPlatformOwner === false');
   });
 
-  it('4. Login.tsx shows neutral rebuild message when bypass is not active', () => {
-    expect(loginCode).toContain('نظام الدخول قيد إعادة البناء');
-    expect(loginCode).toContain('Auth will be rebuilt later');
-  });
-
-  it('5. Login.tsx does not contain legacy bootstrap or signup forms', () => {
-    expect(loginCode).not.toContain('bootstrapEmail');
-    expect(loginCode).not.toContain('isRegisterMode');
-    expect(loginCode).not.toContain('isResetMode');
+  it('4. FirstRunSetup.tsx has required fields, validations, and does not hardcode pre-filled email', () => {
+    expect(firstRunCode).toContain('/api/auth/bootstrap-platform-owner');
+    expect(firstRunCode).toContain('confirmPassword');
+    expect(firstRunCode).toContain('password.length < 12');
+    expect(loginCode).not.toContain('FirstRunSetup');
   });
 });
+

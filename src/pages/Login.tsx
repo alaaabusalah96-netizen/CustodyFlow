@@ -1,7 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useState } from 'react';
+import { signInWithCustomToken } from 'firebase/auth';
+import { auth } from '../firebase';
 import { CustodyDB } from '../db';
 import { Language, Theme, AppUser } from '../types';
 import kemitLogo from '../assets/images/kemit_logo_1784280480891.jpg';
+import { Mail, Lock, Eye, EyeOff, Globe, Loader2, ShieldCheck } from 'lucide-react';
 
 interface LoginProps {
   language: Language;
@@ -12,52 +15,72 @@ interface LoginProps {
 
 export default function Login({
   language,
+  setLanguage,
   onLoginSuccess
 }: LoginProps) {
   const isRtl = language === 'ar';
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // TEMP AUTH BYPASS: if Login ever mounts, immediately "succeed" with DEV user
-    const AUTH_BYPASS_ENABLED =
-      typeof window !== 'undefined' && (window as any).__AUTH_BYPASS__ === true;
-    if (!AUTH_BYPASS_ENABLED) return;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
 
-    const devUser = {
-      id: 'dev-bypass-user',
-      email: 'dev@local',
-      full_name: 'Dev Bypass (مؤقت)',
-      role: 'SystemAdmin' as const,
-      is_active: true,
-      is_platform_owner: true,
-      company_id: '',
-      permissions: {
-        create_expense: true, edit_expense: true, delete_expense: true,
-        create_voucher: true, approve_voucher: true, reject_voucher: true,
-        create_custody: true, edit_custody: true, replace_custody: true,
-        view_reports: true, manage_users: true, manage_companies: true,
-        manage_regions: true, manage_stations: true, manage_roles: true,
-        manage_settings: true, settle_voucher: true,
-      },
-    };
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !password) {
+      setError(isRtl ? 'يرجى إدخال البريد الإلكتروني وكلمة السر' : 'Please enter both email and password');
+      return;
+    }
+
+    setLoading(true);
     try {
-      CustodyDB.setActiveUser(devUser as any);
-    } catch {}
-    onLoginSuccess(devUser as any);
-  }, [onLoginSuccess]);
+      const res = await fetch('/api/auth/verify-credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password }),
+      });
 
-  const AUTH_BYPASS_ENABLED =
-    typeof window !== 'undefined' && (window as any).__AUTH_BYPASS__ === true;
+      const data = await res.json();
 
-  if (AUTH_BYPASS_ENABLED) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
-      </div>
-    );
-  }
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || (isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid credentials'));
+      }
+
+      if (data.customToken) {
+        await signInWithCustomToken(auth, data.customToken);
+      }
+
+      if (data.user) {
+        CustodyDB.setActiveUser(data.user);
+        onLoginSuccess(data.user);
+      } else {
+        throw new Error(isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid credentials');
+      }
+    } catch (err: any) {
+      console.error('Login failed:', err);
+      setError(isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid login credentials');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className={`min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 ${isRtl ? 'font-cairo' : ''}`} dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* Top Language Selector */}
+      <div className="absolute top-4 ltr:right-4 rtl:left-4">
+        <button
+          type="button"
+          onClick={() => setLanguage(language === 'ar' ? 'en' : 'ar')}
+          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+        >
+          <Globe className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+          <span>{language === 'ar' ? 'English' : 'العربية'}</span>
+        </button>
+      </div>
+
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <img
           className="mx-auto h-16 w-auto rounded-xl shadow-md border border-slate-200 dark:border-slate-800"
@@ -67,10 +90,83 @@ export default function Login({
         <h2 className="mt-6 text-2xl font-bold text-slate-900 dark:text-white">
           {isRtl ? 'منصة KEMIT ERP' : 'KEMIT ERP Platform'}
         </h2>
-        <div className="mt-8 bg-white dark:bg-slate-800 py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-slate-200 dark:border-slate-700">
-          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-            {isRtl ? 'نظام الدخول قيد إعادة البناء / Auth will be rebuilt later' : 'Auth will be rebuilt later / نظام الدخول قيد إعادة البناء'}
-          </p>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1">
+          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          {isRtl ? 'تسجيل الدخول الآمن للمؤسسات' : 'Secure Enterprise Sign In'}
+        </p>
+      </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white dark:bg-slate-800 py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-slate-200/80 dark:border-slate-700/80">
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            {error && (
+              <div className="p-3 text-sm text-red-700 bg-red-50 dark:bg-red-900/30 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800 text-center font-medium">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                {isRtl ? 'البريد الإلكتروني' : 'Email Address'}
+              </label>
+              <div className="relative rounded-md shadow-xs">
+                <div className="absolute inset-y-0 ltr:left-0 rtl:right-0 ltr:pl-3 rtl:pr-3 flex items-center pointer-events-none text-slate-400">
+                  <Mail className="h-5 w-5" />
+                </div>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="user@company.com"
+                  className="block w-full ltr:pl-10 rtl:pr-10 py-2.5 sm:text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-slate-900 dark:text-white"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                {isRtl ? 'كلمة السر' : 'Password'}
+              </label>
+              <div className="relative rounded-md shadow-xs">
+                <div className="absolute inset-y-0 ltr:left-0 rtl:right-0 ltr:pl-3 rtl:pr-3 flex items-center pointer-events-none text-slate-400">
+                  <Lock className="h-5 w-5" />
+                </div>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="block w-full ltr:pl-10 ltr:pr-10 rtl:pr-10 rtl:pl-10 py-2.5 sm:text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-slate-900 dark:text-white"
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 ltr:right-0 rtl:left-0 ltr:pr-3 rtl:pl-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin -ml-1 mr-2 rtl:ml-2 rtl:-mr-1 h-5 w-5 text-white" />
+                  <span>{isRtl ? 'جاري التحقق...' : 'Verifying...'}</span>
+                </>
+              ) : (
+                <span>{isRtl ? 'تسجيل الدخول' : 'Sign In'}</span>
+              )}
+            </button>
+          </form>
         </div>
       </div>
     </div>

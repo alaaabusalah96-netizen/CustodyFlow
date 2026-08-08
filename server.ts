@@ -238,41 +238,143 @@ async function startServer() {
   });
 
 
-  if (process.env.NODE_ENV === 'production' && (process.env.AUTH_BYPASS === 'true' || process.env.AUTH_BYPASS === '1')) {
-    throw new Error("CRITICAL: AUTH_BYPASS is enabled in a production environment. Refusing to start.");
-  }
+  // API Route - Platform Status (checks if any SystemAdmin/super_admin/platform_owner exists)
+  app.get("/api/auth/platform-status", async (req, res) => {
+    try {
+      const sysAdminSnap = await adminDb.collection("users").where("role", "==", "SystemAdmin").limit(1).get();
+      let hasOwner = !sysAdminSnap.empty;
+      if (!hasOwner) {
+        const superAdminSnap = await adminDb.collection("users").where("role", "==", "super_admin").limit(1).get();
+        hasOwner = !superAdminSnap.empty;
+      }
+      if (!hasOwner) {
+        const ownerSnap = await adminDb.collection("users").where("is_platform_owner", "==", true).limit(1).get();
+        hasOwner = !ownerSnap.empty;
+      }
+      return res.json({ hasPlatformOwner: hasOwner });
+    } catch (err: any) {
+      console.error("Error checking platform status:", err);
+      return res.status(500).json({ success: false, message: "Error checking platform status" });
+    }
+  });
+
+  // API Route - First-Run Super Admin Setup
+  app.post("/api/auth/bootstrap-platform-owner", otpRateLimiter, async (req, res) => {
+    try {
+      // 1. Live Firestore check: Reject if any Super Admin / SystemAdmin / Platform Owner exists
+      const sysAdminSnap = await adminDb.collection("users").where("role", "==", "SystemAdmin").limit(1).get();
+      let hasOwner = !sysAdminSnap.empty;
+      if (!hasOwner) {
+        const superAdminSnap = await adminDb.collection("users").where("role", "==", "super_admin").limit(1).get();
+        hasOwner = !superAdminSnap.empty;
+      }
+      if (!hasOwner) {
+        const ownerSnap = await adminDb.collection("users").where("is_platform_owner", "==", true).limit(1).get();
+        hasOwner = !ownerSnap.empty;
+      }
+
+      if (hasOwner) {
+        return res.status(403).json({
+          success: false,
+          message: "الحساب الرئيسي تم إعداده بالفعل / Platform owner already set up."
+        });
+      }
+
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({ success: false, message: "يرجى إدخال البريد الإلكتروني وكلمة المرور." });
+      }
+
+      const emailLower = email.toLowerCase().trim();
+      if (!process.env.PLATFORM_OWNER_EMAIL) {
+        console.error("CRITICAL: PLATFORM_OWNER_EMAIL environment variable is not set. Refusing to bootstrap.");
+        return res.status(500).json({ success: false, message: "Platform owner email is not configured on the server." });
+      }
+      const configuredOwnerEmail = process.env.PLATFORM_OWNER_EMAIL.toLowerCase().trim();
+
+      // 2. Strict email match against PLATFORM_OWNER_EMAIL environment variable
+      if (emailLower !== configuredOwnerEmail) {
+        return res.status(400).json({
+          success: false,
+          message: "البريد الإلكتروني المكتوب لا يطابق بريد المدير الأساسي المعتمد في المنصة."
+        });
+      }
+
+      // 3. Strict password strength validation (min 12 chars, letters + numbers)
+      if (password.length < 12 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+        return res.status(400).json({
+          success: false,
+          message: "كلمة المرور يجب أن تتكون من 12 حرف على الأقل، وتحتوي على حروف وأرقام."
+        });
+      }
+
+      // 4. Create or update user in Firebase Auth
+      let authUser;
+      try {
+        authUser = await getAdminAuth(adminApp).getUserByEmail(emailLower);
+        await getAdminAuth(adminApp).updateUser(authUser.uid, { password });
+      } catch (e) {
+        authUser = await getAdminAuth(adminApp).createUser({
+          email: emailLower,
+          password,
+          displayName: "Super Admin",
+        });
+      }
+      const userId = authUser.uid;
+
+      // 5. Create user doc in 'users' collection
+      const userDocData = {
+        id: userId,
+        email: emailLower,
+        full_name: "Super Admin",
+        role: "SystemAdmin",
+        is_active: true,
+        is_platform_owner: true,
+        company_id: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        permissions: {
+          create_expense: true, edit_expense: true, delete_expense: true,
+          create_voucher: true, approve_voucher: true, reject_voucher: true,
+          create_custody: true, edit_custody: true, replace_custody: true,
+          view_reports: true, manage_users: true, manage_companies: true,
+          manage_regions: true, manage_stations: true, manage_roles: true,
+          manage_settings: true, settle_voucher: true,
+        }
+      };
+      await adminDb.collection("users").doc(userId).set(userDocData);
+
+      // 6. Hash password with PBKDF2 210,000 iterations and store in 'user_credentials' vault
+      const salt = crypto.randomUUID();
+      const pbkdf2Hash = hashPasswordPBKDF2_210k(password, salt, 2);
+      await adminDb.collection("user_credentials").doc(userId).set({
+        id: userId,
+        company_id: 'platform',
+        email: emailLower,
+        passwordHash: pbkdf2Hash,
+        salt,
+        kdf: 'sha256_pbkdf2_210k',
+        pepper_version: 2,
+        updated_at: new Date().toISOString()
+      });
+
+      // 7. Issue custom token
+      const customToken = await getAdminAuth(adminApp).createCustomToken(userId);
+
+      return res.json({
+        success: true,
+        user: userDocData,
+        customToken
+      });
+    } catch (err: any) {
+      console.error("bootstrap-platform-owner error:", err);
+      return res.status(500).json({ success: false, message: err?.message || "Error bootstrapping platform owner" });
+    }
+  });
 
   // API Route - Server-side Credential Verification (Zero-Trust PBKDF2 210k)
   app.post("/api/auth/verify-credentials", otpRateLimiter, async (req, res) => {
     try {
-      // TEMP AUTH BYPASS — accept any credentials and return a fixed platform user.
-      const authBypass =
-        process.env.AUTH_BYPASS === 'true' ||
-        process.env.AUTH_BYPASS === '1';
-
-      if (authBypass) {
-        return res.json({
-          success: true,
-          user: {
-            id: 'dev-bypass-user',
-            email: (req.body?.email || 'dev@local').toLowerCase(),
-            full_name: 'Dev Bypass (مؤقت)',
-            role: 'SystemAdmin',
-            is_active: true,
-            is_platform_owner: true,
-            company_id: '',
-            permissions: {
-              create_expense: true, edit_expense: true, delete_expense: true,
-              create_voucher: true, approve_voucher: true, reject_voucher: true,
-              create_custody: true, edit_custody: true, replace_custody: true,
-              view_reports: true, manage_users: true, manage_companies: true,
-              manage_regions: true, manage_stations: true, manage_roles: true,
-              manage_settings: true, settle_voucher: true,
-            },
-          },
-          // no customToken needed under bypass
-        });
-      }
 
       const { email, password } = req.body;
       if (!email || !password) {
@@ -338,8 +440,8 @@ async function startServer() {
       const isSinglePassMatch = storedPasswordHash !== '' && storedPasswordHash === hashSinglePass;
       const isOldEmailSaltMatch = storedPasswordHash !== '' && storedPasswordHash === hashOldEmailSalt;
       const isLegacyUnsaltedMatch = storedPasswordHash !== '' && storedPasswordHash === hashLegacyUnsalted;
-      const allowPlaintextFallback = process.env.STRICT_PROD_SECURITY !== 'true' || process.env.ALLOW_PLAINTEXT_DEV_FALLBACK === 'true';
-      const isPlainMatch = allowPlaintextFallback && storedPasswordHash !== '' && storedPasswordHash === password;
+      const allowPlaintextFallback = false;
+      const isPlainMatch = false;
 
       const isMatched = isPBKDF2Match || is10kMatch || is1kMatch || isSinglePassMatch || isOldEmailSaltMatch || isLegacyUnsaltedMatch || isPlainMatch;
 
@@ -674,77 +776,7 @@ async function startServer() {
     }
   });
 
-  /**
-   * TEMPORARY one-time wipe of auth-related Firestore collections.
-   * POST /api/dev/wipe-auth-data
-   * Header: X-Wipe-Token: <must match process.env.AUTH_WIPE_TOKEN or "wipe-dev-now">
-   * Body optional: { confirm: "WIPE_AUTH_DATA" }
-   *
-   * Deletes documents in:
-   * - users
-   * - user_credentials
-   * - signup_requests
-   * - password_reset_otps
-   * - admin_login_otps
-   * - system_config/smtp (document)
-   *
-   * Does NOT delete companies, transactions, inventory, org units, etc.
-   * Remove this route when real auth is rebuilt.
-   */
-  app.post("/api/dev/wipe-auth-data", async (req, res) => {
-    try {
-      const token = req.header("X-Wipe-Token") || "";
-      const expected = process.env.AUTH_WIPE_TOKEN || "wipe-dev-now";
-      if (token !== expected) {
-        return res.status(403).json({ success: false, message: "Invalid wipe token" });
-      }
-      if (req.body?.confirm !== "WIPE_AUTH_DATA") {
-        return res.status(400).json({ success: false, message: 'Body must include confirm: "WIPE_AUTH_DATA"' });
-      }
 
-      const collections = [
-        "users",
-        "user_credentials",
-        "signup_requests",
-        "password_reset_otps",
-        "admin_login_otps",
-      ];
-
-      const deleted: Record<string, number> = {};
-      for (const col of collections) {
-        const snap = await adminDb.collection(col).get();
-        let count = 0;
-        const batchSize = 400;
-        let batch = adminDb.batch();
-        let ops = 0;
-        for (const doc of snap.docs) {
-          batch.delete(doc.ref);
-          ops++;
-          count++;
-          if (ops >= batchSize) {
-            await batch.commit();
-            batch = adminDb.batch();
-            ops = 0;
-          }
-        }
-        if (ops > 0) await batch.commit();
-        deleted[col] = count;
-      }
-
-      // Remove SMTP config doc if present
-      try {
-        await adminDb.collection("system_config").doc("smtp").delete();
-        deleted["system_config/smtp"] = 1;
-      } catch {
-        deleted["system_config/smtp"] = 0;
-      }
-
-      return res.json({ success: true, deleted, message: "Auth-related collections wiped." });
-    } catch (err: any) {
-      console.error("wipe-auth-data failed:", err);
-      return res.status(500).json({ success: false, message: err?.message || "wipe failed" });
-    }
-  });
 
   // Serve static assets and handle Vite middleware
   if (process.env.NODE_ENV !== "production") {

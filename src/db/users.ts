@@ -13,9 +13,6 @@ export class UsersModule {
   static isPlatformOwner(email?: string | null): boolean {
     if (!email || typeof email !== 'string') return false;
     const cleaned = email.toLowerCase().trim();
-    if (typeof window !== 'undefined' && (window as any).__AUTH_BYPASS__ === true) {
-      return cleaned === 'dev@local' || cleaned.endsWith('@local');
-    }
 
     const envOwner = (typeof process !== 'undefined' && process.env && process.env.PLATFORM_OWNER_EMAIL)
       ? process.env.PLATFORM_OWNER_EMAIL.toLowerCase().trim()
@@ -77,7 +74,6 @@ export class UsersModule {
         users = [...users, defUser];
         hasAddedMissingAdmin = true;
       } else if (
-        !(typeof window !== 'undefined' && (window as any).__AUTH_BYPASS__ === true) &&
         !users[existingIdx].password &&
         defUser.password
       ) {
@@ -136,26 +132,6 @@ export class UsersModule {
   }
 
   static getActiveUser(): AppUser | null {
-    const authBypass =
-      typeof window !== 'undefined' && (window as any).__AUTH_BYPASS__ === true;
-    if (authBypass) {
-      const cached = StorageEngine.cache['active_user'];
-      if (cached && cached.id === 'dev-bypass-user') return cached as AppUser;
-      // If nothing cached, synthesize DEV user without requiring password fields
-      const devUser: AppUser = {
-        id: 'dev-bypass-user',
-        email: 'dev@local',
-        full_name: 'Dev Bypass (مؤقت)',
-        role: 'SystemAdmin',
-        is_active: true,
-        is_platform_owner: true,
-        company_id: '',
-        permissions: UsersModule.enrichUserPermissions('SystemAdmin'),
-      };
-      StorageEngine.cache['active_user'] = devUser;
-      return devUser;
-    }
-
     if (StorageEngine.cache['active_user'] !== undefined && StorageEngine.cache['active_user'] !== null) {
       const cached = StorageEngine.cache['active_user'];
       cached.permissions = UsersModule.enrichUserPermissions(cached.role, cached.permissions);
