@@ -4,6 +4,28 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Auth: Session Cookie Layer (Phase 2)
+**Date:** 2026-08-08
+**Files Changed:** `package.json`, `server.ts`, `src/pages/Login.tsx`, `src/pages/FirstRunSetup.tsx`, `src/App.tsx`, `src/platform_admin_bootstrap.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Dependency & Middleware**: Added `cookie-parser` and `@types/cookie-parser` to `package.json`. Configured `app.use(cookieParser())` right after `app.use(express.json())` in `server.ts`.
+- **Session Cookie Creation (`POST /api/auth/session`)**:
+  - Receives ID token in request body as `idToken` (or `Authorization: Bearer` header).
+  - Verifies token with `getAdminAuth(adminApp).verifyIdToken(idToken)` (returns 401 on failure).
+  - Generates Firebase Admin Session Cookie with 14-day duration (`14 * 24 * 60 * 60 * 1000` ms).
+  - Sets HttpOnly cookie `res.cookie('session', sessionCookie, { maxAge, httpOnly: true, secure: true, sameSite: 'strict', path: '/' })`.
+  - Protected with rate limiter `otpRateLimiter`.
+- **Session Revocation (`POST /api/auth/logout`)**:
+  - Reads `session` cookie and verifies via `getAdminAuth(adminApp).verifySessionCookie(sessionCookie)`.
+  - Revokes refresh tokens via `getAdminAuth(adminApp).revokeRefreshTokens(uid)` on valid session.
+  - Clears cookie via `res.clearCookie('session', { path: '/' })` and returns `{ success: true }`.
+- **Frontend Integration (Non-Blocking)**:
+  - `src/pages/Login.tsx` & `src/pages/FirstRunSetup.tsx`: After `signInWithCustomToken`, retrieves ID token via `auth.currentUser?.getIdToken()` and sends POST request to `/api/auth/session` in background try/catch block.
+  - `src/App.tsx`: `handleLogout` calls `POST /api/auth/logout` and `signOut(auth)` before clearing local state.
+- **Verification**: Updated `src/platform_admin_bootstrap.test.ts` test suite. All 31 test suites and 197 unit tests passed 100% green. Build and linting completed without errors.
+
+---
+
 ## Fix: removed hardcoded fallback owner email
 **Date:** 2026-08-04
 **Files Changed:** `server.ts`, `CHANGELOG.md`

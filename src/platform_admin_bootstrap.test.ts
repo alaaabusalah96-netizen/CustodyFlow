@@ -38,5 +38,26 @@ describe('Auth & First-Run Platform Owner Bootstrap Rules', () => {
     expect(firstRunCode).toContain('password.length < 12');
     expect(loginCode).not.toContain('FirstRunSetup');
   });
+
+  it('5. Session Cookie Layer (Phase 2): server.ts uses cookieParser, defines /api/auth/session & /api/auth/logout', () => {
+    expect(serverCode).toContain('cookieParser');
+    expect(serverCode).toContain('app.use(cookieParser())');
+    expect(serverCode).toContain('/api/auth/session');
+    expect(serverCode).toContain('/api/auth/logout');
+    expect(serverCode).toContain('createSessionCookie');
+    expect(serverCode).toContain('verifySessionCookie');
+    expect(serverCode).toContain('revokeRefreshTokens');
+    expect(serverCode).toContain("res.cookie('session'");
+    expect(serverCode).toContain("httpOnly: true");
+    expect(serverCode).toContain("secure: true");
+    expect(serverCode).toContain("sameSite: 'strict'");
+  });
+
+  it('6. Frontend integration: Login.tsx, FirstRunSetup.tsx call /api/auth/session and App.tsx calls /api/auth/logout', () => {
+    expect(loginCode).toContain('/api/auth/session');
+    expect(firstRunCode).toContain('/api/auth/session');
+    expect(appCode).toContain('/api/auth/logout');
+    expect(appCode).toContain('signOut(auth)');
+  });
 });
 

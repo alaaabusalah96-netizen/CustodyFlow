@@ -1,4 +1,5 @@
 import express from "express";
+import cookieParser from "cookie-parser";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { initializeApp } from "firebase/app";
@@ -119,6 +120,7 @@ async function startServer() {
   app.set("trust proxy", 1);
 
   app.use(express.json());
+  app.use(cookieParser());
 
   // Rate limiting for auth & OTP endpoints to prevent brute-force/DOS
   const otpRateLimiter = rateLimit({
@@ -369,6 +371,67 @@ async function startServer() {
     } catch (err: any) {
       console.error("bootstrap-platform-owner error:", err);
       return res.status(500).json({ success: false, message: err?.message || "Error bootstrapping platform owner" });
+    }
+  });
+
+  // API Route - Issue HttpOnly Session Cookie (Defense-in-depth against XSS)
+  app.post("/api/auth/session", otpRateLimiter, async (req, res) => {
+    try {
+      let idToken = req.body?.idToken;
+      if (!idToken) {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+          idToken = authHeader.substring(7);
+        }
+      }
+
+      if (!idToken) {
+        return res.status(401).json({ success: false, message: "ID Token is required" });
+      }
+
+      try {
+        await getAdminAuth(adminApp).verifyIdToken(idToken);
+      } catch (verifyErr) {
+        return res.status(401).json({ success: false, message: "Invalid ID Token" });
+      }
+
+      const expiresIn = 14 * 24 * 60 * 60 * 1000; // 14 days in milliseconds
+      const sessionCookie = await getAdminAuth(adminApp).createSessionCookie(idToken, { expiresIn });
+
+      res.cookie('session', sessionCookie, {
+        maxAge: expiresIn,
+        httpOnly: true,
+        secure: true,
+        sameSite: 'strict',
+        path: '/'
+      });
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("Session creation error:", err);
+      return res.status(500).json({ success: false, message: "Failed to create session" });
+    }
+  });
+
+  // API Route - Revoke Session Cookie & Clear
+  app.post("/api/auth/logout", async (req, res) => {
+    try {
+      const sessionCookie = req.cookies?.session;
+      if (sessionCookie) {
+        try {
+          const decodedClaims = await getAdminAuth(adminApp).verifySessionCookie(sessionCookie);
+          if (decodedClaims?.uid) {
+            await getAdminAuth(adminApp).revokeRefreshTokens(decodedClaims.uid);
+          }
+        } catch (_) {
+          // Ignore invalid or expired session cookie
+        }
+      }
+    } catch (err) {
+      console.error("Logout session revocation error:", err);
+    } finally {
+      res.clearCookie('session', { path: '/' });
+      return res.json({ success: true });
     }
   });
 

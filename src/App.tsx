@@ -2,7 +2,7 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { CustodyDB, ModulesModule } from './db';
 import { AppUser, Language, Theme, Transaction } from './types';
 import { auth } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import Layout from './components/Layout';
 import { Download, X, Smartphone, ArrowDown, Sparkles, ShieldAlert } from 'lucide-react';
 
@@ -273,7 +273,17 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+      console.error('Logout session revocation error:', err);
+    }
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error('Firebase signOut error:', err);
+    }
     CustodyDB.setActiveUser(null);
     setActiveUser(null);
     setSelectedPendingTx(null);
