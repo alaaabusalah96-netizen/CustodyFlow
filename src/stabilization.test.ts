@@ -776,10 +776,8 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       const storedUsers = StorageEngine.getStored<any[]>('users', []);
       const saved = storedUsers.find(u => u.id === 'usr-salt-test-1');
       expect(saved).toBeDefined();
-      expect(saved.salt).toBeDefined();
-      expect(saved.salt).not.toBe(saved.email);
-      expect(saved.password).not.toBe('MyPassword123!');
-      expect(saved.password).toHaveLength(64);
+      expect(saved.salt).toBeUndefined();
+      expect(saved.password).toBeUndefined();
     });
 
     it('should reject saveJournalEntries when offline and prevent StorageEngine pollution (Phase 2 Correction)', async () => {

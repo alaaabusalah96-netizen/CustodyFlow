@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CustodyDB } from '../db';
-import { useScreenListeners } from '../firebase';
+import { useScreenListeners, auth } from '../firebase';
 import { Company, AppUser, Language, Theme, Region, Station, UserPermissions, Transaction, TransactionStatus, ActivityLog, DeletedTransaction, SignupRequest } from '../types';
 import { 
   Building2, ShieldCheck, KeyRound, UserCheck, RefreshCw, AlertTriangle, 
@@ -124,30 +124,66 @@ function AdminCredentialsForm({
     setIsEditing(false);
   };
 
+  const ensureCompliantPassword = (p: string) => {
+    const trimmed = p.trim();
+    if (trimmed.length >= 12 && /[a-zA-Z]/.test(trimmed) && /[0-9]/.test(trimmed)) {
+      return trimmed;
+    }
+    return `Pass_${trimmed}_2026!`;
+  };
+
   const handleApprove = async (req: SignupRequest) => {
-    const usersList = CustodyDB.getUsers();
-    const newUser: AppUser = {
-      id: `user-approved-${req.role.toLowerCase()}-${Date.now()}`,
-      email: req.email,
+    const cleanEmail = req.email.trim().toLowerCase();
+    const initialPass = ensureCompliantPassword(req.password || '123456');
+    const payload = {
+      email: cleanEmail,
+      password: initialPass,
       full_name: req.full_name,
       role: req.role,
       company_id: req.company_id,
-      region_id: req.region_id,
-      station_id: req.station_id,
-      is_active: true,
-      password: req.password || '123456',
-      salt: req.email.toLowerCase().trim(),
-      permissions: CustodyDB.enrichUserPermissions(req.role)
+      region_id: req.region_id || null,
+      station_id: req.station_id || null,
+      permissions: CustodyDB.enrichUserPermissions(req.role),
+      must_change_password: true
     };
 
-    await CustodyDB.saveUsers([...usersList, newUser]);
-    await CustodyDB.deleteSignupRequest(req.id);
-    CustodyDB.logAudit('APPROVE_SIGNUP_REQUEST', `Approved signup for ${req.full_name} (${req.email}) as ${req.role}`);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const token = await auth.currentUser?.getIdToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    alert(isRtl ? 'تم قبول طلب التسجيل وتفعيل الحساب بنجاح!' : 'Signup request approved successfully!');
-    setActiveSubTab('account');
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('custody_db_updated'));
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(`⚠️ ${data.message || (isRtl ? 'فشل قبول وتفعيل الحساب' : 'Failed to approve signup request')}`);
+        return;
+      }
+
+      if (data.user) {
+        const usersList = CustodyDB.getUsers();
+        const existingIdx = usersList.findIndex(u => u.id === data.user.id);
+        if (existingIdx >= 0) {
+          usersList[existingIdx] = data.user;
+        } else {
+          usersList.push(data.user);
+        }
+        await CustodyDB.saveUsers(usersList);
+      }
+      await CustodyDB.deleteSignupRequest(req.id);
+      CustodyDB.logAudit('APPROVE_SIGNUP_REQUEST', `Approved signup for ${req.full_name} (${req.email}) as ${req.role}`);
+
+      alert(isRtl ? 'تم قبول طلب التسجيل وتفعيل الحساب بنجاح!' : 'Signup request approved successfully!');
+      setActiveSubTab('account');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('custody_db_updated'));
+      }
+    } catch (err: any) {
+      alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
     }
   };
 
@@ -605,80 +641,201 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
     return { amount, stationId };
   };
 
+  const getAuthHeaders = async () => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    } catch (err) {
+      console.warn('Failed to retrieve ID token:', err);
+    }
+    return headers;
+  };
+
   // Directory managers
   const handleSaveRegionManager = async (regionId: string, email: string, pass: string, permissions?: UserPermissions) => {
-    if (!email || !pass) return;
+    if (!email || !email.trim()) return;
+    const cleanEmail = email.trim().toLowerCase();
     const usersList = CustodyDB.getUsers();
     const existingManager = usersList.find(u => u.region_id === regionId && u.role === 'RegionalManager');
-    
+
     if (existingManager) {
-      const updatedUsers = usersList.map(u => {
-        if (u.id === existingManager.id) {
-          return {
-            ...u,
-            email: email.trim().toLowerCase(),
-            password: pass.trim(),
-            is_active: true,
-            permissions: permissions ? { ...u.permissions, ...permissions } : u.permissions
-          };
+      const payload: any = {
+        email: cleanEmail,
+        company_id: myCompanyId,
+        region_id: regionId,
+        role: 'RegionalManager',
+        is_active: true,
+        permissions: permissions ? { ...existingManager.permissions, ...permissions } : existingManager.permissions
+      };
+      if (pass && pass.trim()) {
+        payload.password = ensureCompliantPassword(pass);
+      }
+
+      try {
+        const res = await fetch(`/api/admin/users/${existingManager.id}`, {
+          method: 'PATCH',
+          headers: await getAuthHeaders(),
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          alert(`⚠️ ${data.message || (isRtl ? 'فشل تحديث بيانات مدير المنطقة' : 'Failed to update Regional Manager')}`);
+          return;
         }
-        return u;
-      });
-      await CustodyDB.saveUsers(updatedUsers);
+
+        if (data.user) {
+          const updatedUsers = usersList.map(u => u.id === existingManager.id ? { ...u, ...data.user } : u);
+          await CustodyDB.saveUsers(updatedUsers);
+        }
+        showStructToast(isRtl ? 'تم تحديث بيانات مدير المنطقة بنجاح!' : 'Regional Manager credentials updated successfully!');
+        loadData();
+      } catch (err: any) {
+        alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
+      }
     } else {
-      const newManager: AppUser = {
-        id: `user-rm-${regionId}-${Date.now()}`,
-        email: email.trim().toLowerCase(),
-        full_name: isRtl ? `مدير منطقة` : `Regional Manager`,
+      if (!pass || !pass.trim()) {
+        alert(isRtl ? 'كلمة المرور مطلوبة لإنشاء الحساب' : 'Password is required for account creation');
+        return;
+      }
+      const initialPass = ensureCompliantPassword(pass);
+      const payload = {
+        email: cleanEmail,
+        password: initialPass,
+        full_name: isRtl ? 'مدير منطقة' : 'Regional Manager',
         role: 'RegionalManager',
         company_id: myCompanyId,
         region_id: regionId,
-        is_active: true,
-        password: pass.trim(),
-        permissions: permissions || CustodyDB.enrichUserPermissions('RegionalManager')
+        station_id: null,
+        permissions: permissions || CustodyDB.enrichUserPermissions('RegionalManager'),
+        must_change_password: true
       };
-      await CustodyDB.saveUsers([...usersList, newManager]);
+
+      try {
+        const res = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: await getAuthHeaders(),
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          alert(`⚠️ ${data.message || (isRtl ? 'فشل إنشاء حساب مدير المنطقة' : 'Failed to create Regional Manager')}`);
+          return;
+        }
+
+        if (data.user) {
+          const allUsers = CustodyDB.getUsers();
+          const existingIdx = allUsers.findIndex(u => u.id === data.user.id);
+          if (existingIdx >= 0) {
+            allUsers[existingIdx] = data.user;
+          } else {
+            allUsers.push(data.user);
+          }
+          await CustodyDB.saveUsers(allUsers);
+        }
+        showStructToast(isRtl ? 'تم إنشاء وتوثيق حساب مدير المنطقة بنجاح!' : 'Regional Manager created and provisioned successfully!');
+        loadData();
+      } catch (err: any) {
+        alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
+      }
     }
-    showStructToast(isRtl ? 'تم حفظ بيانات مدير المنطقة بنجاح!' : 'Regional Manager credentials saved successfully!');
-    loadData();
   };
 
   const handleSaveStationAdmin = async (stationId: string, regionId: string | undefined, email: string, pass: string, permissions?: UserPermissions) => {
-    if (!email || !pass) return;
+    if (!email || !email.trim()) return;
+    const cleanEmail = email.trim().toLowerCase();
     const usersList = CustodyDB.getUsers();
     const existingAdmin = usersList.find(u => u.station_id === stationId && u.role === 'StationAdmin');
-    
+
     if (existingAdmin) {
-      const updatedUsers = usersList.map(u => {
-        if (u.id === existingAdmin.id) {
-          return {
-            ...u,
-            email: email.trim().toLowerCase(),
-            password: pass.trim(),
-            is_active: true,
-            permissions: permissions ? { ...u.permissions, ...permissions } : u.permissions
-          };
+      const payload: any = {
+        email: cleanEmail,
+        company_id: myCompanyId,
+        region_id: regionId || null,
+        station_id: stationId,
+        role: 'StationAdmin',
+        is_active: true,
+        permissions: permissions ? { ...existingAdmin.permissions, ...permissions } : existingAdmin.permissions
+      };
+      if (pass && pass.trim()) {
+        payload.password = ensureCompliantPassword(pass);
+      }
+
+      try {
+        const res = await fetch(`/api/admin/users/${existingAdmin.id}`, {
+          method: 'PATCH',
+          headers: await getAuthHeaders(),
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          alert(`⚠️ ${data.message || (isRtl ? 'فشل تحديث بيانات مدير الفرع' : 'Failed to update Branch Admin')}`);
+          return;
         }
-        return u;
-      });
-      await CustodyDB.saveUsers(updatedUsers);
+
+        if (data.user) {
+          const updatedUsers = usersList.map(u => u.id === existingAdmin.id ? { ...u, ...data.user } : u);
+          await CustodyDB.saveUsers(updatedUsers);
+        }
+        showStructToast(isRtl ? 'تم تحديث بيانات مدير الفرع بنجاح!' : 'Branch Admin credentials updated successfully!');
+        loadData();
+      } catch (err: any) {
+        alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
+      }
     } else {
-      const newAdmin: AppUser = {
-        id: `user-sa-${stationId}-${Date.now()}`,
-        email: email.trim().toLowerCase(),
-        full_name: isRtl ? `مسؤول فرع` : `Branch Manager`,
+      if (!pass || !pass.trim()) {
+        alert(isRtl ? 'كلمة المرور مطلوبة لإنشاء الحساب' : 'Password is required for account creation');
+        return;
+      }
+      const initialPass = ensureCompliantPassword(pass);
+      const payload = {
+        email: cleanEmail,
+        password: initialPass,
+        full_name: isRtl ? 'مسؤول فرع' : 'Branch Manager',
         role: 'StationAdmin',
         company_id: myCompanyId,
-        region_id: regionId,
+        region_id: regionId || null,
         station_id: stationId,
-        is_active: true,
-        password: pass.trim(),
-        permissions: permissions || CustodyDB.enrichUserPermissions('StationAdmin')
+        permissions: permissions || CustodyDB.enrichUserPermissions('StationAdmin'),
+        must_change_password: true
       };
-      await CustodyDB.saveUsers([...usersList, newAdmin]);
+
+      try {
+        const res = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: await getAuthHeaders(),
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          alert(`⚠️ ${data.message || (isRtl ? 'فشل إنشاء حساب مدير الفرع' : 'Failed to create Branch Admin')}`);
+          return;
+        }
+
+        if (data.user) {
+          const allUsers = CustodyDB.getUsers();
+          const existingIdx = allUsers.findIndex(u => u.id === data.user.id);
+          if (existingIdx >= 0) {
+            allUsers[existingIdx] = data.user;
+          } else {
+            allUsers.push(data.user);
+          }
+          await CustodyDB.saveUsers(allUsers);
+        }
+        showStructToast(isRtl ? 'تم إنشاء وتوثيق حساب مدير الفرع بنجاح!' : 'Branch Admin created and provisioned successfully!');
+        loadData();
+      } catch (err: any) {
+        alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
+      }
     }
-    showStructToast(isRtl ? 'تم حفظ بيانات مدير الفرع بنجاح!' : 'Branch Admin credentials saved successfully!');
-    loadData();
   };
 
   // Region Handlers

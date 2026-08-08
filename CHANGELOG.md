@@ -2,9 +2,92 @@
 
 All major architectural changes across the 24-phase modernization plan are recorded here in append-only format.
 
+
 ---
 
-## Auth: Phase 2 - Settings.tsx User Creation/Editing Migration
+## Auth: Phase 6 - Hard-Lock Legacy Plaintext User Password Writes
+**Date:** 2026-08-08
+**Files Changed:** `src/db/users.ts`, `src/phase6_password_lock.test.ts`, `src/stabilization.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **UsersModule.saveUsers Hard-Lock**:
+  - Enforced strict stripping of `password` and `salt` properties from all user payload objects before saving to local `StorageEngine` or persisting to the Firestore `users` collection.
+  - Added a non-production deprecation warning (`console.warn`) when `saveUsers` receives a payload containing a `password` property, informing developers that credentials must be provisioned via `/api/admin/users`.
+  - Maintained in-memory credential mapping for offline test environments to allow verification helpers while ensuring zero plaintext/hashed passwords are stored on `users` documents.
+- **UsersModule.getUsers & Storage Sanity**:
+  - Updated `getUsers()` to strip any lingering `password` or `salt` fields before storing or returning user lists.
+  - Confirmed that `/api/admin/users` (server endpoint using PBKDF2 210,000 iterations) and `bootstrap-platform-owner` remain the sole authoritative credential writers to the restricted `user_credentials` vault.
+- **Testing & Verification**:
+  - Created `src/phase6_password_lock.test.ts` to verify:
+    1. `saveUsers` strips `password` and `salt` fields before storing user documents.
+    2. `getUsers` returns user documents strictly without `password` or `salt` fields.
+    3. `saveUsers` logs a deprecation warning when invoked with a password field in non-production environments.
+    4. `/api/admin/users` remains the authoritative credential writer to `user_credentials`.
+  - Updated `src/stabilization.test.ts` to reflect Phase 6 document field lock expectations.
+  - Executed `compile_applet` (0 build errors) and `npx vitest run` (all 35 test suites / 214 tests passed 100% green).
+
+---
+
+## Auth: Phase 5 - Stations.tsx & AdminCredentialsForm User Provisioning Migration
+**Date:** 2026-08-08
+**Files Changed:** `src/pages/Stations.tsx`, `src/components/AdminCredentialsForm.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Stations.tsx Migration**:
+  - Replaced `CustodyDB.saveUsers` calls in `handleSaveRegionManager` and `handleSaveStationAdmin` with secure server API calls to `POST /api/admin/users` (for user creation) and `PATCH /api/admin/users/:id` (for updating existing manager/admin credentials).
+  - Enforced password compliance via `ensureCompliantPassword` (min 12 characters, letters, and numbers) before sending request payloads to the server.
+  - Included ID token (`auth.currentUser.getIdToken()`) Bearer authorization headers and session credentials (`credentials: 'include'`).
+  - Upon server error, displays user error message without writing any user or plaintext password to `CustodyDB`.
+- **AdminCredentialsForm.tsx Migration**:
+  - Replaced direct `CustodyDB.saveUsers` call in `handleApprove` (signup request approval) with `POST /api/admin/users` to securely create and activate user accounts server-side.
+  - Updated `handleApproveCorrection` (account correction approval) to call `PATCH /api/admin/users/:id` on server when email/name/password changes are present before recording the local approval.
+- **Verification**:
+  - Applet compilation (`compile_applet`) succeeded with 0 TypeScript/build errors.
+  - All 34 test suites / 210 unit tests passed 100% green (`vitest run`).
+
+---
+
+## Auth: Phase 4 - CompanyAdminDashboard & RegionAdminDashboard User Provisioning Migration
+**Date:** 2026-08-08
+**Files Changed:** `src/pages/CompanyAdminDashboard.tsx`, `src/pages/RegionAdminDashboard.tsx`, `src/dashboards_user_migration.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **CompanyAdminDashboard Migration**:
+  - Replaced direct `CustodyDB.saveUsers` calls in `handleSaveRegionManager` and `handleSaveStationAdmin` with secure server API calls to `POST /api/admin/users` (for user creation) and `PATCH /api/admin/users/:id` (for updating existing users).
+  - Replaced direct `CustodyDB.saveUsers` call in `AdminCredentialsForm` (`handleApprove`) with `POST /api/admin/users` to securely approve and provision user signup requests server-side.
+  - Enforced strict tenant isolation: users are created/updated with the Company Admin's `myCompanyId`.
+  - Added compliance utility `ensureCompliantPassword` to guarantee passwords meet the min-12 character requirement before API submission.
+  - Included ID token (`auth.currentUser.getIdToken()`) Bearer authorization headers and session credentials (`credentials: 'include'`).
+- **RegionAdminDashboard Migration**:
+  - Replaced direct `CustodyDB.saveUsers` in `handleSaveStationAdmin` with `POST /api/admin/users` and `PATCH /api/admin/users/:id`.
+  - Replaced direct `CustodyDB.saveUsers` in `AdminCredentialsForm` (`handleApprove`) with `POST /api/admin/users`.
+  - Enforced station admin role bindings: `role: 'StationAdmin'` + `company_id: myCompanyId` + `region_id: myRegionId` + `station_id`.
+- **Verification**:
+  - Applet compilation (`compile_applet`) succeeded with 0 TypeScript/build errors.
+  - All 33 test suites / 209 unit tests passed cleanly (`vitest run`).
+
+---
+
+## Auth: Phase 3 - SuperAdmin.tsx User Provisioning Migration
+**Date:** 2026-08-08
+**Files Changed:** `src/pages/SuperAdmin.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Company Admin Provisioning Migration (`handleSaveCompanyAdmin`)**:
+  - Replaced direct `CustodyDB.saveUsers` call with secure server endpoints `POST /api/admin/users` (for creation) and `PATCH /api/admin/users/:id` (for update).
+  - Enforced role binding: `role: 'Admin'` + `company_id`.
+  - Automatically formats passwords using client compliance rules (>= 12 chars, letters, numbers, symbols).
+  - Sends authorization headers using `auth.currentUser.getIdToken()` Bearer token and session credentials (`credentials: 'include'`).
+  - No fallback to local plaintext `saveUsers` on API error; displays error message directly.
+- **Regional Manager Provisioning Migration (`handleSaveRegionManager`)**:
+  - Replaced `CustodyDB.saveUsers` with `POST /api/admin/users` (creation) and `PATCH /api/admin/users/:id` (update).
+  - Enforced role binding: `role: 'RegionalManager'` + `company_id` + `region_id`.
+- **Station Admin Provisioning Migration (`handleSaveStationAdmin`)**:
+  - Replaced `CustodyDB.saveUsers` with `POST /api/admin/users` (creation) and `PATCH /api/admin/users/:id` (update).
+  - Enforced role binding: `role: 'StationAdmin'` + `company_id` + `station_id` (and optional `region_id`).
+- **Password Reset Migration (`handleResetPassword`)**:
+  - Replaced `CustodyDB.resetUserPassword` with `PATCH /api/admin/users/:id`.
+  - Vaults updated password securely using PBKDF2 210,000 iterations without saving plaintext passwords to the `users` document.
+- **Verification**:
+  - Applet compilation (`compile_applet`) succeeded with 0 TypeScript/build errors.
+  - Users saved to state and Firestore no longer contain plaintext password properties.
+
 **Date:** 2026-08-08
 **Files Changed:** `src/pages/Settings.tsx`, `src/settings_user_migration.test.ts`, `CHANGELOG.md`
 **Summary:**

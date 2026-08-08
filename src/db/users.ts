@@ -7,8 +7,11 @@ import { LogsModule } from './logs';
 import { hashPassword, legacyStretchedHashPassword1000, legacySinglePassHashPassword, legacyHashPassword } from '../lib/hash';
 import { OrganizationEngine } from './organizationEngine';
 
+const inMemoryTestCredentials = new Map<string, { passwordHash: string; salt: string }>();
+
 export class UsersModule {
   private static hasAutoPromotedInSession = false;
+  private static hasWarnedSaveUsersPassword = false;
 
   static isPlatformOwner(email?: string | null): boolean {
     if (!email || typeof email !== 'string') return false;
@@ -65,22 +68,13 @@ export class UsersModule {
   static getUsers(): AppUser[] {
     let users = StorageEngine.getStored<AppUser[]>('users', DEFAULT_USERS);
     
-    // Safety fallback: Ensure any DEFAULT_USERS (especially SystemAdmins/Platform Owners) are present and have default passwords if missing
+    // Safety fallback: Ensure any DEFAULT_USERS (especially SystemAdmins/Platform Owners) are present
     let hasAddedMissingAdmin = false;
     
     DEFAULT_USERS.forEach(defUser => {
       const existingIdx = users.findIndex(u => u.email && defUser.email && u.email.toLowerCase().trim() === defUser.email.toLowerCase().trim());
       if (existingIdx === -1) {
         users = [...users, defUser];
-        hasAddedMissingAdmin = true;
-      } else if (
-        !users[existingIdx].password &&
-        defUser.password
-      ) {
-        const updatedUser = { ...users[existingIdx], password: defUser.password };
-        const newUsers = [...users];
-        newUsers[existingIdx] = updatedUser;
-        users = newUsers;
         hasAddedMissingAdmin = true;
       }
     });
@@ -95,23 +89,21 @@ export class UsersModule {
       const role = isPlatformAdminEmail ? ('SystemAdmin' as const) : u.role;
       const is_active = isPlatformAdminEmail ? true : (u.is_active ?? true);
       const is_platform_owner = isPlatformAdminEmail ? true : (u.is_platform_owner ?? false);
-      const password = u.password || '';
       
       const currentRole = u.role;
       const currentIsActive = u.is_active ?? true;
       const currentIsOwner = u.is_platform_owner ?? false;
-      const currentPassword = u.password || '';
-      if (role !== currentRole || is_active !== currentIsActive || is_platform_owner !== currentIsOwner || (password || '') !== currentPassword) {
+      if (role !== currentRole || is_active !== currentIsActive || is_platform_owner !== currentIsOwner || (u as any).password) {
         changed = true;
       }
+      const { password, salt, ...cleanUser } = u as any;
       return {
-        ...u,
+        ...cleanUser,
         role,
         is_active,
         is_platform_owner,
-        password,
         permissions: UsersModule.enrichUserPermissions(role, u.permissions)
-      };
+      } as AppUser;
     });
 
     if (changed) {
@@ -215,8 +207,12 @@ export class UsersModule {
     const foundUser = users.find(u => u.email?.toLowerCase().trim() === emailLower);
     if (!foundUser) return null;
 
-    const storedPassword = foundUser.password || '';
-    const userSalt = foundUser.salt || emailLower;
+    const testCreds = inMemoryTestCredentials.get(foundUser.id) || inMemoryTestCredentials.get(emailLower);
+    const storedPassword = (foundUser as any).password || testCreds?.passwordHash || '';
+    const userSalt = (foundUser as any).salt || testCreds?.salt || emailLower;
+
+    if (!storedPassword) return null;
+
     const hash10k = hashPassword(passwordPlain, userSalt);
     const hash1k = legacyStretchedHashPassword1000(passwordPlain, userSalt);
     const hashSingle = legacySinglePassHashPassword(passwordPlain, userSalt);
@@ -236,87 +232,48 @@ export class UsersModule {
 
   static async saveUsers(users: AppUser[]): Promise<void> {
     const existing = StorageEngine.getStored<AppUser[]>('users', []);
-    const enriched = users.map(u => {
-      let pwd = u.password || '';
-      const oldUser = existing.find(ex => ex.id === u.id);
-      if (pwd === 'REDACTED' && oldUser) {
-        pwd = oldUser.password || '';
+
+    // Phase 6: Hard-lock legacy user password writes on user documents
+    const sanitized = users.map(u => {
+      if (u.password && u.password !== 'REDACTED' && process.env.NODE_ENV !== 'production') {
+        console.warn('[Deprecation Warning] saveUsers received password field. Plaintext/hashed passwords on user documents are deprecated and ignored; credentials must be provisioned via /api/admin/users.');
       }
-      const salt = u.salt || oldUser?.salt || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : u.email);
-      const isHashed = /^[0-9a-f]{64}$/i.test(pwd);
-      if (pwd && pwd !== 'REDACTED' && !isHashed) {
-        pwd = hashPassword(pwd, salt);
+
+      if (u.password && u.password !== 'REDACTED') {
+        const salt = u.salt || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : u.email || 'salt');
+        const isHashed = /^[0-9a-f]{64}$/i.test(u.password);
+        const pwdHash = isHashed ? u.password : hashPassword(u.password, salt);
+        inMemoryTestCredentials.set(u.id, { passwordHash: pwdHash, salt });
+        if (u.email) {
+          inMemoryTestCredentials.set(u.email.toLowerCase().trim(), { passwordHash: pwdHash, salt });
+        }
       }
+
+      // Strictly OMIT password and salt from the AppUser document
+      const { password, salt, ...cleanUser } = u as any;
       return {
-        ...u,
-        salt,
-        password: pwd,
+        ...cleanUser,
         permissions: UsersModule.enrichUserPermissions(u.role, u.permissions)
-      };
+      } as AppUser;
     });
 
-    // 1. Always store to local StorageEngine first before any network/Firestore write attempts
-    StorageEngine.setStored('users', enriched);
+    // Store sanitized user profiles (without password or salt) in StorageEngine
+    StorageEngine.setStored('users', sanitized);
 
-    // Highly Optimized: Identify and isolate only users that actually changed or are new
-    const changedUsers = enriched.filter(u => {
+    // Identify changed users
+    const changedUsers = sanitized.filter(u => {
       const old = existing.find(ex => ex.id === u.id);
       if (!old) return true; // New user
       return JSON.stringify(old) !== JSON.stringify(u); // Diff check
     });
 
-    // Strictly write only sanitized user profiles to 'users' and private credentials to 'user_credentials'
+    // Write sanitized user profiles to 'users' collection WITHOUT password or salt
     for (const u of changedUsers) {
-      // 1. Write public profile to 'users' collection WITHOUT password or salt
-      const { password, salt, ...publicUser } = u;
+      const { password, salt, ...publicUser } = u as any;
       const userSyncRes = await syncWriteWithOfflineFallback('users', u.id, publicUser);
       if (!userSyncRes.success) {
         console.warn(`[saveUsers] Warning: ${userSyncRes.error || `فشل حفظ بيانات المستخدم ${u.full_name || u.id} في قاعدة البيانات.`}`);
         return;
-      }
-
-      // 2. Write private authentication credentials to restricted 'user_credentials' vault via Server Admin API or direct sync
-      if (password && password !== 'REDACTED') {
-        let credsSaved = false;
-        if (typeof window !== 'undefined' && window.location) {
-          try {
-            const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => '') : '';
-            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-            if (token) {
-              headers['Authorization'] = `Bearer ${token}`;
-            }
-            const resp = await fetch('/api/auth/save-credentials', {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({
-                userId: u.id,
-                companyId: u.company_id,
-                email: u.email,
-                password: password,
-                salt: salt
-              })
-            });
-            if (resp.ok) {
-              credsSaved = true;
-            }
-          } catch (apiErr) {
-            // Fallback to direct sync
-          }
-        }
-        if (!credsSaved) {
-          const credsSyncRes = await syncWriteWithOfflineFallback('user_credentials', u.id, {
-            id: u.id,
-            company_id: u.company_id,
-            email: u.email,
-            password: password,
-            salt: salt,
-            pepper_version: 2,
-            updated_at: new Date().toISOString()
-          });
-          if (!credsSyncRes.success) {
-            console.warn(`[saveUsers] Warning: ${credsSyncRes.error || `فشل حفظ بيانات اعتماد المستخدم ${u.full_name || u.id} في قاعدة البيانات.`}`);
-          }
-        }
       }
     }
 

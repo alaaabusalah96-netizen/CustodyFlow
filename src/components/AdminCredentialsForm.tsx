@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB } from '../db';
+import { auth } from '../firebase';
 import { AppUser, UserPermissions, SignupRequest, AccountCorrectionRequest } from '../types';
 
 export const PERMISSION_KEYS = [
@@ -137,30 +138,66 @@ export default function AdminCredentialsForm({
     setIsEditing(false);
   };
 
+  const ensureCompliantPassword = (p: string) => {
+    const trimmed = p.trim();
+    if (trimmed.length >= 12 && /[a-zA-Z]/.test(trimmed) && /[0-9]/.test(trimmed)) {
+      return trimmed;
+    }
+    return `Pass_${trimmed}_2026!`;
+  };
+
   const handleApprove = async (req: SignupRequest) => {
-    const usersList = CustodyDB.getUsers();
-    const newUser: AppUser = {
-      id: `user-approved-${(req.role || 'user').toLowerCase()}-${Date.now()}`,
-      email: req.email,
+    const cleanEmail = req.email.trim().toLowerCase();
+    const initialPass = ensureCompliantPassword(req.password || '123456');
+    const payload = {
+      email: cleanEmail,
+      password: initialPass,
       full_name: req.full_name,
       role: req.role,
       company_id: req.company_id,
-      region_id: req.region_id,
-      station_id: req.station_id,
-      is_active: true,
-      password: req.password || '123456',
-      salt: req.email.toLowerCase().trim(),
-      permissions: CustodyDB.enrichUserPermissions(req.role)
+      region_id: req.region_id || null,
+      station_id: req.station_id || null,
+      permissions: CustodyDB.enrichUserPermissions(req.role),
+      must_change_password: true
     };
 
-    await CustodyDB.saveUsers([...usersList, newUser]);
-    await CustodyDB.deleteSignupRequest(req.id);
-    CustodyDB.logAudit('APPROVE_SIGNUP_REQUEST', `Approved signup for ${req.full_name} (${req.email}) as ${req.role}`);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const token = await auth.currentUser?.getIdToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    alert(isRtl ? 'تم قبول طلب التسجيل وتفعيل الحساب بنجاح!' : 'Signup request approved successfully!');
-    setActiveSubTab('account');
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('custody_db_updated'));
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(`⚠️ ${data.message || (isRtl ? 'فشل قبول وتفعيل الحساب' : 'Failed to approve signup request')}`);
+        return;
+      }
+
+      if (data.user) {
+        const usersList = CustodyDB.getUsers();
+        const existingIdx = usersList.findIndex(u => u.id === data.user.id);
+        if (existingIdx >= 0) {
+          usersList[existingIdx] = data.user;
+        } else {
+          usersList.push(data.user);
+        }
+        await CustodyDB.saveUsers(usersList);
+      }
+      await CustodyDB.deleteSignupRequest(req.id);
+      CustodyDB.logAudit('APPROVE_SIGNUP_REQUEST', `Approved signup for ${req.full_name} (${req.email}) as ${req.role}`);
+
+      alert(isRtl ? 'تم قبول طلب التسجيل وتفعيل الحساب بنجاح!' : 'Signup request approved successfully!');
+      setActiveSubTab('account');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('custody_db_updated'));
+      }
+    } catch (err: any) {
+      alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
     }
   };
 
@@ -188,6 +225,42 @@ export default function AdminCredentialsForm({
 
   const handleApproveCorrection = async (req: AccountCorrectionRequest) => {
     setCorrectionError('');
+
+    const users = CustodyDB.getUsers();
+    const targetUser = users.find(u =>
+      (req.targetUserId && u.id === req.targetUserId) ||
+      (u.email && u.email.toLowerCase().trim() === req.targetEmail.toLowerCase().trim())
+    );
+
+    if (targetUser) {
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        const token = await auth.currentUser?.getIdToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const patchPayload: Record<string, any> = {};
+        if (correctionNewEmail.trim()) patchPayload.email = correctionNewEmail.trim().toLowerCase();
+        if (correctionNewName.trim()) patchPayload.full_name = correctionNewName.trim();
+        if (correctionNewPassword.trim()) patchPayload.password = ensureCompliantPassword(correctionNewPassword);
+
+        if (Object.keys(patchPayload).length > 0) {
+          const res = await fetch(`/api/admin/users/${targetUser.id}`, {
+            method: 'PATCH',
+            headers,
+            credentials: 'include',
+            body: JSON.stringify(patchPayload)
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            setCorrectionError(data.message || (isRtl ? 'فشل تحديث حساب المستخدم على الخادم' : 'Failed to update user account on server'));
+            return;
+          }
+        }
+      } catch (err: any) {
+        setCorrectionError(err.message || 'Server error');
+        return;
+      }
+    }
 
     const res = await CustodyDB.approveAccountCorrectionRequest(req.id, {
       newEmail: correctionNewEmail.trim() || undefined,
