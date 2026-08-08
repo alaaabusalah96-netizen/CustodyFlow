@@ -57,6 +57,7 @@ export interface AppUser {
   company_id?: string;
   is_active?: boolean;
   is_platform_owner?: boolean;
+  must_change_password?: boolean;
   password?: string;
   salt?: string;
   security_pin?: string;

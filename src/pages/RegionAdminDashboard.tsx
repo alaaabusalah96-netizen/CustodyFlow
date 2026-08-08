@@ -124,20 +124,10 @@ function AdminCredentialsForm({
     setIsEditing(false);
   };
 
-  const ensureCompliantPassword = (p: string) => {
-    const trimmed = p.trim();
-    if (trimmed.length >= 12 && /[a-zA-Z]/.test(trimmed) && /[0-9]/.test(trimmed)) {
-      return trimmed;
-    }
-    return `Pass_${trimmed}_2026!`;
-  };
-
   const handleApprove = async (req: SignupRequest) => {
     const cleanEmail = req.email.trim().toLowerCase();
-    const initialPass = ensureCompliantPassword(req.password || '123456');
     const payload = {
       email: cleanEmail,
-      password: initialPass,
       full_name: req.full_name,
       role: req.role,
       company_id: req.company_id,
@@ -177,7 +167,8 @@ function AdminCredentialsForm({
       await CustodyDB.deleteSignupRequest(req.id);
       CustodyDB.logAudit('APPROVE_SIGNUP_REQUEST', `Approved signup for ${req.full_name} (${req.email}) as ${req.role}`);
 
-      alert(isRtl ? 'تم قبول طلب التسجيل وتفعيل الحساب بنجاح!' : 'Signup request approved successfully!');
+      const tempMsg = data.temporaryPassword ? (isRtl ? `\nكلمة المرور المؤقتة: ${data.temporaryPassword}` : `\nTemporary Password: ${data.temporaryPassword}`) : '';
+      alert((isRtl ? 'تم قبول طلب التسجيل وتفعيل الحساب بنجاح!' : 'Signup request approved successfully!') + tempMsg);
       setActiveSubTab('account');
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('custody_db_updated'));
@@ -688,7 +679,7 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
         permissions: permissions ? { ...existingAdmin.permissions, ...permissions } : existingAdmin.permissions
       };
       if (pass && pass.trim()) {
-        payload.password = ensureCompliantPassword(pass);
+        payload.password = pass.trim();
       }
 
       try {
@@ -714,14 +705,8 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
       }
     } else {
-      if (!pass || !pass.trim()) {
-        alert(isRtl ? 'كلمة المرور مطلوبة لإنشاء الحساب' : 'Password is required for account creation');
-        return;
-      }
-      const initialPass = ensureCompliantPassword(pass);
       const payload = {
         email: cleanEmail,
-        password: initialPass,
         full_name: isRtl ? 'مسؤول فرع' : 'Branch Manager',
         role: 'StationAdmin',
         company_id: myCompanyId,
@@ -754,7 +739,8 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
           }
           await CustodyDB.saveUsers(allUsers);
         }
-        showStructToast(isRtl ? 'تم إنشاء وتوثيق حساب مدير الفرع بنجاح!' : 'Branch Admin created and provisioned successfully!');
+        const tempMsg = data.temporaryPassword ? (isRtl ? ` (كلمة المرور المؤقتة: ${data.temporaryPassword})` : ` (Temp Password: ${data.temporaryPassword})`) : '';
+        showStructToast((isRtl ? 'تم إنشاء وتوثيق حساب مدير الفرع بنجاح!' : 'Branch Admin created successfully!') + tempMsg);
         loadData();
       } catch (err: any) {
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);

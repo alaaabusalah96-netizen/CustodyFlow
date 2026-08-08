@@ -247,18 +247,9 @@ export default function Stations({
     setUsers(CustodyDB.getUsers());
   };
 
-  const ensureCompliantPassword = (p: string) => {
-    const trimmed = p.trim();
-    if (trimmed.length >= 12 && /[a-zA-Z]/.test(trimmed) && /[0-9]/.test(trimmed)) {
-      return trimmed;
-    }
-    return `Pass_${trimmed}_2026!`;
-  };
-
   const handleSaveRegionManager = async (regionId: string, companyId: string, email: string, pass: string) => {
-    if (!email || !pass) return;
+    if (!email) return;
     const cleanEmail = email.trim().toLowerCase();
-    const cleanPass = ensureCompliantPassword(pass);
     const usersList = CustodyDB.getUsers();
     const existingManager = usersList.find(u => u.region_id === regionId && u.role === 'RegionalManager');
 
@@ -268,14 +259,16 @@ export default function Stations({
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       if (existingManager) {
-        const payload = {
+        const payload: any = {
           email: cleanEmail,
-          password: cleanPass,
           company_id: companyId,
           region_id: regionId,
           role: 'RegionalManager',
           is_active: true
         };
+        if (pass && pass.trim()) {
+          payload.password = pass.trim();
+        }
         const res = await fetch(`/api/admin/users/${existingManager.id}`, {
           method: 'PATCH',
           headers,
@@ -291,10 +284,10 @@ export default function Stations({
           const updatedUsers = usersList.map(u => u.id === data.user.id ? data.user : u);
           await CustodyDB.saveUsers(updatedUsers);
         }
+        showToast(isRtl ? 'تم تحديث بيانات مدير القطاع بنجاح!' : 'Regional Manager credentials updated successfully!');
       } else {
         const payload = {
           email: cleanEmail,
-          password: cleanPass,
           full_name: isRtl ? `مدير قطاع` : `Regional Manager`,
           role: 'RegionalManager',
           company_id: companyId,
@@ -317,8 +310,9 @@ export default function Stations({
         if (data.user) {
           await CustodyDB.saveUsers([...usersList, data.user]);
         }
+        const tempMsg = data.temporaryPassword ? (isRtl ? ` (كلمة المرور المؤقتة: ${data.temporaryPassword})` : ` (Temp Password: ${data.temporaryPassword})`) : '';
+        showToast((isRtl ? 'تم حفظ بيانات مدير القطاع بنجاح!' : 'Regional Manager created successfully!') + tempMsg);
       }
-      showToast(isRtl ? 'تم حفظ بيانات مدير القطاع بنجاح!' : 'Regional Manager credentials saved successfully!');
       refreshData();
     } catch (err: any) {
       alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
@@ -326,9 +320,8 @@ export default function Stations({
   };
 
   const handleSaveStationAdmin = async (stationId: string, regionId: string | undefined, companyId: string, email: string, pass: string) => {
-    if (!email || !pass) return;
+    if (!email) return;
     const cleanEmail = email.trim().toLowerCase();
-    const cleanPass = ensureCompliantPassword(pass);
     const usersList = CustodyDB.getUsers();
     const existingAdmin = usersList.find(u => u.station_id === stationId && u.role === 'StationAdmin');
 
@@ -338,15 +331,17 @@ export default function Stations({
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       if (existingAdmin) {
-        const payload = {
+        const payload: any = {
           email: cleanEmail,
-          password: cleanPass,
           company_id: companyId,
           region_id: regionId || null,
           station_id: stationId,
           role: 'StationAdmin',
           is_active: true
         };
+        if (pass && pass.trim()) {
+          payload.password = pass.trim();
+        }
         const res = await fetch(`/api/admin/users/${existingAdmin.id}`, {
           method: 'PATCH',
           headers,
@@ -362,10 +357,10 @@ export default function Stations({
           const updatedUsers = usersList.map(u => u.id === data.user.id ? data.user : u);
           await CustodyDB.saveUsers(updatedUsers);
         }
+        showToast(isRtl ? 'تم تحديث بيانات مسؤول الفرع بنجاح!' : 'Branch Admin credentials updated successfully!');
       } else {
         const payload = {
           email: cleanEmail,
-          password: cleanPass,
           full_name: isRtl ? `مسؤول فرع` : `Branch Administrator`,
           role: 'StationAdmin',
           company_id: companyId,
@@ -388,8 +383,9 @@ export default function Stations({
         if (data.user) {
           await CustodyDB.saveUsers([...usersList, data.user]);
         }
+        const tempMsg = data.temporaryPassword ? (isRtl ? ` (كلمة المرور المؤقتة: ${data.temporaryPassword})` : ` (Temp Password: ${data.temporaryPassword})`) : '';
+        showToast((isRtl ? 'تم حفظ بيانات مسؤول الفرع بنجاح!' : 'Branch Admin created successfully!') + tempMsg);
       }
-      showToast(isRtl ? 'تم حفظ بيانات مسؤول الفرع بنجاح!' : 'Branch Admin credentials saved successfully!');
       refreshData();
     } catch (err: any) {
       alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);

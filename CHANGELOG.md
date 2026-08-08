@@ -5,6 +5,31 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Auth: Phase 7 - Server-Side Temporary Passwords & Forced Password Change Gate
+**Date:** 2026-08-08
+**Files Changed:** `server.ts`, `src/types.ts`, `src/App.tsx`, `src/components/ChangePasswordRequired.tsx`, `src/pages/SuperAdmin.tsx`, `src/pages/CompanyAdminDashboard.tsx`, `src/pages/RegionAdminDashboard.tsx`, `src/pages/Stations.tsx`, `src/components/AdminCredentialsForm.tsx`, `src/pages/Settings.tsx`, `src/phase7_temp_passwords.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Server-Generated Temporary Passwords (`POST /api/admin/users`)**:
+  - Added `generateSecureTemporaryPassword()` helper in `server.ts` generating 16-character cryptographically strong random passwords.
+  - Updated `POST /api/admin/users` to always auto-generate temporary passwords for newly provisioned users, ignoring any client-sent `password` parameter.
+  - Vaulted generated credentials into `user_credentials` (PBKDF2 210,000 iterations, pepper_version 2) and updated Firebase Auth.
+  - Enforced `must_change_password: true` on user document creation and returned `temporaryPassword` in response payload.
+- **Forced Password Change Endpoint (`POST /api/auth/change-password`)**:
+  - Protected endpoint with `otpRateLimiter` and `authenticateSessionOrBearer`.
+  - Validates `currentPassword` against `user_credentials` vault / Firebase Auth, requiring `newPassword` to be >= 12 characters with both letters and numbers.
+  - Re-hashes `newPassword` with PBKDF2 210k, updates Firebase Auth, sets `must_change_password: false` on the user doc, and strips legacy plaintext fields.
+- **Frontend Gate & Weak Password Cleanup**:
+  - Created `ChangePasswordRequired.tsx` component and integrated it into `App.tsx` as a hard gate when `activeUser.must_change_password` is true.
+  - Updated user creation alerts across `SuperAdmin.tsx`, `CompanyAdminDashboard.tsx`, `RegionAdminDashboard.tsx`, `Stations.tsx`, `AdminCredentialsForm.tsx`, and `Settings.tsx` to display server-returned temporary passwords.
+  - Removed all weak client-side password padding hacks (`ensureCompliantPassword`, `Pass_..._2026!`).
+- **Testing & Verification**:
+  - Created `src/phase7_temp_passwords.test.ts` to test temporary password generation, strength rules, and gate logic.
+  - Validated via `compile_applet` (0 build errors), `lint_applet` (0 linter errors), and `vitest run` (36 test files / 216 unit tests 100% green).
+
+
+
+---
+
 ## Auth: Phase 6 - Hard-Lock Legacy Plaintext User Password Writes
 **Date:** 2026-08-08
 **Files Changed:** `src/db/users.ts`, `src/phase6_password_lock.test.ts`, `src/stabilization.test.ts`, `CHANGELOG.md`

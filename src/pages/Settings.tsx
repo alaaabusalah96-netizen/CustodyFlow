@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB, ModulesModule } from '../db';
-import { useScreenListeners } from '../firebase';
+import { auth, useScreenListeners } from '../firebase';
 import PermissionMatrix from '../components/PermissionMatrix';
 import ApprovalWorkflowManager from '../components/ApprovalWorkflowManager';
 import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';

@@ -35,6 +35,7 @@ const FleetManagement = lazy(() => import('./pages/FleetManagement'));
 const HRPayroll = lazy(() => import('./pages/HRPayroll'));
 const FirstRunSetup = lazy(() => import('./pages/FirstRunSetup'));
 import ApprovalInbox from './components/ApprovalInbox';
+import ChangePasswordRequired from './components/ChangePasswordRequired';
 
 export default function App() {
   // Try to load any existing active session, or default to null
@@ -709,6 +710,20 @@ export default function App() {
       </Suspense>
     );
   }
+
+  if (activeUser.must_change_password) {
+    return (
+      <ChangePasswordRequired
+        activeUser={activeUser}
+        language={language}
+        onPasswordChanged={(updatedUser) => {
+          setActiveUser(updatedUser);
+        }}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
 
   return (
     <Layout

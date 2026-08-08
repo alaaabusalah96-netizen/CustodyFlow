@@ -311,14 +311,6 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
     return headers;
   };
 
-  const ensureCompliantPassword = (p: string) => {
-    const trimmed = p.trim();
-    if (trimmed.length >= 12 && /[a-zA-Z]/.test(trimmed) && /[0-9]/.test(trimmed)) {
-      return trimmed;
-    }
-    return `Pass_${trimmed}_2026!`;
-  };
-
   const handleSaveCompanyAdmin = async (companyId: string, email: string, pass: string, permissions?: UserPermissions) => {
     if (!email || !email.trim()) return;
     const cleanEmail = email.trim().toLowerCase();
@@ -334,7 +326,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         permissions: permissions ? { ...existingAdmin.permissions, ...permissions } : existingAdmin.permissions
       };
       if (pass && pass.trim()) {
-        payload.password = ensureCompliantPassword(pass);
+        payload.password = pass.trim();
       }
 
       try {
@@ -360,14 +352,8 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
       }
     } else {
-      if (!pass || !pass.trim()) {
-        alert(isRtl ? 'كلمة المرور مطلوبة لإنشاء الحساب' : 'Password is required for account creation');
-        return;
-      }
-      const initialPass = ensureCompliantPassword(pass);
       const payload = {
         email: cleanEmail,
-        password: initialPass,
         full_name: isRtl ? 'أدمن الشركة' : 'Company Admin',
         role: 'Admin',
         company_id: companyId,
@@ -400,7 +386,8 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
           }
           await CustodyDB.saveUsers(allUsers);
         }
-        showStructToast(isRtl ? 'تم إنشاء وتوثيق حساب أدمن الشركة بنجاح!' : 'Company Admin created and provisioned successfully!');
+        const tempMsg = data.temporaryPassword ? (isRtl ? ` (كلمة المرور المؤقتة: ${data.temporaryPassword})` : ` (Temp Password: ${data.temporaryPassword})`) : '';
+        showStructToast((isRtl ? 'تم إنشاء وتوثيق حساب أدمن الشركة بنجاح!' : 'Company Admin created successfully!') + tempMsg);
         handleRefreshData();
       } catch (err: any) {
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
@@ -424,7 +411,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         permissions: permissions ? { ...existingManager.permissions, ...permissions } : existingManager.permissions
       };
       if (pass && pass.trim()) {
-        payload.password = ensureCompliantPassword(pass);
+        payload.password = pass.trim();
       }
 
       try {
@@ -450,14 +437,8 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
       }
     } else {
-      if (!pass || !pass.trim()) {
-        alert(isRtl ? 'كلمة المرور مطلوبة لإنشاء الحساب' : 'Password is required for account creation');
-        return;
-      }
-      const initialPass = ensureCompliantPassword(pass);
       const payload = {
         email: cleanEmail,
-        password: initialPass,
         full_name: isRtl ? 'مدير قطاع' : 'Regional Manager',
         role: 'RegionalManager',
         company_id: companyId,
@@ -490,7 +471,8 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
           }
           await CustodyDB.saveUsers(allUsers);
         }
-        showStructToast(isRtl ? 'تم إنشاء وتوثيق حساب مدير القطاع بنجاح!' : 'Regional Manager created and provisioned successfully!');
+        const tempMsg = data.temporaryPassword ? (isRtl ? ` (كلمة المرور المؤقتة: ${data.temporaryPassword})` : ` (Temp Password: ${data.temporaryPassword})`) : '';
+        showStructToast((isRtl ? 'تم إنشاء وتوثيق حساب مدير القطاع بنجاح!' : 'Regional Manager created successfully!') + tempMsg);
         handleRefreshData();
       } catch (err: any) {
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
@@ -515,7 +497,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         permissions: permissions ? { ...existingAdmin.permissions, ...permissions } : existingAdmin.permissions
       };
       if (pass && pass.trim()) {
-        payload.password = ensureCompliantPassword(pass);
+        payload.password = pass.trim();
       }
 
       try {
@@ -541,14 +523,8 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
       }
     } else {
-      if (!pass || !pass.trim()) {
-        alert(isRtl ? 'كلمة المرور مطلوبة لإنشاء الحساب' : 'Password is required for account creation');
-        return;
-      }
-      const initialPass = ensureCompliantPassword(pass);
       const payload = {
         email: cleanEmail,
-        password: initialPass,
         full_name: isRtl ? 'مسؤول فرع' : 'Branch Administrator',
         role: 'StationAdmin',
         company_id: companyId,
@@ -581,13 +557,15 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
           }
           await CustodyDB.saveUsers(allUsers);
         }
-        showStructToast(isRtl ? 'تم إنشاء وتوثيق حساب مسؤول الفرع بنجاح!' : 'Station Admin created and provisioned successfully!');
+        const tempMsg = data.temporaryPassword ? (isRtl ? ` (كلمة المرور المؤقتة: ${data.temporaryPassword})` : ` (Temp Password: ${data.temporaryPassword})`) : '';
+        showStructToast((isRtl ? 'تم إنشاء وتوثيق حساب مسؤول الفرع بنجاح!' : 'Station Admin created successfully!') + tempMsg);
         handleRefreshData();
       } catch (err: any) {
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
       }
     }
   };
+
 
   // 1. Create New Company
   const handleCreateCompany = (e: React.FormEvent) => {
@@ -626,8 +604,6 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUserForReset || !newPlainPassword.trim()) return;
-    
-    const compliantPass = ensureCompliantPassword(newPlainPassword);
 
     try {
       const res = await fetch(`/api/admin/users/${selectedUserForReset.id}`, {
@@ -635,7 +611,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         headers: await getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({
-          password: compliantPass
+          password: newPlainPassword.trim()
         })
       });
       const data = await res.json();

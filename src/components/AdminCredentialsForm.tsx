@@ -138,20 +138,10 @@ export default function AdminCredentialsForm({
     setIsEditing(false);
   };
 
-  const ensureCompliantPassword = (p: string) => {
-    const trimmed = p.trim();
-    if (trimmed.length >= 12 && /[a-zA-Z]/.test(trimmed) && /[0-9]/.test(trimmed)) {
-      return trimmed;
-    }
-    return `Pass_${trimmed}_2026!`;
-  };
-
   const handleApprove = async (req: SignupRequest) => {
     const cleanEmail = req.email.trim().toLowerCase();
-    const initialPass = ensureCompliantPassword(req.password || '123456');
     const payload = {
       email: cleanEmail,
-      password: initialPass,
       full_name: req.full_name,
       role: req.role,
       company_id: req.company_id,
@@ -191,7 +181,8 @@ export default function AdminCredentialsForm({
       await CustodyDB.deleteSignupRequest(req.id);
       CustodyDB.logAudit('APPROVE_SIGNUP_REQUEST', `Approved signup for ${req.full_name} (${req.email}) as ${req.role}`);
 
-      alert(isRtl ? 'تم قبول طلب التسجيل وتفعيل الحساب بنجاح!' : 'Signup request approved successfully!');
+      const tempMsg = data.temporaryPassword ? (isRtl ? `\nكلمة المرور المؤقتة: ${data.temporaryPassword}` : `\nTemporary Password: ${data.temporaryPassword}`) : '';
+      alert((isRtl ? 'تم قبول طلب التسجيل وتفعيل الحساب بنجاح!' : 'Signup request approved successfully!') + tempMsg);
       setActiveSubTab('account');
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('custody_db_updated'));
@@ -241,7 +232,7 @@ export default function AdminCredentialsForm({
         const patchPayload: Record<string, any> = {};
         if (correctionNewEmail.trim()) patchPayload.email = correctionNewEmail.trim().toLowerCase();
         if (correctionNewName.trim()) patchPayload.full_name = correctionNewName.trim();
-        if (correctionNewPassword.trim()) patchPayload.password = ensureCompliantPassword(correctionNewPassword);
+        if (correctionNewPassword.trim()) patchPayload.password = correctionNewPassword.trim();
 
         if (Object.keys(patchPayload).length > 0) {
           const res = await fetch(`/api/admin/users/${targetUser.id}`, {
