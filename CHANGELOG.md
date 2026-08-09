@@ -5,7 +5,21 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
-## Auth: Removal of Non-Vault Password Change Fallback
+## SuperAdmin Refactor & Navigation Routing (Unified SaaS Management)
+**Date:** 2026-08-09
+**Files Changed:** `src/App.tsx`, `src/pages/SuperAdmin.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Navigation & Routing (`src/App.tsx`)**:
+  - Redirected SystemAdmin users from the sidebar "الإعدادات" (Settings) tab directly to `<SuperAdmin initialSubTab="global_settings" />` instead of opening the legacy `Settings.tsx` page.
+- **SuperAdmin Tab Integration (`src/pages/SuperAdmin.tsx`)**:
+  - Added 6th sub-tab "الإعدادات والصلاحيات العامة" (`global_settings`) hosting platform-wide `PermissionMatrix` and full JSON database snapshot backup/restore cards.
+  - Implemented Minimal/Clean Design System (Stripe/Linear style): `#FAFAFA` background, `#FFFFFF` cards, `#18181B` primary text, `#71717A` secondary text, `#2451B8` cobalt primary accent, `#16794F` success status badges, `#B91C1C` danger badges.
+  - Integrated primary Registered Companies Table directly into the main `companies` sub-tab view (Column structure: Name/ID/Plan, Active/Disabled status, User Count, Expiry Date, Quick Actions).
+  - Added interactive column sorting (ascending/descending) for Company Name, Status, User Count, and Expiry Date.
+- **Verification**:
+  - `lint_applet` passed with 0 errors.
+  - `compile_applet` built cleanly with zero TypeScript/build errors.
+  - `vitest run` passed 100% green across all 36 test suites and 222 unit tests.
 **Date:** 2026-08-09
 **Files Changed:** `server.ts`, `CHANGELOG.md`
 **Summary:**
@@ -2738,6 +2752,24 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 ## TEMPORARY — Auth Bypass (No Login)
 **Date:** 2026-08-01
 **Summary:** Disabled all login screens, password verification, and legacy hash migration paths. App boots directly as a local SystemAdmin DEV user (`dev-bypass-user`). Controlled by `AUTH_BYPASS_ENABLED` in `src/App.tsx` and `AUTH_BYPASS` on the server. This is reversible; real auth will be rebuilt later after wiping all accounts.
+
+---
+
+## Multi-Company Seed Datasets & Administrative Structures
+**Date:** 2026-08-09
+**Files Changed:** `src/db/defaults.ts`, `src/db.ts`, `src/pages/SuperAdmin.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Seeded Diverse Corporate Structures (`src/db/defaults.ts`)**:
+  - **السويدي للصناعات الهندسية (El-Sewedy Industrial Group)**: Manufacturing/Industrial structure (Holding HQ -> 10th Ramadan Cables & Sadat Plants -> Production Lines, Quality Control, and Raw Material Stores). Provisioned Admin (`sewedy.admin@local`) and Station Cashier (`sewedy.cashier@local`).
+  - **كارفور مصر لتجارة التجزئة (Carrefour Egypt Retail)**: Retail Supermarkets structure (Corporate HQ -> Greater Cairo Stores -> Maadi Hypermarket & Express Stores -> Cashier Vaults & Fresh Foods). Provisioned Admin (`carrefour.admin@local`) and Station Cashier (`carrefour.cashier@local`).
+  - **شركة القاهرة للإنتاج الداجني والزراعي (Cairo Poultry Group)**: Agriculture/Poultry structure (HQ -> Farms & Breeding Sector -> Sina 2000 & Qadisiya Stations -> Broiler Farms & Feed Silos). Provisioned Admin (`cairo.admin@local`) and Station Cashier (`cairo.cashier@local`).
+- **Seed Engine (`src/db.ts`)**:
+  - Added `CustodyDB.seedSampleData()` static method to populate companies, regions, stations, organization units, users, transactions, categories, vouchers, and permissions into local `StorageEngine` and synchronize with Firestore `seedDatabaseIfEmpty`.
+- **SuperAdmin Demo Control UI (`src/pages/SuperAdmin.tsx`)**:
+  - Added interactive Demo Seed Datasets section under `global_settings` sub-tab displaying the 3 archetype company cards with their organizational structures, test user accounts, and a 1-click "شحن البيانات التجريبية الآن" reload button.
+- **Verification**:
+  - Applet compilation (`compile_applet`) succeeded cleanly with 0 TypeScript/build errors.
+
 
 
 

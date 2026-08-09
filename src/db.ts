@@ -102,6 +102,49 @@ export class CustodyDB {
     });
   }
 
+  static async seedSampleData(): Promise<void> {
+    StorageEngine.setStored('companies', DEFAULT_COMPANIES);
+    StorageEngine.setStored('regions', DEFAULT_REGIONS);
+    StorageEngine.setStored('stations', DEFAULT_STATIONS);
+    StorageEngine.setStored('organization_units', DEFAULT_ORGANIZATION_UNITS);
+    StorageEngine.setStored('users', DEFAULT_USERS);
+    StorageEngine.setStored('transactions', DEFAULT_TRANSACTIONS);
+    StorageEngine.setStored('categories', DEFAULT_CATEGORIES);
+    StorageEngine.setStored('expenses', DEFAULT_EXPENSES);
+    StorageEngine.setStored('vouchers', DEFAULT_VOUCHERS);
+    StorageEngine.setStored('permissions', DEFAULT_PERMISSIONS);
+    StorageEngine.setStored('roles', DEFAULT_ROLES);
+
+    CustodyDB.clearCache();
+
+    try {
+      await seedDatabaseIfEmpty({
+        companies: DEFAULT_COMPANIES,
+        regions: DEFAULT_REGIONS,
+        stations: DEFAULT_STATIONS,
+        categories: DEFAULT_CATEGORIES,
+        users: DEFAULT_USERS,
+        transactions: DEFAULT_TRANSACTIONS,
+        logs: DEFAULT_LOGS,
+        config: DEFAULT_CONFIG,
+        expenses: DEFAULT_EXPENSES,
+        cashVouchers: DEFAULT_VOUCHERS,
+        transactionHistory: DEFAULT_TX_HISTORY,
+        notifications: DEFAULT_NOTIFICATIONS,
+        auditLogs: DEFAULT_AUDIT_LOGS,
+        permissions: DEFAULT_PERMISSIONS,
+        roles: DEFAULT_ROLES,
+        organizationUnits: DEFAULT_ORGANIZATION_UNITS
+      });
+    } catch (e) {
+      console.warn('Firebase seed failed, local storage seeded successfully:', e);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('custody_db_updated', { detail: { key: 'all' } }));
+    }
+  }
+
   static enrichUserPermissions(role: UserRole, currentPerms?: Partial<UserPermissions>): UserPermissions {
     return UsersModule.enrichUserPermissions(role, currentPerms);
   }

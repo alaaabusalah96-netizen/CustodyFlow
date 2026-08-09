@@ -6,21 +6,23 @@ import {
   Building2, ShieldCheck, KeyRound, UserCheck, RefreshCw, AlertTriangle, 
   Plus, Calendar, Sparkles, User, LogOut, ClipboardList, Info, Check, Search, ShieldAlert,
   Globe, Laptop, FileText, CheckCircle2, XCircle, Network, X, Settings, Trash2, Edit,
-  PlusCircle, Building, Layers, Power, Activity, RotateCcw, Lock
+  PlusCircle, Building, Layers, Power, Activity, RotateCcw, Lock, Download, Upload, ArrowUpDown, Sliders
 } from 'lucide-react';
 import AdminCredentialsForm from '../components/AdminCredentialsForm';
 import SuperAdminImpersonateTab from '../components/SuperAdminImpersonateTab';
 import SuperAdminAuditTab from '../components/SuperAdminAuditTab';
 import SuperAdminSecurityTab from '../components/SuperAdminSecurityTab';
 import SuperAdminOperationsTab from '../components/SuperAdminOperationsTab';
+import PermissionMatrix from '../components/PermissionMatrix';
 
 interface SuperAdminProps {
   language: Language;
   theme: Theme;
+  initialSubTab?: 'companies' | 'operations' | 'impersonate' | 'audit' | 'security' | 'global_settings';
 }
 
 
-export default function SuperAdmin({ language, theme }: SuperAdminProps) {
+export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdminProps) {
   useScreenListeners(['AuditLogs', 'logs', 'transactions', 'deleted_transactions', 'signup_requests']);
 
   const isRtl = language === 'ar';
@@ -29,7 +31,26 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
   const [companies, setCompanies] = useState<Company[]>(() => CustodyDB.getCompanies());
   const [users, setUsers] = useState<AppUser[]>(() => CustodyDB.getUsers());
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => CustodyDB.getAuditLogs());
-  const [activeSubTab, setActiveSubTab] = useState<'companies' | 'operations' | 'impersonate' | 'audit' | 'security'>('companies');
+  const [activeSubTab, setActiveSubTab] = useState<'companies' | 'operations' | 'impersonate' | 'audit' | 'security' | 'global_settings'>(initialSubTab || 'companies');
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
+
+  // Company Table Sorting State
+  const [sortField, setSortField] = useState<'name' | 'status' | 'userCount' | 'expiry'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (field: 'name' | 'status' | 'userCount' | 'expiry') => {
+    if (sortField === field) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
 
   const handleRefreshData = () => {
     setCompanies(CustodyDB.getCompanies());
@@ -57,6 +78,7 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newCompanyCustody, setNewCompanyCustody] = useState<number>(0);
   const [showCreateCompanyModal, setShowCreateCompanyModal] = useState(false);
+  const [isSeedingData, setIsSeedingData] = useState(false);
 
   // Edit Subscription state
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
@@ -779,6 +801,113 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
     );
   }, [companies, companySearch]);
 
+  const sortedAndFilteredCompanies = useMemo(() => {
+    const list = [...filteredCompanies];
+    list.sort((a, b) => {
+      let aVal: any = '';
+      let bVal: any = '';
+
+      if (sortField === 'name') {
+        aVal = (a.name || '').toLowerCase();
+        bVal = (b.name || '').toLowerCase();
+      } else if (sortField === 'status') {
+        aVal = a.is_active !== false ? 'active' : 'disabled';
+        bVal = b.is_active !== false ? 'active' : 'disabled';
+      } else if (sortField === 'userCount') {
+        aVal = users.filter(u => u.company_id === a.id).length;
+        bVal = users.filter(u => u.company_id === b.id).length;
+      } else if (sortField === 'expiry') {
+        aVal = a.subscription_expiry || '';
+        bVal = b.subscription_expiry || '';
+      }
+
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return list;
+  }, [filteredCompanies, sortField, sortOrder, users]);
+
+  // Database Backup and Restore Handlers
+  const handleExportBackup = () => {
+    try {
+      const backupObj = {
+        version: '2.5',
+        exportedAt: new Date().toISOString(),
+        companies: CustodyDB.getCompanies(),
+        regions: CustodyDB.getRegions(),
+        stations: CustodyDB.getStations(),
+        categories: CustodyDB.getCategories(),
+        users: CustodyDB.getUsers(),
+        transactions: CustodyDB.getTransactions(),
+        auditLogs: CustodyDB.getAuditLogs(),
+        logs: CustodyDB.getLogs(),
+        deletedTransactions: CustodyDB.getDeletedTransactions()
+      };
+
+      const dataStr = JSON.stringify(backupObj, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+      const exportFileDefaultName = `kemiterp-backup-${new Date().toISOString().slice(0, 10)}.json`;
+
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+
+      CustodyDB.logAudit('EXPORT_BACKUP', 'Exported full platform JSON database snapshot');
+      showStructToast(isRtl ? 'تم تصدير نسخة احتياطية كاملة بنجاح.' : 'JSON Database snapshot exported successfully.');
+    } catch (e) {
+      alert(isRtl ? 'فشل تصدير البيانات.' : 'Backup failed.');
+    }
+  };
+
+  const handleRestoreData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileReader = new FileReader();
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    fileReader.onload = async (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (!parsed.companies || !parsed.users || !parsed.transactions) {
+          alert(isRtl ? 'ملف النسخة الاحتياطية غير صالح أو ناقص البنية!' : 'Invalid backup file schema!');
+          return;
+        }
+
+        if (parsed.companies) CustodyDB.saveCompanies(parsed.companies);
+        if (parsed.regions) CustodyDB.saveRegions(parsed.regions);
+        if (parsed.stations) CustodyDB.saveStations(parsed.stations);
+        if (parsed.categories) CustodyDB.saveCategories(parsed.categories);
+        if (parsed.users) await CustodyDB.saveUsers(parsed.users);
+        if (parsed.transactions) CustodyDB.saveTransactions(parsed.transactions);
+
+        CustodyDB.logAudit('RESTORE_BACKUP', `Restored database snapshot containing ${parsed.transactions.length} transactions and ${parsed.users.length} users.`);
+        showStructToast(isRtl ? 'تم استعادة قاعدة البيانات وتحديث النظام بالكامل بنجاح!' : 'Database successfully restored and synchronized.');
+        handleRefreshData();
+      } catch (err) {
+        alert(isRtl ? 'فشل قراءة الملف كبنية JSON صالحة.' : 'Failed to parse JSON backup file.');
+      }
+    };
+    fileReader.readAsText(file);
+  };
+
+  const handleSeedData = async () => {
+    if (!confirm(isRtl ? 'هل تريد شحن وتجديد البيانات التجريبية الشاملة لجميع الشركات والتقسيمات الإدارية؟' : 'Do you want to reload full multi-company seed datasets?')) {
+      return;
+    }
+    setIsSeedingData(true);
+    try {
+      await CustodyDB.seedSampleData();
+      showStructToast(isRtl ? 'تم شحن وتأكيد البيانات التجريبية الشاملة لجميع الشركات بنجاح!' : 'Full sample datasets re-seeded successfully!');
+      handleRefreshData();
+    } catch (e: any) {
+      alert(isRtl ? `خطأ أثناء شحن البيانات: ${e.message}` : `Error seeding data: ${e.message}`);
+    } finally {
+      setIsSeedingData(false);
+    }
+  };
+
   const companyAdmins = useMemo(() => {
     return users.filter(u => 
       u.role === 'Admin' && 
@@ -1017,6 +1146,17 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
           <ShieldCheck size={16} />
           <span>{isRtl ? 'أمان التشفير (Phase 4.1)' : 'Security & Encryption (Phase 4.1)'}</span>
         </button>
+        <button
+          onClick={() => setActiveSubTab('global_settings')}
+          className={`px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center lg:justify-start gap-2 transition-all cursor-pointer ${
+            activeSubTab === 'global_settings'
+              ? 'bg-[#2451B8] text-white shadow-md'
+              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Sliders size={16} />
+          <span>{isRtl ? 'الإعدادات والصلاحيات العامة' : 'Global Settings & Permissions'}</span>
+        </button>
       </div>
 
       {/* Tab Contents */}
@@ -1057,6 +1197,169 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
                 <Settings size={14} />
                 <span>{isRtl ? 'إدارة الهيكل التنظيمي والمحطات' : 'Organization Structure Builder'}</span>
               </button>
+            </div>
+          </div>
+
+          {/* Registered Companies Table (Stripe/Linear Clean Minimal Style) */}
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#FAFAFA] dark:bg-slate-900/50">
+              <div className="flex items-center gap-2">
+                <Building2 size={18} className="text-[#2451B8]" />
+                <h3 className="font-bold text-sm text-[#18181B] dark:text-slate-100">
+                  {isRtl ? 'دليل الشركات المسجلة بالمنصة' : 'Registered SaaS Entities Directory'}
+                </h3>
+                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[#71717A] dark:text-slate-400">
+                  {sortedAndFilteredCompanies.length}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={startStructAddCompany}
+                  className="px-3.5 py-1.5 rounded-md bg-[#2451B8] hover:bg-[#1d429a] text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer"
+                >
+                  <Plus size={14} />
+                  <span>{isRtl ? 'إضافة شركة جديدة' : 'Add Company'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs" dir={isRtl ? 'rtl' : 'ltr'}>
+                <thead>
+                  <tr className="bg-[#FAFAFA] dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[#71717A] font-semibold">
+                    <th 
+                      onClick={() => handleSort('name')}
+                      className="p-3 text-right cursor-pointer hover:text-[#18181B] select-none"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>{isRtl ? 'اسم الشركة' : 'Company Name'}</span>
+                        <ArrowUpDown size={12} className={sortField === 'name' ? 'text-[#2451B8]' : 'text-slate-400'} />
+                      </div>
+                    </th>
+                    <th 
+                      onClick={() => handleSort('status')}
+                      className="p-3 text-right cursor-pointer hover:text-[#18181B] select-none"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>{isRtl ? 'الحالة' : 'Status'}</span>
+                        <ArrowUpDown size={12} className={sortField === 'status' ? 'text-[#2451B8]' : 'text-slate-400'} />
+                      </div>
+                    </th>
+                    <th 
+                      onClick={() => handleSort('userCount')}
+                      className="p-3 text-center cursor-pointer hover:text-[#18181B] select-none"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>{isRtl ? 'عدد المستخدمين' : 'Users'}</span>
+                        <ArrowUpDown size={12} className={sortField === 'userCount' ? 'text-[#2451B8]' : 'text-slate-400'} />
+                      </div>
+                    </th>
+                    <th 
+                      onClick={() => handleSort('expiry')}
+                      className="p-3 text-right cursor-pointer hover:text-[#18181B] select-none"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>{isRtl ? 'انتهاء الاشتراك' : 'Expiry Date'}</span>
+                        <ArrowUpDown size={12} className={sortField === 'expiry' ? 'text-[#2451B8]' : 'text-slate-400'} />
+                      </div>
+                    </th>
+                    <th className="p-3 text-center">{isRtl ? 'إجراءات سريعة' : 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {sortedAndFilteredCompanies.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-[#71717A]">
+                        {isRtl ? 'لا توجد شركات مطابقة للبحث' : 'No matching companies found'}
+                      </td>
+                    </tr>
+                  ) : (
+                    sortedAndFilteredCompanies.map((c) => {
+                      const userCount = users.filter(u => u.company_id === c.id).length;
+                      const isActive = c.is_active !== false;
+                      const plan = c.subscription_plan || 'Basic';
+                      const expiry = c.subscription_expiry || '—';
+
+                      return (
+                        <tr key={c.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                          <td className="p-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-2 rounded-md bg-slate-100 dark:bg-slate-800 text-[#2451B8]">
+                                <Building2 size={16} />
+                              </div>
+                              <div>
+                                <div className="font-bold text-[#18181B] dark:text-slate-100">{c.name}</div>
+                                <div className="text-[10px] font-mono text-[#71717A] flex items-center gap-1.5">
+                                  <span>ID: {c.id}</span>
+                                  <span>•</span>
+                                  <span className="capitalize">{plan} Plan</span>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            {isActive ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold text-[#16794F] bg-[#16794F]/10 border border-[#16794F]/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#16794F]" />
+                                <span>{isRtl ? 'نشطة' : 'Active'}</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold text-[#B91C1C] bg-[#B91C1C]/10 border border-[#B91C1C]/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#B91C1C]" />
+                                <span>{isRtl ? 'معطّلة' : 'Disabled'}</span>
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className="font-mono font-bold text-xs text-[#18181B] dark:text-slate-100 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md">
+                              {userCount}
+                            </span>
+                          </td>
+                          <td className="p-3 font-mono text-xs text-[#71717A] dark:text-slate-300">
+                            {expiry}
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setEditingCompany(c);
+                                  setSubPlan(c.subscription_plan || 'Basic');
+                                  setSubStatus(c.subscription_status || 'active');
+                                  setSubExpiry(c.subscription_expiry || '');
+                                  setCompanyModules(ModulesModule.getCompanyModules(c.id));
+                                  setActiveModalTab('subscription');
+                                }}
+                                title={isRtl ? 'تعديل والاشتراك' : 'Edit & Subscription'}
+                                className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-[#2451B8] transition-colors cursor-pointer"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleToggleCompanyActive(c.id, isActive)}
+                                title={isActive ? (isRtl ? 'تعطيل' : 'Disable') : (isRtl ? 'تفعيل' : 'Activate')}
+                                className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+                                  isActive 
+                                    ? 'hover:bg-rose-50 text-[#B91C1C] dark:hover:bg-rose-950/30' 
+                                    : 'hover:bg-emerald-50 text-[#16794F] dark:hover:bg-emerald-950/30'
+                                }`}
+                              >
+                                <Power size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleStructDeleteCompany(c.id)}
+                                title={isRtl ? 'حذف' : 'Delete'}
+                                className="p-1.5 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/30 text-[#B91C1C] transition-colors cursor-pointer"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -1823,6 +2126,181 @@ export default function SuperAdmin({ language, theme }: SuperAdminProps) {
         <SuperAdminSecurityTab
           isRtl={isRtl}
         />
+      )}
+
+      {activeSubTab === 'global_settings' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Global Permission Matrix Section */}
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+              <div>
+                <h3 className="font-bold text-base text-[#18181B] dark:text-slate-100 flex items-center gap-2">
+                  <ShieldCheck className="text-[#2451B8]" size={20} />
+                  <span>{isRtl ? 'مصفوفة الصلاحيات العامة للنظام' : 'Platform Permission Matrix'}</span>
+                </h3>
+                <p className="text-xs text-[#71717A] dark:text-slate-400 mt-1">
+                  {isRtl
+                    ? 'تحديد وإدارة مستويات الوصول الافتراضية لكافة أدوار المستخدمين عبر المنصة'
+                    : 'Configure default permission levels across all platform user roles'}
+                </p>
+              </div>
+            </div>
+            <PermissionMatrix language={language} theme={theme} />
+          </div>
+
+          {/* Platform Backup & Restore Section */}
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-4">
+            <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
+              <h3 className="font-bold text-base text-[#18181B] dark:text-slate-100 flex items-center gap-2">
+                <Download className="text-[#2451B8]" size={20} />
+                <span>{isRtl ? 'النسخ الاحتياطي واستعادة قاعدة البيانات العامة' : 'Platform Database Backup & Snapshot'}</span>
+              </h3>
+              <p className="text-xs text-[#71717A] dark:text-slate-400 mt-1">
+                {isRtl
+                  ? 'تصدير أو استعادة لقطة شاملة لقاعدة بيانات المنصة بالكامل بجميع الشركات والعمليات (ملف JSON)'
+                  : 'Export or restore a complete platform JSON database snapshot containing all entities'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              {/* Export Card */}
+              <div className="p-5 rounded-lg border border-slate-200 dark:border-slate-800 bg-[#FAFAFA] dark:bg-slate-800/40 space-y-3">
+                <div className="flex items-center gap-2 text-[#18181B] dark:text-slate-100 font-bold text-sm">
+                  <Download size={18} className="text-[#2451B8]" />
+                  <span>{isRtl ? 'تصدير نسخة احتياطية' : 'Export Full Snapshot'}</span>
+                </div>
+                <p className="text-xs text-[#71717A] dark:text-slate-400 leading-relaxed">
+                  {isRtl
+                    ? 'قم بتنزيل ملف JSON يحتوي على سجلات الشركات، القطاعات، المحطات، المستخدمين، وجميع القيود والمعاملات المالية.'
+                    : 'Download a full JSON file containing all companies, regions, stations, users, and financial records.'}
+                </p>
+                <button
+                  onClick={handleExportBackup}
+                  className="w-full sm:w-auto px-4 py-2 bg-[#2451B8] hover:bg-[#1d429a] text-white font-semibold rounded-md text-xs transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Download size={15} />
+                  <span>{isRtl ? 'تنزيل ملف النسخة الاحتياطية (JSON)' : 'Download Backup File (.json)'}</span>
+                </button>
+              </div>
+
+              {/* Restore Card */}
+              <div className="p-5 rounded-lg border border-slate-200 dark:border-slate-800 bg-[#FAFAFA] dark:bg-slate-800/40 space-y-3">
+                <div className="flex items-center gap-2 text-[#18181B] dark:text-slate-100 font-bold text-sm">
+                  <Upload size={18} className="text-[#2451B8]" />
+                  <span>{isRtl ? 'استعادة قاعدة البيانات' : 'Restore Database Snapshot'}</span>
+                </div>
+                <p className="text-xs text-[#71717A] dark:text-slate-400 leading-relaxed">
+                  {isRtl
+                    ? 'رفع ملف نسخة احتياطية (JSON) لتحديث واستبدال سجلات المنصة الحالية بالكامل. يرجى التوخي بالتنفيذ.'
+                    : 'Upload a valid JSON backup file to overwrite/synchronize current platform database records.'}
+                </p>
+                <label className="inline-flex w-full sm:w-auto px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[#18181B] dark:text-slate-200 font-semibold rounded-md text-xs hover:bg-slate-50 transition-all shadow-xs items-center justify-center gap-2 cursor-pointer">
+                  <Upload size={15} />
+                  <span>{isRtl ? 'اختيار ملف JSON واستعادة' : 'Select Backup File (.json)'}</span>
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleRestoreData}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Seed Demo Data Section */}
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+              <div>
+                <h3 className="font-bold text-base text-[#18181B] dark:text-slate-100 flex items-center gap-2">
+                  <Sparkles className="text-[#2451B8]" size={20} />
+                  <span>{isRtl ? 'بيانات النظام التجريبية للشركات والتقسيمات الإدارية' : 'Multi-Company Demo Seed Data'}</span>
+                </h3>
+                <p className="text-xs text-[#71717A] dark:text-slate-400 mt-1">
+                  {isRtl
+                    ? 'شحن وإعادة تجديد البيانات الأولية لـ 3 شركات نموذجية بقطاعات، محطات، مستودعات، وحسابات مستخدمين متنوعة لتجربة كافة الموديولات'
+                    : 'Reload seeded environments for 3 sample enterprise structures (Manufacturing, Retail, Poultry)'}
+                </p>
+              </div>
+              <button
+                onClick={handleSeedData}
+                disabled={isSeedingData}
+                className="px-4 py-2 bg-[#2451B8] hover:bg-[#1d429a] text-white font-semibold rounded-md text-xs transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw size={15} className={isSeedingData ? 'animate-spin' : ''} />
+                <span>{isSeedingData ? (isRtl ? 'جاري الشحن...' : 'Seeding...') : (isRtl ? 'شحن البيانات التجريبية الآن' : 'Reload Seed Data Now')}</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+              {/* Company 1 */}
+              <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-[#FAFAFA] dark:bg-slate-800/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                    {isRtl ? 'هيكل صناعي ومصانع' : 'Manufacturing'}
+                  </span>
+                  <span className="text-[10px] text-[#71717A]">comp-sewedy-mfg</span>
+                </div>
+                <h4 className="font-bold text-sm text-[#18181B] dark:text-slate-100">
+                  {isRtl ? 'مجموعة السويدي للصناعات الهندسية' : 'El-Sewedy Industrial Group'}
+                </h4>
+                <p className="text-xs text-[#71717A] dark:text-slate-400 leading-relaxed">
+                  {isRtl
+                    ? 'الشركة القابضة ← مصنع العاشر (كابلات) ومصنع السادات ← خطوط الإنتاج والجودة والمستودعات.'
+                    : 'HQ → 10th Ramadan Cables & Sadat Plants → Production Lines, Quality Control, and Raw Material Stores.'}
+                </p>
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60 text-[11px] space-y-1 text-slate-600 dark:text-slate-300 font-mono">
+                  <div><strong>Admin:</strong> sewedy.admin@local</div>
+                  <div><strong>Cashier:</strong> sewedy.cashier@local</div>
+                </div>
+              </div>
+
+              {/* Company 2 */}
+              <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-[#FAFAFA] dark:bg-slate-800/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                    {isRtl ? 'هيكل تجاري وسلاسل' : 'Retail Supermarkets'}
+                  </span>
+                  <span className="text-[10px] text-[#71717A]">comp-carrefour-retail</span>
+                </div>
+                <h4 className="font-bold text-sm text-[#18181B] dark:text-slate-100">
+                  {isRtl ? 'كارفور مصر لتجارة التجزئة' : 'Carrefour Egypt Retail Supermarkets'}
+                </h4>
+                <p className="text-xs text-[#71717A] dark:text-slate-400 leading-relaxed">
+                  {isRtl
+                    ? 'المقر الرئيسي ← قطاع فروع القاهرة والجيزة ← هايبر المعادي وإكسبريس التجمع ← خزن الكاشير والأغذية.'
+                    : 'Corporate HQ → Greater Cairo Stores → Maadi Hypermarket & Express Stores → Cashier Vaults & Fresh Foods.'}
+                </p>
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60 text-[11px] space-y-1 text-slate-600 dark:text-slate-300 font-mono">
+                  <div><strong>Admin:</strong> carrefour.admin@local</div>
+                  <div><strong>Cashier:</strong> carrefour.cashier@local</div>
+                </div>
+              </div>
+
+              {/* Company 3 */}
+              <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-[#FAFAFA] dark:bg-slate-800/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                    {isRtl ? 'هيكل داجني وزراعي' : 'Poultry & Agriculture'}
+                  </span>
+                  <span className="text-[10px] text-[#71717A]">comp-cairo-poultry</span>
+                </div>
+                <h4 className="font-bold text-sm text-[#18181B] dark:text-slate-100">
+                  {isRtl ? 'شركة القاهرة للإنتاج الداجني والزراعي' : 'Cairo Poultry Group'}
+                </h4>
+                <p className="text-xs text-[#71717A] dark:text-slate-400 leading-relaxed">
+                  {isRtl
+                    ? 'المقر الرئيسي ← قطاع المزارع والتربية ← محطة سينا 2000 والقادسية ← مزارع التسمين وصوامع الأعلاف.'
+                    : 'HQ → Farms & Breeding Sector → Sina 2000 & Qadisiya Stations → Broiler Farms & Feed Silos.'}
+                </p>
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60 text-[11px] space-y-1 text-slate-600 dark:text-slate-300 font-mono">
+                  <div><strong>Admin:</strong> cairo.admin@local</div>
+                  <div><strong>Cashier:</strong> cairo.cashier@local</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* MODAL 1: Create Company */}

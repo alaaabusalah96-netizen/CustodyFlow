@@ -76,12 +76,12 @@ export const DEFAULT_CATEGORIES: ExpenseCategory[] = [
   { id: 'cat-6', name_en: 'Miscellaneous', name_ar: 'مصاريف نثرية أخرى' }
 ];
 
-// Pre-configured Users (12 seeded accounts across 5 Egyptian industries)
+// Pre-configured Users (Seeded accounts across 3 diverse Egyptian company structures)
 export const DEFAULT_USERS: AppUser[] = [
   {
     id: 'dev-bypass-user',
     email: 'dev@local',
-    full_name: 'Dev Bypass (مؤقت)',
+    full_name: 'مدير النظام الشامل (System Owner)',
     role: 'SystemAdmin',
     is_active: true,
     is_platform_owner: true,
@@ -95,11 +95,187 @@ export const DEFAULT_USERS: AppUser[] = [
       manage_settings: true, settle_voucher: true,
     },
   },
+  // 1. Industrial / Manufacturing Company Users (El-Sewedy)
+  {
+    id: 'user-sewedy-admin',
+    email: 'sewedy.admin@local',
+    full_name: 'أحمد السويدي (مدير الشركة)',
+    role: 'Admin',
+    is_active: true,
+    company_id: 'comp-sewedy-mfg',
+    permissions: {
+      create_expense: false, edit_expense: true, delete_expense: true,
+      create_voucher: false, approve_voucher: true, reject_voucher: true,
+      create_custody: true, edit_custody: true, replace_custody: true,
+      view_reports: true, manage_users: true, manage_companies: false,
+      manage_regions: true, manage_stations: true, manage_roles: true,
+      manage_settings: true, settle_voucher: false,
+    },
+  },
+  {
+    id: 'user-sewedy-cashier',
+    email: 'sewedy.cashier@local',
+    full_name: 'محمود حسن (أمين عهدة مصنع العاشر)',
+    role: 'StationAdmin',
+    is_active: true,
+    company_id: 'comp-sewedy-mfg',
+    region_id: 'reg-sewedy-10th',
+    station_id: 'stn-sewedy-fac-1',
+    permissions: {
+      create_expense: true, edit_expense: true, delete_expense: false,
+      create_voucher: true, approve_voucher: false, reject_voucher: false,
+      create_custody: false, edit_custody: false, replace_custody: false,
+      view_reports: true, manage_users: false, manage_companies: false,
+      manage_regions: false, manage_stations: false, manage_roles: false,
+      manage_settings: false, settle_voucher: true,
+    },
+  },
+  // 2. Retail / Supermarket Chain Users (Carrefour)
+  {
+    id: 'user-carrefour-admin',
+    email: 'carrefour.admin@local',
+    full_name: 'طارق القاضي (مدير التجارة والتجزئة)',
+    role: 'Admin',
+    is_active: true,
+    company_id: 'comp-carrefour-retail',
+    permissions: {
+      create_expense: false, edit_expense: true, delete_expense: true,
+      create_voucher: false, approve_voucher: true, reject_voucher: true,
+      create_custody: true, edit_custody: true, replace_custody: true,
+      view_reports: true, manage_users: true, manage_companies: false,
+      manage_regions: true, manage_stations: true, manage_roles: true,
+      manage_settings: true, settle_voucher: false,
+    },
+  },
+  {
+    id: 'user-carrefour-cashier',
+    email: 'carrefour.cashier@local',
+    full_name: 'يوسف منصور (أمين عهدة فرع المعادي)',
+    role: 'StationAdmin',
+    is_active: true,
+    company_id: 'comp-carrefour-retail',
+    region_id: 'reg-carrefour-north',
+    station_id: 'stn-carrefour-store-1',
+    permissions: {
+      create_expense: true, edit_expense: true, delete_expense: false,
+      create_voucher: true, approve_voucher: false, reject_voucher: false,
+      create_custody: false, edit_custody: false, replace_custody: false,
+      view_reports: true, manage_users: false, manage_companies: false,
+      manage_regions: false, manage_stations: false, manage_roles: false,
+      manage_settings: false, settle_voucher: true,
+    },
+  },
+  // 3. Poultry / Agricultural Company Users (Cairo Poultry)
+  {
+    id: 'user-admin',
+    email: 'cairo.admin@local',
+    full_name: 'أحمد السيد (مدير شركة القاهرة للدواجن)',
+    role: 'Admin',
+    is_active: true,
+    company_id: 'comp-cairo-poultry',
+    permissions: {
+      create_expense: false, edit_expense: true, delete_expense: true,
+      create_voucher: false, approve_voucher: true, reject_voucher: true,
+      create_custody: true, edit_custody: true, replace_custody: true,
+      view_reports: true, manage_users: true, manage_companies: false,
+      manage_regions: true, manage_stations: true, manage_roles: true,
+      manage_settings: true, settle_voucher: false,
+    },
+  },
+  {
+    id: 'user-regular',
+    email: 'cairo.cashier@local',
+    full_name: 'مريم علي (أمين عهدة محطة سينا 2000)',
+    role: 'StationAdmin',
+    is_active: true,
+    company_id: 'comp-cairo-poultry',
+    region_id: 'reg-cairo-east',
+    station_id: 'stn-cairo-1',
+    permissions: {
+      create_expense: true, edit_expense: true, delete_expense: false,
+      create_voucher: true, approve_voucher: false, reject_voucher: false,
+      create_custody: false, edit_custody: false, replace_custody: false,
+      view_reports: true, manage_users: false, manage_companies: false,
+      manage_regions: false, manage_stations: false, manage_roles: false,
+      manage_settings: false, settle_voucher: true,
+    },
+  },
 ];
 
 // Pre-seeded Transactions
 export const generateDefaultTransactions = (): Transaction[] => {
   return [
+    // El-Sewedy Manufacturing Transactions
+    {
+      id: 'tx-sew-1',
+      transaction_no: 'CPV-SEW-0001',
+      date: '2026-07-02',
+      description: 'شراء قطع غيار وزيوت صيانة لخط السحب بمصنع العاشر',
+      category_id: 'cat-4',
+      amount: 4850.00,
+      notes: 'صيانة دورية عاجلة لخط السحب والتغليف',
+      status: 'Under Settlement',
+      voucher_no: 'VCH-SEW-0001',
+      voucher_date: '2026-07-03',
+      created_by: 'user-sewedy-cashier',
+      created_at: '2026-07-02T08:30:00Z',
+      updated_at: '2026-07-03T10:00:00Z',
+      station_id: 'stn-sewedy-fac-1',
+      company_id: 'comp-sewedy-mfg'
+    },
+    {
+      id: 'tx-sew-2',
+      transaction_no: 'CPV-SEW-0002',
+      date: '2026-07-04',
+      description: 'معدات أمان وسلامة وصحة مهنية لعمال المصنع',
+      category_id: 'cat-1',
+      amount: 2300.00,
+      notes: 'معلق للتعميد والاعتماد النهائي',
+      status: 'Pending',
+      created_by: 'user-sewedy-cashier',
+      created_at: '2026-07-04T09:15:00Z',
+      updated_at: '2026-07-04T09:15:00Z',
+      station_id: 'stn-sewedy-fac-1',
+      company_id: 'comp-sewedy-mfg'
+    },
+
+    // Carrefour Retail Supermarket Transactions
+    {
+      id: 'tx-crf-1',
+      transaction_no: 'CPV-CRF-0001',
+      date: '2026-07-01',
+      description: 'استعاضة فراش الكاشير وفكة النقدية لفرع المعادي',
+      category_id: 'cat-6',
+      amount: 5000.00,
+      notes: 'تمت الاستعاضة والاعتماد نقداً',
+      status: 'Settled',
+      voucher_no: 'VCH-CRF-0001',
+      voucher_date: '2026-07-01',
+      created_by: 'user-carrefour-cashier',
+      created_at: '2026-07-01T07:00:00Z',
+      updated_at: '2026-07-01T08:30:00Z',
+      station_id: 'stn-carrefour-store-1',
+      company_id: 'comp-carrefour-retail'
+    },
+    {
+      id: 'tx-crf-2',
+      transaction_no: 'CPV-CRF-0002',
+      date: '2026-07-03',
+      description: 'إصلاح طارئ لثلاجة العرض بقسم الأغذية الطازجة',
+      category_id: 'cat-4',
+      amount: 3400.00,
+      notes: 'صيانة فنية طارئة لمنع تلف البضائع',
+      status: 'Under Settlement',
+      voucher_no: 'VCH-CRF-0002',
+      voucher_date: '2026-07-04',
+      created_by: 'user-carrefour-cashier',
+      created_at: '2026-07-03T11:20:00Z',
+      updated_at: '2026-07-04T12:00:00Z',
+      station_id: 'stn-carrefour-store-1',
+      company_id: 'comp-carrefour-retail'
+    },
+
+    // Cairo Poultry Group Transactions
     {
       id: 'tx-sina-1',
       transaction_no: 'CPV-SINA-0001',
