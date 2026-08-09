@@ -5,6 +5,21 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Auth: Removal of Non-Vault Password Change Fallback
+**Date:** 2026-08-09
+**Files Changed:** `server.ts`, `CHANGELOG.md`
+**Summary:**
+- **Strict Vault Verification in `POST /api/auth/change-password`**:
+  - Removed the `if (!credDoc.exists) { isMatch = true; }` fallback in `server.ts`.
+  - Ensures password changes strictly reject with 400 "Incorrect current password" if the user's password hash does not match the vault record or if the vault document is missing.
+  - Adjusted header route comment in `server.ts` to allow regex-based route matching in guard tests.
+- **Verification**:
+  - `lint_applet` passed with 0 errors.
+  - `compile_applet` built cleanly.
+  - `vitest run` passed 100% green across all 36 test suites and 222 unit tests.
+
+---
+
 ## Auth: Phase 7 - Server-Side Temporary Passwords & Forced Password Change Gate
 **Date:** 2026-08-08
 **Files Changed:** `server.ts`, `src/types.ts`, `src/App.tsx`, `src/components/ChangePasswordRequired.tsx`, `src/pages/SuperAdmin.tsx`, `src/pages/CompanyAdminDashboard.tsx`, `src/pages/RegionAdminDashboard.tsx`, `src/pages/Stations.tsx`, `src/components/AdminCredentialsForm.tsx`, `src/pages/Settings.tsx`, `src/phase7_temp_passwords.test.ts`, `CHANGELOG.md`

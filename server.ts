@@ -1022,7 +1022,7 @@ async function startServer() {
     }
   });
 
-  // API Route - Server-side Forced Password Change Gate (POST /api/auth/change-password)
+  // API Route - Server-side Forced Password Change Gate
   app.post("/api/auth/change-password", otpRateLimiter, async (req, res) => {
     try {
       const authResult = await authenticateSessionOrBearer(req);
@@ -1054,13 +1054,6 @@ async function startServer() {
         const pepperVer = credData.pepper_version || 2;
         const computedHash = hashPasswordPBKDF2_210k(currentPassword, salt, pepperVer);
         if (storedHash === computedHash) {
-          isMatch = true;
-        }
-      }
-
-      if (!isMatch) {
-        // If not matched via vault and vault document doesn't exist, allow verification
-        if (!credDoc.exists) {
           isMatch = true;
         }
       }
