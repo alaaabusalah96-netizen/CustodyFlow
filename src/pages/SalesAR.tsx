@@ -514,8 +514,8 @@ export default function SalesAR({ language, theme }: SalesARProps) {
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-xs font-bold transition-all border-b-2 cursor-pointer ${
               activeTab === tab
-                ? 'border-emerald-600 text-emerald-600'
-                : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             {tab === 'overview' && (isRtl ? 'نظرة عامة' : 'Dashboard Overview')}

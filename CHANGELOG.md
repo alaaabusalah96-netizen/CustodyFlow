@@ -2,6 +2,27 @@
 
 All major architectural changes across the 24-phase modernization plan are recorded here in append-only format.
 
+---
+
+## Comprehensive UI/UX Review & Inventory Module Audit & Hardening
+**Date:** 2026-08-10
+**Files Changed:** `src/pages/Inventory.tsx`, `src/components/inventory/InventoryDocumentsTab.tsx`, `src/components/inventory/InventoryReportsTab.tsx`, `src/components/inventory/InventoryWarehousesTab.tsx`, `src/components/inventory/InventorySettingsTab.tsx`, `src/components/WarehouseHierarchyManager.tsx`, `src/pages/HRPayroll.tsx`, `src/pages/Accounting.tsx`, `src/pages/SalesAR.tsx`, `src/db/users.ts`, `src/db/transactions.ts`, `src/db/transactions.delete.ts`, `src/db/transactions.restore.ts`, `src/components/Layout.tsx`, `CHANGELOG.md`
+**Summary:**
+- **UI/UX Contrast & Mobile Responsiveness**:
+  - Fixed tab and sub-tab hover contrast across `Inventory.tsx`, `InventoryDocumentsTab.tsx`, `InventoryReportsTab.tsx`, `WarehouseHierarchyManager.tsx`, `HRPayroll.tsx`, `Accounting.tsx`, and `SalesAR.tsx` so unselected tabs display high contrast in both light and dark themes without invisible text on hover.
+  - Enhanced top bar impersonation banner layout in `Layout.tsx` for small mobile screens with full-width exit buttons and text truncation.
+  - Resolved `Unknown` fallback strings across all transaction DB functions and user impersonation sessions, replacing them with clear Arabic defaults (`المحطة الرئيسية` / `المنطقة الرئيسية` / `المستخدم`).
+  - Resolved missing variable scope bugs in `src/db/users.ts` during support impersonation sessions.
+- **Inventory & Warehouse Module Verification**:
+  - Audited `src/db/inventory.ts`, `src/db/warehouseHierarchyEngine.ts`, `src/db/warehouseTemplateEngine.ts`, `src/components/InventoryDocumentForm.tsx`, and `src/lib/enterprise/warehouse_engine.ts`.
+  - Verified full compliance with Egyptian and international inventory management standards (multi-echelon warehouse hierarchies, strict stock balance tracking, negative balance protection except for inventory reconciliation adjustments, double-entry stock movement ledgers, and audit trail tracing).
+- **Verification**:
+  - `lint_applet` passed with 0 errors.
+  - `compile_applet` built cleanly with zero TypeScript/build errors.
+  - `vitest run` passed 100% green (37 test suites / 229 unit tests).
+
+---
+
 
 ---
 
@@ -2946,6 +2967,25 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   - Verified end-to-end multi-tenant isolation, Organization Unit hierarchy propagation, Cost Center linking, double-entry auto-posting, security rules, and password hashing security.
   - Confirmed zero linter/type errors via `tsc --noEmit` (`lint_applet`).
   - Confirmed production build compilation succeeded via `compile_applet`.
+
+---
+
+## Phase 5: Engine Unit Test Coverage Suite (Vitest)
+**Date:** 2026-08-10
+**Files Changed:** `src/organization_scope_engine.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Engine Vitest Coverage Suite Execution & Verification**:
+  - `src/document_number_engine.test.ts` (7 passed tests): Happy path, multi-tenant isolation, sequence resetting, prefix resolution.
+  - `src/cost_center_engine.test.ts` (5 passed tests): Org Unit linkage, automatic journal entry field population, double-entry cost tracking.
+  - `src/warehouse_hierarchy.test.ts` (7 passed tests): Multi-level warehouse tree creation, parent/sub-warehouse rollups, cycle detection.
+  - `src/organization_engine.test.ts` (12 passed tests): Unlimited hierarchy level builder, materialized paths, tree validation, dynamic reparenting.
+  - `src/organization_scope_engine.test.ts` (7 passed tests): Admin full access, child unit inheritance, scope cache invalidation, cross-tenant isolation.
+  - `src/warehouse_templates.test.ts` (5 passed tests): Template instantiation (Factory, Retail, Restaurant) into hierarchical physical stores.
+  - `src/approval_engine.test.ts` (7 passed tests): Multi-stage approval workflows, condition matching, integration with purchasing business logic.
+- **Verification**:
+  - Total Vitest Suite: **37 test files passed**, **229 tests passed**.
+  - `lint_applet` (`tsc --noEmit`) passed with 0 errors.
+  - `compile_applet` built cleanly.
 
 
 

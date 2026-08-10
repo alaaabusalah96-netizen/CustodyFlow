@@ -323,7 +323,7 @@ export class UsersModule {
     const superAdmin = activeUser.impersonator || activeUser;
     const companies = StorageEngine.getStored<any[]>('companies', []);
     const company = companies.find(c => c.id === targetUser.company_id);
-    const companyName = company ? company.name : 'Unknown';
+    const companyName = company ? company.name : (targetUser.company_id ? `شركة (${targetUser.company_id})` : 'المنصة العامة (SaaS)');
 
     const impersonatedUser: AppUser = {
       ...targetUser,
@@ -358,7 +358,7 @@ export class UsersModule {
     const superAdmin = activeUser.impersonator;
     const companies = StorageEngine.getStored<any[]>('companies', []);
     const company = companies.find(c => c.id === activeUser.company_id);
-    const companyName = company ? company.name : 'Unknown';
+    const companyName = company ? company.name : (activeUser.company_id ? `شركة (${activeUser.company_id})` : 'المنصة العامة (SaaS)');
 
     localStorage.setItem('custody_active_user', JSON.stringify(superAdmin));
 

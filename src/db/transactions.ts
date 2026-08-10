@@ -42,9 +42,9 @@ export class TransactionsModule {
   static getConfig(): CustodyConfig {
     const targetCompanyId = CompaniesModule.getSelectedCompanyId();
     const companies = CompaniesModule.getCompanies();
-    const activeCompany = companies.find(c => c.id === targetCompanyId) || companies[0] || { name: 'Unknown', custody_value: 0 } as any;
+    const activeCompany = companies.find(c => c.id === targetCompanyId) || companies[0] || { name: 'KEMIT ERP', custody_value: 0 } as any;
     return {
-      company_name: activeCompany.name,
+      company_name: activeCompany.name || 'KEMIT ERP',
       custody_value: activeCompany.custody_value || 0,
       use_custom_template: activeCompany.use_custom_template || false,
       custom_template_image: activeCompany.custom_template_image || ''

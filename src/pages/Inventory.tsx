@@ -354,7 +354,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
             className={`pb-3 text-xs md:text-sm font-black transition-all ${
               activeTab === 'documents'
                 ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             {isRtl ? 'أذون ومستندات الحركة' : 'Inventory Documents'}
@@ -369,7 +369,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
             className={`pb-3 text-xs md:text-sm font-black transition-all ${
               activeTab === 'reports'
                 ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             {isRtl ? 'التقارير الرقابية والتحليلية' : 'Inventory Reports'}
@@ -379,7 +379,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
             className={`pb-3 text-xs md:text-sm font-black transition-all ${
               activeTab === 'warehouses'
                 ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             {isRtl ? 'تهيئة المستودعات والحاويات' : 'Warehouse & Bin Settings'}
@@ -389,7 +389,7 @@ export default function Inventory({ language, theme }: InventoryProps) {
             className={`pb-3 text-xs md:text-sm font-black transition-all flex items-center gap-1.5 ${
               activeTab === 'settings'
                 ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             <Settings size={15} />

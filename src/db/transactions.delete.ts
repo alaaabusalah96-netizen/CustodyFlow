@@ -72,11 +72,11 @@ export class TransactionsDeleteModule {
 
     const stations = StationsModule.getStations();
     const station = stations.find(s => s.id === tx.station_id);
-    const stationName = station ? station.station_name : (tx.station_id || 'Unknown');
+    const stationName = station ? station.station_name : (tx.station_id || 'المحطة الرئيسية');
     
     const regions = StationsModule.getRegions();
     const region = station ? regions.find(r => r.id === station.region_id) : null;
-    const regionName = region ? region.name : 'Unknown';
+    const regionName = region ? region.name : 'المنطقة الرئيسية';
 
     const updatedTxs = transactions.map(t => {
       if (t.id === id) {

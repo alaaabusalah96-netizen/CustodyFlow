@@ -352,7 +352,7 @@ export const WarehouseHierarchyManager: React.FC<WarehouseHierarchyManagerProps>
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
             activeSubTab === 'tree'
               ? 'bg-emerald-600 text-white shadow-sm'
-              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <FolderTree size={14} />
@@ -365,7 +365,7 @@ export const WarehouseHierarchyManager: React.FC<WarehouseHierarchyManagerProps>
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
             activeSubTab === 'templates'
               ? 'bg-emerald-600 text-white shadow-sm'
-              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <Sparkles size={14} />
@@ -378,7 +378,7 @@ export const WarehouseHierarchyManager: React.FC<WarehouseHierarchyManagerProps>
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
             activeSubTab === 'audit'
               ? 'bg-emerald-600 text-white shadow-sm'
-              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <ShieldCheck size={14} />

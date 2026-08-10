@@ -205,8 +205,8 @@ export default function Accounting({ language, theme }: AccountingProps) {
           onClick={() => setActiveTab('ledger')}
           className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
             activeTab === 'ledger' 
-              ? 'border-emerald-600 text-emerald-600' 
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400' 
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <BookOpen className="h-4 w-4" />
@@ -220,8 +220,8 @@ export default function Accounting({ language, theme }: AccountingProps) {
           onClick={() => setActiveTab('accounts')}
           className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
             activeTab === 'accounts' 
-              ? 'border-emerald-600 text-emerald-600' 
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400' 
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <Layers className="h-4 w-4" />
@@ -235,8 +235,8 @@ export default function Accounting({ language, theme }: AccountingProps) {
           onClick={() => setActiveTab('trial_balance')}
           className={`px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
             activeTab === 'trial_balance' 
-              ? 'border-emerald-600 text-emerald-600' 
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400' 
+              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <Calculator className="h-4 w-4" />

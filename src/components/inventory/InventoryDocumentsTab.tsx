@@ -70,7 +70,7 @@ export default function InventoryDocumentsTab({
           className={`pb-3 text-xs md:text-sm font-black transition-all ${
             activeDocSubTab === 'all'
               ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-black'
-              : 'text-slate-400 hover:text-slate-200'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           {isRtl ? 'كافة السندات والعهود' : 'All Vouchers & Vouchers'}
@@ -80,7 +80,7 @@ export default function InventoryDocumentsTab({
           className={`pb-3 text-xs md:text-sm font-black transition-all flex items-center gap-2 ${
             activeDocSubTab === 'transit'
               ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-black'
-              : 'text-slate-400 hover:text-slate-200'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <span>{isRtl ? 'شحنات التحويل اللوجستية قيد النقل' : 'In-Transit Logistics Transfers'}</span>

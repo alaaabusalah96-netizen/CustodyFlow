@@ -103,7 +103,7 @@ export default function InventoryReportsTab({
           className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold text-right transition-all ${
             activeReport === 'balances'
               ? 'bg-emerald-600 text-white shadow-md'
-              : 'text-slate-400 hover:bg-slate-800/50'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <span>{isRtl ? 'أرصدة المخازن والحد الأدنى' : 'Warehouse Stock Balances'}</span>
@@ -115,7 +115,7 @@ export default function InventoryReportsTab({
           className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold text-right transition-all ${
             activeReport === 'card'
               ? 'bg-emerald-600 text-white shadow-md'
-              : 'text-slate-400 hover:bg-slate-800/50'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <span>{isRtl ? 'حركة صنف (كارت الصنف)' : 'Stock Card Ledger'}</span>
@@ -127,7 +127,7 @@ export default function InventoryReportsTab({
           className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold text-right transition-all ${
             activeReport === 'ledger'
               ? 'bg-emerald-600 text-white shadow-md'
-              : 'text-slate-400 hover:bg-slate-800/50'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <span>{isRtl ? 'الأستاذ التحليلي للمخزون' : 'Enterprise Item Ledger'}</span>
@@ -139,7 +139,7 @@ export default function InventoryReportsTab({
           className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold text-right transition-all ${
             activeReport === 'valuation'
               ? 'bg-emerald-600 text-white shadow-md'
-              : 'text-slate-400 hover:bg-slate-800/50'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <span>{isRtl ? 'تقييم المخزون المالي' : 'Inventory Valuation (Cost)'}</span>
@@ -151,7 +151,7 @@ export default function InventoryReportsTab({
           className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold text-right transition-all ${
             activeReport === 'slow_moving'
               ? 'bg-emerald-600 text-white shadow-md'
-              : 'text-slate-400 hover:bg-slate-800/50'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <span>{isRtl ? 'الأصناف الراكدة' : 'Slow Moving Items'}</span>
@@ -163,7 +163,7 @@ export default function InventoryReportsTab({
           className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold text-right transition-all ${
             activeReport === 'stocktake'
               ? 'bg-emerald-600 text-white shadow-md'
-              : 'text-slate-400 hover:bg-slate-800/50'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <span>{isRtl ? 'تقرير وجدول جرد المخزون' : 'Stocktake Checklist'}</span>
