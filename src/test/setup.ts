@@ -1,4 +1,11 @@
-import { vi } from 'vitest';
+import { vi, beforeAll, afterEach, afterAll } from 'vitest';
+import '@testing-library/jest-dom/vitest';
+import { server } from './mocks/server';
+
+// MSW Server Lifecycle
+beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
 
 // Enable online mode for offline fallback queue
 if (typeof global !== 'undefined') {
@@ -9,6 +16,24 @@ if (typeof global !== 'undefined') {
   });
 }
 
+// Window matchMedia mock for components
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+// Firebase Mocks
 vi.mock('firebase/app', () => ({ initializeApp: () => ({}) }));
 vi.mock('firebase/auth', () => ({ getAuth: () => ({}) }));
 vi.mock('firebase/storage', () => ({ getStorage: () => ({}) }));

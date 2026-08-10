@@ -4,6 +4,18 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Comprehensive Testing Suite Setup (Playwright E2E, React Testing Library, MSW, Vitest Coverage v8)
+**Date:** 2026-08-10
+**Files Changed:** `package.json`, `vite.config.ts`, `playwright.config.ts`, `src/test/setup.ts`, `src/test/mocks/handlers.ts`, `src/test/mocks/server.ts`, `src/test/msw_integration.test.ts`, `e2e/login.spec.ts`, `e2e/expense.spec.ts`, `e2e/approval.spec.ts`, `e2e/inventory.spec.ts`, `src/components/__tests__/Layout.test.tsx`, `src/components/inventory/__tests__/InventoryWarehousesTab.test.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Playwright (End-to-End Tests)**: Installed `@playwright/test`, created `playwright.config.ts` targeting `http://localhost:3000` with Chromium and Mobile Chrome support. Added E2E spec suites under `e2e/` covering Authentication/Layout (`login.spec.ts`), Expense Creation (`expense.spec.ts`), Transaction Approval (`approval.spec.ts`), and Inventory Module Operations (`inventory.spec.ts`).
+- **React Testing Library**: Installed `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, and `jsdom`. Added RTL component unit tests for core UI layout (`Layout.test.tsx`) and inventory components (`InventoryWarehousesTab.test.tsx`).
+- **MSW (Mock Service Worker)**: Installed `msw`. Created backend API handlers in `src/test/mocks/handlers.ts` mocking `/api/auth/*`, `/api/admin/users`, `/api/transactions/*`, and `/api/inventory/*`. Wired MSW server lifecycle into `src/test/setup.ts`.
+- **Vitest Coverage (v8)**: Installed `@vitest/coverage-v8`, configured v8 coverage provider in `vite.config.ts` with HTML, JSON, and text reporters. Added `"test:coverage"` and `"test:e2e"` scripts to `package.json`.
+- **Verification**: `lint_applet` passed with 0 errors; `compile_applet` compiled cleanly; Vitest unit and integration test suite executed 100% green.
+
+---
+
 ## Comprehensive UI/UX Review & Inventory Module Audit & Hardening
 **Date:** 2026-08-10
 **Files Changed:** `src/pages/Inventory.tsx`, `src/components/inventory/InventoryDocumentsTab.tsx`, `src/components/inventory/InventoryReportsTab.tsx`, `src/components/inventory/InventoryWarehousesTab.tsx`, `src/components/inventory/InventorySettingsTab.tsx`, `src/components/WarehouseHierarchyManager.tsx`, `src/pages/HRPayroll.tsx`, `src/pages/Accounting.tsx`, `src/pages/SalesAR.tsx`, `src/db/users.ts`, `src/db/transactions.ts`, `src/db/transactions.delete.ts`, `src/db/transactions.restore.ts`, `src/components/Layout.tsx`, `CHANGELOG.md`
