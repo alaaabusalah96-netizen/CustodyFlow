@@ -7,10 +7,16 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-// Enable online mode for offline fallback queue
-if (typeof global !== 'undefined') {
+// Safely define onLine on navigator without wiping userAgent or other JSDOM navigator properties
+if (typeof window !== 'undefined' && window.navigator) {
+  Object.defineProperty(window.navigator, 'onLine', {
+    value: true,
+    configurable: true,
+    writable: true
+  });
+} else if (typeof global !== 'undefined') {
   Object.defineProperty(global, 'navigator', {
-    value: { onLine: true },
+    value: { onLine: true, userAgent: 'node.js' },
     configurable: true,
     writable: true
   });

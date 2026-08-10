@@ -4,6 +4,18 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Senior ERP Testing Suite Upgrade & Hardening (Playwright E2E, RTL, MSW, Vitest v8)
+**Date:** 2026-08-10
+**Files Changed:** `src/test/mocks/handlers.ts`, `src/components/__tests__/ApprovalInbox.test.tsx`, `src/components/inventory/__tests__/InventoryDocumentForm.test.tsx`, `src/components/__tests__/VoucherModal.test.tsx`, `e2e/login.spec.ts`, `e2e/expense.spec.ts`, `e2e/approval.spec.ts`, `e2e/inventory.spec.ts`, `CHANGELOG.md`
+**Summary:**
+- **Playwright (E2E Tests)**: Rewrote end-to-end spec files with real ERP business scenarios: Login success/failure with invalid/valid credentials, language toggle (`login.spec.ts`), Expense creation with inputs and required field validations (`expense.spec.ts`), Approval inbox and audit workflow (`approval.spec.ts`), and Inventory module tab navigation and document form triggers (`inventory.spec.ts`). Replaced arbitrary delays with deterministic element checks.
+- **React Testing Library (Unit & Integration Tests)**: Added comprehensive component tests covering `ApprovalInbox.tsx` (tab switching, pending list), `InventoryDocumentForm.tsx` (document types, cancellation callback), and `VoucherModal.tsx` (voucher generation, barcode/QR code rendering, print/close actions).
+- **MSW (Mock Service Worker)**: Expanded API mock handlers in `src/test/mocks/handlers.ts` to support login/logout/me, pending transaction approvals and rejections with reason payloads, warehouse hierarchies, stock balances, inventory documents, and accounting entries.
+- **Vitest Coverage (v8)**: Fixed `navigator.userAgent` initialization in `src/test/setup.ts` to prevent JSDOM `react-dom` test runner initialization crashes. Verified v8 coverage runner with unit and integration test suites.
+- **Verification**: `lint_applet` passed with 0 errors; `compile_applet` compiled cleanly.
+
+---
+
 ## Comprehensive Testing Suite Setup (Playwright E2E, React Testing Library, MSW, Vitest Coverage v8)
 **Date:** 2026-08-10
 **Files Changed:** `package.json`, `vite.config.ts`, `playwright.config.ts`, `src/test/setup.ts`, `src/test/mocks/handlers.ts`, `src/test/mocks/server.ts`, `src/test/msw_integration.test.ts`, `e2e/login.spec.ts`, `e2e/expense.spec.ts`, `e2e/approval.spec.ts`, `e2e/inventory.spec.ts`, `src/components/__tests__/Layout.test.tsx`, `src/components/inventory/__tests__/InventoryWarehousesTab.test.tsx`, `CHANGELOG.md`

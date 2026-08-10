@@ -49,13 +49,13 @@ describe('InventoryWarehousesTab Component (React Testing Library)', () => {
   it('renders warehouse tree title and action buttons', () => {
     render(<InventoryWarehousesTab {...defaultProps} />);
 
-    expect(screen.getByText(/تهيئة هيكل المستودعات/i)).toBeInTheDocument();
+    expect(screen.getByText(/إدارة بنية المستودعات/i)).toBeInTheDocument();
   });
 
   it('allows clicking add main warehouse button', () => {
     render(<InventoryWarehousesTab {...defaultProps} />);
 
-    const addBtn = screen.getByRole('button', { name: /مستودع رئيسي جديد/i });
+    const addBtn = screen.getByRole('button', { name: /إضافة مستودع رئيسي/i });
     expect(addBtn).toBeInTheDocument();
     fireEvent.click(addBtn);
   });

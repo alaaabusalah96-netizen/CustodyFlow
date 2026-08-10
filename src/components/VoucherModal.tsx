@@ -280,6 +280,7 @@ export default function VoucherModal({ transaction, isOpen, onClose, theme }: Vo
           </div>
           <button 
             onClick={onClose}
+            aria-label="إغلاق"
             className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors"
           >
             <X size={18} />
