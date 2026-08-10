@@ -193,13 +193,18 @@ describe('Phase 3.1: Firestore Security Rules Comprehensive Unit Tests', () => {
       expect(raw).toContain('function isUserSelfUpdateSafe(');
     });
 
-    it('should declare strict rules for user_credentials and core collections', () => {
+    it('should declare strict rules for user_credentials and core collections including AuditLogs with isSameCompanyRead', () => {
       expect(validator.hasRuleBlock('user_credentials/{id}')).toBe(true);
       expect(validator.hasRuleBlock('companies/{id}')).toBe(true);
       expect(validator.hasRuleBlock('users/{id}')).toBe(true);
       expect(validator.hasRuleBlock('inventory/{id}')).toBe(true);
       expect(validator.hasRuleBlock('stock_movements/{id}')).toBe(true);
       expect(validator.hasRuleBlock('journal_entries/{id}')).toBe(true);
+      expect(validator.hasRuleBlock('AuditLogs/{id}')).toBe(true);
+      const raw = validator.getRawRules();
+      const auditLogBlock = raw.substring(raw.indexOf('match /AuditLogs/{id}'));
+      const auditLogReadRule = auditLogBlock.substring(0, auditLogBlock.indexOf('allow create:'));
+      expect(auditLogReadRule).toContain('isSameCompanyRead(resource.data)');
     });
   });
 

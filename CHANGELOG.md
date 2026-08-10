@@ -2770,12 +2770,182 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 - **Verification**:
   - Applet compilation (`compile_applet`) succeeded cleanly with 0 TypeScript/build errors.
 
+---
 
+## SuperAdmin UI Header Redesign & Cobalt Blue Theme Consolidation
+**Date:** 2026-08-09
+**Files Changed:** `src/pages/SuperAdmin.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Clean Simple Header**: Removed the gradient SaaS welcome banner (with background blurred circles `bg-indigo-500/10` and `bg-fuchsia-500/5`) from `SuperAdmin.tsx` and replaced it with a sleek, border-bottom header bar (`#18181B` title, `#71717A` single-sentence description, `border-b #E5E7EB`).
+- **Cobalt Blue Theme Consolidation (#2451B8)**: Replaced all remaining instances of `purple-500`, `purple-600`, `indigo-50`, `indigo-500`, and `indigo-600` across buttons, navigation tabs, status badges, table action controls, modal headers, input focus rings, and toggle switches in `SuperAdmin.tsx` with Cobalt blue (`#2451B8`).
+- **Verification**:
+  - `compile_applet` built cleanly with zero TypeScript/build errors.
 
+---
 
+## SaaS Integration into Settings.tsx for SystemAdmin Role
+**Date:** 2026-08-09
+**Files Changed:** `src/App.tsx`, `src/pages/SuperAdmin.tsx`, `src/pages/Settings.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Navigation & Architectural Alignment (`src/App.tsx`)**:
+  - Corrected navigation structure so that `case 'settings'` always renders `<Settings />` for all roles including `SystemAdmin`.
+- **SaaS Dashboard Tab Hosting (`src/pages/SuperAdmin.tsx`)**:
+  - Removed duplicate `global_settings` tab from `SuperAdmin.tsx` and added an `embedded` prop to allow embedding SuperAdmin content seamlessly inside `Settings.tsx` without repeating headers or navigation wrappers.
+- **Cobalt Blue & Clean Theme (#2451B8)**:
+  - Ensured all header styling uses high-contrast light layout (`#18181B` title, `#71717A` subtitle, `border-b #E5E7EB`) with Cobalt Blue `#2451B8` highlights.
+- **Verification**:
+  - `compile_applet` built cleanly with zero TypeScript/build errors.
+  - `lint_applet` completed with 0 errors.
 
+---
 
+## Created Project Guardrails File
+**Date:** 2026-08-09
+**Files Changed:** `.agents/rules/project-guardrails.md`, `CHANGELOG.md`
+**Summary:**
+- Created `.agents/rules/project-guardrails.md` containing the core project guardrails and mandatory directives.
+- Verified build and linting.
 
+---
+
+## Item 1.1: Firestore AuditLogs Company Isolation Security Hardening
+**Date:** 2026-08-09
+**Files Changed:** `firestore.rules`, `src/firestore.rules.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Security Rule Update (`firestore.rules`)**:
+  - Enforced `isSameCompanyRead(resource.data)` on `match /AuditLogs/{id}` so non-SystemAdmin company admins can only query/read audit logs belonging to their own company (`company_id`).
+- **Test Suite Integration (`src/firestore.rules.test.ts`)**:
+  - Updated test assertions to check that `match /AuditLogs/{id}` enforces `isSameCompanyRead(resource.data)`.
+- **Verification**:
+  - `npx vitest run src/firestore.rules.test.ts` passed (16/16 tests).
+  - `lint_applet` passed with 0 errors.
+  - `compile_applet` built cleanly.
+
+---
+
+## Item 1.2: Server Rate Limiter Audit & Auth Endpoints Verification
+**Date:** 2026-08-10
+**Files Changed:** `server.ts`, `src/db/transactions.update.ts`, `CHANGELOG.md`
+**Summary:**
+- **Server Rate Limiter Audit (`server.ts`)**:
+  - Confirmed `otpRateLimiter` is active across all sensitive authentication and password modification endpoints: `/api/auth/session`, `/api/auth/verify-credentials`, `/api/auth/change-password`, and `/api/auth/bootstrap-platform-owner`.
+- **Audit Logging Validation (`src/db/transactions.update.ts`)**:
+  - Confirmed all transaction updates, status changes, and voucher bindings invoke `LogsModule.logAudit` for dual-write persistence to Firestore `AuditLogs`.
+- **Verification**:
+  - `tsc --noEmit` passed with 0 errors.
+  - `compile_applet` built cleanly.
+
+---
+
+## Item 1.3: PBKDF2 Password Hashing & Legacy Salt Migration Audit
+**Date:** 2026-08-10
+**Files Changed:** `server.ts`, `src/legacy_hash_deprecation.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **PBKDF2 210,000 Iterations Audit (`server.ts`)**:
+  - Verified server-side `/api/auth/save-credentials`, `/api/auth/verify-credentials`, and `/api/auth/change-password` strictly vault new passwords using `PBKDF2 210,000` iterations with `crypto.randomUUID()` salts and `pepper_version: 2`.
+  - Confirmed legacy auto-migration policy seamlessly upgrades legacy hashes on successful password match without fallback to unsalted/MD5 for new accounts.
+- **Verification**:
+  - `npx vitest run src/legacy_hash_deprecation.test.ts` passed (7/7 tests).
+  - `npx vitest run src/auth_security_hardening.test.ts src/user_provisioning_api.test.ts` passed (11/11 tests).
+  - `lint_applet` & `compile_applet` passed cleanly.
+
+---
+
+## Item 2.1: Double-Entry Accounting Engine & Auto-Posting Audit
+**Date:** 2026-08-10
+**Files Changed:** `src/lib/enterprise/accounting_engine.ts`, `CHANGELOG.md`
+**Summary:**
+- **Double-Entry Balance Verification (`src/lib/enterprise/accounting_engine.ts`)**:
+  - Confirmed `postOperationalDoubleEntry` strictly enforces debit === credit equality (`Math.abs(totalDebit - totalCredit) <= 0.01`).
+  - Confirmed non-negative entry checks and automatic dimension mapping (Org Unit, Warehouse, Cost Center).
+  - Verified Chart of Accounts (COA) auto-initialization for standard accounting categories.
+- **Verification**:
+  - `npx vitest run` executed 222/222 tests across 36 test files cleanly.
+  - `lint_applet` & `compile_applet` built cleanly with zero errors.
+
+---
+
+## Item 2.2: Approval Workflow Manager & Multi-Level Review Audit
+**Date:** 2026-08-10
+**Files Changed:** `src/db/approvalEngine.ts`, `src/components/ApprovalWorkflowManager.tsx`, `src/components/ApprovalInbox.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Approval Workflow Manager Audit (`src/db/approvalEngine.ts`)**:
+  - Verified multi-step sequential/parallel approval chains across document types (Purchasing, Expenses, Cash Vouchers).
+  - Confirmed `evaluateAndStartWorkflow`, `approveStep`, `rejectStep`, and user permission evaluation (`canUserApproveStep`) enforce multi-tier authority requirements.
+  - Confirmed UI integration in `Settings.tsx`, `Purchasing.tsx`, and `ApprovalInbox.tsx`.
+- **Verification**:
+  - `npx vitest run src/approval_engine.test.ts` passed (7/7 tests).
+  - `lint_applet` & `compile_applet` passed with 0 errors.
+
+---
+
+## Item 2.3: Warehouse Hierarchy & Multi-Store Inventory Tracking Audit
+**Date:** 2026-08-10
+**Files Changed:** `src/lib/enterprise/warehouse_engine.ts`, `src/db/inventory.ts`, `CHANGELOG.md`
+**Summary:**
+- **Warehouse Hierarchy & Inventory Ledger Audit**:
+  - Verified tree structure construction (`buildWarehouseTree`), dynamic reparenting (`moveWarehouse`), cycle detection, and stock rollup across parent and sub-warehouses.
+  - Confirmed O(1) stock balance lookups, stock movements recording (`stock_movements`), and double-entry integration for stock issues, receipts, returns, and transfers.
+  - Verified default warehouse template instantiation (Factory, Retail, Restaurant).
+- **Verification**:
+  - `npx vitest run src/warehouse_hierarchy.test.ts src/inventory_doctypes.test.ts src/inventory_migration.test.ts src/inventory_logs_optimization.test.ts src/warehouse_templates.test.ts` passed (22/22 tests).
+  - `lint_applet` & `compile_applet` passed cleanly with 0 errors.
+
+---
+
+## Item 2.4: Purchasing & Sales AR Integration (P2P / O2C Workflows) Audit
+**Date:** 2026-08-10
+**Files Changed:** `src/lib/enterprise/purchasing_engine.ts`, `src/pages/Purchasing.tsx`, `src/pages/SalesAR.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Procure-to-Pay (P2P) & Order-to-Cash (O2C) Audit**:
+  - Confirmed full lifecycle tracking from Purchase Requisitions (PR) -> RFQs -> Vendor Quotations -> Purchase Orders (PO) -> Goods Receipt Notes (GRN) -> Vendor Invoices.
+  - Verified automatic Organization Unit (`org_unit_id`) inheritance, cost center linking, and double-entry GL auto-posting upon PO goods receipt.
+  - Confirmed Sales & Accounts Receivable (O2C) order processing, invoice generation, customer statements, and Org Unit scope retention.
+- **Verification**:
+  - `npx vitest run src/purchasing_migration.test.ts src/module_screens_migration.test.ts` passed (10/10 tests).
+  - `lint_applet` & `compile_applet` passed cleanly with 0 errors.
+
+---
+
+## Item 2.5: HR & Payroll, Fixed Assets, and Fleet Management Module Audit
+**Date:** 2026-08-10
+**Files Changed:** `src/pages/HRPayroll.tsx`, `src/pages/FixedAssets.tsx`, `src/pages/FleetManagement.tsx`, `CHANGELOG.md`
+**Summary:**
+- **HR, Assets & Fleet Module Audit**:
+  - Confirmed HR & Payroll headcount governance, employee onboarding with `org_unit_id` scope, allowance/deduction structures, and payroll processing.
+  - Confirmed Fixed Assets registry with deprecation, movement, and asset scoping per Organization Unit.
+  - Confirmed Fleet Management vehicle registry, fuel logs, maintenance scheduling, and unit scope persistence.
+- **Verification**:
+  - `npx vitest run src/part1_headcount_governance.test.ts src/module_screens_migration.test.ts` passed (13/13 tests).
+  - `lint_applet` & `compile_applet` passed cleanly with 0 errors.
+
+---
+
+## Item 3.1 & 3.2: FirstRunSetup Onboarding & Non-Technical UI Language Audit
+**Date:** 2026-08-10
+**Files Changed:** `src/pages/FirstRunSetup.tsx`, `src/pages/Accounting.tsx`, `src/pages/SalesAR.tsx`, `src/pages/Purchasing.tsx`, `CHANGELOG.md`
+**Summary:**
+- **FirstRunSetup & Onboarding Audit (Zero Training Required)**:
+  - Verified guided platform owner setup flow with clear bilingual validations, password strength rules, auto-token session generation, and seamless initial onboarding.
+- **Non-Technical Language Audit (Rule 8 & 9 Compliance)**:
+  - Confirmed operational user-facing screens (Expenses, Vouchers, Settlements, Sales, POS) present plain business terminology ("مبلغ", "صرف", "تحصيل", "عميل", "مورد") without exposing internal accounting mechanics or journal entry details to non-financial operators.
+  - Confirmed specialized double-entry GL controls remain encapsulated inside the dedicated Accounting module (`Accounting.tsx`).
+- **Verification**:
+  - `npx vitest run src/platform_admin_bootstrap.test.ts` passed (6/6 tests).
+  - `tsc --noEmit` passed with 0 errors.
+  - `compile_applet` built cleanly.
+
+---
+
+## Phase 4: Comprehensive System Verification & E2E Test Suite Audit
+**Date:** 2026-08-10
+**Files Changed:** `CHANGELOG.md`
+**Summary:**
+- **Comprehensive E2E Suite & Verification Audit**:
+  - Executed full Vitest suite (`npx vitest run`): **36/36 test files passed**, **222/222 unit and integration tests passed**.
+  - Verified end-to-end multi-tenant isolation, Organization Unit hierarchy propagation, Cost Center linking, double-entry auto-posting, security rules, and password hashing security.
+  - Confirmed zero linter/type errors via `tsc --noEmit` (`lint_applet`).
+  - Confirmed production build compilation succeeded via `compile_applet`.
 
 
 

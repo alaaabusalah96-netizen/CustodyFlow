@@ -544,7 +544,7 @@ service cloud.firestore {
     }
 
     match /AuditLogs/{id} {
-      allow read: if isLoggedIn() && (isSystemAdmin() || (getCompanyId() != "" && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin')));
+      allow read: if isSameCompanyRead(resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
       allow create: if isSameCompanyWrite(request.resource.data, null);
       allow update, delete: if false; // Strict modification protection
     }

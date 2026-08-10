@@ -13,16 +13,16 @@ import SuperAdminImpersonateTab from '../components/SuperAdminImpersonateTab';
 import SuperAdminAuditTab from '../components/SuperAdminAuditTab';
 import SuperAdminSecurityTab from '../components/SuperAdminSecurityTab';
 import SuperAdminOperationsTab from '../components/SuperAdminOperationsTab';
-import PermissionMatrix from '../components/PermissionMatrix';
 
 interface SuperAdminProps {
   language: Language;
   theme: Theme;
-  initialSubTab?: 'companies' | 'operations' | 'impersonate' | 'audit' | 'security' | 'global_settings';
+  initialSubTab?: 'companies' | 'operations' | 'impersonate' | 'audit' | 'security';
+  embedded?: boolean;
 }
 
 
-export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdminProps) {
+export default function SuperAdmin({ language, theme, initialSubTab, embedded = false }: SuperAdminProps) {
   useScreenListeners(['AuditLogs', 'logs', 'transactions', 'deleted_transactions', 'signup_requests']);
 
   const isRtl = language === 'ar';
@@ -31,7 +31,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
   const [companies, setCompanies] = useState<Company[]>(() => CustodyDB.getCompanies());
   const [users, setUsers] = useState<AppUser[]>(() => CustodyDB.getUsers());
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => CustodyDB.getAuditLogs());
-  const [activeSubTab, setActiveSubTab] = useState<'companies' | 'operations' | 'impersonate' | 'audit' | 'security' | 'global_settings'>(initialSubTab || 'companies');
+  const [activeSubTab, setActiveSubTab] = useState<'companies' | 'operations' | 'impersonate' | 'audit' | 'security'>(initialSubTab || 'companies');
 
   useEffect(() => {
     if (initialSubTab) {
@@ -934,21 +934,14 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
-      {/* SaaS Welcome Banner */}
-      <div className="p-5 sm:p-8 rounded-3xl bg-gradient-to-r from-[#1e1b4b] via-[#311042] to-[#1e1b4b] border border-indigo-500/20 text-white relative overflow-hidden shadow-2xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full filter blur-3xl -mr-20 -mt-20 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-fuchsia-500/5 rounded-full filter blur-3xl -ml-20 -mb-20 pointer-events-none" />
-        
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-bold uppercase tracking-wider">
-              <ShieldCheck size={12} className="animate-pulse" />
-              <span>{isRtl ? 'التحكم المركزي والأمان' : 'Centralized Security Hub'}</span>
-            </span>
-            <h1 className="text-xl sm:text-2xl md:text-4xl font-extrabold tracking-tight">
+      {/* SaaS Header Bar */}
+      {!embedded && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E5E7EB] dark:border-slate-800">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-[#18181B] dark:text-slate-100">
               {isRtl ? 'لوحة تحكم المدير العام للمنصة (SaaS)' : 'SaaS Super Admin Control Center'}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+            <p className="text-xs sm:text-sm text-[#71717A] dark:text-slate-400 mt-1">
               {isRtl 
                 ? 'مرحباً بك في وحدة الإدارة الشاملة لنظام SaaS. يمكنك التحكم بالاشتراكات وتفعيل وتعطيل الشركات المنضوية، والولوج الفوري للدعم الفني لمساعدة المستخدمين مع الرقابة والامتثال الكامل.'
                 : 'Welcome to the complete multi-tenant SaaS management hub. Easily regulate subscriptions, toggle organization status, reset administrative passwords, and gain instant technical support access under secure audit rails.'}
@@ -956,20 +949,20 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
           </div>
           <button 
             onClick={handleRefreshData}
-            className="flex items-center justify-center gap-2 px-4.5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold transition-all shadow-lg active:scale-95 cursor-pointer border border-indigo-500/30 w-full lg:w-auto"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#2451B8] hover:bg-[#1d429a] text-white text-xs font-semibold transition-all shadow-xs active:scale-95 cursor-pointer w-full sm:w-auto self-start sm:self-auto"
           >
-            <RefreshCw size={16} />
+            <RefreshCw size={15} />
             <span>{isRtl ? 'تحديث البيانات' : 'Refresh Ledger'}</span>
           </button>
         </div>
-      </div>
+      )}
 
       {/* SaaS Overview Summary Cards - Completely isolated from company context */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="p-4 sm:p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-xs font-bold">{isRtl ? 'إجمالي الشركات المنضمّة' : 'Total SaaS Companies'}</span>
-            <div className="p-2 rounded-xl bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400">
+            <div className="p-2 rounded-xl bg-blue-50 dark:bg-slate-800 text-[#2451B8] dark:text-blue-400">
               <Building2 size={18} />
             </div>
           </div>
@@ -1059,7 +1052,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="font-extrabold text-slate-800 dark:text-slate-100 text-sm truncate">{req.full_name}</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-slate-700">{req.role}</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#2451B8]/10 dark:bg-slate-800 text-[#2451B8] dark:text-blue-400 border border-[#2451B8]/20 dark:border-slate-700">{req.role}</span>
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">{req.email}</p>
                     <p className="text-[11px] text-slate-400 dark:text-slate-500">
@@ -1090,74 +1083,65 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
       })()}
 
       {/* Navigation Sub-Tabs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <button
-          onClick={() => setActiveSubTab('companies')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center lg:justify-start gap-2 transition-all cursor-pointer ${
-            activeSubTab === 'companies'
-              ? 'bg-indigo-600 text-white shadow-md'
-              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Building2 size={16} />
-          <span>{isRtl ? 'دليل الشركات والاشتراكات' : 'Companies & Subscriptions'}</span>
-        </button>
-        <button
-          onClick={() => setActiveSubTab('operations')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center lg:justify-start gap-2 transition-all cursor-pointer ${
-            activeSubTab === 'operations'
-              ? 'bg-indigo-600 text-white shadow-md'
-              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Activity size={16} />
-          <span>{isRtl ? 'إدارة العمليات الداخلية لكل الشركات' : 'Internal Operations Management'}</span>
-        </button>
-        <button
-          onClick={() => setActiveSubTab('impersonate')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center lg:justify-start gap-2 transition-all cursor-pointer ${
-            activeSubTab === 'impersonate'
-              ? 'bg-indigo-600 text-white shadow-md'
-              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-          }`}
-        >
-          <UserCheck size={16} />
-          <span>{isRtl ? 'بوابة الدعم والمحاكاة' : 'Support Impersonation Portal'}</span>
-        </button>
-        <button
-          onClick={() => setActiveSubTab('audit')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center lg:justify-start gap-2 transition-all cursor-pointer ${
-            activeSubTab === 'audit'
-              ? 'bg-indigo-600 text-white shadow-md'
-              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-          }`}
-        >
-          <ClipboardList size={16} />
-          <span>{isRtl ? 'سجل الرقابة للرؤساء' : 'Impersonation Audit Logs'}</span>
-        </button>
-        <button
-          onClick={() => setActiveSubTab('security')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center lg:justify-start gap-2 transition-all cursor-pointer ${
-            activeSubTab === 'security'
-              ? 'bg-indigo-600 text-white shadow-md'
-              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-          }`}
-        >
-          <ShieldCheck size={16} />
-          <span>{isRtl ? 'أمان التشفير (Phase 4.1)' : 'Security & Encryption (Phase 4.1)'}</span>
-        </button>
-        <button
-          onClick={() => setActiveSubTab('global_settings')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center lg:justify-start gap-2 transition-all cursor-pointer ${
-            activeSubTab === 'global_settings'
-              ? 'bg-[#2451B8] text-white shadow-md'
-              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Sliders size={16} />
-          <span>{isRtl ? 'الإعدادات والصلاحيات العامة' : 'Global Settings & Permissions'}</span>
-        </button>
-      </div>
+      {!embedded && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+          <button
+            onClick={() => setActiveSubTab('companies')}
+            className={`px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center lg:justify-start gap-2 transition-all cursor-pointer ${
+              activeSubTab === 'companies'
+                ? 'bg-[#2451B8] text-white shadow-md'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Building2 size={16} />
+            <span>{isRtl ? 'دليل الشركات والاشتراكات' : 'Companies & Subscriptions'}</span>
+          </button>
+          <button
+            onClick={() => setActiveSubTab('operations')}
+            className={`px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center lg:justify-start gap-2 transition-all cursor-pointer ${
+              activeSubTab === 'operations'
+                ? 'bg-[#2451B8] text-white shadow-md'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Activity size={16} />
+            <span>{isRtl ? 'إدارة العمليات الداخلية لكل الشركات' : 'Internal Operations Management'}</span>
+          </button>
+          <button
+            onClick={() => setActiveSubTab('impersonate')}
+            className={`px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center lg:justify-start gap-2 transition-all cursor-pointer ${
+              activeSubTab === 'impersonate'
+                ? 'bg-[#2451B8] text-white shadow-md'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            <UserCheck size={16} />
+            <span>{isRtl ? 'بوابة الدعم والمحاكاة' : 'Support Impersonation Portal'}</span>
+          </button>
+          <button
+            onClick={() => setActiveSubTab('audit')}
+            className={`px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center lg:justify-start gap-2 transition-all cursor-pointer ${
+              activeSubTab === 'audit'
+                ? 'bg-[#2451B8] text-white shadow-md'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            <ClipboardList size={16} />
+            <span>{isRtl ? 'سجل الرقابة للرؤساء' : 'Impersonation Audit Logs'}</span>
+          </button>
+          <button
+            onClick={() => setActiveSubTab('security')}
+            className={`px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center lg:justify-start gap-2 transition-all cursor-pointer ${
+              activeSubTab === 'security'
+                ? 'bg-[#2451B8] text-white shadow-md'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            <ShieldCheck size={16} />
+            <span>{isRtl ? 'أمان التشفير (Phase 4.1)' : 'Security & Encryption (Phase 4.1)'}</span>
+          </button>
+        </div>
+      )}
 
       {/* Tab Contents */}
       {activeSubTab === 'companies' && (
@@ -1508,10 +1492,10 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                                 <button
                                   type="button"
                                   onClick={() => startStructAddRegionForCompany(comp.id)}
-                                  className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-slate-700 text-xs font-black transition-all flex items-center gap-1 cursor-pointer"
+                                  className="px-2.5 py-1 rounded-lg bg-[#2451B8]/10 hover:bg-[#2451B8]/20 dark:bg-slate-800 dark:hover:bg-slate-700 text-[#2451B8] dark:text-blue-400 border border-[#2451B8]/20 dark:border-slate-700 text-xs font-black transition-all flex items-center gap-1 cursor-pointer"
                                   title={isRtl ? 'إضافة قطاع/منطقة تحت هذه الشركة' : 'Add Sector under Company'}
                                 >
-                                  <Globe size={13} className="text-indigo-500" />
+                                  <Globe size={13} className="text-[#2451B8]" />
                                   <span>{isRtl ? 'إضافة قطاع' : 'Add Sector'}</span>
                                 </button>
                                 <button
@@ -1538,7 +1522,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                                     setCompanyModules(ModulesModule.getCompanyModules(comp.id));
                                     setActiveModalTab('subscription');
                                   }}
-                                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700/80 hover:bg-purple-50 dark:hover:bg-purple-900/30 text-purple-600 dark:text-purple-400 border border-slate-200 dark:border-slate-600 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700/80 hover:bg-[#2451B8]/10 dark:hover:bg-blue-900/30 text-[#2451B8] dark:text-blue-400 border border-slate-200 dark:border-slate-600 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
                                   title={isRtl ? 'إدارة الاشتراك والتراخيص' : 'Manage Subscription'}
                                 >
                                   <Calendar size={13} />
@@ -1564,7 +1548,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                                 <button
                                   type="button"
                                   onClick={() => startStructEditCompany(comp)}
-                                  className="p-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-400 cursor-pointer transition-all"
+                                  className="p-1.5 rounded-lg hover:bg-[#2451B8]/10 dark:hover:bg-slate-700 text-[#2451B8] dark:text-blue-400 cursor-pointer transition-all"
                                   title={isRtl ? 'تعديل اسم الشركة' : 'Edit Company Name'}
                                 >
                                   <Edit size={14} />
@@ -1832,7 +1816,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                     <button
                       onClick={() => setStructureTab('companies')}
                       className={`px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-                        structureTab === 'companies' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400'
+                        structureTab === 'companies' ? 'border-[#2451B8] text-[#2451B8]' : 'border-transparent text-slate-400'
                       }`}
                     >
                       {isRtl ? '1. الشركات والكيانات' : '1. Companies'}
@@ -1840,7 +1824,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                     <button
                       onClick={() => setStructureTab('regions')}
                       className={`px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-                        structureTab === 'regions' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400'
+                        structureTab === 'regions' ? 'border-[#2451B8] text-[#2451B8]' : 'border-transparent text-slate-400'
                       }`}
                     >
                       {isRtl ? '2. قطاعات ومناطق جغرافية' : '2. Regions'}
@@ -1848,7 +1832,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                     <button
                       onClick={() => setStructureTab('stations')}
                       className={`px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-                        structureTab === 'stations' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400'
+                        structureTab === 'stations' ? 'border-[#2451B8] text-[#2451B8]' : 'border-transparent text-slate-400'
                       }`}
                     >
                       {isRtl ? '3. المحطات والفروع العهدية' : '3. Stations & Branches'}
@@ -1862,7 +1846,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                         <button
                           type="button"
                           onClick={startStructAddCompany}
-                          className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-500 transition-all flex items-center gap-1 shadow-md cursor-pointer"
+                          className="px-3.5 py-1.5 bg-[#2451B8] text-white rounded-lg text-xs font-bold hover:bg-[#1d429a] transition-all flex items-center gap-1 shadow-md cursor-pointer"
                         >
                           <Plus size={14} />
                           <span>{isRtl ? 'إضافة شركة جديدة' : 'Add Company'}</span>
@@ -1900,9 +1884,9 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                                 <td className="p-3.5 text-center whitespace-nowrap font-bold">
                                   <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
                                     c.subscription_plan === 'Enterprise'
-                                      ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
+                                      ? 'bg-[#2451B8]/10 text-[#2451B8] dark:text-blue-400'
                                       : c.subscription_plan === 'Professional'
-                                        ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+                                        ? 'bg-[#2451B8]/10 text-[#2451B8] dark:text-blue-400'
                                         : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'
                                   }`}>
                                     {c.subscription_plan || 'Basic'}
@@ -1919,7 +1903,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                                     {/* Edit Name */}
                                     <button 
                                       onClick={() => startStructEditCompany(c)} 
-                                      className="p-1.5 hover:bg-indigo-50 dark:hover:bg-slate-800 rounded-lg text-indigo-600 dark:text-indigo-400 cursor-pointer transition-all"
+                                      className="p-1.5 hover:bg-[#2451B8]/10 dark:hover:bg-slate-800 rounded-lg text-[#2451B8] dark:text-blue-400 cursor-pointer transition-all"
                                       title={isRtl ? 'تعديل اسم الشركة' : 'Edit Company Name'}
                                     >
                                       <Edit size={14} />
@@ -1948,7 +1932,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                                         setCompanyModules(ModulesModule.getCompanyModules(c.id));
                                         setActiveModalTab('subscription');
                                       }}
-                                      className="p-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-slate-800 text-purple-500 cursor-pointer transition-all"
+                                      className="p-1.5 rounded-lg hover:bg-[#2451B8]/10 dark:hover:bg-slate-800 text-[#2451B8] cursor-pointer transition-all"
                                       title={isRtl ? 'إدارة الاشتراك والتراخيص' : 'Manage Subscription'}
                                     >
                                       <Calendar size={14} />
@@ -1987,7 +1971,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                         <button
                           type="button"
                           onClick={() => startStructAddRegionForCompany(structSelectedCompanyId)}
-                          className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-500 transition-all flex items-center gap-1 shadow-md cursor-pointer"
+                          className="px-3.5 py-1.5 bg-[#2451B8] text-white rounded-lg text-xs font-bold hover:bg-[#1d429a] transition-all flex items-center gap-1 shadow-md cursor-pointer"
                         >
                           <Plus size={14} />
                           <span>{isRtl ? 'إضافة قطاع/منطقة جديدة' : 'Add Region'}</span>
@@ -2012,7 +1996,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                                 <td className="p-3 text-slate-500 dark:text-slate-400">{companies.find(c => c.id === r.company_id)?.name || r.company_id}</td>
                                 <td className="p-3 text-center whitespace-nowrap">
                                   <div className="flex items-center justify-center gap-2">
-                                    <button onClick={() => startStructEditRegion(r)} className="p-1 hover:bg-indigo-50 rounded text-indigo-600 dark:text-indigo-400 cursor-pointer"><Edit size={14} /></button>
+                                    <button onClick={() => startStructEditRegion(r)} className="p-1 hover:bg-[#2451B8]/10 rounded text-[#2451B8] dark:text-blue-400 cursor-pointer"><Edit size={14} /></button>
                                     <button onClick={() => handleStructDeleteRegion(r.id)} className="p-1 hover:bg-rose-50 rounded text-rose-500 cursor-pointer"><Trash2 size={14} /></button>
                                   </div>
                                 </td>
@@ -2031,7 +2015,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                         <button
                           type="button"
                           onClick={() => startStructAddStationForRegion('none', structSelectedCompanyId)}
-                          className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-500 transition-all flex items-center gap-1 shadow-md cursor-pointer"
+                          className="px-3.5 py-1.5 bg-[#2451B8] text-white rounded-lg text-xs font-bold hover:bg-[#1d429a] transition-all flex items-center gap-1 shadow-md cursor-pointer"
                         >
                           <Plus size={14} />
                           <span>{isRtl ? 'إضافة محطة/فرع عهدة جديدة' : 'Add Station'}</span>
@@ -2070,7 +2054,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                                 </td>
                                 <td className="p-3 text-center whitespace-nowrap">
                                   <div className="flex items-center justify-center gap-2">
-                                    <button onClick={() => startStructEditStation(s)} className="p-1 hover:bg-indigo-50 rounded text-indigo-600 dark:text-indigo-400 cursor-pointer"><Edit size={14} /></button>
+                                    <button onClick={() => startStructEditStation(s)} className="p-1 hover:bg-[#2451B8]/10 rounded text-[#2451B8] dark:text-blue-400 cursor-pointer"><Edit size={14} /></button>
                                     <button onClick={() => handleStructDeleteStation(s.id)} className="p-1 hover:bg-rose-50 rounded text-rose-500 cursor-pointer"><Trash2 size={14} /></button>
                                   </div>
                                 </td>
@@ -2128,180 +2112,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
         />
       )}
 
-      {activeSubTab === 'global_settings' && (
-        <div className="space-y-6 animate-fade-in">
-          {/* Global Permission Matrix Section */}
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
-              <div>
-                <h3 className="font-bold text-base text-[#18181B] dark:text-slate-100 flex items-center gap-2">
-                  <ShieldCheck className="text-[#2451B8]" size={20} />
-                  <span>{isRtl ? 'مصفوفة الصلاحيات العامة للنظام' : 'Platform Permission Matrix'}</span>
-                </h3>
-                <p className="text-xs text-[#71717A] dark:text-slate-400 mt-1">
-                  {isRtl
-                    ? 'تحديد وإدارة مستويات الوصول الافتراضية لكافة أدوار المستخدمين عبر المنصة'
-                    : 'Configure default permission levels across all platform user roles'}
-                </p>
-              </div>
-            </div>
-            <PermissionMatrix language={language} theme={theme} />
-          </div>
-
-          {/* Platform Backup & Restore Section */}
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-4">
-            <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
-              <h3 className="font-bold text-base text-[#18181B] dark:text-slate-100 flex items-center gap-2">
-                <Download className="text-[#2451B8]" size={20} />
-                <span>{isRtl ? 'النسخ الاحتياطي واستعادة قاعدة البيانات العامة' : 'Platform Database Backup & Snapshot'}</span>
-              </h3>
-              <p className="text-xs text-[#71717A] dark:text-slate-400 mt-1">
-                {isRtl
-                  ? 'تصدير أو استعادة لقطة شاملة لقاعدة بيانات المنصة بالكامل بجميع الشركات والعمليات (ملف JSON)'
-                  : 'Export or restore a complete platform JSON database snapshot containing all entities'}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              {/* Export Card */}
-              <div className="p-5 rounded-lg border border-slate-200 dark:border-slate-800 bg-[#FAFAFA] dark:bg-slate-800/40 space-y-3">
-                <div className="flex items-center gap-2 text-[#18181B] dark:text-slate-100 font-bold text-sm">
-                  <Download size={18} className="text-[#2451B8]" />
-                  <span>{isRtl ? 'تصدير نسخة احتياطية' : 'Export Full Snapshot'}</span>
-                </div>
-                <p className="text-xs text-[#71717A] dark:text-slate-400 leading-relaxed">
-                  {isRtl
-                    ? 'قم بتنزيل ملف JSON يحتوي على سجلات الشركات، القطاعات، المحطات، المستخدمين، وجميع القيود والمعاملات المالية.'
-                    : 'Download a full JSON file containing all companies, regions, stations, users, and financial records.'}
-                </p>
-                <button
-                  onClick={handleExportBackup}
-                  className="w-full sm:w-auto px-4 py-2 bg-[#2451B8] hover:bg-[#1d429a] text-white font-semibold rounded-md text-xs transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Download size={15} />
-                  <span>{isRtl ? 'تنزيل ملف النسخة الاحتياطية (JSON)' : 'Download Backup File (.json)'}</span>
-                </button>
-              </div>
-
-              {/* Restore Card */}
-              <div className="p-5 rounded-lg border border-slate-200 dark:border-slate-800 bg-[#FAFAFA] dark:bg-slate-800/40 space-y-3">
-                <div className="flex items-center gap-2 text-[#18181B] dark:text-slate-100 font-bold text-sm">
-                  <Upload size={18} className="text-[#2451B8]" />
-                  <span>{isRtl ? 'استعادة قاعدة البيانات' : 'Restore Database Snapshot'}</span>
-                </div>
-                <p className="text-xs text-[#71717A] dark:text-slate-400 leading-relaxed">
-                  {isRtl
-                    ? 'رفع ملف نسخة احتياطية (JSON) لتحديث واستبدال سجلات المنصة الحالية بالكامل. يرجى التوخي بالتنفيذ.'
-                    : 'Upload a valid JSON backup file to overwrite/synchronize current platform database records.'}
-                </p>
-                <label className="inline-flex w-full sm:w-auto px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[#18181B] dark:text-slate-200 font-semibold rounded-md text-xs hover:bg-slate-50 transition-all shadow-xs items-center justify-center gap-2 cursor-pointer">
-                  <Upload size={15} />
-                  <span>{isRtl ? 'اختيار ملف JSON واستعادة' : 'Select Backup File (.json)'}</span>
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleRestoreData}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Seed Demo Data Section */}
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
-              <div>
-                <h3 className="font-bold text-base text-[#18181B] dark:text-slate-100 flex items-center gap-2">
-                  <Sparkles className="text-[#2451B8]" size={20} />
-                  <span>{isRtl ? 'بيانات النظام التجريبية للشركات والتقسيمات الإدارية' : 'Multi-Company Demo Seed Data'}</span>
-                </h3>
-                <p className="text-xs text-[#71717A] dark:text-slate-400 mt-1">
-                  {isRtl
-                    ? 'شحن وإعادة تجديد البيانات الأولية لـ 3 شركات نموذجية بقطاعات، محطات، مستودعات، وحسابات مستخدمين متنوعة لتجربة كافة الموديولات'
-                    : 'Reload seeded environments for 3 sample enterprise structures (Manufacturing, Retail, Poultry)'}
-                </p>
-              </div>
-              <button
-                onClick={handleSeedData}
-                disabled={isSeedingData}
-                className="px-4 py-2 bg-[#2451B8] hover:bg-[#1d429a] text-white font-semibold rounded-md text-xs transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                <RefreshCw size={15} className={isSeedingData ? 'animate-spin' : ''} />
-                <span>{isSeedingData ? (isRtl ? 'جاري الشحن...' : 'Seeding...') : (isRtl ? 'شحن البيانات التجريبية الآن' : 'Reload Seed Data Now')}</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-              {/* Company 1 */}
-              <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-[#FAFAFA] dark:bg-slate-800/40 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
-                    {isRtl ? 'هيكل صناعي ومصانع' : 'Manufacturing'}
-                  </span>
-                  <span className="text-[10px] text-[#71717A]">comp-sewedy-mfg</span>
-                </div>
-                <h4 className="font-bold text-sm text-[#18181B] dark:text-slate-100">
-                  {isRtl ? 'مجموعة السويدي للصناعات الهندسية' : 'El-Sewedy Industrial Group'}
-                </h4>
-                <p className="text-xs text-[#71717A] dark:text-slate-400 leading-relaxed">
-                  {isRtl
-                    ? 'الشركة القابضة ← مصنع العاشر (كابلات) ومصنع السادات ← خطوط الإنتاج والجودة والمستودعات.'
-                    : 'HQ → 10th Ramadan Cables & Sadat Plants → Production Lines, Quality Control, and Raw Material Stores.'}
-                </p>
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60 text-[11px] space-y-1 text-slate-600 dark:text-slate-300 font-mono">
-                  <div><strong>Admin:</strong> sewedy.admin@local</div>
-                  <div><strong>Cashier:</strong> sewedy.cashier@local</div>
-                </div>
-              </div>
-
-              {/* Company 2 */}
-              <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-[#FAFAFA] dark:bg-slate-800/40 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                    {isRtl ? 'هيكل تجاري وسلاسل' : 'Retail Supermarkets'}
-                  </span>
-                  <span className="text-[10px] text-[#71717A]">comp-carrefour-retail</span>
-                </div>
-                <h4 className="font-bold text-sm text-[#18181B] dark:text-slate-100">
-                  {isRtl ? 'كارفور مصر لتجارة التجزئة' : 'Carrefour Egypt Retail Supermarkets'}
-                </h4>
-                <p className="text-xs text-[#71717A] dark:text-slate-400 leading-relaxed">
-                  {isRtl
-                    ? 'المقر الرئيسي ← قطاع فروع القاهرة والجيزة ← هايبر المعادي وإكسبريس التجمع ← خزن الكاشير والأغذية.'
-                    : 'Corporate HQ → Greater Cairo Stores → Maadi Hypermarket & Express Stores → Cashier Vaults & Fresh Foods.'}
-                </p>
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60 text-[11px] space-y-1 text-slate-600 dark:text-slate-300 font-mono">
-                  <div><strong>Admin:</strong> carrefour.admin@local</div>
-                  <div><strong>Cashier:</strong> carrefour.cashier@local</div>
-                </div>
-              </div>
-
-              {/* Company 3 */}
-              <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-[#FAFAFA] dark:bg-slate-800/40 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                    {isRtl ? 'هيكل داجني وزراعي' : 'Poultry & Agriculture'}
-                  </span>
-                  <span className="text-[10px] text-[#71717A]">comp-cairo-poultry</span>
-                </div>
-                <h4 className="font-bold text-sm text-[#18181B] dark:text-slate-100">
-                  {isRtl ? 'شركة القاهرة للإنتاج الداجني والزراعي' : 'Cairo Poultry Group'}
-                </h4>
-                <p className="text-xs text-[#71717A] dark:text-slate-400 leading-relaxed">
-                  {isRtl
-                    ? 'المقر الرئيسي ← قطاع المزارع والتربية ← محطة سينا 2000 والقادسية ← مزارع التسمين وصوامع الأعلاف.'
-                    : 'HQ → Farms & Breeding Sector → Sina 2000 & Qadisiya Stations → Broiler Farms & Feed Silos.'}
-                </p>
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60 text-[11px] space-y-1 text-slate-600 dark:text-slate-300 font-mono">
-                  <div><strong>Admin:</strong> cairo.admin@local</div>
-                  <div><strong>Cashier:</strong> cairo.cashier@local</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MODAL 1: Create Company */}
 
       {/* MODAL 1: Create Company */}
       {showCreateCompanyModal && (
@@ -2309,7 +2120,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowCreateCompanyModal(false)} />
           <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4 text-xs">
             <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <Building2 size={20} className="text-indigo-500" />
+              <Building2 size={20} className="text-[#2451B8]" />
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">{isRtl ? 'إضافة شركة جديدة للمنصة' : 'Onboard New Company'}</h3>
             </div>
 
@@ -2322,7 +2133,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                   placeholder="e.g., Al-Futtaim Egypt (الفطيم مصر)"
                   value={newCompanyName}
                   onChange={(e) => setNewCompanyName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8]"
                 />
               </div>
               <div>
@@ -2333,7 +2144,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                   required
                   value={newCompanyCustody}
                   onChange={(e) => setNewCompanyCustody(Number(e.target.value))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8]"
                 />
               </div>
 
@@ -2347,7 +2158,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-md cursor-pointer"
+                  className="px-4 py-2.5 bg-[#2451B8] hover:bg-[#1d429a] text-white rounded-xl font-bold transition-all shadow-md cursor-pointer"
                 >
                   {isRtl ? 'إنشاء وتفعيل' : 'Onboard Company'}
                 </button>
@@ -2364,7 +2175,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
           <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 w-full max-w-2xl shadow-2xl space-y-4 text-xs my-8">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
-                <Calendar size={20} className="text-indigo-500" />
+                <Calendar size={20} className="text-[#2451B8]" />
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                   {isRtl ? `إدارة تراخيص واشتراكات: ${editingCompany.name}` : `Licensing & Subscription: ${editingCompany.name}`}
                 </h3>
@@ -2381,7 +2192,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                 onClick={() => setActiveModalTab('subscription')}
                 className={`py-2 px-4 font-bold border-b-2 transition-all cursor-pointer ${
                   activeModalTab === 'subscription'
-                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                    ? 'border-[#2451B8] text-[#2451B8] dark:text-blue-400'
                     : 'border-transparent text-slate-400 hover:text-slate-600'
                 }`}
               >
@@ -2392,7 +2203,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                 onClick={() => setActiveModalTab('modules')}
                 className={`py-2 px-4 font-bold border-b-2 transition-all cursor-pointer ${
                   activeModalTab === 'modules'
-                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                    ? 'border-[#2451B8] text-[#2451B8] dark:text-blue-400'
                     : 'border-transparent text-slate-400 hover:text-slate-600'
                 }`}
               >
@@ -2408,7 +2219,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                     <select
                       value={subPlan}
                       onChange={(e) => setSubPlan(e.target.value as Company['subscription_plan'])}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8]"
                     >
                       <option value="Basic">{isRtl ? 'الباقة الأساسية (Basic)' : 'Basic Plan'}</option>
                       <option value="Professional">{isRtl ? 'باقة المحترفين (Professional)' : 'Professional Plan'}</option>
@@ -2421,7 +2232,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                     <select
                       value={subStatus}
                       onChange={(e) => setSubStatus(e.target.value as Company['subscription_status'])}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8]"
                     >
                       <option value="active">{isRtl ? 'نشط (Active)' : 'Active'}</option>
                       <option value="suspended">{isRtl ? 'موقوف مؤقتاً (Suspended)' : 'Suspended'}</option>
@@ -2437,7 +2248,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                       required
                       value={subExpiry}
                       onChange={(e) => setSubExpiry(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8]"
                     />
                   </div>
                 </div>
@@ -2480,7 +2291,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                           const defaults = ModulesModule.getDefaultModulesForPlan(subPlan);
                           setCompanyModules(defaults);
                         }}
-                        className="px-2.5 py-1.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-500/20 cursor-pointer font-bold text-[10px]"
+                        className="px-2.5 py-1.5 bg-[#2451B8]/10 text-[#2451B8] dark:text-blue-400 rounded-lg hover:bg-[#2451B8]/20 cursor-pointer font-bold text-[10px]"
                       >
                         {isRtl ? 'تطبيق باقة الاشتراك' : 'Apply Package'}
                       </button>
@@ -2541,7 +2352,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                           key={m.id}
                           className={`p-3 rounded-2xl border transition-all ${
                             modSettings.enabled
-                              ? 'bg-indigo-500/5 border-indigo-500/10 dark:border-indigo-500/20'
+                              ? 'bg-[#2451B8]/5 border-[#2451B8]/10 dark:border-[#2451B8]/20'
                               : 'bg-slate-50/50 border-slate-100 dark:border-slate-850 dark:bg-slate-850/40 text-slate-400'
                           }`}
                         >
@@ -2549,7 +2360,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                           <div className="flex items-start justify-between gap-4 mb-2.5">
                             <div>
                               <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                                <span className={`h-2 w-2 rounded-full ${modSettings.enabled ? 'bg-indigo-500' : 'bg-slate-300'}`} />
+                                <span className={`h-2 w-2 rounded-full ${modSettings.enabled ? 'bg-[#2451B8]' : 'bg-slate-300'}`} />
                                 {isRtl ? m.name_ar : m.name_en}
                               </h4>
                               <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
@@ -2566,7 +2377,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                                 }}
                                 className="sr-only peer"
                               />
-                              <div className="w-9 h-5 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600" />
+                              <div className="w-9 h-5 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2451B8]" />
                             </label>
                           </div>
 
@@ -2647,7 +2458,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-md cursor-pointer"
+                  className="px-4 py-2.5 bg-[#2451B8] hover:bg-[#1d429a] text-white rounded-xl font-bold transition-all shadow-md cursor-pointer"
                 >
                   {isRtl ? 'حفظ التعديلات والترخيص' : 'Save & License'}
                 </button>
@@ -2687,7 +2498,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                   placeholder="e.g. Pass9922"
                   value={newPlainPassword}
                   onChange={(e) => setNewPlainPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500 font-mono"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8] font-mono"
                 />
               </div>
 
@@ -2723,7 +2534,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowStructCompanyModal(false)} />
           <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4 text-xs">
             <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <Building2 size={20} className="text-indigo-500" />
+              <Building2 size={20} className="text-[#2451B8]" />
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                 {structEditingCompany ? (isRtl ? 'تعديل بيانات الشركة الكيان' : 'Edit Enterprise Company') : (isRtl ? 'إضافة شركة كيان جديدة للمنصة' : 'Add New Enterprise Company')}
               </h3>
@@ -2738,7 +2549,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                   placeholder="e.g., Al-Futtaim Egypt (الفطيم مصر)"
                   value={structCompName}
                   onChange={(e) => setStructCompName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8]"
                 />
               </div>
 
@@ -2751,7 +2562,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                     required
                     value={newCompanyCustody}
                     onChange={(e) => setNewCompanyCustody(Number(e.target.value))}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8]"
                   />
                 </div>
               )}
@@ -2766,7 +2577,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-md cursor-pointer"
+                  className="px-4 py-2.5 bg-[#2451B8] hover:bg-[#1d429a] text-white rounded-xl font-bold transition-all shadow-md cursor-pointer"
                 >
                   {isRtl ? 'حفظ وتفعيل' : 'Save & Onboard'}
                 </button>
@@ -2782,7 +2593,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowStructRegionModal(false)} />
           <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4 text-xs">
             <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <Globe size={20} className="text-indigo-500" />
+              <Globe size={20} className="text-[#2451B8]" />
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                 {structEditingRegion ? (isRtl ? 'تعديل قطاع / منطقة' : 'Edit Region Sector') : (isRtl ? 'إضافة قطاع / منطقة جديدة' : 'Add New Region Sector')}
               </h3>
@@ -2797,7 +2608,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                   placeholder="e.g., Cairo South (جنوب القاهرة)"
                   value={structRegName}
                   onChange={(e) => setStructRegName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8]"
                 />
               </div>
 
@@ -2806,7 +2617,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                 <select
                   value={structRegCompanyId}
                   onChange={(e) => setStructRegCompanyId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8]"
                 >
                   <option value="">{isRtl ? '-- اختر الشركة التابعة لها --' : '-- Select Parent Company --'}</option>
                   {companies.map(c => (
@@ -2825,7 +2636,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-md cursor-pointer"
+                  className="px-4 py-2.5 bg-[#2451B8] hover:bg-[#1d429a] text-white rounded-xl font-bold transition-all shadow-md cursor-pointer"
                 >
                   {isRtl ? 'حفظ' : 'Save'}
                 </button>
@@ -2841,7 +2652,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowStructStationModal(false)} />
           <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl space-y-4 text-xs">
             <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <Building size={20} className="text-indigo-500" />
+              <Building size={20} className="text-[#2451B8]" />
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                 {structEditingStation ? (isRtl ? 'تعديل فرع عهدة / محطة' : 'Edit Custody Station') : (isRtl ? 'إضافة فرع عهدة / محطة جديدة' : 'Add Custody Station')}
               </h3>
@@ -2856,7 +2667,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                   placeholder="e.g. Degla Maadi Branch (فرع دجلة المعادي)"
                   value={structStnName}
                   onChange={(e) => setStructStnName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8]"
                 />
               </div>
 
@@ -2868,7 +2679,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                   placeholder="e.g., CC-MAADI-01"
                   value={structStnCode}
                   onChange={(e) => setStructStnCode(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500 font-mono uppercase"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8] font-mono uppercase"
                 />
               </div>
 
@@ -2881,7 +2692,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                   placeholder="e.g., 50000"
                   value={structStnCustody}
                   onChange={(e) => setStructStnCustody(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500 font-mono"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8] font-mono"
                 />
               </div>
 
@@ -2890,7 +2701,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                 <select
                   value={structStnRegionId}
                   onChange={(e) => setStructStnRegionId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 dark:bg-slate-950 focus:border-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8]"
                 >
                   <option value="none">{isRtl ? 'ارتباط مباشر بالشركة (بدون قطاع)' : 'Direct Link to Company (No Sector)'}</option>
                   {regions.map(r => (
@@ -2909,7 +2720,7 @@ export default function SuperAdmin({ language, theme, initialSubTab }: SuperAdmi
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-md cursor-pointer"
+                  className="px-4 py-2.5 bg-[#2451B8] hover:bg-[#1d429a] text-white rounded-xl font-bold transition-all shadow-md cursor-pointer"
                 >
                   {isRtl ? 'حفظ الفرع' : 'Save Branch'}
                 </button>

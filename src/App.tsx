@@ -499,15 +499,6 @@ export default function App() {
           />
         );
       case 'settings':
-        if (activeUser?.role === 'SystemAdmin') {
-          return (
-            <SuperAdmin 
-              language={language} 
-              theme={theme} 
-              initialSubTab="global_settings"
-            />
-          );
-        }
         return (
           <Settings 
             language={language} 
