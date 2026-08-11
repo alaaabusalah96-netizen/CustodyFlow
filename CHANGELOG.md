@@ -4,6 +4,21 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Settings.tsx Tab Extraction & Modularization (GeneralTab & UsersTab)
+**Date:** 2026-08-11
+**Files Changed:** `src/components/settings/SettingsGeneralTab.tsx`, `src/components/settings/SettingsUsersTab.tsx`, `src/pages/Settings.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Tab Component Extraction**:
+  - Extracted General & System Backup settings tab into `/src/components/settings/SettingsGeneralTab.tsx`.
+  - Extracted User Accounts & Scoped Authority settings tab into `/src/components/settings/SettingsUsersTab.tsx`.
+- **Settings Page Refactoring (`src/pages/Settings.tsx`)**:
+  - Imported `SettingsGeneralTab` and `SettingsUsersTab` into `Settings.tsx` and replaced inline JSX blocks with dedicated tab components.
+  - Maintained all existing state, handlers, props, and company-isolated pending approval workflows.
+- **Verification**:
+  - `compile_applet` built cleanly with zero compilation or typing errors.
+
+---
+
 ## Restaurant POS Orders, Floor Tables & Auto Stock Deduction (Phase 2) Implementation
 **Date:** 2026-08-11
 **Files Changed:** `src/types/restaurant.ts`, `src/db/restaurant.ts`, `src/pages/RestaurantOrders.tsx`, `src/components/Layout.tsx`, `src/App.tsx`, `src/db/modules.ts`, `src/restaurant_orders.test.ts`, `CHANGELOG.md`

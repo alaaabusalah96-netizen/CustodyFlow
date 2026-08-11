@@ -30,7 +30,42 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [deptFilter, setDeptFilter] = useState('ALL');
-  const [activeTab, setActiveTab] = useState<'employees' | 'payroll'>('employees');
+  const [activeTab, setActiveTab] = useState<'employees' | 'attendance' | 'payroll'>('employees');
+
+  // Attendance & Leave States
+  const [attSelectedPeriod, setAttSelectedPeriod] = useState('2026-07');
+  const [attForm, setAttForm] = useState({
+    employee_id: '',
+    date: new Date().toISOString().split('T')[0],
+    checkIn: '09:00',
+    checkOut: '17:00',
+    status: 'PRESENT' as any,
+    latenessMinutes: 0,
+    notes: ''
+  });
+
+  const [leaveForm, setLeaveForm] = useState({
+    employee_id: '',
+    leaveType: 'ANNUAL' as any,
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+    reason: ''
+  });
+
+  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+
+  // Reload Attendance Data
+  const loadAttendanceData = () => {
+    const recs = HRBusinessEngine.getAttendanceRecords(companyId, attSelectedPeriod);
+    const lvs = HRBusinessEngine.getLeaveRequests(companyId);
+    setAttendanceRecords(recs);
+    setLeaveRequests(lvs);
+  };
+
+  useEffect(() => {
+    loadAttendanceData();
+  }, [attSelectedPeriod, companyId]);
 
   // Organization Engine State
   const [orgUnits, setOrgUnits] = useState<any[]>([]);
@@ -199,22 +234,7 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
 
   // Generate Payroll Sheet
   const handleGeneratePayrollSheet = () => {
-    const list = employees.filter(e => e.status === 'ACTIVE').map(e => {
-      const { socialInsuranceEmployee, socialInsuranceEmployer, payrollTax } = calculateEgyptianDeductions(e.baseSalary);
-      const netSalary = e.baseSalary - socialInsuranceEmployee - payrollTax;
-      return {
-        employeeId: e.id,
-        employeeName: e.name,
-        employeeCode: e.code,
-        baseSalary: e.baseSalary,
-        allowances: 0,
-        deductions: 0,
-        socialInsuranceEmployee,
-        socialInsuranceEmployer,
-        payrollTax,
-        netSalary
-      };
-    });
+    const list = HRBusinessEngine.calculateMonthlyPayrollSheet(companyId, payrollPeriod, selectedOrgUnitFilter);
     setPayrollSheet(list);
     setIsPayrollGenerated(true);
   };
@@ -371,17 +391,18 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
 
       {/* HR Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-1">
-        {(['employees', 'payroll'] as const).map((tab) => (
+        {(['employees', 'attendance', 'payroll'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-xs font-bold transition-all border-b-2 cursor-pointer ${
               activeTab === tab
-                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-extrabold'
                 : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             {tab === 'employees' && (isRtl ? 'كتالوج الموظفين' : 'Employee Directory')}
+            {tab === 'attendance' && (isRtl ? '📅 الحضور والغياب والإجازات' : '📅 Attendance & Leaves')}
             {tab === 'payroll' && (isRtl ? 'الرواتب المصروفة سابقاً' : 'Salary Runs History')}
           </button>
         ))}
@@ -469,6 +490,348 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Attendance & Leaves View */}
+      {activeTab === 'attendance' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Form 1: Daily Check-in / Check-out */}
+            <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-4">
+              <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
+                <Calendar className="text-emerald-500 h-4 w-4" />
+                <span>{isRtl ? 'تسجيل الحضور والانصراف اليومي' : 'Daily Attendance Check-In'}</span>
+              </h3>
+
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (!attForm.employee_id) return showToast('error', isRtl ? 'يرجى اختيار الموظف' : 'Select employee');
+                await HRBusinessEngine.recordAttendance(companyId, {
+                  employee_id: attForm.employee_id,
+                  date: attForm.date,
+                  checkIn: attForm.checkIn,
+                  checkOut: attForm.checkOut,
+                  status: attForm.status,
+                  latenessMinutes: Number(attForm.latenessMinutes),
+                  notes: attForm.notes
+                });
+                showToast('success', isRtl ? 'تم تسجيل سجل الحضور اليومي بنجاح' : 'Attendance recorded successfully');
+                loadAttendanceData();
+              }} className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-1">{isRtl ? 'الموظف' : 'Employee'}</label>
+                    <select
+                      value={attForm.employee_id}
+                      onChange={e => setAttForm({ ...attForm, employee_id: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                      required
+                    >
+                      <option value="">{isRtl ? '-- اختر الموظف --' : '-- Select Employee --'}</option>
+                      {employees.map(emp => (
+                        <option key={emp.id} value={emp.id}>{emp.name} ({emp.code})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-1">{isRtl ? 'التاريخ' : 'Date'}</label>
+                    <input
+                      type="date"
+                      value={attForm.date}
+                      onChange={e => setAttForm({ ...attForm, date: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-1">{isRtl ? 'الحالة' : 'Status'}</label>
+                    <select
+                      value={attForm.status}
+                      onChange={e => setAttForm({ ...attForm, status: e.target.value as any })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                    >
+                      <option value="PRESENT">{isRtl ? 'حاضر (Present)' : 'Present'}</option>
+                      <option value="LATE">{isRtl ? 'متأخر (Late)' : 'Late'}</option>
+                      <option value="ABSENT">{isRtl ? 'غائب (Absent)' : 'Absent'}</option>
+                      <option value="EARLY_LEAVE">{isRtl ? 'انصراف مبكر' : 'Early Leave'}</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-1">{isRtl ? 'الدخول' : 'Check-In'}</label>
+                    <input
+                      type="time"
+                      value={attForm.checkIn}
+                      onChange={e => setAttForm({ ...attForm, checkIn: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-1">{isRtl ? 'دقائق التأخير' : 'Late Mins'}</label>
+                    <input
+                      type="number"
+                      value={attForm.latenessMinutes}
+                      onChange={e => setAttForm({ ...attForm, latenessMinutes: Number(e.target.value) })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1">{isRtl ? 'ملاحظات' : 'Notes'}</label>
+                  <input
+                    type="text"
+                    placeholder={isRtl ? 'سبب التأخير أو ملاحظة المباشرة...' : 'Reason for delay or notes...'}
+                    value={attForm.notes}
+                    onChange={e => setAttForm({ ...attForm, notes: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-sm"
+                >
+                  {isRtl ? 'حفظ سجل الحضور' : 'Save Attendance Record'}
+                </button>
+              </form>
+            </div>
+
+            {/* Form 2: Leave Request Submission */}
+            <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-4">
+              <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
+                <Heart className="text-indigo-500 h-4 w-4" />
+                <span>{isRtl ? 'تقديم طلب إجازة موظف' : 'Submit Leave Request'}</span>
+              </h3>
+
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (!leaveForm.employee_id) return showToast('error', isRtl ? 'اختر الموظف' : 'Select employee');
+                await HRBusinessEngine.submitLeaveRequest(companyId, {
+                  employee_id: leaveForm.employee_id,
+                  leaveType: leaveForm.leaveType,
+                  startDate: leaveForm.startDate,
+                  endDate: leaveForm.endDate,
+                  reason: leaveForm.reason
+                });
+                showToast('success', isRtl ? 'تم تقديم طلب الإجازة للارسال للاعتماد' : 'Leave request submitted');
+                setLeaveForm({ ...leaveForm, reason: '' });
+                loadAttendanceData();
+              }} className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-1">{isRtl ? 'الموظف' : 'Employee'}</label>
+                    <select
+                      value={leaveForm.employee_id}
+                      onChange={e => setLeaveForm({ ...leaveForm, employee_id: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                      required
+                    >
+                      <option value="">{isRtl ? '-- اختر الموظف --' : '-- Select Employee --'}</option>
+                      {employees.map(emp => (
+                        <option key={emp.id} value={emp.id}>{emp.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-1">{isRtl ? 'نوع الإجازة' : 'Leave Type'}</label>
+                    <select
+                      value={leaveForm.leaveType}
+                      onChange={e => setLeaveForm({ ...leaveForm, leaveType: e.target.value as any })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                    >
+                      <option value="ANNUAL">{isRtl ? 'إجازة سنوية' : 'Annual Leave'}</option>
+                      <option value="SICK">{isRtl ? 'إجازة مرضية' : 'Sick Leave'}</option>
+                      <option value="CASUAL">{isRtl ? 'إجازة عارضة' : 'Casual Leave'}</option>
+                      <option value="UNPAID">{isRtl ? 'إجازة بدون راتب (خصم)' : 'Unpaid Leave (Deduction)'}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-1">{isRtl ? 'تاريخ البداية' : 'Start Date'}</label>
+                    <input
+                      type="date"
+                      value={leaveForm.startDate}
+                      onChange={e => setLeaveForm({ ...leaveForm, startDate: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-1">{isRtl ? 'تاريخ النهاية' : 'End Date'}</label>
+                    <input
+                      type="date"
+                      value={leaveForm.endDate}
+                      onChange={e => setLeaveForm({ ...leaveForm, endDate: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1">{isRtl ? 'سبب الإجازة' : 'Reason'}</label>
+                  <input
+                    type="text"
+                    placeholder={isRtl ? 'اكتب أسباب أو مبررات طلب الإجازة...' : 'State leave justification...'}
+                    value={leaveForm.reason}
+                    onChange={e => setLeaveForm({ ...leaveForm, reason: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-sm"
+                >
+                  {isRtl ? 'إرسال طلب الإجازة' : 'Submit Leave Request'}
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* Leave Requests Approvals Queue */}
+          <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+            <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center justify-between">
+              <span>{isRtl ? 'جدول طلبات الإجازات والاعتمادات' : 'Leave Approvals Queue'}</span>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 font-bold">
+                {leaveRequests.length} {isRtl ? 'طلبات' : 'requests'}
+              </span>
+            </h3>
+
+            {leaveRequests.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-4">{isRtl ? 'لا توجد طلبات إجازة مسجلة حالياً.' : 'No leave requests recorded.'}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-right">
+                  <thead>
+                    <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 font-bold">
+                      <th className="py-2">{isRtl ? 'الموظف' : 'Employee'}</th>
+                      <th className="py-2">{isRtl ? 'نوع الإجازة' : 'Type'}</th>
+                      <th className="py-2">{isRtl ? 'الفترة' : 'Period'}</th>
+                      <th className="py-2">{isRtl ? 'الأيام' : 'Days'}</th>
+                      <th className="py-2">{isRtl ? 'السبب' : 'Reason'}</th>
+                      <th className="py-2">{isRtl ? 'الحالة' : 'Status'}</th>
+                      <th className="py-2 text-center">{isRtl ? 'الإجراء' : 'Action'}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaveRequests.map(lv => (
+                      <tr key={lv.id} className="border-b border-slate-100 dark:border-slate-800/50">
+                        <td className="py-2.5 font-bold text-slate-800 dark:text-slate-200">{lv.employee_name || lv.employee_id}</td>
+                        <td className="py-2.5">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            lv.leaveType === 'UNPAID' ? 'bg-rose-500/10 text-rose-600' : 'bg-blue-500/10 text-blue-600'
+                          }`}>
+                            {lv.leaveType}
+                          </span>
+                        </td>
+                        <td className="py-2.5 font-mono text-slate-500">{lv.startDate} ~ {lv.endDate}</td>
+                        <td className="py-2.5 font-bold">{lv.daysCount} {isRtl ? 'أيام' : 'days'}</td>
+                        <td className="py-2.5 text-slate-500">{lv.reason}</td>
+                        <td className="py-2.5">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                            lv.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600' :
+                            lv.status === 'REJECTED' ? 'bg-rose-500/10 text-rose-600' : 'bg-amber-500/10 text-amber-600'
+                          }`}>
+                            {lv.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-center">
+                          {lv.status === 'PENDING' && (
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={async () => {
+                                  await HRBusinessEngine.updateLeaveStatus(companyId, lv.id, 'APPROVED', activeUser?.full_name || 'HR Manager');
+                                  showToast('success', isRtl ? 'تمت الموافقة على الإجازة' : 'Leave request approved');
+                                  loadAttendanceData();
+                                }}
+                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold cursor-pointer"
+                              >
+                                {isRtl ? 'موافقة' : 'Approve'}
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  await HRBusinessEngine.updateLeaveStatus(companyId, lv.id, 'REJECTED', activeUser?.full_name || 'HR Manager');
+                                  showToast('error', isRtl ? 'تم رفض طلب الإجازة' : 'Leave request rejected');
+                                  loadAttendanceData();
+                                }}
+                                className="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[10px] font-bold cursor-pointer"
+                              >
+                                {isRtl ? 'رفض' : 'Reject'}
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Monthly Attendance & Automatic Payroll Deductions Summary */}
+          <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
+                <Calculator className="text-emerald-500 h-4 w-4" />
+                <span>{isRtl ? 'ملخص الحضور والخصومات الآلية للرواتب' : 'Monthly Attendance & Auto-Deductions Summary'}</span>
+              </h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-400">{isRtl ? 'الشهر:' : 'Period:'}</span>
+                <input
+                  type="month"
+                  value={attSelectedPeriod}
+                  onChange={e => setAttSelectedPeriod(e.target.value)}
+                  className="px-2 py-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-right">
+                <thead>
+                  <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 font-bold">
+                    <th className="py-2">{isRtl ? 'الكود والموظف' : 'Employee'}</th>
+                    <th className="py-2 text-center">{isRtl ? 'أيام الحضور' : 'Present Days'}</th>
+                    <th className="py-2 text-center">{isRtl ? 'أيام الغياب' : 'Absent Days'}</th>
+                    <th className="py-2 text-center">{isRtl ? 'دقائق التأخير' : 'Late Mins'}</th>
+                    <th className="py-2 text-center">{isRtl ? 'إجازة بدون راتب' : 'Unpaid Leaves'}</th>
+                    <th className="py-2 font-mono text-emerald-600">{isRtl ? 'خصم الحضور التلقائي' : 'Auto Deduction'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.map(emp => {
+                    const summary = HRBusinessEngine.getMonthlyAttendanceSummary(companyId, emp.id, attSelectedPeriod);
+                    return (
+                      <tr key={emp.id} className="border-b border-slate-100 dark:border-slate-800/50">
+                        <td className="py-2.5 font-bold text-slate-800 dark:text-slate-100">
+                          {emp.name} <span className="text-[10px] text-slate-400 font-mono">({emp.code})</span>
+                        </td>
+                        <td className="py-2.5 text-center font-bold text-emerald-600">{summary.presentDays}</td>
+                        <td className="py-2.5 text-center font-bold text-rose-600">{summary.absentDays}</td>
+                        <td className="py-2.5 text-center font-mono text-amber-600">{summary.totalLatenessMinutes} m</td>
+                        <td className="py-2.5 text-center font-bold">{summary.unpaidLeaveDays} d</td>
+                        <td className="py-2.5 font-mono font-black text-rose-600">{summary.calculatedDeduction.toLocaleString()} EGP</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

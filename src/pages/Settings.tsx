@@ -4,6 +4,8 @@ import { auth, useScreenListeners } from '../firebase';
 import PermissionMatrix from '../components/PermissionMatrix';
 import ApprovalWorkflowManager from '../components/ApprovalWorkflowManager';
 import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
+import SettingsGeneralTab from '../components/settings/SettingsGeneralTab';
+import SettingsUsersTab from '../components/settings/SettingsUsersTab';
 import { translations, Language, Theme, AppUser, UserRole, Region, Station, UserPermissions } from '../types';
 import { 
   Settings as SettingsIcon, 
@@ -741,955 +743,95 @@ export default function Settings({ language, theme }: SettingsProps) {
 
       {/* --- TAB 1: GENERAL & BACKUP --- */}
       {activeTab === 'general' && (
-        <div className="grid gap-6 md:grid-cols-2 animate-fade-in">
-          {/* Card 1: General configuration */}
-          <div className={`p-5 rounded-2xl border ${
-            theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
-          }`}>
-            <div className="flex items-center gap-2 mb-4 border-b pb-2.5 border-slate-100 dark:border-slate-800">
-              <Building size={16} className="text-emerald-500" />
-              <h3 className="font-bold text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {t.companySettings}
-              </h3>
-            </div>
-
-            <form onSubmit={handleSaveConfig} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-400 font-bold mb-1">{t.companyName} *</label>
-                <input
-                  type="text"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
-                    theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
-                  }`}
-                  required
-                />
-              </div>
-
-              {/* Custom Print Template Upload */}
-              <div className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-4 space-y-3">
-                <h4 className="font-bold text-slate-700 dark:text-slate-300 text-[11px] uppercase tracking-wider">
-                  {isRtl ? 'إعدادات قوالب الطباعة والهوية' : 'Print Layout & Branding Templates'}
-                </h4>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="useCustomTemplate"
-                    checked={useCustomTemplate}
-                    onChange={(e) => setUseCustomTemplate(e.target.checked)}
-                    className="rounded border-slate-300 dark:border-slate-700 text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <label htmlFor="useCustomTemplate" className="text-slate-600 dark:text-slate-400 font-medium">
-                    {isRtl ? 'استخدام قالب تصميم خاص بالشركة (خلفية مخصصة)' : 'Use custom company backdrop template'}
-                  </label>
-                </div>
-
-                {useCustomTemplate && (
-                  <div className="p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 space-y-2">
-                    <label className="block text-slate-500 font-semibold mb-1">
-                      {isRtl ? 'تحميل نموذج التصميم (PDF أو صورة عالية الجودة)' : 'Upload backdrop template (PDF or High-quality image)'}
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setCustomTemplateImage(reader.result as string);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-500/10 file:text-emerald-600 hover:file:bg-emerald-500/20"
-                    />
-                    {customTemplateImage && (
-                      <div className="mt-2 space-y-1">
-                        <span className="text-[10px] text-slate-400 block">
-                          {isRtl ? '✓ تم تحميل الملف ومعالجته تلقائياً' : '✓ Template uploaded and processed successfully'}
-                        </span>
-                        <div className="h-16 w-24 border rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
-                          <img src={customTemplateImage} alt="Template Preview" className="h-full object-contain" />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setCustomTemplateImage('')}
-                          className="text-[10px] text-rose-500 hover:underline"
-                        >
-                          {isRtl ? 'حذف القالب' : 'Remove template'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black transition-all text-xs animate-pulse"
-              >
-                {t.saveChanges}
-              </button>
-            </form>
-          </div>
-
-          {/* Card 2: JSON Backup & Data Restore */}
-          <div className={`p-5 rounded-2xl border ${
-            theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
-          }`}>
-            <div className="flex items-center gap-2 mb-4 border-b pb-2.5 border-slate-100 dark:border-slate-800">
-              <RefreshCw size={16} className="text-indigo-500" />
-              <h3 className="font-bold text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {isRtl ? 'النسخ الاحتياطي واستعادة البيانات المرفقة' : 'Data Backup & Restore Panel'}
-              </h3>
-            </div>
-
-            <div className="space-y-4 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-              <p>
-                {isRtl 
-                  ? 'يمكنك تصدير قاعدة البيانات بالكامل بما يشمل المحطات، الصلاحيات، الفواتير، والمسجل التاريخي، في ملف مشفر واحد لحماية بياناتك من الفقدان.' 
-                  : 'You can export all configurations, transaction histories, audit journals, and employee metadata locally as an offline JSON snapshot.'}
-              </p>
-
-              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-700 dark:text-amber-400 text-[11px] flex gap-2">
-                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-                <span>
-                  {isRtl 
-                    ? 'تحذير: استعادة ملف احتياطي قديم سيقوم بدمج أو استبدال البيانات الحالية على هذا المتصفح ومزامنتها للجميع.' 
-                    : 'Warning: Uploading a database restore file will overwrite or combine matching records across your cloud storage.'}
-                </span>
-              </div>
-
-              <div className="grid gap-3 pt-2">
-                {/* Export Action */}
-                <button
-                  onClick={handleBackupData}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black transition-all text-xs"
-                >
-                  <Download size={15} />
-                  <span>{isRtl ? 'تصدير نسخة احتياطية فورية (JSON)' : 'Download Complete Backup (JSON)'}</span>
-                </button>
-
-                {/* Import Action */}
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept=".json"
-                    id="db-restore-upload"
-                    onChange={handleRestoreData}
-                    className="hidden"
-                  />
-                  <label
-                    htmlFor="db-restore-upload"
-                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold transition-all text-xs cursor-pointer"
-                  >
-                    <Upload size={15} />
-                    <span>{isRtl ? 'استيراد واستعادة قاعدة البيانات' : 'Restore database from JSON'}</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3: Platform Admin Account Security (Exclusive to SystemAdmin) */}
-          {currentUser && currentUser.role === 'SystemAdmin' && (
-            <div className={`p-5 rounded-2xl border ${
-              theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
-            }`}>
-              <div className="flex items-center gap-2 mb-4 border-b pb-2.5 border-slate-100 dark:border-slate-800">
-                <Lock size={16} className="text-rose-500 animate-pulse" />
-                <h3 className="font-bold text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  {isRtl ? 'أمان حساب أدمن المنصة والتحقق الثنائي' : 'Platform Admin Account Security & 2FA'}
-                </h3>
-              </div>
-
-              {adminSecuritySuccess && (
-                <div className="p-3 mb-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
-                  {adminSecuritySuccess}
-                </div>
-              )}
-
-              {adminSecurityError && (
-                <div className="p-3 mb-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-semibold">
-                  {adminSecurityError}
-                </div>
-              )}
-
-              {adminEmailResetStep === 0 ? (
-                /* Choose or Direct Update */
-                <form onSubmit={handleUpdateAdminPasswordDirectly} className="space-y-4 text-xs">
-                  <p className="text-slate-500 text-[11px] leading-relaxed">
-                    {isRtl 
-                      ? 'بصفتك مدير المنصة العام، يمكنك تحديث كلمة المرور الخاصة بك مباشرة باستخدام الرقم السري الحالي، أو اختبار كود التحقق الآمن عبر البريد الإلكتروني.' 
-                      : 'As the Platform Admin, you can update your master credentials directly, or experience the secure email OTP simulation.'
-                    }
-                  </p>
-
-                  <div>
-                    <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'كلمة المرور الحالية *' : 'Current Password *'}</label>
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      value={currentAdminPassword}
-                      onChange={(e) => setCurrentAdminPassword(e.target.value)}
-                      className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-1 focus:ring-rose-500 ${
-                        theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
-                      }`}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'كلمة المرور الجديدة *' : 'New Password *'}</label>
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      value={newAdminPassword}
-                      onChange={(e) => setNewAdminPassword(e.target.value)}
-                      className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-1 focus:ring-rose-500 ${
-                        theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
-                      }`}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'تأكيد كلمة المرور الجديدة *' : 'Confirm New Password *'}</label>
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      value={confirmAdminPassword}
-                      onChange={(e) => setConfirmAdminPassword(e.target.value)}
-                      className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-1 focus:ring-rose-500 ${
-                        theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
-                      }`}
-                      required
-                    />
-                  </div>
-
-                  <div className="grid gap-2 pt-2">
-                    <button
-                      type="submit"
-                      className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black transition-all text-xs cursor-pointer"
-                    >
-                      {isRtl ? 'حفظ التحديث مباشرة 💾' : 'Save Changes Directly 💾'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleTriggerAdminEmailReset}
-                      className="w-full py-2.5 rounded-xl border border-indigo-500 text-indigo-500 hover:bg-indigo-500/10 font-bold transition-all text-xs cursor-pointer flex items-center justify-center gap-1"
-                    >
-                      <span>{isRtl ? 'إرسال كود تعيين للإيميل 📧' : 'Send Reset Code to Email 📧'}</span>
-                    </button>
-                  </div>
-                </form>
-              ) : adminEmailResetStep === 1 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center text-xs">
-                  <RefreshCw size={24} className="animate-spin text-indigo-500 mb-2" />
-                  <p className="text-slate-400">{isRtl ? 'جاري توليد كود التحقق المشفر وإرساله...' : 'Generating security verification code...'}</p>
-                </div>
-              ) : adminEmailResetStep === 2 ? (
-                /* Verify OTP & Set Password */
-                <form onSubmit={handleVerifyAdminEmailCode} className="space-y-4 text-xs">
-                  <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-xl text-[11px] leading-relaxed">
-                    {isRtl 
-                      ? `تم توليد كود تحقق سري ومحاكاة إرساله إلى بريدك ${currentUser.email || 'user@domain.com'} بنجاح! يرجى نسخ الرمز المعروض بالأسفل وإدخاله هنا.` 
-                      : `Security verification code has been dispatched to ${currentUser.email || 'user@domain.com'}. Please copy the code below.`
-                    }
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'أدخل كود التحقق السري (6 أرقام) *' : 'Verification OTP (6 digits) *'}</label>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      placeholder="123456"
-                      value={adminResetCodeInput}
-                      onChange={(e) => setAdminResetCodeInput(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border text-center font-mono text-base tracking-widest focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:bg-slate-800 dark:border-slate-700 text-slate-200"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'كلمة المرور الجديدة *' : 'New Password *'}</label>
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      value={newAdminPassword}
-                      onChange={(e) => setNewAdminPassword(e.target.value)}
-                      className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
-                        theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
-                      }`}
-                      required
-                    />
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="submit"
-                      className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black transition-all text-xs cursor-pointer"
-                    >
-                      {isRtl ? 'تأكيد وحفظ كلمة المرور' : 'Confirm & Save Password'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAdminEmailResetStep(0)}
-                      className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-400 hover:text-slate-300 transition-all text-xs cursor-pointer"
-                    >
-                      {isRtl ? 'إلغاء' : 'Cancel'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                /* Success step */
-                <div className="flex flex-col items-center justify-center py-6 text-center text-xs">
-                  <div className="h-10 w-10 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-2 animate-bounce">
-                    <CheckCircle size={20} />
-                  </div>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{isRtl ? 'تم تحديث كلمة المرور بالكامل!' : 'Password updated successfully!'}</p>
-                  <p className="text-[10px] text-slate-500 mt-1">{isRtl ? 'تم مزامنة الرقم السري الجديد مع الخادم السحابي بنجاح.' : 'New master key synced to Firestore.'}</p>
-                  <button
-                    onClick={() => {
-                      setAdminEmailResetStep(0);
-                      setAdminSecuritySuccess('');
-                      setAdminSecurityError('');
-                    }}
-                    className="mt-4 px-4 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all text-[11px] font-bold cursor-pointer"
-                  >
-                    {isRtl ? 'العودة' : 'Go Back'}
-                  </button>
-                </div>
-              )}
-
-              {/* Settings Internal Mailbox Simulator View */}
-              {adminEmailResetStep === 2 && (
-                <div className="mt-4 p-3 rounded-xl border border-indigo-500/20 bg-slate-900/90 text-slate-300 text-[11px] leading-relaxed">
-                  <div className="flex items-center gap-1.5 text-indigo-400 font-bold border-b border-slate-800 pb-1.5 mb-1.5 uppercase tracking-wider text-[9px]">
-                    <Inbox size={12} />
-                    <span>{isRtl ? 'علبة الوارد الافتراضية للمنصة' : `Virtual Mail Inbox (${currentUser.email || 'user@domain.com'})`}</span>
-                  </div>
-                  <p className="text-slate-200 font-bold">{isRtl ? '🔐 رمز الأمان السري لإعادة تعيين كلمة مرور KEMIT ERP' : '🔐 KEMIT ERP Security OTP'}</p>
-                  <p className="mt-1 text-slate-400">{isRtl ? 'الرمز المؤقت لتحديث حسابك بالكامل هو:' : 'Your master account OTP token is:'}</p>
-                  <div className="my-2 p-2 rounded bg-indigo-950/40 text-center font-mono text-base font-extrabold tracking-widest text-indigo-400">
-                    {adminGeneratedCode}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <SettingsGeneralTab
+          language={language}
+          theme={theme}
+          currentUser={currentUser}
+          companyName={companyName}
+          setCompanyName={setCompanyName}
+          custodyValue={custodyValue}
+          setCustodyValue={setCustodyValue}
+          useCustomTemplate={useCustomTemplate}
+          setUseCustomTemplate={setUseCustomTemplate}
+          customTemplateImage={customTemplateImage}
+          setCustomTemplateImage={setCustomTemplateImage}
+          regions={regions}
+          stations={stations}
+          handleSaveConfig={handleSaveConfig}
+          handleBackupData={handleBackupData}
+          handleRestoreData={handleRestoreData}
+          currentAdminPassword={currentAdminPassword}
+          setCurrentAdminPassword={setCurrentAdminPassword}
+          newAdminPassword={newAdminPassword}
+          setNewAdminPassword={setNewAdminPassword}
+          confirmAdminPassword={confirmAdminPassword}
+          setConfirmAdminPassword={setConfirmAdminPassword}
+          adminSecurityError={adminSecurityError}
+          adminSecuritySuccess={adminSecuritySuccess}
+          adminEmailResetStep={adminEmailResetStep}
+          setAdminEmailResetStep={setAdminEmailResetStep}
+          adminGeneratedCode={adminGeneratedCode}
+          adminResetCodeInput={adminResetCodeInput}
+          setAdminResetCodeInput={setAdminResetCodeInput}
+          handleUpdateAdminPasswordDirectly={handleUpdateAdminPasswordDirectly}
+          handleTriggerAdminEmailReset={handleTriggerAdminEmailReset}
+          handleVerifyAdminEmailCode={handleVerifyAdminEmailCode}
+          setAdminSecurityError={setAdminSecurityError}
+          setAdminSecuritySuccess={setAdminSecuritySuccess}
+        />
       )}
 
       {/* --- TAB 3: USER ACCOUNTS & PERMISSIONS MODULE --- */}
       {activeTab === 'users' && (
-        <div className="space-y-6 animate-fade-in">
-          {/* Pending Approval Requests Section (SystemAdmin Only) */}
-          {currentUser.role === 'SystemAdmin' && (
-            <div className={`p-5 rounded-2xl border flex flex-col ${
-              theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
-            }`}>
-              <div className="flex items-center gap-2 mb-4 border-b pb-2.5 border-slate-100 dark:border-slate-800">
-                <ShieldCheck size={16} className="text-amber-500 shrink-0" />
-                <div>
-                  <h3 className="font-bold text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    {isRtl ? 'طلبات التسجيل وتفعيل الحسابات المعلقة (لكل شركة منفصلة)' : 'Pending Registration & Activation Queue (Company Isolated)'}
-                  </h3>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
-                    {isRtl 
-                      ? 'قم بمراجعة طلبات الانضمام، وتحديد المنطقة/الفرع المناسب لكل موظف وعزل حسابه داخل شركته الخاصة.' 
-                      : 'Review incoming requests, assign their specific geographical scopes, and approve them securely.'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Grid of pending user requests */}
-              {CustodyDB.getUsers().filter(u => !u.is_active).length === 0 ? (
-                <div className="py-6 text-center text-xs text-slate-400 italic">
-                  {isRtl ? 'لا توجد طلبات تفعيل معلقة حالياً.' : 'No pending registration requests at this moment.'}
-                </div>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {CustodyDB.getUsers().filter(u => !u.is_active).map((pendingUser) => {
-                    const requestedCompany = CustodyDB.getCompanies().find(c => c.id === pendingUser.company_id);
-                    // Filter stations and regions by the pending user's requested company_id
-                    const companyStations = CustodyDB.getStations().filter(s => s.company_id === pendingUser.company_id);
-                    const companyRegions = CustodyDB.getRegions().filter(r => r.company_id === pendingUser.company_id);
-
-                    const mapping = pendingMappings[pendingUser.id] || {};
-
-                    return (
-                      <div 
-                        key={pendingUser.id}
-                        className={`p-4 rounded-xl border text-xs flex flex-col justify-between gap-3 ${
-                          theme === 'dark' ? 'bg-slate-800/40 border-slate-700' : 'bg-amber-50/20 border-amber-200/40 shadow-sm'
-                        }`}
-                      >
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-bold text-slate-800 dark:text-slate-100">{pendingUser.full_name}</span>
-                            <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                              {pendingUser.role === 'Admin' ? (isRtl ? 'أدمن شركة' : 'Company Admin') : pendingUser.role === 'RegionalManager' ? (isRtl ? 'مدير منطقة' : 'Regional Manager') : (isRtl ? 'مدير محطة' : 'Station Mgr')}
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-mono mb-2">{pendingUser.email}</div>
-                          
-                          <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-[10px] mb-3">
-                            <div className="font-bold text-slate-500 mb-0.5">{isRtl ? 'الشركة المطلوبة:' : 'Requested Corporate:'}</div>
-                            <div className="text-emerald-600 dark:text-emerald-400 font-extrabold">{requestedCompany?.name || pendingUser.company_id || (isRtl ? 'غير محدد' : 'Not Specified')}</div>
-                          </div>
-
-                          {/* Company Scope Mapping Options */}
-                          <div className="space-y-2 mt-2 pt-2 border-t border-dashed border-slate-200 dark:border-slate-700">
-                            <div>
-                              <label className="block text-[10px] font-black text-slate-400 mb-1">
-                                {isRtl ? 'تعيين نطاق الوحدة التنظيمية (الشجرة):' : 'Assign Organization Unit Scope (Tree):'}
-                              </label>
-                              <OrgUnitTreeSelect
-                                companyId={pendingUser.company_id || CustodyDB.getSelectedCompanyId()}
-                                value={mapping.org_unit_id || ''}
-                                onChange={(unitId) => setPendingMappings({
-                                  ...pendingMappings,
-                                  [pendingUser.id]: { ...mapping, org_unit_id: unitId }
-                                })}
-                                mode="single"
-                                isRtl={isRtl}
-                                theme={theme}
-                                showInheritanceSummary={false}
-                                placeholder={isRtl ? 'اختر الوحدة التنظيمية...' : 'Select Organization Unit...'}
-                              />
-                            </div>
-
-                            {pendingUser.role === 'StationAdmin' && (
-                              <div>
-                                <label className="block text-[10px] font-black text-slate-400 mb-1">
-                                  {isRtl ? 'تعيين لفرع/محطة الشركة (إرث):' : 'Assign Company Station (Legacy):'}
-                                </label>
-                                <select
-                                  value={mapping.stationId || ''}
-                                  onChange={(e) => setPendingMappings({
-                                    ...pendingMappings,
-                                    [pendingUser.id]: { ...mapping, stationId: e.target.value }
-                                  })}
-                                  className={`w-full px-2.5 py-1.5 rounded-lg border text-xs focus:outline-none ${
-                                    theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
-                                  }`}
-                                >
-                                  <option value="">{isRtl ? '--- اختر المحطة ---' : '--- Choose Station ---'}</option>
-                                  {companyStations.map(s => (
-                                    <option key={s.id} value={s.id}>{s.station_name} ({s.station_code})</option>
-                                  ))}
-                                </select>
-                              </div>
-                            )}
-
-                            {pendingUser.role === 'RegionalManager' && (
-                              <div>
-                                <label className="block text-[10px] font-black text-slate-400 mb-1">
-                                  {isRtl ? 'تعيين لمنطقة الشركة الجغرافية (إرث):' : 'Assign Company Region (Legacy):'}
-                                </label>
-                                <select
-                                  value={mapping.regionId || ''}
-                                  onChange={(e) => setPendingMappings({
-                                    ...pendingMappings,
-                                    [pendingUser.id]: { ...mapping, regionId: e.target.value }
-                                  })}
-                                  className={`w-full px-2.5 py-1.5 rounded-lg border text-xs focus:outline-none ${
-                                    theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
-                                  }`}
-                                >
-                                  <option value="">{isRtl ? '--- اختر المنطقة ---' : '--- Choose Region ---'}</option>
-                                  {companyRegions.map(r => (
-                                    <option key={r.id} value={r.id}>{r.name} ({r.code})</option>
-                                  ))}
-                                </select>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Action buttons */}
-                        <div className="flex gap-2 justify-end mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                          <button
-                            onClick={async () => {
-                              // Perform activation
-                              if (pendingUser.role === 'StationAdmin' && !mapping.stationId) {
-                                alert(isRtl ? 'يرجى اختيار المحطة التابعة لشركة الموظف أولاً.' : 'Please choose the station for this company employee first.');
-                                return;
-                              }
-                              if (pendingUser.role === 'RegionalManager' && !mapping.regionId) {
-                                alert(isRtl ? 'يرجى اختيار المنطقة التابعة لشركة الموظف أولاً.' : 'Please choose the region for this company employee first.');
-                                return;
-                              }
-
-                              // Find the station or region details to map correctly
-                              const chosenStation = companyStations.find(s => s.id === mapping.stationId);
-                              const mappedRegionId = pendingUser.role === 'StationAdmin' 
-                                ? (chosenStation?.region_id || '') 
-                                : mapping.regionId;
-
-                              const payload = {
-                                is_active: true,
-                                org_unit_id: mapping.org_unit_id || null,
-                                station_id: pendingUser.role === 'StationAdmin' ? (mapping.stationId || null) : null,
-                                region_id: mappedRegionId || null,
-                                permissions: CustodyDB.enrichUserPermissions(pendingUser.role)
-                              };
-
-                              try {
-                                const res = await fetch(`/api/admin/users/${pendingUser.id}`, {
-                                  method: 'PATCH',
-                                  headers: await getAuthHeaders(),
-                                  credentials: 'include',
-                                  body: JSON.stringify(payload)
-                                });
-                                const data = await res.json();
-
-                                if (!res.ok || !data.success) {
-                                  alert(`⚠️ ${data.message || (isRtl ? 'فشل تفعيل حساب الموظف' : 'Failed to activate user')}`);
-                                  return;
-                                }
-
-                                if (data.user) {
-                                  const allDbUsers = CustodyDB.getUsers().map(u => u.id === pendingUser.id ? { ...u, ...data.user } : u);
-                                  await CustodyDB.saveUsers(allDbUsers);
-                                }
-                                setUsers(CustodyDB.getScopedUsers());
-                                triggerToast(isRtl ? `تم تفعيل حساب الموظف ${pendingUser.full_name} بنجاح.` : `User account for ${pendingUser.full_name} successfully activated.`);
-                              } catch (err: any) {
-                                alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
-                              }
-                            }}
-                            className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black hover:shadow-md transition-all cursor-pointer"
-                          >
-                            {isRtl ? 'الموافقة والتفعيل' : 'Approve & Activate'}
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (!confirm(isRtl ? 'هل أنت متأكد من رفض وحذف طلب هذا التسجيل؟' : 'Are you sure you want to reject and delete this request?')) return;
-                              const allDbUsers = CustodyDB.getUsers().filter(u => u.id !== pendingUser.id);
-                              await CustodyDB.saveUsers(allDbUsers);
-                              setUsers(CustodyDB.getScopedUsers());
-                              triggerToast(isRtl ? 'تم رفض وحذف الطلب المعلق.' : 'Pending request rejected and deleted.');
-                            }}
-                            className="px-3 py-1.5 rounded-lg border text-rose-500 hover:bg-rose-500/10 transition-all cursor-pointer"
-                          >
-                            {isRtl ? 'رفض' : 'Reject'}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className={currentUser.role === 'SystemAdmin' ? "grid gap-6 md:grid-cols-2" : "max-w-3xl mx-auto w-full"}>
-            {/* Card 1: Users Accounts list */}
-            <div className={`p-5 rounded-2xl border flex flex-col ${
-              theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
-            }`}>
-              <div className="flex items-center gap-2 mb-4 border-b pb-2.5 border-slate-100 dark:border-slate-800">
-                <Users2 size={16} className="text-emerald-500" />
-                <h3 className="font-bold text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  {isRtl ? 'قائمة حسابات الموظفين وصلاحياتهم' : 'Employees & Security Profiles'}
-                </h3>
-              </div>
-
-              {/* List of current scoped users */}
-              <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1 flex-1">
-                {users.filter(u => u.is_active !== false).map((u) => {
-                  const isEditing = editingUserId === u.id;
-                  const uStation = u.station_id ? stations.find(s => s.id === u.station_id) : null;
-                  const uRegion = u.region_id ? regions.find(r => r.id === u.region_id) : null;
-                  
-                  return (
-                    <div 
-                      key={u.id} 
-                      className={`p-3.5 rounded-xl border text-xs relative ${
-                        isEditing 
-                          ? 'border-indigo-500 bg-indigo-500/5' 
-                          : (theme === 'dark' ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50/50 border-slate-150')
-                      }`}
-                    >
-                      {isEditing ? (
-                        /* Expanded Edit User Sub Form */
-                        <div className="space-y-3">
-                          <div className="font-black text-slate-700 dark:text-slate-200">
-                            {isRtl ? `تعديل صلاحيات: ${u.full_name}` : `Modifying parameters: ${u.full_name}`}
-                          </div>
-
-                          <div>
-                            <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'الاسم بالكامل' : 'Full Name'}</label>
-                            <input
-                              type="text"
-                              value={editUserFullName}
-                              onChange={(e) => setEditUserFullName(e.target.value)}
-                              className={`w-full px-2 py-1 rounded text-xs focus:outline-none ${
-                                theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200'
-                              }`}
-                            />
-                          </div>
-
-                          {/* Organization Unit Scope Selection (Phase 4) */}
-                          <div className="space-y-1.5 p-3 rounded-xl bg-slate-100/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
-                            <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                              {isRtl ? 'نطاق الصلاحية الإشرافية (شجرة الهيكل التنظيمي):' : 'Supervisory Access Scope (Organization Tree):'}
-                            </label>
-                            <OrgUnitTreeSelect
-                              companyId={CustodyDB.getSelectedCompanyId()}
-                              value={editUserOrgUnitId}
-                              onChange={(unitId) => setEditUserOrgUnitId(unitId)}
-                              mode="single"
-                              isRtl={isRtl}
-                              theme={theme}
-                              showInheritanceSummary={true}
-                              placeholder={isRtl ? 'اختر الوحدة التنظيمية النطاقية للمستخدم...' : 'Select user scope organization unit...'}
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'الدور المالي' : 'Role'}</label>
-                              <select
-                                value={editUserRole}
-                                onChange={(e) => handleEditUserRoleChange(e.target.value as UserRole)}
-                                className={`w-full px-2 py-1 rounded text-xs focus:outline-none ${
-                                  theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200'
-                                }`}
-                              >
-                                {SYSTEM_ROLES.filter(r => !r.systemAdminOnly || currentUser.role === 'SystemAdmin').map(r => (
-                                  <option key={r.id} value={r.id}>{isRtl ? r.labelAr : r.labelEn}</option>
-                                ))}
-                              </select>
-                            </div>
-
-                            {editUserRole === 'StationAdmin' && (
-                              <div>
-                                <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'ربط بالمحطة (إرث)' : 'Station Mapping (Legacy)'}</label>
-                                <select
-                                  value={editUserStationId}
-                                  onChange={(e) => setEditUserStationId(e.target.value)}
-                                  className={`w-full px-2 py-1 rounded text-xs focus:outline-none ${
-                                    theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
-                                  }`}
-                                >
-                                  <option value="">{isRtl ? 'بدون محطة' : 'Unmapped'}</option>
-                                  {stations.map(s => (
-                                    <option key={s.id} value={s.id}>{s.station_name}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            )}
-
-                            {editUserRole === 'RegionalManager' && (
-                              <div>
-                                <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'ربط بالمنطقة (إرث)' : 'Region Mapping (Legacy)'}</label>
-                                <select
-                                  value={editUserRegionId}
-                                  onChange={(e) => setEditUserRegionId(e.target.value)}
-                                  className={`w-full px-2 py-1 rounded text-xs focus:outline-none ${
-                                    theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
-                                  }`}
-                                >
-                                  <option value="">{isRtl ? 'بدون منطقة' : 'Unmapped'}</option>
-                                  {regions.map(r => (
-                                    <option key={r.id} value={r.id}>{r.name}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Interactive Permissions checklist */}
-                          <div className="space-y-2 border-t border-b py-2.5 my-2 border-slate-200 dark:border-slate-800">
-                            <span className="block text-[10px] text-slate-400 font-bold uppercase mb-1">
-                              {isRtl ? 'تخصيص الصلاحيات الفردية:' : 'Grant Scoped Authority:'}
-                            </span>
-
-                            {/* Toggle between Default and Custom */}
-                            <div className="flex bg-slate-100/80 dark:bg-slate-950/60 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 mb-2">
-                              <button
-                                type="button"
-                                onClick={() => handleEditUserToggleMode(true)}
-                                className={`flex-1 py-1 rounded text-[9px] font-bold transition-all text-center cursor-pointer ${
-                                  editUserIsDefaultMode 
-                                    ? 'bg-indigo-600 text-white shadow-sm' 
-                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-                                }`}
-                              >
-                                {isRtl ? 'الافتراضية للدور (Default)' : 'Default for Role'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleEditUserToggleMode(false)}
-                                className={`flex-1 py-1 rounded text-[9px] font-bold transition-all text-center cursor-pointer ${
-                                  !editUserIsDefaultMode 
-                                    ? 'bg-indigo-600 text-white shadow-sm' 
-                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-                                }`}
-                              >
-                                {isRtl ? 'تخصيص يدوي (Manual)' : 'Manual Customization'}
-                              </button>
-                            </div>
-
-                            <div className={`grid grid-cols-2 gap-2 text-[10px] ${editUserIsDefaultMode ? 'opacity-70 font-medium' : ''}`}>
-                              {PERMISSIONS_LIST.filter(p => !currentUser?.company_id || ModulesModule.isPermissionEnabledForCompany(currentUser.company_id, p.key)).map((p) => (
-                                <label key={p.key} className={`flex items-center gap-1.5 text-slate-600 dark:text-slate-300 ${editUserIsDefaultMode ? 'cursor-not-allowed' : 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400'}`}>
-                                  <input
-                                    type="checkbox"
-                                    disabled={editUserIsDefaultMode}
-                                    checked={!!editUserPermissions[p.key as keyof UserPermissions]}
-                                    onChange={(e) => setEditUserPermissions({
-                                      ...editUserPermissions,
-                                      [p.key]: e.target.checked
-                                    })}
-                                    className="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500"
-                                  />
-                                  <span className="font-semibold">{isRtl ? p.ar : p.en}</span>
-                                </label>
-                              ))}
-                            </div>
-
-                            {editUserIsDefaultMode && (
-                              <p className="text-[9px] text-slate-400 font-semibold italic text-center pt-1">
-                                {isRtl ? '💡 يتم تطبيق الصلاحيات القياسية لهذا الدور المالي تلقائياً.' : '💡 Standard permissions are locked to this role automatically.'}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="flex gap-2 justify-end">
-                            <button
-                              onClick={() => handleSaveEditUser(u.id)}
-                              className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 font-black"
-                            >
-                              {isRtl ? 'حفظ الصلاحيات' : 'Update Profile'}
-                            </button>
-                            <button
-                              onClick={() => setEditingUserId(null)}
-                              className="px-3 py-1.5 rounded-lg border hover:bg-slate-50 dark:hover:bg-slate-800"
-                            >
-                              {isRtl ? 'إلغاء' : 'Cancel'}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        /* Display User View */
-                        <>
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <span className="font-bold text-slate-800 dark:text-slate-100 block">{u.full_name}</span>
-                              <span className="text-[10px] text-slate-400 block font-mono mb-1">{u.email}</span>
-                              {uStation && (
-                                <span className="text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded text-emerald-600 dark:text-emerald-400 font-semibold inline-block">
-                                  {isRtl ? `فرع/محطة: ${uStation.station_name}` : `Station: ${uStation.station_name}`}
-                                </span>
-                              )}
-                              {!uStation && uRegion && (
-                                <span className="text-[10px] bg-sky-500/10 px-1.5 py-0.5 rounded text-sky-600 dark:text-sky-400 font-semibold inline-block">
-                                  {isRtl ? `منطقة: ${uRegion.name}` : `Region: ${uRegion.name}`}
-                                </span>
-                              )}
-                            </div>
-                            
-                            <div className="flex items-center gap-1">
-                              {(() => {
-                                const rDef = SYSTEM_ROLES.find(r => r.id === u.role);
-                                return (
-                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${rDef?.bgClass || 'bg-slate-500/15 text-slate-600 border border-slate-500/10'}`}>
-                                    {rDef ? (isRtl ? rDef.labelAr : rDef.labelEn) : u.role}
-                                  </span>
-                                );
-                              })()}
-                              
-                              {/* Actions buttons */}
-                              {currentUser.role === 'SystemAdmin' && (
-                                <>
-                                  <button
-                                    onClick={() => handleStartEditUser(u)}
-                                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-colors cursor-pointer"
-                                    title="Edit role & fine-grain permissions"
-                                  >
-                                    <Edit2 size={13} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteUser(u.id)}
-                                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
-                                    title="Delete employee profile"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Scoped privileges checkmarks */}
-                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[9px] text-slate-400">
-                            <div className="flex items-center gap-1">
-                              <ShieldCheck size={11} className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).manage_settings ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
-                              <span className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).manage_settings ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>Manage settings</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <ShieldCheck size={11} className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).create_expense ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
-                              <span className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).create_expense ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>Create expenses</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <ShieldCheck size={11} className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).settle_voucher ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
-                              <span className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).settle_voucher ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>Settle vouchers</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <ShieldCheck size={11} className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).delete_expense ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
-                              <span className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).delete_expense ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>Delete expenses</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <ShieldCheck size={11} className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).replace_custody ? "text-indigo-500" : "text-slate-300 dark:text-slate-700"} />
-                              <span className={(u.permissions || CustodyDB.enrichUserPermissions(u.role)).replace_custody ? "text-slate-600 dark:text-slate-300 font-semibold" : ""}>
-                                {isRtl ? 'استعاضة العهدة' : 'Replenish custody'}
-                              </span>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Card 2: Register New User Profile Form */}
-            {currentUser.role === 'SystemAdmin' && (
-              <div className={`p-5 rounded-2xl border flex flex-col ${
-                theme === 'dark' ? 'bg-[#1e293b] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'
-              }`}>
-                <div className="flex items-center gap-2 mb-4 border-b pb-2.5 border-slate-100 dark:border-slate-800">
-                  <UserPlus size={16} className="text-emerald-500" />
-                  <h3 className="font-bold text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    {isRtl ? 'تسجيل موظف مالي جديد' : 'Pre-seed New User Credentials'}
-                  </h3>
-                </div>
-
-                <form onSubmit={handleAddUser} className="space-y-3.5 text-xs flex-1 flex flex-col justify-between">
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'الاسم بالكامل' : 'Full Name'}</label>
-                      <input
-                        type="text"
-                        placeholder={isRtl ? 'الاسم الثلاثي للموظف' : 'Full Name'}
-                        value={newUserName}
-                        onChange={(e) => setNewUserName(e.target.value)}
-                        className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
-                          theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
-                        }`}
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'البريد الإلكتروني' : 'Email Address'}</label>
-                      <input
-                        type="email"
-                        placeholder={isRtl ? 'user@company.com' : 'Email address'}
-                        value={newUserEmail}
-                        onChange={(e) => setNewUserEmail(e.target.value)}
-                        className={`w-full px-3 py-2 rounded-xl border text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
-                          theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
-                        }`}
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'الدور الوظيفي والمسؤولية:' : 'Role Selection:'}</label>
-                      <div className="flex flex-col gap-2 p-3 bg-slate-50 dark:bg-slate-800/40 border rounded-xl">
-                        {SYSTEM_ROLES.filter(r => !r.systemAdminOnly || currentUser.role === 'SystemAdmin').map((role) => (
-                          <label key={role.id} className="flex items-center gap-1.5 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="newUserRoleRadio"
-                              checked={newUserRole === role.id}
-                              onChange={() => setNewUserRole(role.id)}
-                              className="text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <span className={role.colorClass}>
-                              {isRtl ? role.labelAr : role.labelEn}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Organization Unit Scope Selection (Phase 4) */}
-                    <div className="space-y-1">
-                      <label className="block text-slate-400 font-bold mb-1">
-                        {isRtl ? 'تعيين نطاق الصلاحية (شجرة الهيكل التنظيمي):' : 'Assign Authority Scope (Organization Tree):'}
-                      </label>
-                      <OrgUnitTreeSelect
-                        companyId={CustodyDB.getSelectedCompanyId()}
-                        value={newUserOrgUnitId}
-                        onChange={(unitId) => setNewUserOrgUnitId(unitId)}
-                        mode="single"
-                        isRtl={isRtl}
-                        theme={theme}
-                        showInheritanceSummary={true}
-                        placeholder={isRtl ? 'اختر الوحدة التنظيمية النطاقية...' : 'Select Organization Scope Unit...'}
-                      />
-                    </div>
-
-                    {/* Conditional Station selection (Legacy fallback) */}
-                    {newUserRole === 'StationAdmin' && (
-                      <div>
-                        <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'تعيين إلى فرع / محطة (إرث):' : 'Assign to Cash Station (Legacy):'}</label>
-                        <select
-                          value={newUserStationId}
-                          onChange={(e) => setNewUserStationId(e.target.value)}
-                          className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
-                            theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
-                          }`}
-                        >
-                          <option value="">{isRtl ? 'اختر المحطة التابع لها...' : 'Select Station...'}</option>
-                          {stations.map(s => (
-                            <option key={s.id} value={s.id}>{s.station_name} ({s.station_code})</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {/* Conditional Region selection (Legacy fallback) */}
-                    {newUserRole === 'RegionalManager' && (
-                      <div>
-                        <label className="block text-slate-400 font-bold mb-1">{isRtl ? 'تعيين إلى منطقة جغرافية (إرث):' : 'Assign to Region Zone (Legacy):'}</label>
-                        <select
-                          value={newUserRegionId}
-                          onChange={(e) => setNewUserRegionId(e.target.value)}
-                          className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
-                            theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200'
-                          }`}
-                        >
-                          <option value="">{isRtl ? 'اختر المنطقة الجغرافية...' : 'Select Region...'}</option>
-                          {regions.map(r => (
-                            <option key={r.id} value={r.id}>{r.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full mt-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs transition-all"
-                  >
-                    + {isRtl ? 'تسجيل الموظف وتعميم الصلاحيات' : 'Register & Seed Credentials'}
-                  </button>
-                </form>
-              </div>
-            )}
-          </div>
-        </div>
+        <SettingsUsersTab
+          language={language}
+          theme={theme}
+          currentUser={currentUser}
+          users={users}
+          regions={regions}
+          stations={stations}
+          pendingMappings={pendingMappings}
+          setPendingMappings={setPendingMappings}
+          editingUserId={editingUserId}
+          setEditingUserId={setEditingUserId}
+          editUserFullName={editUserFullName}
+          setEditUserFullName={setEditUserFullName}
+          editUserRole={editUserRole}
+          editUserStationId={editUserStationId}
+          setEditUserStationId={setEditUserStationId}
+          editUserRegionId={editUserRegionId}
+          setEditUserRegionId={setEditUserRegionId}
+          editUserOrgUnitId={editUserOrgUnitId}
+          setEditUserOrgUnitId={setEditUserOrgUnitId}
+          editUserAssignedOrgUnitIds={editUserAssignedOrgUnitIds}
+          setEditUserAssignedOrgUnitIds={setEditUserAssignedOrgUnitIds}
+          editUserPermissions={editUserPermissions}
+          setEditUserPermissions={setEditUserPermissions}
+          editUserIsDefaultMode={editUserIsDefaultMode}
+          handleEditUserRoleChange={handleEditUserRoleChange}
+          handleEditUserToggleMode={handleEditUserToggleMode}
+          handleSaveEditUser={handleSaveEditUser}
+          handleDeleteUser={handleDeleteUser}
+          handleStartEditUser={handleStartEditUser}
+          newUserName={newUserName}
+          setNewUserName={setNewUserName}
+          newUserEmail={newUserEmail}
+          setNewUserEmail={setNewUserEmail}
+          newUserRole={newUserRole}
+          setNewUserRole={setNewUserRole}
+          newUserStationId={newUserStationId}
+          setNewUserStationId={setNewUserStationId}
+          newUserRegionId={newUserRegionId}
+          setNewUserRegionId={setNewUserRegionId}
+          newUserOrgUnitId={newUserOrgUnitId}
+          setNewUserOrgUnitId={setNewUserOrgUnitId}
+          newUserAssignedOrgUnitIds={newUserAssignedOrgUnitIds}
+          setNewUserAssignedOrgUnitIds={setNewUserAssignedOrgUnitIds}
+          handleAddUser={handleAddUser}
+          getAuthHeaders={getAuthHeaders}
+          setUsers={setUsers}
+          triggerToast={triggerToast}
+        />
       )}
 
       {activeTab === 'matrix' && (
