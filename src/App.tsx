@@ -34,6 +34,8 @@ const FixedAssets = lazy(() => import('./pages/FixedAssets'));
 const FleetManagement = lazy(() => import('./pages/FleetManagement'));
 const HRPayroll = lazy(() => import('./pages/HRPayroll'));
 const Contracting = lazy(() => import('./pages/Contracting'));
+const RestaurantMenu = lazy(() => import('./pages/RestaurantMenu'));
+const RestaurantOrders = lazy(() => import('./pages/RestaurantOrders'));
 const FirstRunSetup = lazy(() => import('./pages/FirstRunSetup'));
 import ApprovalInbox from './components/ApprovalInbox';
 import ChangePasswordRequired from './components/ChangePasswordRequired';
@@ -580,6 +582,20 @@ export default function App() {
         return (
           <Contracting
             activeUser={activeUser!}
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'restaurant-menu':
+        return (
+          <RestaurantMenu
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'restaurant-orders':
+        return (
+          <RestaurantOrders
             language={language}
             theme={theme}
           />

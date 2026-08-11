@@ -32,7 +32,9 @@ import {
   DollarSign as SalesIcon,
   Truck as FleetIcon,
   HardHat,
-  Inbox
+  Inbox,
+  Utensils,
+  ChefHat
 } from 'lucide-react';
 import { CustodyDB, ModulesModule } from '../db';
 import { translations, Language, Theme, AppUser } from '../types';
@@ -73,6 +75,8 @@ export function getFilteredMenuItems(activeUser: AppUser | null, language: Langu
     { id: 'fleet', label: isRtl ? 'إدارة الأسطول والحركة' : 'Fleet & Transportation', icon: FleetIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager'] },
     { id: 'hr_payroll', label: isRtl ? 'الموارد البشرية والرواتب' : 'HR & Payroll Ledger', icon: Briefcase, roleAllowed: ['SystemAdmin', 'Admin'] },
     { id: 'contracting', label: isRtl ? 'إدارة المقاولات والمستخلصات' : 'Construction & Contracting', icon: HardHat, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
+    { id: 'restaurant-menu', label: isRtl ? 'قائمة الطعام والتكاليف' : 'Restaurant Menu & Costs', icon: Utensils, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
+    { id: 'restaurant-orders', label: isRtl ? 'طلبات المطعم ونقطة البيع (POS)' : 'Restaurant Orders & POS', icon: ChefHat, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
     { id: 'reports', label: t.reports, icon: FileText, permission: 'view_reports' },
     { id: 'search', label: t.search, icon: SearchIcon },
     { id: 'audit-log', label: isRtl ? 'سجل الرقابة والامتثال' : 'Security & Audit Log', icon: ShieldCheck, roleAllowed: ['Admin', 'SystemAdmin'] },

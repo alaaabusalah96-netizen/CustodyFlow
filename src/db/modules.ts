@@ -117,6 +117,14 @@ export const ERP_MODULES_REGISTRY: ERPModule[] = [
     description_en: 'Projects & sites management, subcontractor contracts, client/subcontractor payment certificates, and daily labor tracking.',
     description_ar: 'إدارة المشاريع والمواقع، عقود مقاولي الباطن، المستخلصات (المالك ومقاولي الباطن)، وتتبع حضور ويوميات العمالة.',
     screens: ['contracting']
+  },
+  {
+    id: 'restaurant',
+    name_en: 'Restaurant & POS Management',
+    name_ar: 'إدارة المطاعم ونقاط البيع',
+    description_en: 'Dishes menu, recipe cost calculations (BOM), POS order management, dine-in tables, and auto inventory stock deduction.',
+    description_ar: 'إدارة قائمة الأطعمة وتكاليف الوجبات (BOM)، نقطة البيع للمطاعم، إشغال الطاولات، والتخصيم التلقائي للمخزون.',
+    screens: ['restaurant-menu', 'restaurant-orders']
   }
 ];
 

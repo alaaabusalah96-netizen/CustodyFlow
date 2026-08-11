@@ -602,15 +602,16 @@ export class InventoryModule {
   }
 
   // Products
-  static getProducts(): Product[] {
-    const companyId = CompaniesModule.getSelectedCompanyId();
+  static getProducts(targetCompanyId?: string): Product[] {
+    const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
     const list = StorageEngine.getStored<Product[]>('products', DEFAULT_PRODUCTS);
-    return list.filter(p => p.company_id === companyId);
+    if (!companyId) return list;
+    return list.filter(p => p.company_id === companyId || !p.company_id);
   }
 
-  static saveProducts(list: Product[]): void {
+  static saveProducts(list: Product[], targetCompanyId?: string): void {
     const all = StorageEngine.getStored<Product[]>('products', DEFAULT_PRODUCTS);
-    const companyId = CompaniesModule.getSelectedCompanyId();
+    const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(p => p.company_id !== companyId);
     const combined = !companyId ? list : [...filteredOut, ...list];
     StorageEngine.setStored('products', combined);
@@ -618,15 +619,15 @@ export class InventoryModule {
   }
 
   static addProduct(product: Omit<Product, 'id'> & { company_id?: string }): Product {
-    const list = InventoryModule.getProducts();
     const companyId = product.company_id || CompaniesModule.getSelectedCompanyId();
+    const list = InventoryModule.getProducts(companyId);
     const newP: Product = {
       ...product,
       id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
       company_id: companyId
     };
     list.push(newP);
-    InventoryModule.saveProducts(list);
+    InventoryModule.saveProducts(list, companyId);
     return newP;
   }
 

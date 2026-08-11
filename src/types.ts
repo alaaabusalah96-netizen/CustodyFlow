@@ -9,6 +9,7 @@ export interface Company {
   subscription_status?: 'active' | 'suspended' | 'trial' | 'expired';
   subscription_expiry?: string;
   subscription_plan?: 'Basic' | 'Professional' | 'Enterprise';
+  industry?: 'poultry' | 'restaurant' | 'general' | string;
   tenantId?: string;
   organizationId?: string;
   org_unit_id?: string;

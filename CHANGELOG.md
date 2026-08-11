@@ -4,6 +4,62 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Restaurant POS Orders, Floor Tables & Auto Stock Deduction (Phase 2) Implementation
+**Date:** 2026-08-11
+**Files Changed:** `src/types/restaurant.ts`, `src/db/restaurant.ts`, `src/pages/RestaurantOrders.tsx`, `src/components/Layout.tsx`, `src/App.tsx`, `src/db/modules.ts`, `src/restaurant_orders.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Data Models (`src/types/restaurant.ts`)**:
+  - Extended domain types to support Restaurant Floor Tables (`RestaurantTable`), Order Types (`dine_in`, `takeaway`, `delivery`), Order Statuses (`pending`, `in_kitchen`, `ready`, `served`, `paid`, `cancelled`), Order Items (`RestaurantOrderItem`), Payment Methods (`cash`, `card`, `credit`), and full Orders (`RestaurantOrder`).
+- **Order Management & Inventory Stock Deduction Engine (`src/db/restaurant.ts`)**:
+  - Implemented Table floor management: `getTables`, `seedDefaultTables`, `addTable`, `updateTable`, `deleteTable`, and automatic table occupancy toggling upon order creation and bill settlement.
+  - Implemented Order processing lifecycle: `getOrders`, `getOrderById`, `createOrder`, and `updateOrderStatus`.
+  - Integrated automatic raw material inventory stock deduction (`deductStockForOrder`): when an order status reaches `served` or `paid`, the engine looks up each ordered dish's Recipe (BOM), calculates total raw material quantities needed, and writes negative stock movement records (`StockMovement`) into `InventoryModule`.
+  - Added idempotent protection (`is_stock_deducted` flag) ensuring raw materials are deducted exactly once per order.
+- **POS & Kitchen UI Interface (`src/pages/RestaurantOrders.tsx`)**:
+  - Built comprehensive cashier POS terminal featuring order type selection (Dine-in with table picker, Takeaway, Delivery with customer contacts), category dish catalog search, cart item quantity adjustments, special dish note inputs, 14% VAT tax toggle, discount input, payment method selection, and thermal receipt print modal.
+  - Built interactive Table Floor Map displaying table capacity, occupancy status colors, active order total amounts, and fast billing settlement controls.
+  - Built Kitchen Kanban board categorizing live orders across 4 columns (`New Order`, `In Kitchen`, `Ready`, `Served / Paid`) with 1-click status progression buttons.
+- **Navigation & Routing (`src/db/modules.ts`, `src/components/Layout.tsx`, `src/App.tsx`)**:
+  - Updated `restaurant` module registry to include `restaurant-orders` screen.
+  - Added "طلبات المطعم ونقطة البيع (POS)" navigation link with Lucide `ChefHat` icon.
+  - Added lazy-loaded `<RestaurantOrders />` route in `App.tsx`.
+- **Unit Tests (`src/restaurant_orders.test.ts`)**:
+  - Created test suite verifying default table seeding, order creation and table occupancy status updates, recipe-based automatic raw material stock deduction in `InventoryModule`, table release upon payment, and double-deduction prevention. All 4 tests passed 100% green.
+- **Verification**:
+  - `lint_applet` passed cleanly (`tsc --noEmit`).
+  - `compile_applet` built cleanly with zero errors.
+  - All unit tests executed 100% green via `vitest`.
+
+---
+
+## Restaurant Module & Dish Costing Engine (Phase 1) Implementation
+**Date:** 2026-08-11
+**Files Changed:** `src/types/restaurant.ts`, `src/db/restaurant.ts`, `src/db/inventory.ts`, `src/db/modules.ts`, `src/db.ts`, `src/components/Layout.tsx`, `src/App.tsx`, `src/pages/RestaurantMenu.tsx`, `src/restaurant_engine.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Data Models (`src/types/restaurant.ts`)**:
+  - Created domain types for Menu Categories (`MenuCategory`), Menu Items/Dishes (`MenuItem`), Dish Recipes/BOM (`Recipe`, `RecipeIngredient`), and Menu Items with live cost & profit breakdown (`MenuItemWithCost`).
+- **Restaurant Engine (`src/db/restaurant.ts`)**:
+  - Built `RestaurantEngine` providing local storage persistence for menu categories, dishes, and recipes (BOM).
+  - Implemented dynamic dish cost calculation engine (`calculateMenuItemCost`) linking dish recipes directly to raw material purchase prices in the inventory module (`InventoryModule`).
+  - Added target margin selling price calculator (`suggestMenuItemPrice`) to help non-technical users set dish prices based on target gross profit margin percentages.
+- **Inventory Integration (`src/db/inventory.ts`)**:
+  - Updated `InventoryModule.getProducts`, `saveProducts`, and `addProduct` to support optional target company IDs so multi-company and unit test isolates function cleanly.
+- **Unit Tests (`src/restaurant_engine.test.ts`)**:
+  - Created comprehensive test suite verifying menu category management, dish creation, dynamic dish cost calculations from inventory raw materials, live cost updates when raw material purchase prices change, and target profit margin price suggestions. All 4 tests passed 100% green.
+- **Module Registration & Navigation (`src/db/modules.ts`, `src/db.ts`, `src/components/Layout.tsx`, `src/App.tsx`)**:
+  - Registered `restaurant` module in `ERP_MODULES_REGISTRY` and enabled automatic module access when company industry is `'restaurant'`.
+  - Exported `RestaurantEngine` in `src/db.ts`.
+  - Added "قائمة الأطعمة والتكلفة" (Restaurant Menu & Costs) sidebar item with Lucide `Utensils` icon in `src/components/Layout.tsx`.
+  - Added lazy-loaded `<RestaurantMenu />` route in `src/App.tsx`.
+- **UI & Experience (`src/pages/RestaurantMenu.tsx`)**:
+  - Created intuitive, zero-training UI with dish catalog filtering by category, live food cost indicator badges, target profit margin price assistant, and interactive Bill of Materials (Recipe) modal to select raw material ingredients from inventory and define serving quantities.
+- **Verification**:
+  - `lint_applet` passed with 0 errors (`tsc --noEmit`).
+  - `compile_applet` built cleanly with 0 build errors.
+  - Vitest unit tests passed 100% green.
+
+---
+
 ## Firestore Read Security Rules Multi-Tenant Hardening & Attachment File Size Limit Adjustment
 **Date:** 2026-08-11
 **Files Changed:** `/firestore.rules`, `src/pages/NewExpense.tsx`, `CHANGELOG.md`

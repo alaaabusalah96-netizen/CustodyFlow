@@ -55,11 +55,12 @@ import { TransactionsModule } from './db/transactions';
 import { ModulesModule, ERP_MODULES_REGISTRY, CompanyModuleSettings } from './db/modules';
 import { InventoryModule, StockLookupIndex } from './db/inventory';
 import { ContractingEngine } from './db/contracting';
+import { RestaurantEngine } from './db/restaurant';
 import { ConfigurationEngine } from './lib/enterprise/configuration';
 import { TenantSettings } from './types/enterprise';
 import { db } from './firebase';
 
-export { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings, ConfigurationEngine, type TenantSettings, type StockLookupIndex, ContractingEngine };
+export { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings, ConfigurationEngine, type TenantSettings, type StockLookupIndex, ContractingEngine, RestaurantEngine, InventoryModule, CompaniesModule, UsersModule };
 
 export class CustodyDB {
   static hashPassword(password: string, salt: string = '', pepperVersion: number = 2): string {
