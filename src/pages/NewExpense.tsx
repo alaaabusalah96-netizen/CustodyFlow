@@ -219,11 +219,11 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
       
-      // Limit size to 10MB
-      if (file.size > 10 * 1024 * 1024) {
+      // Limit size to 700KB (Firestore 1MB document limit considering base64 overhead)
+      if (file.size > 700 * 1024) {
         newErrors['attachments'] = isRtl 
-          ? `الملف "${file.name}" يتجاوز الحد الأقصى المسموح به (10 ميجابايت).` 
-          : `File "${file.name}" exceeds the maximum limit of 10MB.`;
+          ? `الملف "${file.name}" يتجاوز الحد الأقصى المسموح به (700 كيلوبايت).` 
+          : `File "${file.name}" exceeds the maximum limit of 700KB.`;
         continue;
       }
 
@@ -790,8 +790,8 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
                       </div>
                       <div className="text-[10px] text-slate-400">
                         {isRtl 
-                          ? 'الحد الأقصى للملف: 10 ميجابايت (الصور، PDF، Excel، Word)' 
-                          : 'Maximum file size: 10MB (Images, PDF, Excel, Word)'
+                          ? 'الحد الأقصى للملف: 700 كيلوبايت (الصور، PDF، Excel، Word)' 
+                          : 'Maximum file size: 700KB (Images, PDF, Excel, Word)'
                         }
                       </div>
                     </div>

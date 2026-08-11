@@ -116,7 +116,13 @@ service cloud.firestore {
 
     // --- Dynamic Organization Engine (Phase 2) ---
     match /organization_unit_types/{id} {
-      allow read: if isLoggedIn();
+      allow read: if isLoggedIn() && (
+        isSystemAdmin() ||
+        resource == null ||
+        resource.data.companyId == null ||
+        resource.data.companyId == getCompanyId() ||
+        resource.data.company_id == getCompanyId()
+      );
       allow write: if isSystemAdmin() || (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin'));
     }
 
@@ -149,7 +155,13 @@ service cloud.firestore {
 
     // --- Organization Templates (Phase 3) ---
     match /organization_templates/{id} {
-      allow read: if isLoggedIn();
+      allow read: if isLoggedIn() && (
+        isSystemAdmin() ||
+        resource == null ||
+        resource.data.companyId == null ||
+        resource.data.companyId == getCompanyId() ||
+        resource.data.company_id == getCompanyId()
+      );
       allow write: if isSystemAdmin() || (
         isLoggedIn() &&
         (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
@@ -159,7 +171,13 @@ service cloud.firestore {
 
     // --- Warehouse Types (Phase 5) ---
     match /warehouse_types/{id} {
-      allow read: if isLoggedIn();
+      allow read: if isLoggedIn() && (
+        isSystemAdmin() ||
+        resource == null ||
+        resource.data.companyId == null ||
+        resource.data.companyId == getCompanyId() ||
+        resource.data.company_id == getCompanyId()
+      );
       allow write: if isSystemAdmin() || (
         isLoggedIn() &&
         (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
@@ -169,7 +187,13 @@ service cloud.firestore {
 
     // --- Warehouse Templates (Phase 6) ---
     match /warehouse_templates/{id} {
-      allow read: if isLoggedIn();
+      allow read: if isLoggedIn() && (
+        isSystemAdmin() ||
+        resource == null ||
+        resource.data.companyId == null ||
+        resource.data.companyId == getCompanyId() ||
+        resource.data.company_id == getCompanyId()
+      );
       allow write: if isSystemAdmin() || (
         isLoggedIn() &&
         (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
@@ -556,6 +580,7 @@ service cloud.firestore {
     }
 
     // --- Categories & System Meta ---
+    // Global shared taxonomy, no per-company data exists in this collection
     match /categories/{id} {
       allow read: if isLoggedIn();
       allow write: if isSystemAdmin();

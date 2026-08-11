@@ -4,6 +4,27 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Firestore Read Security Rules Multi-Tenant Hardening & Attachment File Size Limit Adjustment
+**Date:** 2026-08-11
+**Files Changed:** `/firestore.rules`, `src/pages/NewExpense.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Firestore Security Rules Audit & Hardening (`/firestore.rules`)**:
+  - **Pre-Work Audit Findings**:
+    1. `organization_unit_types`: **Has company-specific data**. Custom unit types can be created per company with a non-null `companyId`. Updated `allow read` to restrict access to `isSystemAdmin() || resource == null || resource.data.companyId == null || resource.data.companyId == getCompanyId() || resource.data.company_id == getCompanyId()`.
+    2. `organization_templates`: **Has company-specific data**. Custom organization structure templates can be created per company with a non-null `companyId`. Updated `allow read` to restrict access to `isSystemAdmin() || resource == null || resource.data.companyId == null || resource.data.companyId == getCompanyId() || resource.data.company_id == getCompanyId()`.
+    3. `warehouse_types`: **Has company-specific data**. Custom warehouse types can be created per company with a non-null `companyId`. Updated `allow read` to restrict access to `isSystemAdmin() || resource == null || resource.data.companyId == null || resource.data.companyId == getCompanyId() || resource.data.company_id == getCompanyId()`.
+    4. `warehouse_templates`: **Has company-specific data**. Custom warehouse structure templates can be created per company with a non-null `companyId`. Updated `allow read` to restrict access to `isSystemAdmin() || resource == null || resource.data.companyId == null || resource.data.companyId == getCompanyId() || resource.data.company_id == getCompanyId()`.
+    5. `categories`: **Global shared taxonomy**. Contains standard expense categories without `companyId` field. Retained `allow read: if isLoggedIn();` and added clarifying comment `// Global shared taxonomy, no per-company data exists in this collection`.
+- **Attachment Limit Alignment (`src/pages/NewExpense.tsx`)**:
+  - Updated attachment file size limit from unrealistic 10MB to a realistic 700KB (`700 * 1024` bytes) to prevent silent document save failures caused by Firestore's strict 1MB document size limit (accounting for ~33% base64 encoding expansion and document metadata overhead).
+  - Updated user-facing validation error messages and upload area helper text in both Arabic (`700 كيلوبايت`) and English (`700KB`).
+- **Verification**:
+  - `lint_applet` passed (`tsc --noEmit`).
+  - `compile_applet` passed cleanly.
+  - Vitest test suite executed and passed.
+
+---
+
 ## Construction Contracting Module Implementation (المقاولات والمستخلصات وعمالة اليومية)
 **Date:** 2026-08-11
 **Files Changed:** `src/types/contracting.ts`, `src/db/contracting.ts`, `src/contracting_engine.test.ts`, `src/db/modules.ts`, `src/db.ts`, `src/components/Layout.tsx`, `src/App.tsx`, `src/pages/Contracting.tsx`, `CHANGELOG.md`
