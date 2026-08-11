@@ -33,6 +33,7 @@ const CRM = lazy(() => import('./pages/CRM'));
 const FixedAssets = lazy(() => import('./pages/FixedAssets'));
 const FleetManagement = lazy(() => import('./pages/FleetManagement'));
 const HRPayroll = lazy(() => import('./pages/HRPayroll'));
+const Contracting = lazy(() => import('./pages/Contracting'));
 const FirstRunSetup = lazy(() => import('./pages/FirstRunSetup'));
 import ApprovalInbox from './components/ApprovalInbox';
 import ChangePasswordRequired from './components/ChangePasswordRequired';
@@ -571,6 +572,14 @@ export default function App() {
       case 'hr_payroll':
         return (
           <HRPayroll
+            language={language}
+            theme={theme}
+          />
+        );
+      case 'contracting':
+        return (
+          <Contracting
+            activeUser={activeUser!}
             language={language}
             theme={theme}
           />

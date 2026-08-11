@@ -4,6 +4,33 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Construction Contracting Module Implementation (المقاولات والمستخلصات وعمالة اليومية)
+**Date:** 2026-08-11
+**Files Changed:** `src/types/contracting.ts`, `src/db/contracting.ts`, `src/contracting_engine.test.ts`, `src/db/modules.ts`, `src/db.ts`, `src/components/Layout.tsx`, `src/App.tsx`, `src/pages/Contracting.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Data Models (`src/types/contracting.ts`)**:
+  - Created domain types for Contracting Projects (`ContractingProject`), BOQ Items (`BOQItem`), Subcontractors (`Subcontractor`), Subcontracts (`SubcontractorContract`), Payment Certificates/Vouchers (`ContractingPaymentVoucher`), Certificate Lines (`PaymentVoucherLine`), Daily Workers (`DailyWorker`), Daily Site Attendance Logs (`DailyAttendanceLog`), and Payout Batches (`DailyLaborPayoutBatch`).
+- **Contracting Engine (`src/db/contracting.ts`)**:
+  - Built `ContractingEngine` providing local storage persistence and pre-seeded demonstration data for Egyptian projects (e.g. New Administrative Capital, 6th of October Warehouses).
+  - Implemented business logic calculations for payment certificates: auto-calculating total work completed, previous vs current quantities, advance payment deduction (`advance_deduction`), retention guarantee deduction (`retention_deduction`), tax deductions, and net payable amount.
+  - Implemented daily labor management with site attendance logging, wage calculations (base rate + overtime + bonuses - deductions), and 1-click batch cash payout generation.
+- **Unit Tests (`src/contracting_engine.test.ts`)**:
+  - Created test suite validating project initialization, payment certificate breakdown logic, worker daily wage calculations, and daily labor batch payout status updates. All 4 tests passed 100% green.
+- **Module Registration & Navigation (`src/db/modules.ts`, `src/db.ts`, `src/components/Layout.tsx`, `src/App.tsx`)**:
+  - Registered `contracting` module in `ERP_MODULES_REGISTRY` with Arabic and English descriptions.
+  - Exported `ContractingEngine` in `src/db.ts`.
+  - Added "إدارة المقاولات والمستخلصات" navigation item with Lucide `HardHat` icon in `src/components/Layout.tsx`.
+  - Added lazy-loaded `<Contracting />` route in `src/App.tsx`.
+- **UI & Experience (`src/pages/Contracting.tsx`)**:
+  - Built non-technical, zero-training UI with 5 sub-tabs: Projects & BOQ (`projects`), Payment Certificates (`vouchers`), Subcontractors & Contracts (`subcontractors`), Daily Labor & Attendance Grid (`daily_labor`), and Site Profitability Reports (`reports`).
+  - Included a printable A4 Payment Certificate Invoice modal with official seal and signature lines.
+- **Verification**:
+  - `lint_applet` passed with 0 errors (`tsc --noEmit`).
+  - `compile_applet` compiled cleanly with 0 build errors.
+  - Vitest test suite executed 100% green.
+
+---
+
 ## Senior ERP Testing Suite Upgrade & Hardening (Playwright E2E, RTL, MSW, Vitest v8)
 **Date:** 2026-08-10
 **Files Changed:** `src/test/mocks/handlers.ts`, `src/components/__tests__/ApprovalInbox.test.tsx`, `src/components/inventory/__tests__/InventoryDocumentForm.test.tsx`, `src/components/__tests__/VoucherModal.test.tsx`, `e2e/login.spec.ts`, `e2e/expense.spec.ts`, `e2e/approval.spec.ts`, `e2e/inventory.spec.ts`, `CHANGELOG.md`

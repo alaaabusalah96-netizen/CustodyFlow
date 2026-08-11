@@ -31,6 +31,7 @@ import {
   Receipt as PosIcon,
   DollarSign as SalesIcon,
   Truck as FleetIcon,
+  HardHat,
   Inbox
 } from 'lucide-react';
 import { CustodyDB, ModulesModule } from '../db';
@@ -71,6 +72,7 @@ export function getFilteredMenuItems(activeUser: AppUser | null, language: Langu
     { id: 'fixed_assets', label: isRtl ? 'الأصول الثابتة والاستهلاكات' : 'Fixed Assets & Depreciation', icon: AssetIcon, roleAllowed: ['SystemAdmin', 'Admin'] },
     { id: 'fleet', label: isRtl ? 'إدارة الأسطول والحركة' : 'Fleet & Transportation', icon: FleetIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager'] },
     { id: 'hr_payroll', label: isRtl ? 'الموارد البشرية والرواتب' : 'HR & Payroll Ledger', icon: Briefcase, roleAllowed: ['SystemAdmin', 'Admin'] },
+    { id: 'contracting', label: isRtl ? 'إدارة المقاولات والمستخلصات' : 'Construction & Contracting', icon: HardHat, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
     { id: 'reports', label: t.reports, icon: FileText, permission: 'view_reports' },
     { id: 'search', label: t.search, icon: SearchIcon },
     { id: 'audit-log', label: isRtl ? 'سجل الرقابة والامتثال' : 'Security & Audit Log', icon: ShieldCheck, roleAllowed: ['Admin', 'SystemAdmin'] },
@@ -101,6 +103,7 @@ export function getFilteredMenuItems(activeUser: AppUser | null, language: Langu
         'fixed_assets',
         'fleet',
         'hr_payroll',
+        'contracting',
         'reports'
       ];
       if (operationalModuleIds.includes(item.id)) {

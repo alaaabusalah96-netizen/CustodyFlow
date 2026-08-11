@@ -109,6 +109,14 @@ export const ERP_MODULES_REGISTRY: ERPModule[] = [
     description_en: 'Employee files, department assignments, salary models, allowances, deductions, and monthly payroll processing.',
     description_ar: 'ملفات الموظفين، شؤون العاملين، احتساب البدلات والاستقطاعات، وإصدار مسيرات الرواتب الشهرية.',
     screens: ['hr_payroll']
+  },
+  {
+    id: 'contracting',
+    name_en: 'Construction & Contracting',
+    name_ar: 'إدارة المقاولات والمستخلصات',
+    description_en: 'Projects & sites management, subcontractor contracts, client/subcontractor payment certificates, and daily labor tracking.',
+    description_ar: 'إدارة المشاريع والمواقع، عقود مقاولي الباطن، المستخلصات (المالك ومقاولي الباطن)، وتتبع حضور ويوميات العمالة.',
+    screens: ['contracting']
   }
 ];
 
