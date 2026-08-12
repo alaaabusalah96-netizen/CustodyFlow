@@ -84,6 +84,58 @@ export const mockDocuments = [
   }
 ];
 
+export const mockPurchaseOrders = [
+  {
+    id: 'po-101',
+    poNumber: 'PO-2026-001',
+    vendorId: 'vendor-01',
+    vendorName: 'شركة التوريدات العامة',
+    totalAmount: 12500,
+    status: 'ISSUED',
+    items: [
+      { id: 'item-101', name: 'زيت محرك 4L', qty: 50, unitPrice: 250 }
+    ]
+  }
+];
+
+export const mockEmployees = [
+  {
+    id: 'emp-001',
+    fullName: 'سامي عبد الرحمن',
+    jobTitle: 'أخصائي مخازن',
+    department: 'المخازن واللوجستيات',
+    status: 'ACTIVE',
+    basicSalary: 8500
+  }
+];
+
+export const mockContractClaims = [
+  {
+    id: 'claim-101',
+    claimNo: 'IPC-2026-001',
+    projectName: 'مشروع إنشاء مبنى المحطة الجديدة',
+    subcontractorName: 'شركة النيل للمقاولات',
+    grossAmount: 45000,
+    retentionAmount: 4500,
+    netAmount: 40500,
+    status: 'APPROVED'
+  }
+];
+
+export const mockRestaurantOrders = [
+  {
+    id: 'ord-101',
+    orderNo: 'POS-8821',
+    tableNo: 'Table 4',
+    totalAmount: 320,
+    status: 'COMPLETED',
+    paymentMethod: 'CASH',
+    items: [
+      { menuItemId: 'menu-1', name: 'وجبة غداء عمل', qty: 2, price: 160 }
+    ]
+  }
+];
+
 export const handlers = [
   // Authentication
   http.post('/api/auth/login', async ({ request }) => {
@@ -118,6 +170,16 @@ export const handlers = [
       success: true,
       users: mockUsers
     });
+  }),
+
+  http.patch('/api/admin/users/:id/status', async ({ params, request }) => {
+    const body = (await request.json()) as any;
+    const user = mockUsers.find(u => u.id === params.id);
+    if (user) {
+      user.is_active = body.is_active;
+      return HttpResponse.json({ success: true, user });
+    }
+    return HttpResponse.json({ success: false, error: 'المستخدم غير موجود' }, { status: 404 });
   }),
 
   // Transactions & Expense Approvals
@@ -240,6 +302,63 @@ export const handlers = [
         { item_id: 'item-102', item_name: 'فلتر زيت هيدروليكي', sku: 'FLT-HYD-02', qty: 35, unit: 'قطعة', warehouse_id: 'wh-main-01' }
       ]
     });
+  }),
+
+  // Purchasing Module
+  http.get('/api/purchasing/orders', () => {
+    return HttpResponse.json({ success: true, orders: mockPurchaseOrders });
+  }),
+
+  http.post('/api/purchasing/orders/:id/receive', ({ params }) => {
+    const target = mockPurchaseOrders.find(p => p.id === params.id);
+    if (target) {
+      target.status = 'RECEIVED';
+      return HttpResponse.json({ success: true, order: target });
+    }
+    return HttpResponse.json({ success: false, error: 'أمر الشراء غير موجود' }, { status: 404 });
+  }),
+
+  // HR & Attendance
+  http.get('/api/hr/employees', () => {
+    return HttpResponse.json({ success: true, employees: mockEmployees });
+  }),
+
+  http.post('/api/hr/attendance', async ({ request }) => {
+    const body = (await request.json()) as any;
+    return HttpResponse.json({
+      success: true,
+      record: {
+        id: `att-${Date.now()}`,
+        employeeId: body.employeeId || 'emp-001',
+        timestamp: new Date().toISOString(),
+        type: body.type || 'CHECK_IN'
+      }
+    });
+  }),
+
+  // Contracting Module
+  http.get('/api/contracting/claims', () => {
+    return HttpResponse.json({ success: true, claims: mockContractClaims });
+  }),
+
+  // Restaurant & POS
+  http.get('/api/restaurant/orders', () => {
+    return HttpResponse.json({ success: true, orders: mockRestaurantOrders });
+  }),
+
+  http.post('/api/restaurant/orders', async ({ request }) => {
+    const body = (await request.json()) as any;
+    const newOrd = {
+      id: `ord-${Date.now()}`,
+      orderNo: `POS-${Math.floor(1000 + Math.random() * 9000)}`,
+      tableNo: body.tableNo || 'Takeaway',
+      totalAmount: body.totalAmount || 0,
+      status: 'PENDING',
+      paymentMethod: body.paymentMethod || 'CASH',
+      items: body.items || []
+    };
+    mockRestaurantOrders.unshift(newOrd);
+    return HttpResponse.json({ success: true, order: newOrd }, { status: 201 });
   }),
 
   // Accounting & Financial Reports

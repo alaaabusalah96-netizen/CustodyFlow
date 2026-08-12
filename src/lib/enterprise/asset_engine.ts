@@ -171,4 +171,92 @@ export class AssetBusinessEngine {
       console.error('Asset depreciation GL double entry posting error:', glError);
     }
   }
+
+  /**
+   * Disposes of a fixed asset (sale/scrap) and posts double-entry journal entry
+   */
+  public static async disposeAsset(
+    companyId: string,
+    operatorId: string,
+    data: {
+      assetId: string;
+      disposalPrice: number;
+      disposalDate: string;
+      org_unit_id?: string;
+      cost_center_id?: string;
+    }
+  ): Promise<FixedAsset> {
+    const allAssets = StorageEngine.getStored<FixedAsset[]>('fixed_assets_items', []);
+    const asset = allAssets.find(a => a.id === data.assetId);
+    if (!asset) {
+      throw new Error('Asset not found');
+    }
+
+    const salePrice = Number(data.disposalPrice) || 0;
+    const gainLoss = salePrice - asset.netBookValue;
+
+    const updatedAsset: FixedAsset = {
+      ...asset,
+      status: 'DISPOSED',
+      disposalDate: data.disposalDate,
+      disposalPrice: salePrice,
+      gainLoss,
+      netBookValue: 0
+    };
+
+    const updatedList = allAssets.map(a => a.id === asset.id ? updatedAsset : a);
+    StorageEngine.setStored('fixed_assets_items', updatedList);
+    await dbSetDoc('fixed_assets_items', updatedAsset.id, updatedAsset);
+
+    // Double-entry GL Post for Asset Disposal
+    const targetOrgUnit = data.org_unit_id || asset.org_unit_id;
+    let targetCostCenter = data.cost_center_id || asset.cost_center_id;
+    if (!targetCostCenter && targetOrgUnit) {
+      const cc = await CostCenterEngine.resolveCostCenterForOrgUnit(targetOrgUnit, companyId);
+      if (cc) targetCostCenter = cc.id;
+    }
+
+    try {
+      const entries: Array<{ accountCode: string; debit: number; credit: number; notes?: string }> = [];
+
+      // 1. Debit Cash/Bank for Sale Proceeds
+      if (salePrice > 0) {
+        entries.push({ accountCode: '110101', debit: salePrice, credit: 0, notes: `تحصيل ثمن بيع الأصل ${asset.code}` });
+      }
+
+      // 2. Debit Accumulated Depreciation
+      if (asset.accumulatedDepreciation > 0) {
+        entries.push({ accountCode: '130201', debit: asset.accumulatedDepreciation, credit: 0, notes: `إغلاق مجمع استهلاك الأصل ${asset.code}` });
+      }
+
+      // 3. Credit Asset Historical Cost
+      entries.push({ accountCode: '130101', debit: 0, credit: asset.originalCost, notes: `استبعاد التكلفة التاريخية للأصل ${asset.code}` });
+
+      // 4. Gain or Loss on Disposal
+      if (gainLoss > 0) {
+        // Gain (Credit 420101)
+        entries.push({ accountCode: '420101', debit: 0, credit: gainLoss, notes: `أرباح رأسمالية عن بيع الأصل ${asset.code}` });
+      } else if (gainLoss < 0) {
+        // Loss (Debit 520101)
+        entries.push({ accountCode: '520101', debit: Math.abs(gainLoss), credit: 0, notes: `خسائر رأسمالية عن استبعاد الأصل ${asset.code}` });
+      }
+
+      await AccountingBusinessEngine.postOperationalDoubleEntry(
+        companyId,
+        operatorId,
+        `DISP-${Date.now()}`,
+        `قيد استبعاد أصل ثابت (${asset.name} - ${asset.code})`,
+        `Fixed asset disposal entry (${asset.name} - ${asset.code})`,
+        entries,
+        {
+          org_unit_id: targetOrgUnit,
+          cost_center_id: targetCostCenter
+        }
+      );
+    } catch (glError) {
+      console.error('Asset disposal GL post error:', glError);
+    }
+
+    return updatedAsset;
+  }
 }

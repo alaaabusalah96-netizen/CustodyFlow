@@ -13,6 +13,10 @@ export interface FixedAsset {
   depreciationRate: number; // e.g. 0.10 for 10%
   accumulatedDepreciation: number;
   netBookValue: number;
+  status?: 'ACTIVE' | 'DISPOSED';
+  disposalDate?: string;
+  disposalPrice?: number;
+  gainLoss?: number;
   createdAt: string;
 }
 

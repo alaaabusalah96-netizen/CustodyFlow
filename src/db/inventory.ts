@@ -975,6 +975,13 @@ export class InventoryModule {
     }
     const currentStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
     const current_balance_after = currentStock + qtyChange;
+    
+    if (qtyChange < 0 && current_balance_after < 0) {
+      const config = InventoryModule.getInventoryConfig();
+      if (config.allow_overdraft === 'STRICT') {
+        throw new Error(`رصيد غير كافٍ للمنتج (${productId}) في المستودع/الحاوية. الرصيد الحالي: ${currentStock}، الكمية المطلوبة: ${Math.abs(qtyChange)}. / Insufficient stock for product (${productId}). Available: ${currentStock}, Requested: ${Math.abs(qtyChange)}.`);
+      }
+    }
     const org_unit_id = InventoryModule.resolveWarehouseOrgUnit(warehouseId, companyId);
     const movement: StockMovement = {
       id: `m-adj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

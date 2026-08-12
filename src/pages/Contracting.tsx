@@ -34,6 +34,11 @@ import {
   PaymentVoucherType 
 } from '../types/contracting';
 import { ContractingEngine } from '../db/contracting';
+import { ContractingProjectsTab } from '../components/contracting/ContractingProjectsTab';
+import { ContractingVouchersTab } from '../components/contracting/ContractingVouchersTab';
+import { ContractingSubcontractorsTab } from '../components/contracting/ContractingSubcontractorsTab';
+import { ContractingDailyLaborTab } from '../components/contracting/ContractingDailyLaborTab';
+import { ContractingReportsTab } from '../components/contracting/ContractingReportsTab';
 
 interface ContractingProps {
   activeUser: AppUser;
@@ -425,383 +430,56 @@ export default function Contracting({ activeUser, language, theme }: Contracting
 
       {/* SUB-TAB 1: PROJECTS & BOQ */}
       {activeSubTab === 'projects' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Projects Directory List */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center justify-between">
-                <span>{isRtl ? 'سجل المشاريع والمواقع' : 'Projects Directory'}</span>
-                <span className="text-xs bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded-full">{projects.length}</span>
-              </h3>
-              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                {projects.map((p) => {
-                  const isSelected = p.id === selectedProjectId;
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => setSelectedProjectId(p.id)}
-                      className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                        isSelected
-                          ? 'border-amber-500 bg-amber-500/5 dark:bg-amber-500/10'
-                          : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">{p.code}</span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600">
-                          {p.status === 'IN_PROGRESS' ? (isRtl ? 'قيد التنفيذ' : 'In Progress') : (isRtl ? 'مكتمل' : 'Completed')}
-                        </span>
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-900 dark:text-white">{p.name}</h4>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{p.client_name} - {p.location}</p>
-                      <div className="flex items-center justify-between mt-3 text-xs border-t border-slate-100 dark:border-slate-700 pt-2">
-                        <span className="text-slate-500">{isRtl ? 'قيمة العقد:' : 'Value:'}</span>
-                        <span className="font-bold text-slate-900 dark:text-white">{p.contract_value.toLocaleString()} ج.م</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Selected Project BOQ Items (جدول مقايسة بنود الكميات) */}
-            <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                    {isRtl ? 'جدول المقايسة وبنود الكميات (BOQ)' : 'Bill of Quantities (BOQ)'}
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {isRtl ? 'البنود المتعاقد عليها ومواصفات وأسعار الوحدة لكل بند بالمشروع' : 'Contracted items, units, and unit rates'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-right text-slate-700 dark:text-slate-300">
-                  <thead className="bg-slate-100 dark:bg-slate-700/50 text-slate-900 dark:text-slate-100 font-bold uppercase text-[11px]">
-                    <tr>
-                      <th className="p-2.5 rounded-r-lg">بند#</th>
-                      <th className="p-2.5">الوصف والمواصفات الفنية</th>
-                      <th className="p-2.5 text-center">الوحدة</th>
-                      <th className="p-2.5 text-center">الكمية التعاقدية</th>
-                      <th className="p-2.5 text-center">فئة الوحدة</th>
-                      <th className="p-2.5 text-left rounded-l-lg">الإجمالي التعاقدي</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 dark:divide-slate-700 font-medium">
-                    {boqItems.map((boq) => (
-                      <tr key={boq.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
-                        <td className="p-2.5 font-bold font-mono text-amber-600">{boq.item_number}</td>
-                        <td className="p-2.5 font-bold text-slate-900 dark:text-white">{boq.description}</td>
-                        <td className="p-2.5 text-center font-bold bg-slate-50 dark:bg-slate-700/20">{boq.unit}</td>
-                        <td className="p-2.5 text-center font-bold">{boq.contracted_qty.toLocaleString()}</td>
-                        <td className="p-2.5 text-center">{boq.unit_price.toLocaleString()} ج.م</td>
-                        <td className="p-2.5 text-left font-black text-slate-900 dark:text-white">
-                          {boq.total_amount.toLocaleString()} ج.م
-                        </td>
-                      </tr>
-                    ))}
-                    {!boqItems.length && (
-                      <tr>
-                        <td colSpan={6} className="p-6 text-center text-slate-400">
-                          {isRtl ? 'لا توجد بنود مقايسة مسجلة لهذا المشروع بعد.' : 'No BOQ items listed for this project yet.'}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ContractingProjectsTab
+          isRtl={isRtl}
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+          setSelectedProjectId={setSelectedProjectId}
+          boqItems={boqItems}
+        />
       )}
 
       {/* SUB-TAB 2: PAYMENT CERTIFICATES & INVOICES */}
       {activeSubTab === 'vouchers' && (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                {isRtl ? 'سجل مستخلصات المالك ومقاولي الباطن' : 'Payment Certificates Ledger'}
-              </h3>
-              <p className="text-xs text-slate-500">
-                {isRtl ? 'احتساب إجمالي الأعمال المنفذة، الاستقطاعات، وخصم الدفعة المقدمة وضمان الأعمال' : 'Track current work completed, deductions, and net payouts'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleOpenNewVoucherModal('CLIENT')}
-                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
-              >
-                <Plus size={14} />
-                <span>{isRtl ? '+ مستخلص مالك جديد' : '+ New Client Certificate'}</span>
-              </button>
-              <button
-                onClick={() => handleOpenNewVoucherModal('SUBCONTRACTOR')}
-                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
-              >
-                <Plus size={14} />
-                <span>{isRtl ? '+ مستخلص مقاول باطن' : '+ New Subcontractor Certificate'}</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-right text-slate-700 dark:text-slate-300">
-                <thead className="bg-slate-100 dark:bg-slate-700/50 text-slate-900 dark:text-slate-100 font-bold uppercase text-[11px]">
-                  <tr>
-                    <th className="p-3">رقم المستخلص</th>
-                    <th className="p-3">النوع</th>
-                    <th className="p-3">التاريخ والنزول</th>
-                    <th className="p-3 text-center">الأعمال المنفذة</th>
-                    <th className="p-3 text-center">خصم الدفعة المقدمة</th>
-                    <th className="p-3 text-center">ضمان الأعمال (محتجز)</th>
-                    <th className="p-3 text-left">صافي المستحق</th>
-                    <th className="p-3 text-center">الحالة</th>
-                    <th className="p-3 text-center">طباعة</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                  {vouchers.map((v) => (
-                    <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors font-medium">
-                      <td className="p-3 font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                        <FileText size={16} className="text-amber-500" />
-                        <span>{v.voucher_number}</span>
-                      </td>
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          v.type === 'CLIENT' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-blue-500/10 text-blue-600'
-                        }`}>
-                          {v.type === 'CLIENT' ? (isRtl ? 'مستخلص مالك' : 'Client Certificate') : (isRtl ? 'مقاول باطن' : 'Subcontractor')}
-                        </span>
-                      </td>
-                      <td className="p-3 text-slate-500">{v.date}</td>
-                      <td className="p-3 text-center font-bold">{v.current_work_completed.toLocaleString()} ج.م</td>
-                      <td className="p-3 text-center text-amber-600 font-medium">-{v.advance_deduction.toLocaleString()} ج.م</td>
-                      <td className="p-3 text-center text-indigo-600 font-medium">-{v.retention_deduction.toLocaleString()} ج.م</td>
-                      <td className="p-3 text-left font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                        {v.net_amount.toLocaleString()} ج.م
-                      </td>
-                      <td className="p-3 text-center">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 flex items-center justify-center gap-1">
-                          <CheckCircle2 size={12} />
-                          <span>{isRtl ? 'معتمد' : 'Approved'}</span>
-                        </span>
-                      </td>
-                      <td className="p-3 text-center">
-                        <button
-                          onClick={() => {
-                            setActivePrintVoucher(v);
-                            setShowPrintModal(true);
-                          }}
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-all cursor-pointer"
-                        >
-                          <Printer size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {!vouchers.length && (
-                    <tr>
-                      <td colSpan={9} className="p-6 text-center text-slate-400">
-                        {isRtl ? 'لا توجد مستخلصات مسجلة لهذا المشروع بعد.' : 'No payment certificates logged yet.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <ContractingVouchersTab
+          isRtl={isRtl}
+          vouchers={vouchers}
+          handleOpenNewVoucherModal={handleOpenNewVoucherModal}
+          setActivePrintVoucher={setActivePrintVoucher}
+          setShowPrintModal={setShowPrintModal}
+        />
       )}
 
       {/* SUB-TAB 3: SUBCONTRACTORS & CONTRACTS */}
       {activeSubTab === 'subcontractors' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                {isRtl ? 'دليل مقاولي الباطن والعقود' : 'Subcontractors & Contracts Directory'}
-              </h3>
-              <p className="text-xs text-slate-500">
-                {isRtl ? 'سجل شركات المقاولات الفرعية، العقود المبرمة، ونسب الخصم والمحتجزات' : 'Directory of sub-contractors and assigned scopes'}
-              </p>
-            </div>
-            <button
-              onClick={() => setShowSubcontractorModal(true)}
-              className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
-            >
-              <Plus size={14} />
-              <span>{isRtl ? 'إضافة مقاول باطن' : 'Add Subcontractor'}</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {subcontractors.map((s) => (
-              <div key={s.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-mono font-bold text-amber-600">{s.code}</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
-                    {s.status === 'ACTIVE' ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'غير نشط' : 'Inactive')}
-                  </span>
-                </div>
-                <h4 className="text-sm font-bold text-slate-900 dark:text-white">{s.name}</h4>
-                <p className="text-xs text-slate-500 mt-1">{isRtl ? 'التخصص:' : 'Specialty:'} <span className="font-semibold text-slate-700 dark:text-slate-300">{s.specialty}</span></p>
-                <div className="flex items-center justify-between mt-4 border-t border-slate-100 dark:border-slate-700 pt-3 text-xs">
-                  <span className="text-slate-500">{s.phone}</span>
-                  <span className="font-medium text-slate-400">{isRtl ? 'س.ت:' : 'CR:'} {s.commercial_register || 'غير مدخل'}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <ContractingSubcontractorsTab
+          isRtl={isRtl}
+          subcontractors={subcontractors}
+          setShowSubcontractorModal={setShowSubcontractorModal}
+        />
       )}
 
       {/* SUB-TAB 4: DAILY LABOR & SITE ATTENDANCE GRID */}
       {activeSubTab === 'daily_labor' && (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                {isRtl ? 'كشف حضور ويوميات العمالة بالموقع' : 'Daily Site Worker Attendance & Wages'}
-              </h3>
-              <p className="text-xs text-slate-500">
-                {isRtl ? 'تسجيل حضور العمالة باليومية وساعات الإضافي وإصدار سندات صرف الأجور بضغطة واحدة' : 'Log daily worker hours, overtime, and release cash wage payouts'}
-              </p>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-bold"
-              />
-              <button
-                onClick={() => setShowWorkerModal(true)}
-                className="px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus size={14} />
-                <span>{isRtl ? 'تعريف عامل جديد' : 'Add Worker'}</span>
-              </button>
-              <button
-                onClick={handleProcessBatchPayout}
-                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
-              >
-                <Wallet size={14} />
-                <span>{isRtl ? 'إصدار سند صرف اليوميات' : 'Batch Pay Wages'}</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-right text-slate-700 dark:text-slate-300">
-                <thead className="bg-slate-100 dark:bg-slate-700/50 text-slate-900 dark:text-slate-100 font-bold uppercase text-[11px]">
-                  <tr>
-                    <th className="p-3">اسم العامل</th>
-                    <th className="p-3">المهنة / الصنعة</th>
-                    <th className="p-3 text-center">فئة اليومية</th>
-                    <th className="p-3 text-center">الحضور (أيام)</th>
-                    <th className="p-3 text-center">إضافي (ساعات)</th>
-                    <th className="p-3 text-center">إجمالي مستحق اليوم</th>
-                    <th className="p-3 text-center">حالة الصرف</th>
-                    <th className="p-3 text-center">إجراء تسجيل</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                  {workers.map((w) => {
-                    const log = attendanceLogs.find(a => a.worker_id === w.id && a.date === selectedDate);
-                    return (
-                      <tr key={w.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors font-medium">
-                        <td className="p-3 font-bold text-slate-900 dark:text-white">{w.name}</td>
-                        <td className="p-3">
-                          <span className="px-2 py-0.5 bg-amber-500/10 text-amber-600 rounded-md font-bold text-[10px]">
-                            {w.trade}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center font-bold">{w.daily_rate} ج.م</td>
-                        <td className="p-3 text-center font-bold text-blue-600">{log ? log.days_worked : 0} يوم</td>
-                        <td className="p-3 text-center text-purple-600">{log ? log.overtime_hours : 0} س</td>
-                        <td className="p-3 text-center font-black text-slate-900 dark:text-white text-sm">
-                          {log ? log.total_wage.toLocaleString() : 0} ج.م
-                        </td>
-                        <td className="p-3 text-center">
-                          {log?.payment_status === 'PAID' ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600">
-                              {isRtl ? 'تم الصرف' : 'Paid'}
-                            </span>
-                          ) : log ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600">
-                              {isRtl ? 'مستحق للصرف' : 'Unpaid'}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">{isRtl ? 'لم يسجل' : 'Not Logged'}</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => handleLogAttendance(w, 1, 0)}
-                              className="px-2 py-1 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white rounded-lg text-[10px] font-bold transition-all cursor-pointer"
-                            >
-                              {isRtl ? 'يوم كامل' : 'Full Day'}
-                            </button>
-                            <button
-                              onClick={() => handleLogAttendance(w, 1, 2)}
-                              className="px-2 py-1 bg-blue-500/10 text-blue-600 hover:bg-blue-500 hover:text-white rounded-lg text-[10px] font-bold transition-all cursor-pointer"
-                            >
-                              {isRtl ? '+2 س إضافي' : '+2h OT'}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <ContractingDailyLaborTab
+          isRtl={isRtl}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          workers={workers}
+          attendanceLogs={attendanceLogs}
+          setShowWorkerModal={setShowWorkerModal}
+          handleProcessBatchPayout={handleProcessBatchPayout}
+          handleLogAttendance={handleLogAttendance}
+        />
       )}
 
       {/* SUB-TAB 5: FINANCIAL REPORTS */}
       {activeSubTab === 'reports' && (
-        <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">
-              {isRtl ? 'تقرير ربحية وكفاءة الموقع' : 'Site Profitability & Cost Control'}
-            </h3>
-            <p className="text-xs text-slate-500 mb-6">
-              {isRtl ? 'مقارنة إجمالي الأعمال المعتمدة بالمستخلصات مع مصروفات وأجور العمالة بالموقع' : 'Comparison of certified revenues vs labor expenses'}
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-200 dark:border-slate-700">
-                <span className="text-xs text-slate-500">{isRtl ? 'إجمالي المستخلصات المعتمدة:' : 'Approved Revenue:'}</span>
-                <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
-                  {vouchers.reduce((s, v) => s + v.current_work_completed, 0).toLocaleString()} ج.م
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-200 dark:border-slate-700">
-                <span className="text-xs text-slate-500">{isRtl ? 'إجمالي أجور يوميات العمالة:' : 'Total Labor Cost:'}</span>
-                <div className="text-xl font-black text-rose-600 dark:text-rose-400 mt-1">
-                  {attendanceLogs.reduce((s, a) => s + a.total_wage, 0).toLocaleString()} ج.م
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-200 dark:border-slate-700">
-                <span className="text-xs text-slate-500">{isRtl ? 'إجمالي المحتجزات (ضمان الأعمال):' : 'Retention Guarantees:'}</span>
-                <div className="text-xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
-                  {vouchers.reduce((s, v) => s + v.retention_deduction, 0).toLocaleString()} ج.م
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ContractingReportsTab
+          isRtl={isRtl}
+          vouchers={vouchers}
+          attendanceLogs={attendanceLogs}
+        />
       )}
 
       {/* MODAL: NEW PROJECT */}

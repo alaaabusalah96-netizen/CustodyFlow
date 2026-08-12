@@ -27,6 +27,8 @@ import {
 import { ApprovalEngine } from '../db/approvalEngine';
 import { StorageEngine } from '../db/storage';
 import { PurchasingBusinessEngine } from '../lib/enterprise/purchasing_engine';
+import { TransactionsUpdateModule } from '../db/transactions.update';
+import { TransactionsVoucherModule } from '../db/transactions.voucher';
 import { 
   ApprovalInstance, 
   ApprovalWorkflowDefinition, 
@@ -127,13 +129,24 @@ export default function ApprovalInbox({
         }
         break;
       }
-      case 'CASH_VOUCHER':
+      case 'CASH_VOUCHER': {
+        const vouchers = TransactionsVoucherModule.getCashVouchers();
+        const v = vouchers.find(item => item.id === instance.documentId);
+        if (v) {
+          v.status = statusCamel;
+          TransactionsVoucherModule.saveCashVoucher(v);
+        }
+        break;
+      }
       case 'EXPENSE': {
-        const vouchers = StorageEngine.getStored<any[]>('cash_vouchers', []);
-        const idx = vouchers.findIndex(v => v.id === instance.documentId);
-        if (idx !== -1) {
-          vouchers[idx].status = statusCamel;
-          StorageEngine.setStored('cash_vouchers', vouchers);
+        TransactionsUpdateModule.updateTransaction(instance.documentId, {
+          status: isApproved ? 'Under Settlement' : 'Rejected'
+        });
+        const expList = StorageEngine.getStored<any[]>('Expenses', []);
+        const expIdx = expList.findIndex(e => e.id === instance.documentId);
+        if (expIdx !== -1) {
+          expList[expIdx].status = statusCamel;
+          StorageEngine.setStored('Expenses', expList);
         }
         break;
       }

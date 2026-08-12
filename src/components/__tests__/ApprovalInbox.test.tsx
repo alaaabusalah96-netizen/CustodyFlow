@@ -43,4 +43,17 @@ describe('ApprovalInbox Component (React Testing Library)', () => {
       expect(historyTab).toHaveClass(/bg-white/);
     });
   });
+
+  it('renders document type filter options', () => {
+    render(
+      <ApprovalInbox
+        activeUser={mockAdminUser as any}
+        isRtl={true}
+        theme="light"
+        onActionComplete={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/جميع أنواع المستندات/i)).toBeInTheDocument();
+  });
 });

@@ -8,6 +8,7 @@ import { TransactionsHistoryModule } from './transactions.history';
 import { ValidationEngine } from './validation';
 import { DEFAULT_TRANSACTIONS } from './defaults';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
+import { ApprovalEngine } from './approvalEngine';
 
 export class TransactionsCreateModule {
   static async addTransaction(data: Omit<Transaction, 'id' | 'transaction_no' | 'status' | 'created_at' | 'updated_at' | 'created_by'> & { status?: TransactionStatus }): Promise<{ success: boolean; errors?: string[]; data?: Transaction }> {
@@ -75,6 +76,21 @@ export class TransactionsCreateModule {
           success: false,
           errors: [syncRes.error || 'يلزم وجود اتصال بالإنترنت للحفظ. يرجى إعادة الاتصال والمحاولة مرة أخرى.']
         };
+      }
+
+      // Evaluate and start Approval Workflow for EXPENSE if configured
+      try {
+        ApprovalEngine.evaluateAndStartWorkflow({
+          companyId: company_id,
+          documentType: 'EXPENSE',
+          documentId: newTx.id,
+          amount: newTx.amount,
+          org_unit_id: newTx.org_unit_id,
+          requesterId: user?.id || 'unknown',
+          requesterName: user?.full_name || 'Anonymous'
+        });
+      } catch (err) {
+        console.warn('Approval Engine evaluation for expense skipped:', err);
       }
 
       TransactionsHistoryModule.addTransactionHistory({

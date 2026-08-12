@@ -1,30 +1,47 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('E2E: Expense Recording & Validation Flow', () => {
+test.describe('E2E: Expense Creation, Approval & Settlement Flow', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
-    // Perform auto-login if on login screen
     const emailInput = page.locator('input[type="email"]');
     if (await emailInput.isVisible()) {
       await emailInput.fill('admin@kemit.com');
       await page.locator('input[type="password"]').fill('Password123!');
       await page.locator('button[type="submit"]').click();
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
     }
   });
 
-  test('should navigate to expense creation and validate required fields', async ({ page }) => {
-    const expenseNavBtn = page.locator('button:has-text("تسجيل مصروف"), a[href*="expense"], button:has-text("New Expense")').first();
-    if (await expenseNavBtn.isVisible()) {
-      await expenseNavBtn.click();
+  test('should navigate to expense creation and validate required form controls', async ({ page }) => {
+    const newExpenseNav = page.locator('#nav-item-new-expense, button:has-text("تسجيل مصروف"), a:has-text("تسجيل مصروف")').first();
+    await expect(newExpenseNav).toBeVisible({ timeout: 10000 });
+    await newExpenseNav.click();
+
+    const heading = page.locator('h1, h2, h3').filter({ hasText: /تسجيل|مصروف|جديد/i }).first();
+    await expect(heading).toBeVisible();
+
+    const submitBtn = page.locator('button[type="submit"], button:has-text("حفظ المصروف"), button:has-text("إرسال")').first();
+    await expect(submitBtn).toBeVisible();
+  });
+
+  test('should fill and submit a new expense transaction', async ({ page }) => {
+    const newExpenseNav = page.locator('#nav-item-new-expense, button:has-text("تسجيل مصروف")').first();
+    await expect(newExpenseNav).toBeVisible({ timeout: 10000 });
+    await newExpenseNav.click();
+
+    const descInput = page.locator('input[placeholder*="بيان"], input[placeholder*="وصف"], textarea[placeholder*="بيان"]').first();
+    const amountInput = page.locator('input[type="number"], input[placeholder*="مبلغ"]').first();
+
+    if (await descInput.isVisible()) {
+      await descInput.fill('شراء أدوات مكتبية وصيانة دورية للمكتب');
+    }
+    if (await amountInput.isVisible()) {
+      await amountInput.fill('850');
     }
 
-    const formHeader = page.locator('h1, h2, h3').filter({ hasText: /مصروف|Expense|تسجيل/i });
-    await expect(formHeader.first()).toBeVisible();
-
-    const submitBtn = page.locator('button[type="submit"], button:has-text("حفظ"), button:has-text("إرسال")').first();
+    const submitBtn = page.locator('button[type="submit"], button:has-text("حفظ"), button:has-text("حفظ المصروف")').first();
     if (await submitBtn.isVisible()) {
       await submitBtn.click();
     }
@@ -33,26 +50,27 @@ test.describe('E2E: Expense Recording & Validation Flow', () => {
     await expect(body).toBeVisible();
   });
 
-  test('should successfully enter item description, amount, and notes', async ({ page }) => {
-    const expenseNavBtn = page.locator('button:has-text("تسجيل مصروف"), button:has-text("New Expense")').first();
-    if (await expenseNavBtn.isVisible()) {
-      await expenseNavBtn.click();
-    }
+  test('should inspect approval inbox for pending vouchers and expenses', async ({ page }) => {
+    const approvalsNav = page.locator('#nav-item-approvals, button:has-text("صندوق الاعتمادات والموافقات"), button:has-text("اعتماد المعاملات")').first();
+    await expect(approvalsNav).toBeVisible({ timeout: 10000 });
+    await approvalsNav.click();
 
-    const descInput = page.locator('input[placeholder*="بيان"], input[placeholder*="وصف"], input[name*="desc"]').first();
-    const amountInput = page.locator('input[type="number"], input[placeholder*="مبلغ"]').first();
-    const notesInput = page.locator('textarea, input[placeholder*="ملاحظات"]').first();
+    const pendingTab = page.locator('button:has-text("بانتظار موافقتي"), button:has-text("معلقة")').first();
+    await expect(pendingTab).toBeVisible();
 
-    if (await descInput.isVisible()) {
-      await descInput.fill('شراء أدوات صيانة ومعدات تشغيل');
-    }
-    if (await amountInput.isVisible()) {
-      await amountInput.fill('750');
-    }
-    if (await notesInput.isVisible()) {
-      await notesInput.fill('تم الشراء حسب إذن التوريد المرفق');
-    }
+    const historyTab = page.locator('button:has-text("سجل الاعتمادات السابقة"), button:has-text("السابقة")').first();
+    await expect(historyTab).toBeVisible();
+    await historyTab.click();
 
-    expect(await page.locator('body').isVisible()).toBe(true);
+    await expect(historyTab).toHaveClass(/bg-white|text-purple/);
+  });
+
+  test('should access cash voucher issuance view', async ({ page }) => {
+    const voucherNav = page.locator('#nav-item-voucher, button:has-text("سند صرف نقدية"), button:has-text("سند صرف")').first();
+    await expect(voucherNav).toBeVisible({ timeout: 10000 });
+    await voucherNav.click();
+
+    const voucherHeading = page.locator('h1, h2, h3, div').filter({ hasText: /سند|صرف|نقدية|Voucher/i }).first();
+    await expect(voucherHeading).toBeVisible();
   });
 });

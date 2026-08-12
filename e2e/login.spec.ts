@@ -29,20 +29,18 @@ test.describe('E2E: Authentication & Login Scenarios', () => {
     await passwordInput.fill('WrongPassword123!');
     await submitBtn.click();
 
-    const errorMessage = page.locator('.bg-red-50, .text-red-700, .bg-red-900\\/30');
-    await expect(errorMessage.first()).toBeVisible();
+    const errorMessage = page.locator('.bg-red-50, .text-red-700, .bg-red-900\\/30, [role="alert"]').first();
+    await expect(errorMessage).toBeVisible();
   });
 
   test('should toggle interface language between Arabic and English', async ({ page }) => {
-    const langBtn = page.locator('button:has-text("English"), button:has-text("العربية")');
+    const langBtn = page.locator('button:has-text("English"), button:has-text("العربية")').first();
     await expect(langBtn).toBeVisible();
 
     const initialText = await langBtn.innerText();
     await langBtn.click();
 
-    await page.waitForTimeout(300);
-    const newText = await langBtn.innerText();
-    expect(newText).not.toEqual(initialText);
+    await expect(langBtn).not.toHaveText(initialText);
   });
 
   test('should successfully log in with valid credentials and redirect to dashboard', async ({ page }) => {
@@ -54,8 +52,21 @@ test.describe('E2E: Authentication & Login Scenarios', () => {
     await passwordInput.fill('Password123!');
     await submitBtn.click();
 
-    // After login, either header with active user or dashboard content is visible
-    const mainContent = page.locator('header, main, nav, [data-testid="dashboard-view"]').first();
-    await expect(mainContent).toBeVisible({ timeout: 10000 });
+    const header = page.locator('#app-header, header, [data-testid="dashboard-view"]').first();
+    await expect(header).toBeVisible({ timeout: 10000 });
+  });
+
+  test('should perform logout and return to login screen', async ({ page }) => {
+    const emailInput = page.locator('input[type="email"]');
+    await emailInput.fill('admin@kemit.com');
+    await page.locator('input[type="password"]').fill('Password123!');
+    await page.locator('button[type="submit"]').click();
+
+    const logoutBtn = page.locator('button:has-text("تسجيل الخروج"), button:has-text("Logout")').first();
+    await expect(logoutBtn).toBeVisible({ timeout: 10000 });
+    await logoutBtn.click();
+
+    await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 10000 });
   });
 });
+

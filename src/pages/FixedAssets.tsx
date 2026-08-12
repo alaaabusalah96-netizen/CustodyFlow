@@ -40,6 +40,12 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
   // Modals
   const [showAddAsset, setShowAddAsset] = useState(false);
   const [showDepreciationRun, setShowDepreciationRun] = useState(false);
+  const [showDisposeModal, setShowDisposeModal] = useState(false);
+  const [selectedAssetForDisposal, setSelectedAssetForDisposal] = useState<FixedAsset | null>(null);
+  const [disposalForm, setDisposalForm] = useState({
+    disposalPrice: 0,
+    disposalDate: new Date().toISOString().split('T')[0]
+  });
 
   // Form States - Asset
   const [assetForm, setAssetForm] = useState({
@@ -198,6 +204,35 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
     }
   };
 
+  const handleDisposeAsset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAssetForDisposal) return;
+
+    try {
+      await AssetBusinessEngine.disposeAsset(companyId, activeUser?.id || 'system', {
+        assetId: selectedAssetForDisposal.id,
+        disposalPrice: Number(disposalForm.disposalPrice) || 0,
+        disposalDate: disposalForm.disposalDate,
+        org_unit_id: formOrgUnitId || selectedAssetForDisposal.org_unit_id
+      });
+
+      LogsModule.addLog(
+        activeUser?.id || 'system',
+        activeUser?.full_name || 'System',
+        isRtl ? 'استبعاد أصل ثابت' : 'Dispose Fixed Asset',
+        `Disposed asset ${selectedAssetForDisposal.name} (${selectedAssetForDisposal.code}) at price ${disposalForm.disposalPrice} EGP`
+      );
+
+      showToast('success', isRtl ? 'تم استبعاد الأصل الثابت وإثبات القيد المحاسبي بنجاح' : 'Asset disposed and GL entry posted successfully');
+      setShowDisposeModal(false);
+      setSelectedAssetForDisposal(null);
+      loadAssets();
+    } catch (err) {
+      console.error('Dispose asset error:', err);
+      showToast('error', isRtl ? 'حدث خطأ أثناء استبعاد الأصل' : 'Error disposing asset');
+    }
+  };
+
   // Filters
   const filteredAssets = assets.filter(a => {
     const matchesCategory = categoryFilter === 'ALL' || a.category === categoryFilter;
@@ -336,17 +371,19 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
                 <th className="p-3">{isRtl ? 'رمز الأصل' : 'Asset Code'}</th>
                 <th className="p-3">{isRtl ? 'اسم ومسمى الأصل' : 'Asset Title'}</th>
                 <th className="p-3">{isRtl ? 'تصنيف الأصل' : 'Category'}</th>
+                <th className="p-3">{isRtl ? 'الحالة' : 'Status'}</th>
                 <th className="p-3">{isRtl ? 'تاريخ الشراء' : 'Purchase Date'}</th>
                 <th className="p-3 text-right">{isRtl ? 'التكلفة التاريخية' : 'Acquisition Cost'}</th>
                 <th className="p-3 text-right">{isRtl ? 'معدل القسط' : 'Amort. Rate'}</th>
                 <th className="p-3 text-right">{isRtl ? 'مجمع الاستهلاك' : 'Accumulated Amort.'}</th>
                 <th className="p-3 text-right">{isRtl ? 'صافي القيمة الدفترية' : 'Net Book Value'}</th>
+                <th className="p-3 text-center">{isRtl ? 'إجراءات' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs text-slate-700 dark:text-slate-200">
               {filteredAssets.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">
+                  <td colSpan={10} className="p-8 text-center text-slate-400 font-medium">
                     {isRtl ? 'لا يوجد أصول ثابتة مدرجة مطابقة للبحث' : 'No fixed assets matching search criteria'}
                   </td>
                 </tr>
@@ -364,11 +401,36 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
                       )}
                     </td>
                     <td className="p-3 font-semibold text-slate-500">{a.category}</td>
+                    <td className="p-3">
+                      {a.status === 'DISPOSED' ? (
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 rounded-full">
+                          {isRtl ? 'مستبعد / مباع' : 'Disposed'}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 rounded-full">
+                          {isRtl ? 'نشط بالخدمة' : 'Active'}
+                        </span>
+                      )}
+                    </td>
                     <td className="p-3 font-mono text-slate-400">{a.purchaseDate}</td>
                     <td className="p-3 text-right font-mono font-extrabold">{a.originalCost.toLocaleString()} EGP</td>
                     <td className="p-3 text-right font-mono text-slate-400 font-bold">{(a.depreciationRate * 100)}%</td>
                     <td className="p-3 text-right font-mono text-rose-500 font-bold">{a.accumulatedDepreciation.toLocaleString()} EGP</td>
                     <td className="p-3 text-right font-mono font-black text-emerald-600">{a.netBookValue.toLocaleString()} EGP</td>
+                    <td className="p-3 text-center">
+                      {a.status !== 'DISPOSED' && (
+                        <button
+                          onClick={() => {
+                            setSelectedAssetForDisposal(a);
+                            setDisposalForm({ disposalPrice: a.netBookValue, disposalDate: new Date().toISOString().split('T')[0] });
+                            setShowDisposeModal(true);
+                          }}
+                          className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-[11px] rounded-lg transition-all"
+                        >
+                          {isRtl ? 'استبعاد / بيع' : 'Dispose'}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
@@ -591,6 +653,88 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL 3: DISPOSE / SELL FIXED ASSET */}
+      {showDisposeModal && selectedAssetForDisposal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 shadow-2xl relative">
+            <button
+              onClick={() => setShowDisposeModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+            >
+              <X size={16} />
+            </button>
+            <h3 className="text-md font-black text-slate-800 dark:text-white mb-2 flex items-center gap-2">
+              <TrendingDown className="text-amber-500 h-5 w-5" />
+              <span>{isRtl ? 'استبعاد / بيع أصل ثابت' : 'Dispose / Sell Fixed Asset'}</span>
+            </h3>
+            <p className="text-xs text-slate-400 mb-4">
+              {selectedAssetForDisposal.name} ({selectedAssetForDisposal.code})
+            </p>
+
+            <form onSubmit={handleDisposeAsset} className="space-y-4">
+              <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 text-xs space-y-1 font-mono">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">{isRtl ? 'التكلفة التاريخية:' : 'Historical Cost:'}</span>
+                  <span>{selectedAssetForDisposal.originalCost.toLocaleString()} EGP</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">{isRtl ? 'مجمع الاستهلاك:' : 'Accum. Depreciation:'}</span>
+                  <span className="text-rose-500">-{selectedAssetForDisposal.accumulatedDepreciation.toLocaleString()} EGP</span>
+                </div>
+                <div className="flex justify-between border-t border-slate-200 dark:border-slate-800 pt-1 font-bold">
+                  <span>{isRtl ? 'القيمة الدفترية المتبقية:' : 'Net Book Value:'}</span>
+                  <span className="text-emerald-600">{selectedAssetForDisposal.netBookValue.toLocaleString()} EGP</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'سعر البيع / القيمة المستردة (EGP)' : 'Sale / Disposal Price (EGP)'}</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={disposalForm.disposalPrice}
+                  onChange={(e) => setDisposalForm({ ...disposalForm, disposalPrice: Number(e.target.value) })}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:border-amber-500 text-slate-800 dark:text-slate-100 font-mono font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'تاريخ الاستبعاد' : 'Disposal Date'}</label>
+                <input
+                  type="date"
+                  value={disposalForm.disposalDate}
+                  onChange={(e) => setDisposalForm({ ...disposalForm, disposalDate: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:border-amber-500 text-slate-800 dark:text-slate-100 font-mono"
+                />
+              </div>
+
+              {/* Gain / Loss preview */}
+              <div className="p-3 rounded-xl border text-xs flex justify-between items-center font-mono font-bold bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40">
+                <span>{isRtl ? 'الأرباح / الخسائر الرأسمالية المتوقعة:' : 'Expected Capital Gain/Loss:'}</span>
+                <span className={disposalForm.disposalPrice - selectedAssetForDisposal.netBookValue >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                  {(disposalForm.disposalPrice - selectedAssetForDisposal.netBookValue).toLocaleString()} EGP
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowDisposeModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl"
+                >
+                  {isRtl ? 'تأكيد الاستبعاد والقيد المحاسبي' : 'Confirm Asset Disposal'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

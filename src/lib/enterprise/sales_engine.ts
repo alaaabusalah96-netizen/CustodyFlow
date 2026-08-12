@@ -103,6 +103,67 @@ export class SalesBusinessEngine {
   }
 
   /**
+   * Converts a CRM Lead into a registered Customer and optionally creates an initial Sales Invoice
+   */
+  public static async convertLeadToCustomerAndInvoice(
+    companyId: string,
+    operatorId: string,
+    data: {
+      leadId: string;
+      leadName: string;
+      phone?: string;
+      email?: string;
+      dealValue: number;
+      org_unit_id?: string;
+      cost_center_id?: string;
+    }
+  ): Promise<{ customer: Customer; invoice?: SalesInvoice }> {
+    const existingCustomers = this.getCustomersByOrgUnit(companyId, data.org_unit_id);
+    let customer = existingCustomers.find(
+      c => c.nameAr.toLowerCase() === data.leadName.toLowerCase() || c.nameEn.toLowerCase() === data.leadName.toLowerCase()
+    );
+
+    if (!customer) {
+      customer = await this.createCustomer(companyId, {
+        nameAr: data.leadName,
+        nameEn: data.leadName,
+        phone: data.phone,
+        email: data.email,
+        org_unit_id: data.org_unit_id,
+        cost_center_id: data.cost_center_id
+      });
+    }
+
+    let invoice: SalesInvoice | undefined = undefined;
+    if (data.dealValue > 0) {
+      const subtotal = Math.round((data.dealValue / 1.14) * 100) / 100;
+      const vatAmount = Math.round((data.dealValue - subtotal) * 100) / 100;
+      invoice = await this.createSalesInvoice(companyId, operatorId, {
+        customerId: customer.id,
+        customerName: customer.nameAr || customer.nameEn,
+        subtotal,
+        taxAmount: vatAmount,
+        netAmount: data.dealValue,
+        items: [
+          {
+            id: `item-${Date.now()}`,
+            productId: 'srv-crm',
+            name: 'خدمات / توريدات العقد المحول من فرصة CRM',
+            qty: 1,
+            price: subtotal,
+            total: subtotal
+          }
+        ],
+        notes: `فاتورة صادرة تلقائياً بناءً على إغلاق فرصة CRM (#${data.leadId})`,
+        org_unit_id: data.org_unit_id,
+        cost_center_id: data.cost_center_id
+      });
+    }
+
+    return { customer, invoice };
+  }
+
+  /**
    * Issues a sales invoice with automatic sequence numbering, cost center, stock deduction, and double-entry posting
    */
   public static async createSalesInvoice(

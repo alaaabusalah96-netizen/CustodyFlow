@@ -9,6 +9,7 @@ import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
 import { LogsModule } from '../db/logs';
 import { dbSetDoc } from '../firebase';
+import { SalesBusinessEngine } from '../lib/enterprise/sales_engine';
 
 interface CRMProps {
   language: 'ar' | 'en';
@@ -208,7 +209,7 @@ export default function CRM({ language, theme }: CRMProps) {
   };
 
   // Change Lead pipeline Stage
-  const changeLeadStage = (leadId: string, nextStatus: Lead['status']) => {
+  const changeLeadStage = async (leadId: string, nextStatus: Lead['status']) => {
     const allLeads = StorageEngine.getStored<Lead[]>('leads', []);
     const updated = allLeads.map(l => {
       if (l.id === leadId) {
@@ -227,9 +228,35 @@ export default function CRM({ language, theme }: CRMProps) {
         isRtl ? 'تحديث حالة العميل CRM' : 'Update CRM Lead Status',
         `Moved prospect ${leadObj.name} to stage ${nextStatus}`
       );
+
+      // Auto-convert Lead to Customer & Sales Invoice on Closed Won
+      if (nextStatus === 'WON') {
+        try {
+          await SalesBusinessEngine.convertLeadToCustomerAndInvoice(
+            companyId,
+            activeUser?.id || 'system',
+            {
+              leadId: leadObj.id,
+              leadName: leadObj.name,
+              phone: leadObj.phone,
+              email: leadObj.email,
+              dealValue: leadObj.dealValue
+            }
+          );
+          showToast(
+            'success',
+            isRtl
+              ? 'تم الفوز بالصفقة وتحويل الفرصة إلى عميل دائم وإصدار فاتورة المبيعات القيد المحاسبي!'
+              : 'Deal won! Lead converted to permanent customer & sales invoice issued.'
+          );
+        } catch (err) {
+          console.error('Error converting lead to customer:', err);
+        }
+      } else {
+        showToast('success', isRtl ? 'تم ترقية صفقة العميل بالمرحلة' : 'Lead stage updated successfully');
+      }
     }
 
-    showToast('success', isRtl ? 'تم ترقية صفقة العميل بالمرحلة' : 'Lead stage updated successfully');
     loadLeads();
   };
 

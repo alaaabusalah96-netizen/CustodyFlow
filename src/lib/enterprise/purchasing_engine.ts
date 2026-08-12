@@ -264,7 +264,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
     }
 
     const pos = PurchasingBusinessEngine.getPurchaseOrders(companyId).filter(po => po.vendorId === vendorId && po.status === 'RECEIVED');
-    const cashVouchers = StorageEngine.getStored<CashVoucher[]>('cash_vouchers', []).filter(v => 
+    const cashVouchers = StorageEngine.getStored<CashVoucher[]>('CashVouchers', []).filter(v => 
       v.company_id === companyId && (
         v.recipient_name === vendor.nameAr ||
         v.recipient_name === vendor.nameEn ||

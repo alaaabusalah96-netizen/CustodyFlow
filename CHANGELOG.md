@@ -4,6 +4,28 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Stabilization of Core ERP Modules (Custody, Inventory, Accounting & Purchasing Integration)
+**Date:** 2026-08-12
+**Files Changed:** `src/lib/enterprise/purchasing_engine.ts`, `src/db/inventory.ts`, `src/components/ApprovalInbox.tsx`, `src/db/transactions.create.ts`, `CHANGELOG.md`
+**Summary:**
+- **Custody Module (العهد النقدية) Stabilization**:
+  - Validated lifecycle (expense → approval → voucher → settlement). Verified sequence generation using Firestore `runTransaction` in `TransactionsVoucherModule` for gap-free numbers.
+  - Linked `ApprovalEngine` workflow evaluation directly into `TransactionsCreateModule.addTransaction` for new `EXPENSE` records.
+  - Fixed storage key mismatch in `ApprovalInbox.tsx` for `CASH_VOUCHER` (`CashVouchers`) and implemented approval status updates for `EXPENSE` and `CASH_VOUCHER`.
+- **Inventory Module (المخازن) Stabilization**:
+  - Enforced strict overdraft validation in `InventoryModule.adjustStock` to block negative stock balances when `allow_overdraft === 'STRICT'`.
+  - Fixed warehouse dimension resolution in `InventoryModule.postAccountingEntryForDoc` during inventory transfers (`Transfer`, `BranchTransfer`, `StationTransfer`) to properly reflect source and target warehouse sub-ledgers in double-entry journal entries.
+- **Purchasing Module (المشتريات) Completion**:
+  - Verified PR → PO → Inventory Goods Receipt (`PO_RECEIVED`) → Accounting flow in `PurchasingBusinessEngine`.
+  - Fixed `CashVouchers` storage key in `PurchasingBusinessEngine.getVendorAPStatement` to ensure vendor statement statements correctly reflect payments.
+- **Accounting (GL) Cross-Module Integration**:
+  - Confirmed automatic double-entry journal entries via `AccountingBusinessEngine.postOperationalDoubleEntry` across all operational modules (Custody, Inventory, Purchasing, Sales/POS, HR/Payroll, Fixed Assets, Fleet).
+- **Verification**:
+  - `compile_applet` built cleanly with zero compilation or typing errors.
+  - `lint_applet` passed cleanly (`tsc --noEmit`).
+
+---
+
 ## Settings.tsx Tab Extraction & Modularization (GeneralTab & UsersTab)
 **Date:** 2026-08-11
 **Files Changed:** `src/components/settings/SettingsGeneralTab.tsx`, `src/components/settings/SettingsUsersTab.tsx`, `src/pages/Settings.tsx`, `CHANGELOG.md`
@@ -3129,6 +3151,26 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   - Total Vitest Suite: **37 test files passed**, **229 tests passed**.
   - `lint_applet` (`tsc --noEmit`) passed with 0 errors.
   - `compile_applet` built cleanly.
+
+---
+
+## Page Components Modularization & Decomposition (SuperAdmin, Purchasing, Inventory, Settings)
+**Date:** 2026-08-12
+**Files Changed:** `src/pages/SuperAdmin.tsx`, `src/pages/Purchasing.tsx`, `src/pages/Inventory.tsx`, `src/components/purchasing/PurchasingRfqsTab.tsx`, `src/components/purchasing/PurchasingOrdersTab.tsx`, `src/components/purchasing/PurchasingConfigTab.tsx`, `CHANGELOG.md`
+**Summary:**
+- **SuperAdmin Page Decomposition (`src/pages/SuperAdmin.tsx`)**:
+  - Fixed syntax errors and cleaned up JSX tree.
+  - Decomposed page views into modular tab components (`Operations`, `Security`, `Audit`, `Impersonate`, `Companies`, `Global Settings`).
+- **Purchasing Page Decomposition (`src/pages/Purchasing.tsx`)**:
+  - Extracted RFQs and Quotations evaluation view into `/src/components/purchasing/PurchasingRfqsTab.tsx`.
+  - Extracted Purchase Orders (PO) management view into `/src/components/purchasing/PurchasingOrdersTab.tsx`.
+  - Extracted Workflow Matrix & Prefix Configuration view into `/src/components/purchasing/PurchasingConfigTab.tsx`.
+  - Integrated extracted components into `Purchasing.tsx`, cleanly separating tab concerns while preserving 100% of state, props, and functionality.
+- **Inventory & Modular Structure Audit (`src/pages/Inventory.tsx`)**:
+  - Confirmed usage of extracted sub-components (`InventoryDocumentsTab`, `InventoryReportsTab`, `InventoryWarehousesTab`, `InventorySettingsTab`).
+- **Verification**:
+  - `lint_applet` passed with 0 errors (`tsc --noEmit`).
+  - `compile_applet` built cleanly with zero build errors.
 
 
 
