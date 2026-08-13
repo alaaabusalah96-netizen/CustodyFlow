@@ -4,6 +4,33 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fleet Trip Entity Definition & Trip Creation Screen (Steps A & B)
+**Date:** 2026-08-13
+**Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/pages/FleetManagement.tsx`, `src/fleet_trips.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Step A - Trip Entity Definition (`src/types/fleet.ts`)**:
+  - Defined `TripStatus` type union containing `'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'DISPATCHED' | 'COMPLETED' | 'REJECTED' | 'CANCELLED'`.
+  - Defined `Trip` interface containing `id`, `company_id`, `org_unit_id?`, `vehicle_id`, `driver_id`, `from_org_unit_id`, `to_org_unit_id`, `tripType`, `status`, `scheduledAt`, `dispatchedAt?`, `completedAt?`, `notes?`, `createdBy`, `createdAt`.
+- **Engine Logic (`src/lib/enterprise/fleet_engine.ts`)**:
+  - Implemented `FleetBusinessEngine.getTripsByCompany(companyId)` for retrieving company-scoped trips from StorageEngine (`fleet_trips_items`).
+  - Implemented `FleetBusinessEngine.createTrip(...)` which defaults `status: 'DRAFT'` and persists records to StorageEngine and Firestore (`dbSetDoc`).
+- **Step B - Trip Creation Screen & Tab (`src/pages/FleetManagement.tsx`)**:
+  - Added new "المشاوير" (Trips) tab alongside vehicles view in `FleetManagement.tsx`.
+  - Implemented trip creation form/modal with vehicle selection (from fleet vehicles), driver selection (from active company users), origin location (`from_org_unit_id`), destination location (`to_org_unit_id`), trip type (free text), scheduled date/time, and optional notes.
+  - Added trip table displaying recorded trips with `DRAFT` status badges.
+  - Enforced permission check `create_trip` (or `manage_fleet` / admin role) before enabling trip creation.
+- **Unit Testing (`src/fleet_trips.test.ts`)**:
+  - Added Vitest unit test suite validating:
+    1. Default `status: 'DRAFT'` upon trip creation.
+    2. Permission check evaluation (`create_trip` / `manage_fleet`).
+    3. Multi-tenant `company_id` trip filtering.
+- **Verification**:
+  - `compile_applet` built cleanly with zero compilation or typing errors.
+  - `vitest run src/fleet_trips.test.ts` passed 3/3 tests (100% green).
+
+---
+
+
 ## Firestore Security Rules Deployment for Trips Collection (`match /trips/{id}`)
 **Date:** 2026-08-13
 **Files Changed:** `/firestore.rules`, `src/fleet_trips_rules.test.ts`, `CHANGELOG.md`

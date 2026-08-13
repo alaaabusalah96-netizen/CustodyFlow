@@ -4,9 +4,59 @@ import { DocumentNumberEngine } from '../../db/documentNumberEngine';
 import { CostCenterEngine } from '../../db/costCenterEngine';
 import { OrganizationEngine } from '../../db/organizationEngine';
 import { AccountingBusinessEngine } from './accounting_engine';
-import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus } from '../../types/fleet';
+import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus, Trip, TripStatus } from '../../types/fleet';
 
 export class FleetBusinessEngine {
+  /**
+   * Retrieves trips filtered by company
+   */
+  public static getTripsByCompany(companyId: string): Trip[] {
+    const all = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    return all.filter(t => t.company_id === companyId);
+  }
+
+  /**
+   * Creates a new trip in DRAFT status
+   */
+  public static async createTrip(
+    companyId: string,
+    creatorId: string,
+    data: {
+      vehicle_id: string;
+      driver_id: string;
+      from_org_unit_id: string;
+      to_org_unit_id: string;
+      tripType: string;
+      scheduledAt: string;
+      notes?: string;
+      org_unit_id?: string;
+    }
+  ): Promise<Trip> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+
+    const newTrip: Trip = {
+      id: `trip-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      company_id: companyId,
+      org_unit_id: data.org_unit_id || data.from_org_unit_id || undefined,
+      vehicle_id: data.vehicle_id,
+      driver_id: data.driver_id,
+      from_org_unit_id: data.from_org_unit_id,
+      to_org_unit_id: data.to_org_unit_id,
+      tripType: data.tripType,
+      status: 'DRAFT',
+      scheduledAt: data.scheduledAt,
+      notes: data.notes || '',
+      createdBy: creatorId,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updated = [...allTrips, newTrip];
+    StorageEngine.setStored('fleet_trips_items', updated);
+    await dbSetDoc('fleet_trips_items', newTrip.id, newTrip);
+
+    return newTrip;
+  }
+
   /**
    * Retrieves vehicles filtered by company and optional organization unit subtree
    */

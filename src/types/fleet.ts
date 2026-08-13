@@ -48,3 +48,25 @@ export interface FuelLog {
   odometerReading: number;
   createdAt: string;
 }
+
+export type TripStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' 
+  | 'DISPATCHED' | 'COMPLETED' | 'REJECTED' | 'CANCELLED';
+
+export interface Trip {
+  id: string;
+  company_id: string;
+  org_unit_id?: string;
+  vehicle_id: string;
+  driver_id: string;
+  from_org_unit_id: string;
+  to_org_unit_id: string;
+  tripType: string;
+  status: TripStatus;
+  scheduledAt: string;
+  dispatchedAt?: string;
+  completedAt?: string;
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+}
+

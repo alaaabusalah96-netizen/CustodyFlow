@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Truck, Plus, Search, Filter, Wrench, Fuel, ShieldAlert,
-  Building2, Gauge, Calendar, User, FileText, CheckCircle2
+  Building2, Gauge, Calendar, User, FileText, CheckCircle2,
+  MapPin, Navigation
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { UsersModule } from '../db/users';
@@ -10,7 +11,7 @@ import { LogsModule } from '../db/logs';
 import { OrganizationEngine } from '../db/organizationEngine';
 import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
-import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus } from '../types/fleet';
+import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus, Trip } from '../types/fleet';
 
 interface FleetManagementProps {
   language: 'ar' | 'en';
@@ -22,10 +23,22 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   const companyId = CompaniesModule.getSelectedCompanyId() || 'comp-default';
   const activeUser = UsersModule.getActiveUser();
 
+  const canCreateTrip = Boolean(
+    activeUser?.permissions?.create_trip || 
+    activeUser?.permissions?.manage_fleet || 
+    activeUser?.role === 'SystemAdmin' ||
+    activeUser?.role === 'Admin'
+  );
+
+  // Tabs
+  const [activeTab, setActiveTab] = useState<'vehicles' | 'trips'>('vehicles');
+
   // State
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceLog[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLog[]>([]);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +48,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
 
   // Modals
   const [showAddVehicle, setShowAddVehicle] = useState(false);
+  const [showAddTrip, setShowAddTrip] = useState(false);
   const [showLogMaintenance, setShowLogMaintenance] = useState(false);
   const [showLogFuel, setShowLogFuel] = useState(false);
   const [selectedVehicleForLog, setSelectedVehicleForLog] = useState<Vehicle | null>(null);
@@ -50,6 +64,16 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     driverName: '',
     odometerReading: 0,
     fuelCapacity: 100
+  });
+
+  const [tripForm, setTripForm] = useState({
+    vehicle_id: '',
+    driver_id: '',
+    from_org_unit_id: '',
+    to_org_unit_id: '',
+    tripType: '',
+    scheduledAt: new Date().toISOString().slice(0, 16),
+    notes: ''
   });
 
   const [maintenanceForm, setMaintenanceForm] = useState({
@@ -96,6 +120,9 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     const units = OrganizationEngine.getUnits(companyId);
     setOrgUnits(units);
 
+    const loadedUsers = UsersModule.getUsers().filter(u => u.is_active);
+    setUsers(loadedUsers);
+
     const loadedVehicles = FleetBusinessEngine.getVehiclesByOrgUnit(companyId, selectedOrgUnitFilter);
 
     if (loadedVehicles.length === 0 && selectedOrgUnitFilter === 'ALL') {
@@ -140,6 +167,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
 
     setMaintenanceLogs(StorageEngine.getStored<MaintenanceLog[]>('fleet_maintenance_logs', []).filter(l => l.company_id === companyId));
     setFuelLogs(StorageEngine.getStored<FuelLog[]>('fleet_fuel_logs', []).filter(l => l.company_id === companyId));
+    setTrips(FleetBusinessEngine.getTripsByCompany(companyId));
   };
 
   useEffect(() => {
@@ -194,6 +222,48 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     } catch (err) {
       console.error(err);
       showToast('error', isRtl ? 'حدث خطأ أثناء تسجيل المركبة' : 'Error registering vehicle');
+    }
+  };
+
+  const handleCreateTrip = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canCreateTrip) {
+      showToast('error', isRtl ? 'غير مصرح لك بإنشاء مشوار' : 'Unauthorized to create trip');
+      return;
+    }
+
+    if (!tripForm.vehicle_id || !tripForm.driver_id || !tripForm.from_org_unit_id || !tripForm.to_org_unit_id || !tripForm.tripType) {
+      showToast('error', isRtl ? 'يرجى ملء جميع الحقول المطلوبة' : 'Please fill all required fields');
+      return;
+    }
+
+    try {
+      await FleetBusinessEngine.createTrip(companyId, activeUser?.id || 'system', {
+        vehicle_id: tripForm.vehicle_id,
+        driver_id: tripForm.driver_id,
+        from_org_unit_id: tripForm.from_org_unit_id,
+        to_org_unit_id: tripForm.to_org_unit_id,
+        tripType: tripForm.tripType,
+        scheduledAt: tripForm.scheduledAt,
+        notes: tripForm.notes,
+        org_unit_id: tripForm.from_org_unit_id
+      });
+
+      showToast('success', isRtl ? 'تم تسجيل المشوار بصفة مسودة (DRAFT) بنجاح' : 'Trip recorded in DRAFT status successfully');
+      setTripForm({
+        vehicle_id: '',
+        driver_id: '',
+        from_org_unit_id: '',
+        to_org_unit_id: '',
+        tripType: '',
+        scheduledAt: new Date().toISOString().slice(0, 16),
+        notes: ''
+      });
+      setShowAddTrip(false);
+      loadData();
+    } catch (err) {
+      console.error(err);
+      showToast('error', isRtl ? 'حدث خطأ أثناء تسجيل المشوار' : 'Error creating trip');
     }
   };
 
@@ -282,13 +352,13 @@ export default function FleetManagement({ language }: FleetManagementProps) {
               {isRtl ? 'إدارة الأسطول والحركة والنقل' : 'Fleet & Transportation Management'}
             </h1>
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-              {isRtl ? 'متابعة سيارات وشاحنات الشركة، المصاريف، الوقود، والصيانة المرتبطة بالهياكل التنظيمية' : 'Manage corporate fleet vehicles, maintenance logs, fuel expenses tied to org units.'}
+              {isRtl ? 'متابعة سيارات وشاحنات الشركة، المصاريف، الوقود، والمشاوير المرتبطة بالهياكل التنظيمية' : 'Manage corporate fleet vehicles, maintenance logs, fuel expenses, and trips.'}
             </p>
           </div>
         </div>
 
-        {activeUser?.permissions?.manage_fleet && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          {activeTab === 'vehicles' && activeUser?.permissions?.manage_fleet && (
             <button
               onClick={() => setShowAddVehicle(true)}
               className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm transition-all"
@@ -296,119 +366,242 @@ export default function FleetManagement({ language }: FleetManagementProps) {
               <Plus className="h-4 w-4" />
               <span>{isRtl ? 'إضافة مركبة للأسطول' : 'Register Vehicle'}</span>
             </button>
-          </div>
-        )}
-      </div>
+          )}
 
-      {/* Filter Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute right-3 rtl:left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={isRtl ? 'ابحث برقم اللوحة، الماركة، السائق، الكود...' : 'Search plate, make, driver, code...'}
-            className="w-full pl-9 pr-9 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5">
-            <Building2 className="h-3.5 w-3.5 text-slate-400" />
-            <select
-              value={selectedOrgUnitFilter}
-              onChange={(e) => setSelectedOrgUnitFilter(e.target.value)}
-              className="bg-transparent text-xs text-slate-800 dark:text-slate-100 focus:outline-none"
+          {canCreateTrip && (
+            <button
+              onClick={() => setShowAddTrip(true)}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm transition-all"
             >
-              <option value="ALL">{isRtl ? 'جميع الهياكل التنظيمية' : 'All Org Units'}</option>
-              {orgUnits.map((u) => (
-                <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-100 rounded-xl px-2.5 py-1.5 focus:outline-none"
-          >
-            <option value="ALL">{isRtl ? 'جميع أنواع المركبات' : 'All Vehicle Types'}</option>
-            <option value="TRUCK">{isRtl ? 'شاحنات نقل ثقيل' : 'Trucks'}</option>
-            <option value="PICKUP">{isRtl ? 'سيارات نقل خفيف (بيك آب)' : 'Pickups'}</option>
-            <option value="VAN">{isRtl ? 'فانات وتوزيع' : 'Vans'}</option>
-            <option value="CAR">{isRtl ? 'سيارات ملاكي وموظفين' : 'Passenger Cars'}</option>
-            <option value="HEAVY_EQUIPMENT">{isRtl ? 'معدات ثقيلة ورافعات' : 'Heavy Equipment'}</option>
-          </select>
+              <Plus className="h-4 w-4" />
+              <span>{isRtl ? 'إنشاء مشوار جديد' : 'Create Trip'}</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Vehicle Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredVehicles.map(v => (
-          <div key={v.id} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-3">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-md">
-                    {v.code}
-                  </span>
-                  <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-md">
-                    {v.type}
-                  </span>
-                </div>
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white mt-1">
-                  {v.make} {v.model} ({v.year})
-                </h3>
-                <p className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                  {v.plateNumber}
-                </p>
-                {v.org_unit_id && (
-                  <div className="mt-1 flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">
-                    <Building2 className="h-3 w-3" />
-                    <span>{orgUnits.find(u => u.id === v.org_unit_id)?.name || v.org_unit_id}</span>
-                  </div>
-                )}
-              </div>
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800">
+        <button
+          onClick={() => setActiveTab('vehicles')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'vehicles'
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <Truck className="h-4 w-4" />
+          <span>{isRtl ? 'المركبات والأسطول' : 'Vehicles'}</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('trips')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'trips'
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <Navigation className="h-4 w-4" />
+          <span>{isRtl ? 'المشاوير' : 'Trips'}</span>
+        </button>
+      </div>
+
+      {/* Vehicles Tab */}
+      {activeTab === 'vehicles' && (
+        <>
+          {/* Filter Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute right-3 rtl:left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={isRtl ? 'ابحث برقم اللوحة، الماركة، السائق، الكود...' : 'Search plate, make, driver, code...'}
+                className="w-full pl-9 pr-9 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none"
+              />
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
-              <div>
-                <span className="text-[10px] text-slate-400 block">{isRtl ? 'السائق المسؤول' : 'Assigned Driver'}</span>
-                <span className="font-bold text-slate-700 dark:text-slate-300">{v.driverName || '-'}</span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5">
+                <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                <select
+                  value={selectedOrgUnitFilter}
+                  onChange={(e) => setSelectedOrgUnitFilter(e.target.value)}
+                  className="bg-transparent text-xs text-slate-800 dark:text-slate-100 focus:outline-none"
+                >
+                  <option value="ALL">{isRtl ? 'جميع الهياكل التنظيمية' : 'All Org Units'}</option>
+                  {orgUnits.map((u) => (
+                    <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
+                  ))}
+                </select>
               </div>
-              <div>
-                <span className="text-[10px] text-slate-400 block">{isRtl ? 'عدّاد الكيلومترات' : 'Odometer (KM)'}</span>
-                <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{v.odometerReading.toLocaleString()} KM</span>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
-              <button
-                onClick={() => {
-                  setSelectedVehicleForLog(v);
-                  setShowLogFuel(true);
-                }}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 rounded-xl hover:bg-amber-100 transition-all"
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-100 rounded-xl px-2.5 py-1.5 focus:outline-none"
               >
-                <Fuel className="h-3.5 w-3.5" />
-                <span>{isRtl ? 'تموين وقود' : 'Fuel Refill'}</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setSelectedVehicleForLog(v);
-                  setShowLogMaintenance(true);
-                }}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-xl hover:bg-indigo-100 transition-all"
-              >
-                <Wrench className="h-3.5 w-3.5" />
-                <span>{isRtl ? 'تسجيل صيانة' : 'Maintenance'}</span>
-              </button>
+                <option value="ALL">{isRtl ? 'جميع أنواع المركبات' : 'All Vehicle Types'}</option>
+                <option value="TRUCK">{isRtl ? 'شاحنات نقل ثقيل' : 'Trucks'}</option>
+                <option value="PICKUP">{isRtl ? 'سيارات نقل خفيف (بيك آب)' : 'Pickups'}</option>
+                <option value="VAN">{isRtl ? 'فانات وتوزيع' : 'Vans'}</option>
+                <option value="CAR">{isRtl ? 'سيارات ملاكي وموظفين' : 'Passenger Cars'}</option>
+                <option value="HEAVY_EQUIPMENT">{isRtl ? 'معدات ثقيلة ورافعات' : 'Heavy Equipment'}</option>
+              </select>
             </div>
           </div>
-        ))}
-      </div>
+
+          {/* Vehicle Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredVehicles.map(v => (
+              <div key={v.id} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-md">
+                        {v.code}
+                      </span>
+                      <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-md">
+                        {v.type}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-extrabold text-slate-900 dark:text-white mt-1">
+                      {v.make} {v.model} ({v.year})
+                    </h3>
+                    <p className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      {v.plateNumber}
+                    </p>
+                    {v.org_unit_id && (
+                      <div className="mt-1 flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">
+                        <Building2 className="h-3 w-3" />
+                        <span>{orgUnits.find(u => u.id === v.org_unit_id)?.name || v.org_unit_id}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">{isRtl ? 'السائق المسؤول' : 'Assigned Driver'}</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">{v.driverName || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">{isRtl ? 'عدّاد الكيلومترات' : 'Odometer (KM)'}</span>
+                    <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{v.odometerReading.toLocaleString()} KM</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                  <button
+                    onClick={() => {
+                      setSelectedVehicleForLog(v);
+                      setShowLogFuel(true);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 rounded-xl hover:bg-amber-100 transition-all"
+                  >
+                    <Fuel className="h-3.5 w-3.5" />
+                    <span>{isRtl ? 'تموين وقود' : 'Fuel Refill'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setSelectedVehicleForLog(v);
+                      setShowLogMaintenance(true);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-xl hover:bg-indigo-100 transition-all"
+                  >
+                    <Wrench className="h-3.5 w-3.5" />
+                    <span>{isRtl ? 'تسجيل صيانة' : 'Maintenance'}</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Trips Tab */}
+      {activeTab === 'trips' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <h3 className="font-extrabold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+              <Navigation className="h-4 w-4 text-indigo-600" />
+              <span>{isRtl ? 'جدول المشاوير والرحلات' : 'Trips Schedule'}</span>
+            </h3>
+            <span className="text-xs text-slate-500 font-mono font-bold">
+              {trips.length} {isRtl ? 'مشوار مسجل' : 'trips'}
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-right rtl:text-right ltr:text-left">
+              <thead className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-100 dark:border-slate-800">
+                <tr>
+                  <th className="p-3">#</th>
+                  <th className="p-3">{isRtl ? 'المركبة' : 'Vehicle'}</th>
+                  <th className="p-3">{isRtl ? 'السائق' : 'Driver'}</th>
+                  <th className="p-3">{isRtl ? 'من (المصدر)' : 'From'}</th>
+                  <th className="p-3">{isRtl ? 'إلى (الوجهة)' : 'To'}</th>
+                  <th className="p-3">{isRtl ? 'نوع المشوار' : 'Trip Type'}</th>
+                  <th className="p-3">{isRtl ? 'الموعد المجدول' : 'Scheduled At'}</th>
+                  <th className="p-3">{isRtl ? 'الحالة' : 'Status'}</th>
+                  <th className="p-3">{isRtl ? 'ملاحظات' : 'Notes'}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {trips.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
+                      {isRtl ? 'لا توجد مشاوير مسجلة حالياً.' : 'No trips recorded yet.'}
+                    </td>
+                  </tr>
+                ) : (
+                  trips.map((t, idx) => {
+                    const vehicle = vehicles.find(v => v.id === t.vehicle_id);
+                    const driver = users.find(u => u.id === t.driver_id);
+                    const fromUnit = orgUnits.find(u => u.id === t.from_org_unit_id);
+                    const toUnit = orgUnits.find(u => u.id === t.to_org_unit_id);
+
+                    return (
+                      <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="p-3 font-mono font-bold text-slate-400">{idx + 1}</td>
+                        <td className="p-3 font-bold text-slate-800 dark:text-slate-200">
+                          {vehicle ? `${vehicle.plateNumber} (${vehicle.make})` : t.vehicle_id}
+                        </td>
+                        <td className="p-3 font-medium text-slate-700 dark:text-slate-300">
+                          {driver ? driver.full_name : t.driver_id}
+                        </td>
+                        <td className="p-3 text-slate-600 dark:text-slate-400 font-medium">
+                          {fromUnit ? `${fromUnit.code} - ${fromUnit.name}` : t.from_org_unit_id}
+                        </td>
+                        <td className="p-3 text-slate-600 dark:text-slate-400 font-medium">
+                          {toUnit ? `${toUnit.code} - ${toUnit.name}` : t.to_org_unit_id}
+                        </td>
+                        <td className="p-3 font-semibold text-indigo-600 dark:text-indigo-400">
+                          {t.tripType}
+                        </td>
+                        <td className="p-3 font-mono text-slate-600 dark:text-slate-400">
+                          {t.scheduledAt ? new Date(t.scheduledAt).toLocaleString(isRtl ? 'ar-EG' : 'en-US') : '-'}
+                        </td>
+                        <td className="p-3">
+                          <span className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
+                            {t.status === 'DRAFT' ? (isRtl ? 'مسودة (DRAFT)' : 'DRAFT') : t.status}
+                          </span>
+                        </td>
+                        <td className="p-3 text-slate-500 text-[11px]">
+                          {t.notes || '-'}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Add Vehicle Modal */}
       {showAddVehicle && (
@@ -521,6 +714,161 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                   className="flex-1 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm"
                 >
                   {isRtl ? 'حفظ وتأكيد' : 'Save Vehicle'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Trip Modal */}
+      {showAddTrip && canCreateTrip && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 w-full max-w-lg border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
+                <Navigation className="h-5 w-5 text-emerald-600" />
+                <span>{isRtl ? 'إنشاء مشوار جديد (مسودة)' : 'Create New Trip (DRAFT)'}</span>
+              </h3>
+              <button onClick={() => setShowAddTrip(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <form onSubmit={handleCreateTrip} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                    {isRtl ? 'اختر المركبة *' : 'Select Vehicle *'}
+                  </label>
+                  <select
+                    value={tripForm.vehicle_id}
+                    onChange={(e) => setTripForm({ ...tripForm, vehicle_id: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                  >
+                    <option value="">{isRtl ? '-- اختر مركبة --' : '-- Select Vehicle --'}</option>
+                    {vehicles.map(v => (
+                      <option key={v.id} value={v.id}>
+                        {v.plateNumber} ({v.make} {v.model})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                    {isRtl ? 'اختر السائق *' : 'Select Driver *'}
+                  </label>
+                  <select
+                    value={tripForm.driver_id}
+                    onChange={(e) => setTripForm({ ...tripForm, driver_id: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                  >
+                    <option value="">{isRtl ? '-- اختر سائق --' : '-- Select Driver --'}</option>
+                    {users.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.full_name} ({u.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                    {isRtl ? 'موقع المصدر (من) *' : 'Origin Location (From) *'}
+                  </label>
+                  <select
+                    value={tripForm.from_org_unit_id}
+                    onChange={(e) => setTripForm({ ...tripForm, from_org_unit_id: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                  >
+                    <option value="">{isRtl ? '-- موقع المصدر --' : '-- Origin Location --'}</option>
+                    {orgUnits.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.code} - {u.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                    {isRtl ? 'موقع الوجهة (إلى) *' : 'Destination Location (To) *'}
+                  </label>
+                  <select
+                    value={tripForm.to_org_unit_id}
+                    onChange={(e) => setTripForm({ ...tripForm, to_org_unit_id: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                  >
+                    <option value="">{isRtl ? '-- موقع الوجهة --' : '-- Destination Location --'}</option>
+                    {orgUnits.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.code} - {u.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                    {isRtl ? 'نوع المشوار *' : 'Trip Type *'}
+                  </label>
+                  <input
+                    type="text"
+                    value={tripForm.tripType}
+                    onChange={(e) => setTripForm({ ...tripForm, tripType: e.target.value })}
+                    required
+                    placeholder={isRtl ? 'مثال: نقل بضائع / صيانة خارجية / مهمة عمل' : 'e.g. Freight / Cargo / Patrol'}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                    {isRtl ? 'الموعد المجدول *' : 'Scheduled At *'}
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={tripForm.scheduledAt}
+                    onChange={(e) => setTripForm({ ...tripForm, scheduledAt: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                  {isRtl ? 'ملاحظات إضافية' : 'Additional Notes'}
+                </label>
+                <input
+                  type="text"
+                  value={tripForm.notes}
+                  onChange={(e) => setTripForm({ ...tripForm, notes: e.target.value })}
+                  placeholder={isRtl ? 'أي تفاصيل خاصة بالمشوار...' : 'Any additional notes...'}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddTrip(false)}
+                  className="flex-1 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm"
+                >
+                  {isRtl ? 'حفظ بصفة مسودة' : 'Save Draft Trip'}
                 </button>
               </div>
             </form>
