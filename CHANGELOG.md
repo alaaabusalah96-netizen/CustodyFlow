@@ -4,6 +4,22 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Firestore Security Rules Deployment for Trips Collection (`match /trips/{id}`)
+**Date:** 2026-08-13
+**Files Changed:** `/firestore.rules`, `src/fleet_trips_rules.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Firestore Security Rules (`/firestore.rules`)**:
+  - Added `match /trips/{id}` rule block under Logistics section directly after `match /vehicles/{id}` and `match /drivers/{id}`.
+  - Implemented multi-tenant company isolation (`isSameCompanyRead` and `isSameCompanyWrite`).
+  - Configured `allow create` and `allow update` for `Admin`, `SystemAdmin`, `Manager`, `Driver`, or users with explicit `create_trip`, `approve_trip`, `dispatch_trip`, or `manage_fleet` permissions in their user profile.
+  - Configured `allow delete` for `Admin`, `SystemAdmin`, or users with `manage_fleet` permission.
+  - Deployed updated rules to project `custodyflow` using `deploy_firebase`.
+- **Testing & Verification (`src/fleet_trips_rules.test.ts`)**:
+  - Created Vitest test suite validating permissions enrichment and trip payload company-id structure.
+  - Executed `deploy_firebase`, `lint_applet` (0 errors), `compile_applet` (0 errors), and `vitest run` (100% green).
+
+---
+
 ## Fleet Permissions Extension & Page Protection
 **Date:** 2026-08-13
 **Files Changed:** `src/types.ts`, `src/db/users.ts`, `src/pages/FleetManagement.tsx`, `src/fleet_permissions.test.ts`, `CHANGELOG.md`
