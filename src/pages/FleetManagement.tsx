@@ -76,6 +76,22 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     setTimeout(() => setToast(null), 3000);
   };
 
+  if (!activeUser?.permissions?.manage_fleet) {
+    return (
+      <div className="p-8 text-center max-w-md mx-auto my-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <ShieldAlert className="h-12 w-12 text-rose-500 mx-auto mb-3" />
+        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-2">
+          {isRtl ? 'غير مصرح لك بالوصول لهذه الصفحة' : 'Unauthorized Access'}
+        </h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {isRtl
+            ? 'عذراً، لا تمتلك صلاحية إدارة الأسطول والمركبات (manage_fleet) للوصول لهذه الشاشة.'
+            : 'Sorry, you do not have permission to access Fleet Management.'}
+        </p>
+      </div>
+    );
+  }
+
   const loadData = () => {
     const units = OrganizationEngine.getUnits(companyId);
     setOrgUnits(units);
@@ -271,15 +287,17 @@ export default function FleetManagement({ language }: FleetManagementProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowAddVehicle(true)}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm transition-all"
-          >
-            <Plus className="h-4 w-4" />
-            <span>{isRtl ? 'إضافة مركبة للأسطول' : 'Register Vehicle'}</span>
-          </button>
-        </div>
+        {activeUser?.permissions?.manage_fleet && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAddVehicle(true)}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm transition-all"
+            >
+              <Plus className="h-4 w-4" />
+              <span>{isRtl ? 'إضافة مركبة للأسطول' : 'Register Vehicle'}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filter Bar */}

@@ -4,6 +4,26 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fleet Permissions Extension & Page Protection
+**Date:** 2026-08-13
+**Files Changed:** `src/types.ts`, `src/db/users.ts`, `src/pages/FleetManagement.tsx`, `src/fleet_permissions.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **User Permissions Model Extension (`src/types.ts`)**:
+  - Added 4 optional boolean fields to `UserPermissions` interface: `manage_fleet?: boolean`, `create_trip?: boolean`, `approve_trip?: boolean`, `dispatch_trip?: boolean`.
+- **Enrichment Logic (`src/db/users.ts`)**:
+  - Updated `UsersModule.enrichUserPermissions` with default fallbacks: `manage_fleet` defaults to `isSystemAdmin`, while `create_trip`, `approve_trip`, and `dispatch_trip` default to `false`. Explicit `currentPerms` override defaults.
+- **Page Access Control (`src/pages/FleetManagement.tsx`)**:
+  - Added strict permission check at the start of `FleetManagement` component for `manage_fleet`. Unpermitted users see "غير مصرح لك بالوصول لهذه الصفحة".
+  - Protected the "Register Vehicle" button with `manage_fleet` permission check.
+- **Unit Testing (`src/fleet_permissions.test.ts`)**:
+  - Created Vitest tests confirming `SystemAdmin` gets `manage_fleet: true`, `StationAdmin` gets `manage_fleet: false` & `create_trip: false` by default, and explicit `currentPerms` (`create_trip: true`) are preserved.
+- **Verification**:
+  - `lint_applet` (`tsc --noEmit`) completed with 0 errors.
+  - `compile_applet` built cleanly.
+  - Vitest test suite passed 100% green.
+
+---
+
 ## Fleet Module & Permissions Registration
 **Date:** 2026-08-13
 **Files Changed:** `src/types.ts`, `src/db/modules.ts`, `src/db/defaults.ts`, `src/fleet_module_registration.test.ts`, `CHANGELOG.md`

@@ -42,6 +42,10 @@ export interface UserPermissions {
   manage_settings?: boolean;
   // Backward compatibility
   settle_voucher?: boolean;
+  manage_fleet?: boolean;
+  create_trip?: boolean;
+  approve_trip?: boolean;
+  dispatch_trip?: boolean;
 }
 
 export interface AppUser {

@@ -62,6 +62,10 @@ export class UsersModule {
       manage_roles: currentPerms?.manage_roles ?? (isSystemAdmin || isAdmin),
       manage_settings: currentPerms?.manage_settings ?? (isSystemAdmin || isAdmin),
       settle_voucher: (isAdmin || isSystemAdmin) ? false : (currentPerms?.settle_voucher ?? (isSystemAdmin || isStation)),
+      manage_fleet: currentPerms?.manage_fleet ?? isSystemAdmin,
+      create_trip: currentPerms?.create_trip ?? false,
+      approve_trip: currentPerms?.approve_trip ?? false,
+      dispatch_trip: currentPerms?.dispatch_trip ?? false,
     };
   }
 
