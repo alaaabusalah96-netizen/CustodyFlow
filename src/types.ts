@@ -536,7 +536,7 @@ export interface SystemPermission {
   name_ar: string;
   description_en: string;
   description_ar: string;
-  category: 'expenses' | 'vouchers' | 'custody' | 'admin' | 'reports';
+  category: 'expenses' | 'vouchers' | 'custody' | 'admin' | 'reports' | 'fleet';
 }
 
 export interface SystemRole {

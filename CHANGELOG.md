@@ -4,6 +4,24 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fleet Module & Permissions Registration
+**Date:** 2026-08-13
+**Files Changed:** `src/types.ts`, `src/db/modules.ts`, `src/db/defaults.ts`, `src/fleet_module_registration.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Module Registration (`src/db/modules.ts`)**:
+  - Registered `fleet` module in `ERP_MODULES_REGISTRY` with `id: 'fleet'`, `name_ar: 'إدارة الأسطول والمشاوير'`, `name_en: 'Fleet & Trip Management'`, and `screens: ['fleet']`.
+- **System Permissions (`src/db/defaults.ts` & `src/types.ts`)**:
+  - Expanded `SystemPermission` category union type in `src/types.ts` to include `'fleet'`.
+  - Added 4 new granular permissions to `DEFAULT_PERMISSIONS` with `category: 'fleet'`: `manage_fleet` (إدارة الأسطول والمركبات), `create_trip` (إنشاء مشوار جديد), `approve_trip` (اعتماد مشوار), and `dispatch_trip` (تحريك/تنفيذ مشوار).
+- **Unit Testing & Isolation (`src/fleet_module_registration.test.ts`)**:
+  - Added Vitest test suite verifying `fleet` module attributes, all 4 permissions and their Arabic titles, and preservation of pre-existing modules and permissions without accidental deletion.
+- **Verification**:
+  - `lint_applet` passed cleanly (`tsc --noEmit`).
+  - `compile_applet` built cleanly with zero compilation errors.
+  - Vitest test suite passed 100% green.
+
+---
+
 ## Stabilization of Core ERP Modules (Custody, Inventory, Accounting & Purchasing Integration)
 **Date:** 2026-08-12
 **Files Changed:** `src/lib/enterprise/purchasing_engine.ts`, `src/db/inventory.ts`, `src/components/ApprovalInbox.tsx`, `src/db/transactions.create.ts`, `CHANGELOG.md`

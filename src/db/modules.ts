@@ -125,6 +125,14 @@ export const ERP_MODULES_REGISTRY: ERPModule[] = [
     description_en: 'Dishes menu, recipe cost calculations (BOM), POS order management, dine-in tables, and auto inventory stock deduction.',
     description_ar: 'إدارة قائمة الأطعمة وتكاليف الوجبات (BOM)، نقطة البيع للمطاعم، إشغال الطاولات، والتخصيم التلقائي للمخزون.',
     screens: ['restaurant-menu', 'restaurant-orders']
+  },
+  {
+    id: 'fleet',
+    name_en: 'Fleet & Trip Management',
+    name_ar: 'إدارة الأسطول والمشاوير',
+    description_en: 'Fleet vehicles catalog, driver assignments, trip logs, fuel & maintenance expenses tracking.',
+    description_ar: 'إدارة أسطول المركبات، تعيين السائقين، سجل المشاوير، وتتبع تكاليف الوقود والصيانة.',
+    screens: ['fleet']
   }
 ];
 

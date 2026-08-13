@@ -566,7 +566,11 @@ export const DEFAULT_PERMISSIONS: SystemPermission[] = [
   { id: 'manage_regions', name_en: 'Manage Regions', name_ar: 'إدارة الأقاليم والمناطق', description_en: 'Allows managing geographic region entities', description_ar: 'يسمح بإدارة أقاليم ومناطق العمل', category: 'admin' },
   { id: 'manage_stations', name_en: 'Manage Stations', name_ar: 'إدارة الفروع والمحطات', description_en: 'Allows managing station/branch entities', description_ar: 'يسمح بإدارة المحطات والفروع التابعة للشركة', category: 'admin' },
   { id: 'manage_roles', name_en: 'Manage Roles', name_ar: 'إدارة الأدوار والصلاحيات', description_en: 'Allows modifying roles and mapping custom permissions', description_ar: 'يسمح بتعديل الأدوار وربط الصلاحيات المخصصة لها', category: 'admin' },
-  { id: 'manage_settings', name_en: 'Manage General Settings', name_ar: 'إدارة الإعدادات العامة', description_en: 'Allows changing system configurations', description_ar: 'يسمح بتعديل الإعدادات العامة للنظام', category: 'admin' }
+  { id: 'manage_settings', name_en: 'Manage General Settings', name_ar: 'إدارة الإعدادات العامة', description_en: 'Allows changing system configurations', description_ar: 'يسمح بتعديل الإعدادات العامة للنظام', category: 'admin' },
+  { id: 'manage_fleet', name_en: 'Manage Fleet & Vehicles', name_ar: 'إدارة الأسطول والمركبات', description_en: 'Allows managing fleet vehicles and drivers', description_ar: 'يسمح بإدارة أسطول المركبات والسائقين', category: 'fleet' },
+  { id: 'create_trip', name_en: 'Create New Trip', name_ar: 'إنشاء مشوار جديد', description_en: 'Allows creating new trip requests', description_ar: 'يسمح بإنشاء طلبات مشاوير جديدة', category: 'fleet' },
+  { id: 'approve_trip', name_en: 'Approve Trip', name_ar: 'اعتماد مشوار', description_en: 'Allows approving pending trip requests', description_ar: 'يسمح باعتماد طلبات المشاوير المعلقة', category: 'fleet' },
+  { id: 'dispatch_trip', name_en: 'Dispatch / Execute Trip', name_ar: 'تحريك/تنفيذ مشوار', description_en: 'Allows dispatching and executing trips', description_ar: 'يسمح بتحريك وتنفيذ المشاوير', category: 'fleet' }
 ];
 
 export const DEFAULT_ROLES: SystemRole[] = [
