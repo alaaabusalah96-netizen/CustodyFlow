@@ -49,6 +49,7 @@ export interface UserPermissions {
   reassign_vehicle?: boolean;
   execute_breakdown_decision?: boolean;
   create_emergency_trip?: boolean;
+  manage_vehicle_constraints?: boolean;
 }
 
 export interface AppUser {

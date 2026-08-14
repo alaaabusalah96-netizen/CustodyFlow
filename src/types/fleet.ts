@@ -167,3 +167,17 @@ export interface Trip {
   createdAt: string;
 }
 
+export type VehicleConstraintMode = 'BLOCK_SPECIFIC_LOCATIONS' | 'EXTERNAL_ONLY';
+
+export interface VehicleConstraintRule {
+  id: string;
+  company_id: string;
+  vehicle_id: string;
+  mode: VehicleConstraintMode;
+  blocked_org_unit_ids?: string[];
+  reason?: string;
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+}
+

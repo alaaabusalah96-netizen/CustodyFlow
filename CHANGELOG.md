@@ -4,6 +4,36 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Vehicle Access & Dispatch Constraints (BLOCK_SPECIFIC_LOCATIONS & EXTERNAL_ONLY)
+**Date:** 2026-08-14
+**Files Changed:** `src/types/fleet.ts`, `src/types.ts`, `src/db/defaults.ts`, `src/db/users.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/pages/FleetManagement.tsx`, `src/fleet_module_registration.test.ts`, `src/fleet_vehicle_constraints.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Step A - Entity Definition (`src/types/fleet.ts`)**:
+  - Defined `VehicleConstraintMode` (`'BLOCK_SPECIFIC_LOCATIONS' | 'EXTERNAL_ONLY'`).
+  - Defined `VehicleConstraintRule` interface with properties: `id`, `company_id`, `vehicle_id`, `mode`, `blocked_org_unit_ids?`, `reason?`, `is_active`, `created_by`, `created_at`.
+- **Step B - New Granular Permission (`src/types.ts`, `src/db/defaults.ts`, `src/db/users.ts`)**:
+  - Added `manage_vehicle_constraints?: boolean` to `UserPermissions`.
+  - Registered permission in `DEFAULT_PERMISSIONS` under category `fleet` with Arabic label `"إدارة قيود وصول المركبات"`.
+  - Configured `UsersModule.enrichUserPermissions` to default `manage_vehicle_constraints` to `isSystemAdmin` (`false` for all other roles).
+- **Step C - Vehicle Constraints Management UI (`src/pages/FleetManagement.tsx`)**:
+  - Added "قيود المركبات" tab protected by `canManageConstraints` permission.
+  - Implemented interactive creation form with vehicle selection, dual visual mode selectors (`BLOCK_SPECIFIC_LOCATIONS` vs `EXTERNAL_ONLY`), searchable branch multi-select list with "Select All" / "Clear All" affordances, and optional reason input.
+  - Implemented constraints table displaying vehicle plate/model, mode badge, blocked branch badges, active status, enable/disable toggle button, and deletion action.
+- **Step D - Automatic Constraint Enforcement on Trip Creation (`src/lib/enterprise/fleet_engine.ts`)**:
+  - Inside `createTrip`, dynamically queries active `VehicleConstraintRule` records for the assigned `vehicle_id`.
+  - For `BLOCK_SPECIFIC_LOCATIONS`: checks every stop's `location.org_unit_id` against `rule.blocked_org_unit_ids`, immediately rejecting the trip if a match is found with an explanatory message including the vehicle plate and branch name.
+  - For `EXTERNAL_ONLY`: checks if any stop has an `org_unit_id`, immediately rejecting the trip if internal company branches/units are included.
+- **Step E - Unit Test Suite (`src/fleet_vehicle_constraints.test.ts`, `src/fleet_module_registration.test.ts`)**:
+  - Implemented 5 test cases in `src/fleet_vehicle_constraints.test.ts` validating:
+    1. Rejection of trips when vehicle has `BLOCK_SPECIFIC_LOCATIONS` matching a stop.
+    2. Rejection of trips when `EXTERNAL_ONLY` vehicle is routed to a registered branch.
+    3. Acceptance of trips for `EXTERNAL_ONLY` vehicle when all stops are external.
+    4. Verification that `manage_vehicle_constraints` defaults to `false` for non-SystemAdmin users and `true` for SystemAdmin.
+    5. Re-enabling trip creation after deactivating constraint rules.
+  - All tests passed 100% green.
+
+---
+
 ## Fleet GPS Fallback Elimination, Granular Permissions & Driver Strict ID Matching
 **Date:** 2026-08-14
 **Files Changed:** `src/types.ts`, `src/db/users.ts`, `src/db/defaults.ts`, `src/components/DriverPortalView.tsx`, `src/components/BreakdownReassignmentModal.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_gps_and_permissions_fix.test.ts`, `CHANGELOG.md`

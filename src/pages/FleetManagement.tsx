@@ -4,7 +4,8 @@ import {
   Building2, Gauge, Calendar, User, FileText, CheckCircle2,
   MapPin, Navigation, Trash2, Map, Play, ArrowRightLeft, Sparkles,
   Clock, CheckCircle, AlertTriangle, AlertCircle, Radio, Loader2,
-  Siren, PauseCircle, MessageSquare, Compass
+  Siren, PauseCircle, MessageSquare, Compass, Ban, Lock, CheckSquare, Square,
+  Power, ShieldCheck, X
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { UsersModule } from '../db/users';
@@ -18,7 +19,18 @@ import EmergencyTripModal from '../components/EmergencyTripModal';
 import TripChatModal from '../components/TripChatModal';
 import DriverPortalView from '../components/DriverPortalView';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
-import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus, Trip, TripStop, LearnedLocationHistoryEntry } from '../types/fleet';
+import { 
+  Vehicle, 
+  MaintenanceLog, 
+  FuelLog, 
+  VehicleType, 
+  VehicleStatus, 
+  Trip, 
+  TripStop, 
+  LearnedLocationHistoryEntry,
+  VehicleConstraintMode,
+  VehicleConstraintRule
+} from '../types/fleet';
 
 interface FleetManagementProps {
   language: 'ar' | 'en';
@@ -46,15 +58,36 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     activeUser?.role === 'Admin'
   );
 
+  const canManageConstraints = Boolean(
+    activeUser?.permissions?.manage_vehicle_constraints || 
+    activeUser?.permissions?.manage_fleet || 
+    activeUser?.role === 'SystemAdmin'
+  );
+
   // Tabs
-  const [activeTab, setActiveTab] = useState<'vehicles' | 'trips' | 'driver_portal'>('trips');
+  const [activeTab, setActiveTab] = useState<'vehicles' | 'trips' | 'driver_portal' | 'vehicle_constraints'>('trips');
 
   // State
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceLog[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLog[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [constraints, setConstraints] = useState<VehicleConstraintRule[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+
+  // Constraint Form State
+  const [constraintForm, setConstraintForm] = useState<{
+    vehicle_id: string;
+    mode: VehicleConstraintMode;
+    blocked_org_unit_ids: string[];
+    reason: string;
+  }>({
+    vehicle_id: '',
+    mode: 'BLOCK_SPECIFIC_LOCATIONS',
+    blocked_org_unit_ids: [],
+    reason: ''
+  });
+  const [orgUnitConstraintSearch, setOrgUnitConstraintSearch] = useState('');
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -204,6 +237,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     setMaintenanceLogs(StorageEngine.getStored<MaintenanceLog[]>('fleet_maintenance_logs', []).filter(l => l.company_id === companyId));
     setFuelLogs(StorageEngine.getStored<FuelLog[]>('fleet_fuel_logs', []).filter(l => l.company_id === companyId));
     setTrips(FleetBusinessEngine.getTripsByCompany(companyId));
+    setConstraints(FleetBusinessEngine.getVehicleConstraints(companyId));
   };
 
   useEffect(() => {
@@ -212,6 +246,80 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     window.addEventListener('custody_db_updated', onUpdate);
     return () => window.removeEventListener('custody_db_updated', onUpdate);
   }, [companyId, selectedOrgUnitFilter]);
+
+  // Constraint Handlers
+  const handleSaveConstraint = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!constraintForm.vehicle_id) {
+      showToast('error', isRtl ? 'يرجى اختيار المركبة المراد تطبيق القيد عليها' : 'Please select a vehicle');
+      return;
+    }
+    if (constraintForm.mode === 'BLOCK_SPECIFIC_LOCATIONS' && constraintForm.blocked_org_unit_ids.length === 0) {
+      showToast('error', isRtl ? 'يرجى تحديد موقع/فرع واحد على الأقل لحظره' : 'Please select at least one location to block');
+      return;
+    }
+
+    try {
+      await FleetBusinessEngine.saveVehicleConstraint(companyId, activeUser?.id || 'system', {
+        vehicle_id: constraintForm.vehicle_id,
+        mode: constraintForm.mode,
+        blocked_org_unit_ids: constraintForm.blocked_org_unit_ids,
+        reason: constraintForm.reason,
+        is_active: true
+      });
+
+      LogsModule.addLog(
+        activeUser?.id || 'system',
+        activeUser?.full_name || 'System',
+        isRtl ? 'حفظ قيد وصول مركبة' : 'Save Vehicle Constraint',
+        `Saved constraint for vehicle ${constraintForm.vehicle_id} in mode ${constraintForm.mode}`
+      );
+
+      showToast('success', isRtl ? 'تم حفظ وتفعيل قيد وصول المركبة بنجاح' : 'Vehicle constraint saved and active');
+      setConstraintForm({
+        vehicle_id: '',
+        mode: 'BLOCK_SPECIFIC_LOCATIONS',
+        blocked_org_unit_ids: [],
+        reason: ''
+      });
+      setOrgUnitConstraintSearch('');
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      showToast('error', err.message || (isRtl ? 'تعذر حفظ القيد' : 'Failed to save constraint'));
+    }
+  };
+
+  const handleToggleConstraint = async (constraintId: string, currentActive: boolean) => {
+    try {
+      await FleetBusinessEngine.toggleVehicleConstraint(companyId, constraintId, !currentActive);
+      LogsModule.addLog(
+        activeUser?.id || 'system',
+        activeUser?.full_name || 'System',
+        isRtl ? 'تعديل حالة قيد مركبة' : 'Toggle Vehicle Constraint',
+        `Toggled constraint ${constraintId} to ${!currentActive ? 'ACTIVE' : 'INACTIVE'}`
+      );
+      showToast('success', !currentActive 
+        ? (isRtl ? 'تم تفعيل القيد بنجاح' : 'Constraint activated')
+        : (isRtl ? 'تم إلغاء تفعيل القيد بنجاح' : 'Constraint deactivated')
+      );
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      showToast('error', err.message || (isRtl ? 'تعذر تعديل حالة القيد' : 'Failed to toggle constraint'));
+    }
+  };
+
+  const handleDeleteConstraint = async (constraintId: string) => {
+    try {
+      await FleetBusinessEngine.deleteVehicleConstraint(companyId, constraintId);
+      showToast('success', isRtl ? 'تم حذف القيد' : 'Constraint deleted');
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      showToast('error', err.message || (isRtl ? 'تعذر حذف القيد' : 'Failed to delete constraint'));
+    }
+  };
 
   // Handlers
   const handleAddVehicle = async (e: React.FormEvent) => {
@@ -555,9 +663,9 @@ export default function FleetManagement({ language }: FleetManagementProps) {
       });
       setShowAddTrip(false);
       loadData();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showToast('error', isRtl ? 'حدث خطأ أثناء تسجيل المشوار' : 'Error creating trip');
+      showToast('error', err?.message || (isRtl ? 'حدث خطأ أثناء تسجيل المشوار' : 'Error creating trip'));
     }
   };
 
@@ -721,6 +829,25 @@ export default function FleetManagement({ language }: FleetManagementProps) {
           <Compass className="h-4 w-4 text-emerald-600" />
           <span>{isRtl ? 'بوابة السائق الميدانية (الموبايل)' : 'Driver Field Portal'}</span>
         </button>
+
+        {canManageConstraints && (
+          <button
+            onClick={() => setActiveTab('vehicle_constraints')}
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === 'vehicle_constraints'
+                ? 'border-rose-600 text-rose-600 dark:text-rose-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <Ban className="h-4 w-4 text-rose-600" />
+            <span>{isRtl ? 'قيود المركبات' : 'Vehicle Constraints'}</span>
+            {constraints.filter(c => c.is_active).length > 0 && (
+              <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 rounded-full">
+                {constraints.filter(c => c.is_active).length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Vehicles Tab */}
@@ -1182,6 +1309,378 @@ export default function FleetManagement({ language }: FleetManagementProps) {
           }}
           showToast={(type, msg) => showToast(type === 'error' ? 'error' : 'success', msg)}
         />
+      )}
+
+      {/* Vehicle Constraints Tab */}
+      {activeTab === 'vehicle_constraints' && (
+        <div className="space-y-6">
+          {/* Header Banner */}
+          <div className="bg-gradient-to-r from-rose-900/10 via-amber-900/10 to-indigo-900/10 dark:from-rose-950/40 dark:via-amber-950/40 dark:to-indigo-950/40 border border-rose-200/60 dark:border-rose-900/40 rounded-2xl p-4.5 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-rose-600 text-white rounded-xl shadow-md">
+                <Ban className="h-6 w-6" />
+              </div>
+              <div>
+                <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>{isRtl ? 'قيود وصول وتوجيه المركبات' : 'Vehicle Access & Dispatch Constraints'}</span>
+                  <span className="px-2 py-0.5 text-[11px] font-bold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded-full">
+                    {constraints.filter(c => c.is_active).length} {isRtl ? 'قيد نشط' : 'Active'}
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {isRtl 
+                    ? 'منع مركبات محددة من الذهاب لفروع معينة أو قصرها على المشاوير الخارجية فقط. يتم فحص القيود آلياً عند إنشاء أي مشوار.'
+                    : 'Enforce routing rules per vehicle. Prohibit dispatching to specific branches or restrict to external trips only.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 bg-white/80 dark:bg-slate-900/80 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              <span>{isRtl ? 'حماية تلقائية فعالة عند جدولة المشاوير' : 'Active enforcement on trip creation'}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* New Constraint Form */}
+            <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="font-extrabold text-slate-900 dark:text-white text-sm flex items-center gap-2">
+                  <Plus className="h-4 w-4 text-rose-600" />
+                  <span>{isRtl ? 'إضافة قيد وصول جديد لمركبة' : 'Add Vehicle Access Constraint'}</span>
+                </h3>
+              </div>
+
+              <form onSubmit={handleSaveConstraint} className="space-y-4">
+                {/* 1. Vehicle Selection */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
+                    {isRtl ? '1. اختر المركبة *' : '1. Select Vehicle *'}
+                  </label>
+                  <select
+                    value={constraintForm.vehicle_id}
+                    onChange={(e) => setConstraintForm({ ...constraintForm, vehicle_id: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-semibold"
+                  >
+                    <option value="">{isRtl ? '-- اختر المركبة من الأسطول --' : '-- Select Fleet Vehicle --'}</option>
+                    {vehicles.map(v => (
+                      <option key={v.id} value={v.id}>
+                        {v.plateNumber} — {v.make} {v.model} {v.driverName ? `(سائق: ${v.driverName})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 2. Mode Selection */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
+                    {isRtl ? '2. نوع القيد والوضع *' : '2. Constraint Mode *'}
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setConstraintForm({ ...constraintForm, mode: 'BLOCK_SPECIFIC_LOCATIONS' })}
+                      className={`p-3 rounded-2xl border text-right transition-all flex flex-col gap-1 ${
+                        constraintForm.mode === 'BLOCK_SPECIFIC_LOCATIONS'
+                          ? 'border-rose-500 bg-rose-50/70 dark:bg-rose-950/50 text-rose-900 dark:text-rose-100 shadow-sm ring-2 ring-rose-400/20'
+                          : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/50 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="font-bold text-xs">{isRtl ? 'منع مواقع محددة' : 'Block Specific Locations'}</span>
+                        {constraintForm.mode === 'BLOCK_SPECIFIC_LOCATIONS' && <CheckCircle2 className="h-4 w-4 text-rose-600" />}
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {isRtl ? 'حظر توجيه المركبة إلى فروع ومواقع تختارها بنفسك' : 'Block dispatch to selected branches only'}
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setConstraintForm({ ...constraintForm, mode: 'EXTERNAL_ONLY' })}
+                      className={`p-3 rounded-2xl border text-right transition-all flex flex-col gap-1 ${
+                        constraintForm.mode === 'EXTERNAL_ONLY'
+                          ? 'border-amber-500 bg-amber-50/70 dark:bg-amber-950/50 text-amber-900 dark:text-amber-100 shadow-sm ring-2 ring-amber-400/20'
+                          : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/50 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="font-bold text-xs">{isRtl ? 'خارجي فقط' : 'External Trips Only'}</span>
+                        {constraintForm.mode === 'EXTERNAL_ONLY' && <CheckCircle2 className="h-4 w-4 text-amber-600" />}
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {isRtl ? 'منع كل الفروع والوحدات المسجلة (للمشاوير الخارجية فقط)' : 'Block all registered company branches'}
+                      </p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. Location Selector (if BLOCK_SPECIFIC_LOCATIONS) */}
+                {constraintForm.mode === 'BLOCK_SPECIFIC_LOCATIONS' && (
+                  <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                        <Building2 className="h-3.5 w-3.5 text-rose-600" />
+                        <span>{isRtl ? '3. اختر المواقع والفروع المحظورة *' : '3. Select Blocked Locations *'}</span>
+                      </label>
+                      <span className="text-[10px] font-mono font-bold text-rose-600 dark:text-rose-400">
+                        {constraintForm.blocked_org_unit_ids.length} {isRtl ? 'موقع محدد' : 'selected'}
+                      </span>
+                    </div>
+
+                    <div className="relative">
+                      <Search className="absolute right-2.5 rtl:right-2.5 rtl:left-auto ltr:left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={orgUnitConstraintSearch}
+                        onChange={(e) => setOrgUnitConstraintSearch(e.target.value)}
+                        placeholder={isRtl ? 'بحث في الفروع والمواقع...' : 'Search locations...'}
+                        className="w-full pl-3 pr-8 rtl:pr-8 rtl:pl-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allIds = orgUnits.map(u => u.id);
+                          setConstraintForm({ ...constraintForm, blocked_org_unit_ids: allIds });
+                        }}
+                        className="text-indigo-600 hover:underline font-bold"
+                      >
+                        {isRtl ? 'تحديد كل المواقع' : 'Select All'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConstraintForm({ ...constraintForm, blocked_org_unit_ids: [] })}
+                        className="text-slate-400 hover:text-slate-600"
+                      >
+                        {isRtl ? 'إلغاء التحديد' : 'Clear All'}
+                      </button>
+                    </div>
+
+                    {/* OrgUnit Multi-select Checkbox List */}
+                    <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+                      {orgUnits
+                        .filter(u => !orgUnitConstraintSearch || u.name.toLowerCase().includes(orgUnitConstraintSearch.toLowerCase()) || (u.code && u.code.toLowerCase().includes(orgUnitConstraintSearch.toLowerCase())))
+                        .map(unit => {
+                          const isChecked = constraintForm.blocked_org_unit_ids.includes(unit.id);
+                          return (
+                            <div
+                              key={unit.id}
+                              onClick={() => {
+                                if (isChecked) {
+                                  setConstraintForm({
+                                    ...constraintForm,
+                                    blocked_org_unit_ids: constraintForm.blocked_org_unit_ids.filter(id => id !== unit.id)
+                                  });
+                                } else {
+                                  setConstraintForm({
+                                    ...constraintForm,
+                                    blocked_org_unit_ids: [...constraintForm.blocked_org_unit_ids, unit.id]
+                                  });
+                                }
+                              }}
+                              className={`flex items-center justify-between p-2 rounded-xl text-xs cursor-pointer transition-all border ${
+                                isChecked
+                                  ? 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200'
+                                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                {isChecked ? (
+                                  <CheckSquare className="h-4 w-4 text-rose-600 shrink-0" />
+                                ) : (
+                                  <Square className="h-4 w-4 text-slate-400 shrink-0" />
+                                )}
+                                <span className="font-bold">{unit.name}</span>
+                              </div>
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                {unit.code || unit.type}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      {orgUnits.length === 0 && (
+                        <p className="text-center py-3 text-xs text-slate-400">
+                          {isRtl ? 'لا توجد وحدات تنظيمية مسجلة' : 'No org units found'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Reason */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
+                    {isRtl ? '4. سبب وضع القيد (اختياري)' : '4. Reason for constraint (Optional)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={constraintForm.reason}
+                    onChange={(e) => setConstraintForm({ ...constraintForm, reason: e.target.value })}
+                    placeholder={isRtl ? 'مثال: سيارة مخصصة لعملاء الإسكندرية / غير مجهزة لدخول المستودع الرئيسي' : 'e.g. Dedicated for external clients only'}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+                >
+                  <ShieldAlert className="h-4 w-4" />
+                  <span>{isRtl ? 'حفظ وتفعيل القيد على المركبة' : 'Save & Activate Constraint'}</span>
+                </button>
+              </form>
+            </div>
+
+            {/* Constraints Table / List */}
+            <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <Lock className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                  <h3 className="font-extrabold text-slate-900 dark:text-white text-sm">
+                    {isRtl ? 'سجل قيود وصول المركبات' : 'Active & Configured Constraints'}
+                  </h3>
+                </div>
+                <span className="text-xs font-bold text-slate-400">
+                  {constraints.length} {isRtl ? 'قيد مسجل' : 'records'}
+                </span>
+              </div>
+
+              {constraints.length === 0 ? (
+                <div className="text-center py-12 space-y-2">
+                  <Ban className="h-10 w-10 text-slate-300 dark:text-slate-700 mx-auto" />
+                  <p className="text-sm font-bold text-slate-500">
+                    {isRtl ? 'لا توجد أي قيود وصول مسجلة للمركبات حالياً' : 'No vehicle constraints configured yet'}
+                  </p>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    {isRtl ? 'استخدم النموذج الجانبي لتحديد فروع محظورة أو قصر مركبات معينة على المشاوير الخارجية.' : 'Use the form to enforce routing rules for vehicles.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-right rtl:text-right ltr:text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 font-bold">
+                        <th className="pb-3 px-2">{isRtl ? 'المركبة' : 'Vehicle'}</th>
+                        <th className="pb-3 px-2">{isRtl ? 'نوع القيد' : 'Mode'}</th>
+                        <th className="pb-3 px-2">{isRtl ? 'المواقع الممنوعة' : 'Blocked Targets'}</th>
+                        <th className="pb-3 px-2">{isRtl ? 'الحالة' : 'Status'}</th>
+                        <th className="pb-3 px-2 text-center">{isRtl ? 'الإجراءات' : 'Actions'}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                      {constraints.map((rule) => {
+                        const targetVehicle = vehicles.find(v => v.id === rule.vehicle_id);
+                        const blockedCount = rule.blocked_org_unit_ids?.length || 0;
+                        const blockedNames = (rule.blocked_org_unit_ids || [])
+                          .map(id => orgUnits.find(u => u.id === id)?.name || id)
+                          .slice(0, 3);
+
+                        return (
+                          <tr key={rule.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/40 transition-colors">
+                            <td className="py-3 px-2">
+                              <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                                <Truck className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                <span>{targetVehicle?.plateNumber || rule.vehicle_id}</span>
+                              </div>
+                              <div className="text-[11px] text-slate-400">
+                                {targetVehicle ? `${targetVehicle.make} ${targetVehicle.model}` : ''}
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-2">
+                              {rule.mode === 'EXTERNAL_ONLY' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                                  <span>{isRtl ? 'خارجي فقط' : 'External Only'}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300">
+                                  <span>{isRtl ? 'منع مواقع محددة' : 'Specific Locations'}</span>
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-2 max-w-[200px]">
+                              {rule.mode === 'EXTERNAL_ONLY' ? (
+                                <span className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold">
+                                  {isRtl ? 'جميع الفروع والوحدات المسجلة' : 'All registered branches'}
+                                </span>
+                              ) : (
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap gap-1">
+                                    {blockedNames.map((name, i) => (
+                                      <span key={i} className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-medium text-slate-700 dark:text-slate-300">
+                                        {name}
+                                      </span>
+                                    ))}
+                                    {blockedCount > 3 && (
+                                      <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 text-[10px] font-bold font-mono">
+                                        +{blockedCount - 3}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {rule.reason && (
+                                    <p className="text-[10px] text-slate-400 truncate" title={rule.reason}>
+                                      💬 {rule.reason}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-2">
+                              {rule.is_active ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                                  <CheckCircle className="h-3 w-3" />
+                                  <span>{isRtl ? 'نشط' : 'Active'}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                  <X className="h-3 w-3" />
+                                  <span>{isRtl ? 'معطّل' : 'Inactive'}</span>
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-2 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleConstraint(rule.id, rule.is_active)}
+                                  title={rule.is_active ? (isRtl ? 'إلغاء تفعيل القيد' : 'Deactivate') : (isRtl ? 'إعادة تفعيل القيد' : 'Activate')}
+                                  className={`p-1.5 rounded-lg text-xs font-bold flex items-center gap-1 border transition-all ${
+                                    rule.is_active
+                                      ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800'
+                                      : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800'
+                                  }`}
+                                >
+                                  <Power className="h-3.5 w-3.5" />
+                                  <span>{rule.is_active ? (isRtl ? 'إلغاء التفعيل' : 'Disable') : (isRtl ? 'تفعيل' : 'Enable')}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteConstraint(rule.id)}
+                                  title={isRtl ? 'حذف القيد' : 'Delete'}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 transition-all"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Add Vehicle Modal */}

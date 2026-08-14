@@ -69,6 +69,7 @@ export class UsersModule {
       reassign_vehicle: currentPerms?.reassign_vehicle ?? false,
       execute_breakdown_decision: currentPerms?.execute_breakdown_decision ?? false,
       create_emergency_trip: currentPerms?.create_emergency_trip ?? false,
+      manage_vehicle_constraints: currentPerms?.manage_vehicle_constraints ?? isSystemAdmin,
     };
   }
 

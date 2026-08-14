@@ -20,7 +20,9 @@ import {
   LearnedLocationHistoryEntry,
   BreakdownDecisionType,
   BreakdownDecisionLog,
-  TripChatMessage
+  TripChatMessage,
+  VehicleConstraintMode,
+  VehicleConstraintRule
 } from '../../types/fleet';
 
 export class FleetBusinessEngine {
@@ -62,6 +64,32 @@ export class FleetBusinessEngine {
   ): Promise<Trip> {
     if (!data.stops || data.stops.length < 2) {
       throw new Error('Trip must contain at least 2 stops');
+    }
+
+    // Validate stops against active vehicle access constraints
+    const activeConstraints = this.getActiveVehicleConstraints(companyId, data.vehicle_id);
+    if (activeConstraints.length > 0) {
+      const orgUnits = OrganizationEngine.getUnits(companyId);
+      for (const rule of activeConstraints) {
+        if (rule.mode === 'EXTERNAL_ONLY') {
+          for (const stop of data.stops) {
+            if (stop.location && stop.location.org_unit_id && stop.location.org_unit_id.trim() !== '') {
+              const matchedUnit = orgUnits.find(u => u.id === stop.location.org_unit_id);
+              const unitName = matchedUnit ? `${matchedUnit.name} (${matchedUnit.code})` : (stop.location.label || stop.location.org_unit_id);
+              throw new Error(`لا يمكن تعيين المركبة لهذا المشوار: المركبة محددة للمهام والمواقع الخارجية فقط وممنوعة من زيارة الفروع والوحدات المسجلة (${unitName})`);
+            }
+          }
+        } else if (rule.mode === 'BLOCK_SPECIFIC_LOCATIONS') {
+          const blockedIds = rule.blocked_org_unit_ids || [];
+          for (const stop of data.stops) {
+            if (stop.location && stop.location.org_unit_id && blockedIds.includes(stop.location.org_unit_id)) {
+              const matchedUnit = orgUnits.find(u => u.id === stop.location.org_unit_id);
+              const unitName = matchedUnit ? `${matchedUnit.name} (${matchedUnit.code})` : (stop.location.label || stop.location.org_unit_id);
+              throw new Error(`لا يمكن إنشاء المشوار: المركبة ممنوعة من التوجه إلى الموقع المحدد (${unitName}) بموجب قيود الوصول الجغرافي النشطة`);
+            }
+          }
+        }
+      }
     }
 
     const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
@@ -1336,5 +1364,116 @@ export class FleetBusinessEngine {
     await dbSetDoc('fleet_trip_chat_messages', newMsg.id, newMsg);
 
     return newMsg;
+  }
+
+  /**
+   * Retrieves all vehicle constraint rules for a company
+   */
+  public static getVehicleConstraints(companyId: string): VehicleConstraintRule[] {
+    const all = StorageEngine.getStored<VehicleConstraintRule[]>('fleet_vehicle_constraints', []);
+    return all.filter(c => c.company_id === companyId);
+  }
+
+  /**
+   * Retrieves active vehicle constraint rules for a company, optionally filtered by vehicleId
+   */
+  public static getActiveVehicleConstraints(companyId: string, vehicleId?: string): VehicleConstraintRule[] {
+    const all = this.getVehicleConstraints(companyId);
+    return all.filter(c => c.is_active && (!vehicleId || c.vehicle_id === vehicleId));
+  }
+
+  /**
+   * Creates or updates a vehicle access constraint rule
+   */
+  public static async saveVehicleConstraint(
+    companyId: string,
+    creatorId: string,
+    data: {
+      id?: string;
+      vehicle_id: string;
+      mode: VehicleConstraintMode;
+      blocked_org_unit_ids?: string[];
+      reason?: string;
+      is_active?: boolean;
+    }
+  ): Promise<VehicleConstraintRule> {
+    if (!data.vehicle_id) {
+      throw new Error('Vehicle ID is required');
+    }
+    if (data.mode === 'BLOCK_SPECIFIC_LOCATIONS' && (!data.blocked_org_unit_ids || data.blocked_org_unit_ids.length === 0)) {
+      throw new Error('Please select at least one location to block');
+    }
+
+    const all = StorageEngine.getStored<VehicleConstraintRule[]>('fleet_vehicle_constraints', []);
+    const now = new Date().toISOString();
+
+    if (data.id) {
+      const idx = all.findIndex(c => c.id === data.id && c.company_id === companyId);
+      if (idx !== -1) {
+        const updatedRule: VehicleConstraintRule = {
+          ...all[idx],
+          vehicle_id: data.vehicle_id,
+          mode: data.mode,
+          blocked_org_unit_ids: data.mode === 'BLOCK_SPECIFIC_LOCATIONS' ? (data.blocked_org_unit_ids || []) : [],
+          reason: data.reason || '',
+          is_active: data.is_active !== undefined ? data.is_active : all[idx].is_active,
+        };
+        all[idx] = updatedRule;
+        StorageEngine.setStored('fleet_vehicle_constraints', all);
+        await dbSetDoc('fleet_vehicle_constraints', updatedRule.id, updatedRule);
+        return updatedRule;
+      }
+    }
+
+    const newRule: VehicleConstraintRule = {
+      id: `vconst-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      company_id: companyId,
+      vehicle_id: data.vehicle_id,
+      mode: data.mode,
+      blocked_org_unit_ids: data.mode === 'BLOCK_SPECIFIC_LOCATIONS' ? (data.blocked_org_unit_ids || []) : [],
+      reason: data.reason || '',
+      is_active: data.is_active !== undefined ? data.is_active : true,
+      created_by: creatorId,
+      created_at: now
+    };
+
+    const updated = [...all, newRule];
+    StorageEngine.setStored('fleet_vehicle_constraints', updated);
+    await dbSetDoc('fleet_vehicle_constraints', newRule.id, newRule);
+    return newRule;
+  }
+
+  /**
+   * Toggles active status of a vehicle constraint rule
+   */
+  public static async toggleVehicleConstraint(
+    companyId: string,
+    constraintId: string,
+    isActive: boolean
+  ): Promise<VehicleConstraintRule> {
+    const all = StorageEngine.getStored<VehicleConstraintRule[]>('fleet_vehicle_constraints', []);
+    const idx = all.findIndex(c => c.id === constraintId && c.company_id === companyId);
+    if (idx === -1) {
+      throw new Error(`Vehicle constraint ${constraintId} not found`);
+    }
+
+    const updatedRule: VehicleConstraintRule = {
+      ...all[idx],
+      is_active: isActive
+    };
+
+    all[idx] = updatedRule;
+    StorageEngine.setStored('fleet_vehicle_constraints', all);
+    await dbSetDoc('fleet_vehicle_constraints', updatedRule.id, updatedRule);
+    return updatedRule;
+  }
+
+  /**
+   * Deletes a vehicle constraint rule
+   */
+  public static async deleteVehicleConstraint(companyId: string, constraintId: string): Promise<void> {
+    const all = StorageEngine.getStored<VehicleConstraintRule[]>('fleet_vehicle_constraints', []);
+    const filtered = all.filter(c => !(c.id === constraintId && c.company_id === companyId));
+    StorageEngine.setStored('fleet_vehicle_constraints', filtered);
   }
 }
