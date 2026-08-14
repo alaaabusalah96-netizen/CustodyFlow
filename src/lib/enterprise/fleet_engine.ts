@@ -4,7 +4,7 @@ import { DocumentNumberEngine } from '../../db/documentNumberEngine';
 import { CostCenterEngine } from '../../db/costCenterEngine';
 import { OrganizationEngine } from '../../db/organizationEngine';
 import { AccountingBusinessEngine } from './accounting_engine';
-import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus, Trip, TripStatus } from '../../types/fleet';
+import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus, Trip, TripStatus, TripStop, TripLocation } from '../../types/fleet';
 
 export class FleetBusinessEngine {
   /**
@@ -16,7 +16,7 @@ export class FleetBusinessEngine {
   }
 
   /**
-   * Creates a new trip in DRAFT status
+   * Creates a new trip in DRAFT status with multi-point stops
    */
   public static async createTrip(
     companyId: string,
@@ -24,24 +24,45 @@ export class FleetBusinessEngine {
     data: {
       vehicle_id: string;
       driver_id: string;
-      from_org_unit_id: string;
-      to_org_unit_id: string;
+      stops: Array<{
+        id?: string;
+        sequence?: number;
+        location: TripLocation;
+        status?: 'PENDING' | 'ARRIVED' | 'SKIPPED';
+        arrivedAt?: string;
+      }>;
       tripType: string;
       scheduledAt: string;
       notes?: string;
       org_unit_id?: string;
     }
   ): Promise<Trip> {
+    if (!data.stops || data.stops.length < 2) {
+      throw new Error('Trip must contain at least 2 stops');
+    }
+
     const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+
+    const stops: TripStop[] = data.stops.map((stop, idx) => ({
+      id: stop.id || `stop-${Date.now()}-${idx + 1}-${Math.random().toString(36).substring(2, 6)}`,
+      sequence: idx + 1,
+      location: {
+        org_unit_id: stop.location.org_unit_id || undefined,
+        label: stop.location.label || '',
+        lat: typeof stop.location.lat === 'number' ? stop.location.lat : undefined,
+        lng: typeof stop.location.lng === 'number' ? stop.location.lng : undefined,
+      },
+      status: stop.status || 'PENDING',
+      arrivedAt: stop.arrivedAt,
+    }));
 
     const newTrip: Trip = {
       id: `trip-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       company_id: companyId,
-      org_unit_id: data.org_unit_id || data.from_org_unit_id || undefined,
+      org_unit_id: data.org_unit_id || stops[0]?.location.org_unit_id || undefined,
       vehicle_id: data.vehicle_id,
       driver_id: data.driver_id,
-      from_org_unit_id: data.from_org_unit_id,
-      to_org_unit_id: data.to_org_unit_id,
+      stops,
       tripType: data.tripType,
       status: 'DRAFT',
       scheduledAt: data.scheduledAt,

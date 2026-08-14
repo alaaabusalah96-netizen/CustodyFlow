@@ -27,4 +27,15 @@ describe('Fleet Permissions Enrichening', () => {
     expect(perms.manage_fleet).toBe(true);
     expect(perms.approve_trip).toBe(false);
   });
+
+  it('should return manage_fleet: true for Admin role by default, and false for other roles like StationAdmin or RegionalManager', () => {
+    const adminPerms = UsersModule.enrichUserPermissions('Admin');
+    expect(adminPerms.manage_fleet).toBe(true);
+
+    const stationPerms = UsersModule.enrichUserPermissions('StationAdmin');
+    expect(stationPerms.manage_fleet).toBe(false);
+
+    const regionalPerms = UsersModule.enrichUserPermissions('RegionalManager');
+    expect(regionalPerms.manage_fleet).toBe(false);
+  });
 });

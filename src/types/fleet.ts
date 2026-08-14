@@ -52,14 +52,28 @@ export interface FuelLog {
 export type TripStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' 
   | 'DISPATCHED' | 'COMPLETED' | 'REJECTED' | 'CANCELLED';
 
+export interface TripLocation {
+  org_unit_id?: string;
+  label: string;
+  lat?: number;
+  lng?: number;
+}
+
+export interface TripStop {
+  id: string;
+  sequence: number;
+  location: TripLocation;
+  status: 'PENDING' | 'ARRIVED' | 'SKIPPED';
+  arrivedAt?: string;
+}
+
 export interface Trip {
   id: string;
   company_id: string;
   org_unit_id?: string;
   vehicle_id: string;
   driver_id: string;
-  from_org_unit_id: string;
-  to_org_unit_id: string;
+  stops: TripStop[];
   tripType: string;
   status: TripStatus;
   scheduledAt: string;

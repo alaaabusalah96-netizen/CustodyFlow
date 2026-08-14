@@ -4,6 +4,50 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fleet Multi-Stop Dynamic Route & OpenStreetMap/Leaflet Coordinate Selection (Steps A, B, C, D, E)
+**Date:** 2026-08-13
+**Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/LeafletMapPickerModal.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_trips_rules.test.ts`, `src/fleet_trips.test.ts`, `src/fleet_trip_stops.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Step A - Multi-Stop Route Domain Types (`src/types/fleet.ts`)**:
+  - Defined `TripLocation` (`org_unit_id?`, `label`, `lat?`, `lng?`) and `TripStop` (`id`, `sequence`, `location`, `status: 'PENDING' | 'ARRIVED' | 'SKIPPED'`, `arrivedAt?`).
+  - Refactored `Trip` interface: replaced `from_org_unit_id` / `to_org_unit_id` with `stops: TripStop[]`.
+- **Step B - Multi-Stop Dynamic Trip Form & Visualizer (`src/pages/FleetManagement.tsx`)**:
+  - Implemented dynamic stop list manager allowing addition and removal of route stops (minimum 2 stops enforced).
+  - Wired `<datalist>` auto-suggestions from company organizational units (`orgUnits`), auto-populating `org_unit_id` when selected or preserving free-text custom names.
+  - Refactored Trips table to render ordered route stops sequence tags (`#1`, `#2`, `#3`...) with GPS badges.
+- **Step C - OpenStreetMap & Leaflet Map Picker Modal (`src/components/LeafletMapPickerModal.tsx`)**:
+  - Integrated `leaflet` library modal displaying OpenStreetMap tiles (`https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png`).
+  - Implemented click-to-pin coordinate picker, search-by-name geocoding, draggable marker, and GPS coordinate confirmation.
+- **Step D - Business Engine Validation (`src/lib/enterprise/fleet_engine.ts`)**:
+  - Enforced validation requiring `stops.length >= 2` and automated sequence normalization in `FleetBusinessEngine.createTrip`.
+- **Step E & Tests (`src/fleet_trip_stops.test.ts`, `src/fleet_trips_rules.test.ts`, `src/fleet_trips.test.ts`)**:
+  - Created unit tests validating >= 2 stops requirement, sequential ordering, org_unit_id vs free text labels, and GPS coordinate precision.
+  - Updated rules and trip tests to execute real `FleetBusinessEngine.createTrip` calls.
+- **Verification**:
+  - `lint_applet` passed cleanly (`tsc --noEmit`, 0 errors).
+  - `compile_applet` built cleanly with zero compilation errors.
+  - Vitest test suite executed 100% green across all unit test files.
+
+---
+
+## Fleet Menu Permission Unification & Company Admin Default Permission (Steps A & B)
+**Date:** 2026-08-13
+**Files Changed:** `src/components/Layout.tsx`, `src/db/users.ts`, `src/fleet_permissions.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Step A - Unified Menu Item Visibility (`src/components/Layout.tsx`)**:
+  - Replaced hardcoded `roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager']` on the 'fleet' menu item with `permission: 'manage_fleet'`.
+  - Aligned menu item visibility strictly with the actual user `manage_fleet` permission check.
+- **Step B - Expanded Default Permission (`src/db/users.ts`)**:
+  - Expanded `UsersModule.enrichUserPermissions` default value for `manage_fleet` to evaluate `currentPerms?.manage_fleet ?? (isSystemAdmin || isAdmin)`.
+  - Granted `manage_fleet: true` by default to Company Admin (`role === 'Admin'`) alongside `SystemAdmin`.
+- **Unit Testing (`src/fleet_permissions.test.ts`)**:
+  - Added test case verifying `role === 'Admin'` returns `manage_fleet: true` by default, while other roles like `StationAdmin` and `RegionalManager` default to `false`.
+- **Verification**:
+  - `compile_applet` passed cleanly.
+  - `vitest run src/fleet_permissions.test.ts` passed 4/4 tests (100% green).
+
+---
+
 ## Fleet Trip Entity Definition & Trip Creation Screen (Steps A & B)
 **Date:** 2026-08-13
 **Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/pages/FleetManagement.tsx`, `src/fleet_trips.test.ts`, `CHANGELOG.md`

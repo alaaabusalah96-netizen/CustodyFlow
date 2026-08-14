@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Truck, Plus, Search, Filter, Wrench, Fuel, ShieldAlert,
   Building2, Gauge, Calendar, User, FileText, CheckCircle2,
-  MapPin, Navigation
+  MapPin, Navigation, Trash2, Map
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { UsersModule } from '../db/users';
@@ -10,6 +10,7 @@ import { CompaniesModule } from '../db/companies';
 import { LogsModule } from '../db/logs';
 import { OrganizationEngine } from '../db/organizationEngine';
 import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
+import LeafletMapPickerModal from '../components/LeafletMapPickerModal';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
 import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus, Trip } from '../types/fleet';
 
@@ -53,6 +54,10 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   const [showLogFuel, setShowLogFuel] = useState(false);
   const [selectedVehicleForLog, setSelectedVehicleForLog] = useState<Vehicle | null>(null);
 
+  // Map Picker Modal
+  const [mapModalOpen, setMapModalOpen] = useState(false);
+  const [activeMapStopIndex, setActiveMapStopIndex] = useState<number | null>(null);
+
   // Forms
   const [formOrgUnitId, setFormOrgUnitId] = useState<string>('');
   const [vehicleForm, setVehicleForm] = useState({
@@ -69,11 +74,13 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   const [tripForm, setTripForm] = useState({
     vehicle_id: '',
     driver_id: '',
-    from_org_unit_id: '',
-    to_org_unit_id: '',
     tripType: '',
     scheduledAt: new Date().toISOString().slice(0, 16),
-    notes: ''
+    notes: '',
+    stops: [
+      { id: 'stop-1', label: '', org_unit_id: '', lat: undefined as number | undefined, lng: undefined as number | undefined },
+      { id: 'stop-2', label: '', org_unit_id: '', lat: undefined as number | undefined, lng: undefined as number | undefined },
+    ]
   });
 
   const [maintenanceForm, setMaintenanceForm] = useState({
@@ -225,6 +232,69 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     }
   };
 
+  const handleAddStopRow = () => {
+    setTripForm(prev => ({
+      ...prev,
+      stops: [
+        ...prev.stops,
+        {
+          id: `stop-${Date.now()}-${prev.stops.length + 1}`,
+          label: '',
+          org_unit_id: '',
+          lat: undefined,
+          lng: undefined
+        }
+      ]
+    }));
+  };
+
+  const handleRemoveStopRow = (index: number) => {
+    if (tripForm.stops.length <= 2) return;
+    setTripForm(prev => ({
+      ...prev,
+      stops: prev.stops.filter((_, idx) => idx !== index)
+    }));
+  };
+
+  const handleStopLabelChange = (index: number, value: string) => {
+    const matchedUnit = orgUnits.find(u => 
+      `${u.code} - ${u.name}` === value ||
+      u.name === value ||
+      u.code === value
+    );
+
+    setTripForm(prev => {
+      const nextStops = [...prev.stops];
+      nextStops[index] = {
+        ...nextStops[index],
+        label: value,
+        org_unit_id: matchedUnit ? matchedUnit.id : ''
+      };
+      return { ...prev, stops: nextStops };
+    });
+  };
+
+  const handleOpenMapPicker = (index: number) => {
+    setActiveMapStopIndex(index);
+    setMapModalOpen(true);
+  };
+
+  const handleConfirmMapCoords = (coords: { lat: number; lng: number }) => {
+    if (activeMapStopIndex !== null) {
+      setTripForm(prev => {
+        const nextStops = [...prev.stops];
+        const current = nextStops[activeMapStopIndex];
+        nextStops[activeMapStopIndex] = {
+          ...current,
+          lat: coords.lat,
+          lng: coords.lng,
+          label: current.label || `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`
+        };
+        return { ...prev, stops: nextStops };
+      });
+    }
+  };
+
   const handleCreateTrip = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canCreateTrip) {
@@ -232,32 +302,56 @@ export default function FleetManagement({ language }: FleetManagementProps) {
       return;
     }
 
-    if (!tripForm.vehicle_id || !tripForm.driver_id || !tripForm.from_org_unit_id || !tripForm.to_org_unit_id || !tripForm.tripType) {
+    if (!tripForm.vehicle_id || !tripForm.driver_id || !tripForm.tripType) {
       showToast('error', isRtl ? 'يرجى ملء جميع الحقول المطلوبة' : 'Please fill all required fields');
       return;
     }
 
+    if (tripForm.stops.length < 2) {
+      showToast('error', isRtl ? 'يجب تحديد نقطتين على الأقل لخط السير' : 'At least 2 stops are required for the route');
+      return;
+    }
+
+    const hasEmptyStop = tripForm.stops.some(s => !s.label.trim() && (s.lat === undefined || s.lng === undefined));
+    if (hasEmptyStop) {
+      showToast('error', isRtl ? 'يرجى إدخال اسم أو تحديد موقع لكل محطة في خط السير' : 'Please specify a name or map location for each stop');
+      return;
+    }
+
     try {
+      const stopsData = tripForm.stops.map((s, idx) => ({
+        id: s.id,
+        sequence: idx + 1,
+        location: {
+          org_unit_id: s.org_unit_id || undefined,
+          label: s.label.trim() || `${s.lat?.toFixed(4)}, ${s.lng?.toFixed(4)}`,
+          lat: s.lat,
+          lng: s.lng
+        },
+        status: 'PENDING' as const
+      }));
+
       await FleetBusinessEngine.createTrip(companyId, activeUser?.id || 'system', {
         vehicle_id: tripForm.vehicle_id,
         driver_id: tripForm.driver_id,
-        from_org_unit_id: tripForm.from_org_unit_id,
-        to_org_unit_id: tripForm.to_org_unit_id,
         tripType: tripForm.tripType,
         scheduledAt: tripForm.scheduledAt,
         notes: tripForm.notes,
-        org_unit_id: tripForm.from_org_unit_id
+        stops: stopsData,
+        org_unit_id: stopsData[0]?.location.org_unit_id
       });
 
       showToast('success', isRtl ? 'تم تسجيل المشوار بصفة مسودة (DRAFT) بنجاح' : 'Trip recorded in DRAFT status successfully');
       setTripForm({
         vehicle_id: '',
         driver_id: '',
-        from_org_unit_id: '',
-        to_org_unit_id: '',
         tripType: '',
         scheduledAt: new Date().toISOString().slice(0, 16),
-        notes: ''
+        notes: '',
+        stops: [
+          { id: 'stop-1', label: '', org_unit_id: '', lat: undefined, lng: undefined },
+          { id: 'stop-2', label: '', org_unit_id: '', lat: undefined, lng: undefined },
+        ]
       });
       setShowAddTrip(false);
       loadData();
@@ -542,8 +636,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                   <th className="p-3">#</th>
                   <th className="p-3">{isRtl ? 'المركبة' : 'Vehicle'}</th>
                   <th className="p-3">{isRtl ? 'السائق' : 'Driver'}</th>
-                  <th className="p-3">{isRtl ? 'من (المصدر)' : 'From'}</th>
-                  <th className="p-3">{isRtl ? 'إلى (الوجهة)' : 'To'}</th>
+                  <th className="p-3">{isRtl ? 'خط السير (المحطات)' : 'Route (Stops)'}</th>
                   <th className="p-3">{isRtl ? 'نوع المشوار' : 'Trip Type'}</th>
                   <th className="p-3">{isRtl ? 'الموعد المجدول' : 'Scheduled At'}</th>
                   <th className="p-3">{isRtl ? 'الحالة' : 'Status'}</th>
@@ -553,7 +646,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {trips.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
+                    <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">
                       {isRtl ? 'لا توجد مشاوير مسجلة حالياً.' : 'No trips recorded yet.'}
                     </td>
                   </tr>
@@ -561,8 +654,6 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                   trips.map((t, idx) => {
                     const vehicle = vehicles.find(v => v.id === t.vehicle_id);
                     const driver = users.find(u => u.id === t.driver_id);
-                    const fromUnit = orgUnits.find(u => u.id === t.from_org_unit_id);
-                    const toUnit = orgUnits.find(u => u.id === t.to_org_unit_id);
 
                     return (
                       <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
@@ -573,11 +664,42 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                         <td className="p-3 font-medium text-slate-700 dark:text-slate-300">
                           {driver ? driver.full_name : t.driver_id}
                         </td>
-                        <td className="p-3 text-slate-600 dark:text-slate-400 font-medium">
-                          {fromUnit ? `${fromUnit.code} - ${fromUnit.name}` : t.from_org_unit_id}
-                        </td>
-                        <td className="p-3 text-slate-600 dark:text-slate-400 font-medium">
-                          {toUnit ? `${toUnit.code} - ${toUnit.name}` : t.to_org_unit_id}
+                        <td className="p-3 text-slate-700 dark:text-slate-300">
+                          {t.stops && t.stops.length > 0 ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[11px] font-bold text-slate-500">
+                                {isRtl ? 'من' : 'From'}
+                              </span>
+                              {t.stops.map((stop, sIdx) => {
+                                const isFirst = sIdx === 0;
+                                const isLast = sIdx === t.stops.length - 1;
+                                const stopLabel =
+                                  stop.location.label ||
+                                  orgUnits.find(u => u.id === stop.location.org_unit_id)?.name ||
+                                  stop.location.org_unit_id ||
+                                  (stop.location.lat ? `${stop.location.lat.toFixed(3)}, ${stop.location.lng?.toFixed(3)}` : `Stop ${sIdx + 1}`);
+
+                                return (
+                                  <React.Fragment key={stop.id || sIdx}>
+                                    {sIdx > 0 && <span className="text-slate-400 font-bold text-xs">←</span>}
+                                    <span
+                                      className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold border ${
+                                        isFirst
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800/60'
+                                          : isLast
+                                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200/60 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-800/60'
+                                          : 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                                      }`}
+                                    >
+                                      {stopLabel}
+                                    </span>
+                                  </React.Fragment>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            '-'
+                          )}
                         </td>
                         <td className="p-3 font-semibold text-indigo-600 dark:text-indigo-400">
                           {t.tripType}
@@ -774,43 +896,98 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
-                    {isRtl ? 'موقع المصدر (من) *' : 'Origin Location (From) *'}
-                  </label>
-                  <select
-                    value={tripForm.from_org_unit_id}
-                    onChange={(e) => setTripForm({ ...tripForm, from_org_unit_id: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+              {/* Dynamic Multi-stop Route Section */}
+              <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60 dark:border-slate-800/60">
+                  <div className="flex items-center gap-1.5">
+                    <MapPin className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      {isRtl ? 'محطات خط السير *' : 'Route Stops *'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddStopRow}
+                    className="px-2.5 py-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg flex items-center gap-1 transition-all"
                   >
-                    <option value="">{isRtl ? '-- موقع المصدر --' : '-- Origin Location --'}</option>
-                    {orgUnits.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.code} - {u.name}
-                      </option>
-                    ))}
-                  </select>
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>{isRtl ? '+ إضافة نقطة' : '+ Add Stop'}</span>
+                  </button>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
-                    {isRtl ? 'موقع الوجهة (إلى) *' : 'Destination Location (To) *'}
-                  </label>
-                  <select
-                    value={tripForm.to_org_unit_id}
-                    onChange={(e) => setTripForm({ ...tripForm, to_org_unit_id: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="">{isRtl ? '-- موقع الوجهة --' : '-- Destination Location --'}</option>
-                    {orgUnits.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.code} - {u.name}
-                      </option>
-                    ))}
-                  </select>
+                <datalist id="fleet-org-units-list">
+                  {orgUnits.map(u => (
+                    <option key={u.id} value={`${u.code} - ${u.name}`} />
+                  ))}
+                </datalist>
+
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {tripForm.stops.map((stop, sIdx) => {
+                    const isFirst = sIdx === 0;
+                    const isLast = sIdx === tripForm.stops.length - 1;
+                    const stopTitle = isFirst
+                      ? (isRtl ? 'نقطة الانطلاق (المصدر)' : 'Departure / Origin')
+                      : isLast
+                      ? (isRtl ? 'نقطة الوصول (الوجهة)' : 'Destination / Arrival')
+                      : (isRtl ? `نقطة وسيطة (${sIdx + 1})` : `Stop (${sIdx + 1})`);
+
+                    return (
+                      <div
+                        key={stop.id || sIdx}
+                        className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800"
+                      >
+                        <span className={`px-2 py-1 text-[10px] font-black rounded-md ${
+                          isFirst ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' :
+                          isLast ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300' :
+                          'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                        }`}>
+                          #{sIdx + 1}
+                        </span>
+
+                        <div className="flex-1 relative">
+                          <input
+                            type="text"
+                            list="fleet-org-units-list"
+                            value={stop.label}
+                            onChange={(e) => handleStopLabelChange(sIdx, e.target.value)}
+                            placeholder={stopTitle}
+                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                          />
+                          {stop.lat !== undefined && stop.lng !== undefined && (
+                            <span className="absolute left-2 rtl:left-2 rtl:right-auto ltr:right-2 top-1.5 px-1.5 py-0.5 rounded text-[9px] font-mono bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 pointer-events-none">
+                              📍 {stop.lat.toFixed(3)}, {stop.lng.toFixed(3)}
+                            </span>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenMapPicker(sIdx)}
+                          title={isRtl ? 'اختار من الخريطة' : 'Select from Map'}
+                          className={`p-2 rounded-lg text-xs font-semibold flex items-center gap-1 border transition-all ${
+                            stop.lat !== undefined
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:border-slate-700'
+                          }`}
+                        >
+                          <Map className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline text-[10px]">
+                            {isRtl ? 'الخريطة' : 'Map'}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={tripForm.stops.length <= 2}
+                          onClick={() => handleRemoveStopRow(sIdx)}
+                          title={isRtl ? 'حذف هذه النقطة' : 'Remove Stop'}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-all"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1026,6 +1203,20 @@ export default function FleetManagement({ language }: FleetManagementProps) {
           </div>
         </div>
       )}
+
+      {/* Leaflet Map Picker Modal */}
+      <LeafletMapPickerModal
+        isOpen={mapModalOpen}
+        onClose={() => {
+          setMapModalOpen(false);
+          setActiveMapStopIndex(null);
+        }}
+        onConfirm={handleConfirmMapCoords}
+        initialLat={activeMapStopIndex !== null ? tripForm.stops[activeMapStopIndex]?.lat : undefined}
+        initialLng={activeMapStopIndex !== null ? tripForm.stops[activeMapStopIndex]?.lng : undefined}
+        stopLabel={activeMapStopIndex !== null ? tripForm.stops[activeMapStopIndex]?.label : undefined}
+        isRtl={isRtl}
+      />
     </div>
   );
 }
