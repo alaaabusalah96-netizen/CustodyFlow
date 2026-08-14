@@ -4,7 +4,26 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
-## Fleet Operational Task Workflow, Driver GPS Lifecycle & Smart Breakdown Reassignment
+## Fleet Operational Completion: Driver Mobile Portal, Autonomous Learned Locations & In-App Operational Trip Chat
+**Date:** 2026-08-14
+**Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/DriverPortalView.tsx`, `src/components/TripChatModal.tsx`, `src/components/BreakdownReassignmentModal.tsx`, `src/components/EmergencyTripModal.tsx`, `src/pages/FleetManagement.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Autonomous Location Learning Engine (`src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`)**:
+  - Implemented multi-tenant learning key `company_id + (org_unit_id || 'global') + normalized_task_type`.
+  - When drivers arrive at stops via GPS, coordinates and location labels are recorded into an append-only historical database (`fleet_learned_locations_entries`), maintaining frequency metrics and last-used timestamps.
+  - Implemented `getLearnedLocations` returning top 2-3 most frequent historical destinations for any given task in the branch/company.
+  - Integrated smart suggestion badges in the trip creation stop editor in `FleetManagement.tsx` to automatically populate coordinates on click.
+- **Dedicated Driver Mobile Field Portal (`src/components/DriverPortalView.tsx`, `src/pages/FleetManagement.tsx`)**:
+  - Designed an intuitive, high-contrast, zero-training mobile interface for field drivers.
+  - Features real-time GPS acquisition for `startTrip`, sequence-ordered stop arrival logging with GPS capture (`recordStopArrival`), and trip finalization (`completeTrip`).
+  - Highlights emergency dispatch alerts and allows drivers to open Google Maps navigation directly to any destination.
+- **In-App Operational Trip Chat & Instructions (`src/components/TripChatModal.tsx`, `src/lib/enterprise/fleet_engine.ts`)**:
+  - Replaced all external communication channels (such as WhatsApp or phone calls) with a 100% self-contained internal trip chat engine.
+  - Allows drivers and fleet supervisors to communicate operational updates, location notes, and cargo status per trip with timestamped logs.
+- **Granular Task-Level Redistribution for Vehicle Breakdown (`src/components/BreakdownReassignmentModal.tsx`, `src/lib/enterprise/fleet_engine.ts`)**:
+  - Implemented `executeIndividualStopDecision` enabling dispatchers to move specific stops/tasks from a broken vehicle to separate active vehicles (rather than all-or-nothing).
+- **Verification**:
+  - Built and verified via `compile_applet` with zero TypeScript errors.
 **Date:** 2026-08-13
 **Files Changed:** `metadata.json`, `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/BreakdownReassignmentModal.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_task_reassignment_gps.test.ts`, `CHANGELOG.md`
 **Summary:**

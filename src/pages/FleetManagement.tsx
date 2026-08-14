@@ -4,7 +4,7 @@ import {
   Building2, Gauge, Calendar, User, FileText, CheckCircle2,
   MapPin, Navigation, Trash2, Map, Play, ArrowRightLeft, Sparkles,
   Clock, CheckCircle, AlertTriangle, AlertCircle, Radio, Loader2,
-  Siren, PauseCircle
+  Siren, PauseCircle, MessageSquare, Compass
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { UsersModule } from '../db/users';
@@ -15,6 +15,8 @@ import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
 import LeafletMapPickerModal from '../components/LeafletMapPickerModal';
 import BreakdownReassignmentModal from '../components/BreakdownReassignmentModal';
 import EmergencyTripModal from '../components/EmergencyTripModal';
+import TripChatModal from '../components/TripChatModal';
+import DriverPortalView from '../components/DriverPortalView';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
 import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus, Trip, TripStop, LearnedLocationHistoryEntry } from '../types/fleet';
 
@@ -45,7 +47,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   );
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'vehicles' | 'trips'>('vehicles');
+  const [activeTab, setActiveTab] = useState<'vehicles' | 'trips' | 'driver_portal'>('trips');
 
   // State
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -73,6 +75,10 @@ export default function FleetManagement({ language }: FleetManagementProps) {
 
   // Emergency Trip Modal
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+
+  // Trip Chat Modal
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [selectedTripForChat, setSelectedTripForChat] = useState<Trip | null>(null);
 
   // GPS Execution State
   const [gpsLoadingId, setGpsLoadingId] = useState<string | null>(null);
@@ -703,6 +709,18 @@ export default function FleetManagement({ language }: FleetManagementProps) {
           <Navigation className="h-4 w-4" />
           <span>{isRtl ? 'المشاوير' : 'Trips'}</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('driver_portal')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'driver_portal'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <Compass className="h-4 w-4 text-emerald-600" />
+          <span>{isRtl ? 'بوابة السائق الميدانية (الموبايل)' : 'Driver Field Portal'}</span>
+        </button>
       </div>
 
       {/* Vehicles Tab */}
@@ -1077,6 +1095,20 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {/* Operational Trip Chat Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedTripForChat(t);
+                            setShowChatModal(true);
+                          }}
+                          className="px-3 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl flex items-center gap-1.5 transition-all"
+                          title={isRtl ? 'المحادثة والتعليمات الميدانية للمشوار' : 'Trip operational messages'}
+                        >
+                          <MessageSquare className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                          <span>{isRtl ? 'شات المشوار' : 'Trip Chat'}</span>
+                        </button>
+
                         {/* Start Trip Button */}
                         {isDraft && (
                           <button
@@ -1128,6 +1160,26 @@ export default function FleetManagement({ language }: FleetManagementProps) {
             )}
           </div>
         </div>
+      )}
+
+      {/* Driver Field Portal Tab */}
+      {activeTab === 'driver_portal' && (
+        <DriverPortalView
+          trips={trips}
+          companyId={companyId}
+          activeUser={{
+            id: activeUser?.id || 'usr-driver-1',
+            full_name: activeUser?.full_name || 'السائق الميداني',
+            role: activeUser?.role || 'driver'
+          }}
+          isRtl={isRtl}
+          onRefresh={() => loadData()}
+          onOpenChat={(trip) => {
+            setSelectedTripForChat(trip);
+            setShowChatModal(true);
+          }}
+          showToast={(type, msg) => showToast(type === 'error' ? 'error' : 'success', msg)}
+        />
       )}
 
       {/* Add Vehicle Modal */}
@@ -1432,6 +1484,42 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                           </button>
                         </div>
 
+                        {/* Learned Location Suggestions for this task/stop */}
+                        {(() => {
+                          const taskKey = stop.taskTitle || stop.label;
+                          if (!taskKey) return null;
+                          const learnedList = FleetBusinessEngine.getLearnedLocations(companyId, stop.org_unit_id, taskKey);
+                          if (!learnedList || learnedList.length === 0) return null;
+                          return (
+                            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                              <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-0.5">
+                                <Sparkles className="h-2.5 w-2.5" />
+                                {isRtl ? 'مواقع مقترحة بناءً على السوابق:' : 'Learned locations:'}
+                              </span>
+                              {learnedList.slice(0, 3).map((entry, eIdx) => (
+                                <button
+                                  key={eIdx}
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = [...tripForm.stops];
+                                    updated[sIdx] = {
+                                      ...updated[sIdx],
+                                      label: entry.label,
+                                      lat: entry.lat,
+                                      lng: entry.lng
+                                    };
+                                    setTripForm({ ...tripForm, stops: updated });
+                                  }}
+                                  className="px-2 py-0.5 text-[9px] font-medium bg-indigo-50/80 dark:bg-indigo-950/80 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 rounded-md transition-all flex items-center gap-1"
+                                >
+                                  <span>📍 {entry.label}</span>
+                                  <span className="opacity-60 font-mono">({entry.visitCount}x)</span>
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
+
                         {/* Stop Notes / Description */}
                         <div>
                           <input
@@ -1708,6 +1796,23 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         initialLat={activeMapStopIndex !== null ? tripForm.stops[activeMapStopIndex]?.lat : undefined}
         initialLng={activeMapStopIndex !== null ? tripForm.stops[activeMapStopIndex]?.lng : undefined}
         stopLabel={activeMapStopIndex !== null ? tripForm.stops[activeMapStopIndex]?.label : undefined}
+        isRtl={isRtl}
+      />
+
+      {/* Operational Trip Chat Modal */}
+      <TripChatModal
+        isOpen={showChatModal}
+        onClose={() => {
+          setShowChatModal(false);
+          setSelectedTripForChat(null);
+        }}
+        trip={selectedTripForChat}
+        companyId={companyId}
+        currentUser={{
+          id: activeUser?.id || 'admin',
+          full_name: activeUser?.full_name || 'إدارة الحركة والتشغيل',
+          role: activeUser?.role || 'admin'
+        }}
         isRtl={isRtl}
       />
     </div>

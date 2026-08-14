@@ -95,11 +95,24 @@ export interface LearnedTaskLocation {
   history?: LearnedLocationHistoryEntry[];
 }
 
+export interface TripChatMessage {
+  id: string;
+  trip_id: string;
+  company_id: string;
+  sender_id: string;
+  sender_name: string;
+  sender_role?: 'DRIVER' | 'SUPERVISOR' | 'ADMIN';
+  message: string;
+  created_at: string;
+}
+
 export type BreakdownDecisionType = 'REASSIGN' | 'POSTPONE' | 'SUSPEND';
 
 export interface BreakdownDecisionLog {
   id: string;
   decision: BreakdownDecisionType;
+  stopId?: string; // If decision is per individual task/stop
+  stopTaskTitle?: string;
   fromVehicleId: string;
   toVehicleId?: string;
   toDriverId?: string;
@@ -118,6 +131,11 @@ export interface TripStop {
   status: TripStopStatus;
   startLocation?: TripLocation;
   arrivedLocation?: TripLocation;
+  reassignedToTripId?: string;
+  reassignedToVehicleId?: string;
+  reassignedToDriverId?: string;
+  postponedUntil?: string;
+  postponeReason?: string;
   startedAt?: string;
   arrivedAt?: string;
   completedAt?: string;

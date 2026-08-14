@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { ShieldAlert, ArrowRightLeft, MapPin, CheckCircle2, Clock, Truck, Sparkles, PauseCircle, HelpCircle, Calendar, User } from 'lucide-react';
-import { Vehicle, Trip, BreakdownDecisionType } from '../types/fleet';
+import { 
+  ShieldAlert, ArrowRightLeft, MapPin, CheckCircle2, Clock, Truck, 
+  Sparkles, PauseCircle, Calendar, User, Layers, CheckSquare, Split 
+} from 'lucide-react';
+import { Vehicle, Trip, TripStop, BreakdownDecisionType } from '../types/fleet';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
 
 interface BreakdownReassignmentModalProps {
@@ -27,8 +30,14 @@ export default function BreakdownReassignmentModal({
   const affectedTrips = FleetBusinessEngine.getOpenTripsForVehicle(companyId, vehicle.id);
   const allVehicles = FleetBusinessEngine.getVehiclesByOrgUnit(companyId);
 
-  // State per trip decision
+  // Scope: Either whole trip or individual task redistribution
+  const [mode, setMode] = useState<'WHOLE_TRIP' | 'INDIVIDUAL_TASK'>('WHOLE_TRIP');
   const [selectedTripId, setSelectedTripId] = useState<string>(affectedTrips[0]?.id || '');
+  const [selectedStopId, setSelectedStopId] = useState<string>('');
+  
+  const activeTrip = affectedTrips.find(t => t.id === selectedTripId) || affectedTrips[0];
+  const eligibleStops = (activeTrip?.stops || []).filter(s => s.sequence > 1 && s.status !== 'COMPLETED' && s.status !== 'SKIPPED');
+
   const [decisionType, setDecisionType] = useState<BreakdownDecisionType>('REASSIGN');
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
   const [selectedDriverName, setSelectedDriverName] = useState<string>('');
@@ -42,8 +51,10 @@ export default function BreakdownReassignmentModal({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Target coordinates for proximity calculation
-  const activeTrip = affectedTrips.find(t => t.id === selectedTripId) || affectedTrips[0];
-  const targetCoords = (vehicle.last_known_location?.lat && vehicle.last_known_location?.lng)
+  const targetStop = eligibleStops.find(s => s.id === selectedStopId);
+  const targetCoords = (targetStop?.location?.lat && targetStop?.location?.lng)
+    ? { lat: targetStop.location.lat, lng: targetStop.location.lng }
+    : (vehicle.last_known_location?.lat && vehicle.last_known_location?.lng)
     ? { lat: vehicle.last_known_location.lat, lng: vehicle.last_known_location.lng }
     : (activeTrip?.startLocation?.lat && activeTrip?.startLocation?.lng)
     ? { lat: activeTrip.startLocation.lat, lng: activeTrip.startLocation.lng }
@@ -69,37 +80,73 @@ export default function BreakdownReassignmentModal({
 
   const handleExecuteDecision = async () => {
     if (!selectedTripId) return;
+    if (mode === 'INDIVIDUAL_TASK' && !selectedStopId) return;
     if (decisionType === 'REASSIGN' && !selectedVehicleId) return;
 
     try {
       setSubmitting(true);
-      const defaultReason = decisionType === 'REASSIGN'
-        ? (isRtl ? `تعطل المركبة (${vehicle.plateNumber}) وإعادة الإسناد للمركبة (${selectedTargetVehicle?.plateNumber || selectedVehicleId})` : `Vehicle breakdown (${vehicle.plateNumber}) reassigned to ${selectedTargetVehicle?.plateNumber || selectedVehicleId}`)
-        : decisionType === 'POSTPONE'
-        ? (isRtl ? `تأجيل المشوار نظراً لتعطل المركبة (${vehicle.plateNumber})` : `Trip postponed due to breakdown of vehicle ${vehicle.plateNumber}`)
-        : (isRtl ? `تعليق المشوار بانتظار قرار لاحق بعد تعطل المركبة (${vehicle.plateNumber})` : `Trip suspended pending future decision`);
 
-      await FleetBusinessEngine.executeBreakdownDecision(
-        companyId,
-        activeUserId,
-        {
-          tripId: selectedTripId,
-          decision: decisionType,
-          fromVehicleId: vehicle.id,
-          toVehicleId: decisionType === 'REASSIGN' ? selectedVehicleId : undefined,
-          toDriverId: decisionType === 'REASSIGN' ? (selectedDriverName || selectedTargetVehicle?.driverName || activeTrip?.driver_id) : undefined,
-          reason: customReason.trim() || defaultReason,
-          postponedUntil: decisionType === 'POSTPONE' ? postponeUntil : undefined
-        }
-      );
+      if (mode === 'INDIVIDUAL_TASK') {
+        const stopName = targetStop?.taskTitle || targetStop?.location?.label || 'مهمة';
+        const defaultReason = decisionType === 'REASSIGN'
+          ? (isRtl ? `تحويل مهمة (${stopName}) من المركبة المتعطلة (${vehicle.plateNumber}) إلى (${selectedTargetVehicle?.plateNumber || selectedVehicleId})` : `Reassigned task ${stopName} from ${vehicle.plateNumber} to ${selectedTargetVehicle?.plateNumber || selectedVehicleId}`)
+          : decisionType === 'POSTPONE'
+          ? (isRtl ? `تأجيل مهمة (${stopName}) نظراً لتعطل المركبة (${vehicle.plateNumber})` : `Postponed task ${stopName} due to breakdown`)
+          : (isRtl ? `تعليق مهمة (${stopName}) بانتظار قرار لاحق` : `Suspended task ${stopName}`);
 
-      const msg = decisionType === 'REASSIGN'
-        ? (isRtl ? 'تمت إعادة إسناد المشوار للمركبة البديلة بنجاح' : 'Trip successfully reassigned')
-        : decisionType === 'POSTPONE'
-        ? (isRtl ? 'تم تأجيل المشوار بنجاح' : 'Trip successfully postponed')
-        : (isRtl ? 'تم تعليق المشوار لقرار لاحق' : 'Trip suspended for later decision');
+        await FleetBusinessEngine.executeIndividualStopDecision(
+          companyId,
+          activeUserId,
+          {
+            tripId: selectedTripId,
+            stopId: selectedStopId,
+            decision: decisionType,
+            fromVehicleId: vehicle.id,
+            toVehicleId: decisionType === 'REASSIGN' ? selectedVehicleId : undefined,
+            toDriverId: decisionType === 'REASSIGN' ? (selectedDriverName || selectedTargetVehicle?.driverName || activeTrip?.driver_id) : undefined,
+            reason: customReason.trim() || defaultReason,
+            postponedUntil: decisionType === 'POSTPONE' ? postponeUntil : undefined
+          }
+        );
 
-      setSuccessMsg(msg);
+        const msg = decisionType === 'REASSIGN'
+          ? (isRtl ? `تمت إعادة إسناد المهمة (${stopName}) للمركبة البديلة بنجاح` : 'Task successfully reassigned')
+          : decisionType === 'POSTPONE'
+          ? (isRtl ? `تم تأجيل المهمة (${stopName}) بنجاح` : 'Task postponed')
+          : (isRtl ? `تم تعليق المهمة (${stopName})` : 'Task suspended');
+
+        setSuccessMsg(msg);
+      } else {
+        // Whole Trip
+        const defaultReason = decisionType === 'REASSIGN'
+          ? (isRtl ? `تعطل المركبة (${vehicle.plateNumber}) وإعادة الإسناد للمركبة (${selectedTargetVehicle?.plateNumber || selectedVehicleId})` : `Vehicle breakdown (${vehicle.plateNumber}) reassigned to ${selectedTargetVehicle?.plateNumber || selectedVehicleId}`)
+          : decisionType === 'POSTPONE'
+          ? (isRtl ? `تأجيل المشوار نظراً لتعطل المركبة (${vehicle.plateNumber})` : `Trip postponed due to breakdown of vehicle ${vehicle.plateNumber}`)
+          : (isRtl ? `تعليق المشوار بانتظار قرار لاحق بعد تعطل المركبة (${vehicle.plateNumber})` : `Trip suspended pending future decision`);
+
+        await FleetBusinessEngine.executeBreakdownDecision(
+          companyId,
+          activeUserId,
+          {
+            tripId: selectedTripId,
+            decision: decisionType,
+            fromVehicleId: vehicle.id,
+            toVehicleId: decisionType === 'REASSIGN' ? selectedVehicleId : undefined,
+            toDriverId: decisionType === 'REASSIGN' ? (selectedDriverName || selectedTargetVehicle?.driverName || activeTrip?.driver_id) : undefined,
+            reason: customReason.trim() || defaultReason,
+            postponedUntil: decisionType === 'POSTPONE' ? postponeUntil : undefined
+          }
+        );
+
+        const msg = decisionType === 'REASSIGN'
+          ? (isRtl ? 'تمت إعادة إسناد المشوار بالكامل للمركبة البديلة بنجاح' : 'Trip successfully reassigned')
+          : decisionType === 'POSTPONE'
+          ? (isRtl ? 'تم تأجيل المشوار بنجاح' : 'Trip successfully postponed')
+          : (isRtl ? 'تم تعليق المشوار لقرار لاحق' : 'Trip suspended for later decision');
+
+        setSuccessMsg(msg);
+      }
+
       setTimeout(() => {
         setSuccessMsg(null);
         onReassigned();
@@ -113,30 +160,36 @@ export default function BreakdownReassignmentModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 w-full max-w-2xl border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-amber-50 dark:bg-amber-950/60 text-amber-600 rounded-xl">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+        {/* Header */}
+        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-rose-50/50 dark:bg-rose-950/30">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-rose-600 text-white rounded-2xl shadow-sm">
               <ShieldAlert className="h-5 w-5" />
             </div>
             <div>
               <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
-                {isRtl ? 'إدارة مشاوير المركبة المتعطلة' : 'Vehicle Breakdown Management'}
+                {isRtl ? 'قرارات المشرف عند عطل المركبة والمهام' : 'Vehicle Breakdown & Task Decisions'}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {isRtl ? 'خيارات المشرف: إعادة إسناد لأقرب مركبة لتوفير السولار، أو التأجيل، أو التعليق' : 'Supervisor decisions: Reassign to nearest vehicle, postpone, or suspend.'}
+                {isRtl ? 'إعادة إسناد كامل المشوار أو توزيع كل مهمة على حدة مع اقتراح الأقرب جغرافياً' : 'Reassign entire trip or distribute individual tasks with nearest vehicle matching'}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">✕</button>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm font-bold p-1.5"
+          >
+            ✕
+          </button>
         </div>
 
-        {/* Breakdown vehicle summary */}
-        <div className="p-3.5 bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-800/60 rounded-2xl flex items-center justify-between flex-wrap gap-2">
+        {/* Vehicle Context Banner */}
+        <div className="p-3 sm:px-5 bg-rose-50/30 dark:bg-rose-950/20 border-b border-rose-100 dark:border-rose-900/40 flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">
-              {isRtl ? 'المركبة المتعطلة / خارج الخدمة' : 'Disabled Vehicle'}
+            <span className="text-[11px] font-bold text-rose-800 dark:text-rose-300 block">
+              {isRtl ? 'المركبة المتعطلة:' : 'Broken Vehicle:'}
             </span>
             <div className="text-sm font-extrabold text-slate-900 dark:text-white">
               {vehicle.plateNumber} ({vehicle.make} {vehicle.model}) - <span className="font-mono text-rose-600">{vehicle.code}</span>
@@ -156,12 +209,49 @@ export default function BreakdownReassignmentModal({
         </div>
 
         {affectedTrips.length === 0 ? (
-          <div className="p-8 text-center bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-500 text-xs font-medium">
+          <div className="p-8 text-center bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-500 text-xs font-medium m-4">
             <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
             {isRtl ? 'لا توجد مشاوير أو مهام مفتوحة مسندة لهذه المركبة حالياً.' : 'No active trips assigned to this vehicle.'}
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+            {/* Mode Switch: Whole Trip vs Individual Task */}
+            <div className="flex items-center gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('WHOLE_TRIP');
+                  setSelectedStopId('');
+                }}
+                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                  mode === 'WHOLE_TRIP'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-black'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <Layers className="h-3.5 w-3.5" />
+                <span>{isRtl ? 'إسناد / معالجة المشوار بالكامل' : 'Whole Trip Decision'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('INDIVIDUAL_TASK');
+                  if (eligibleStops.length > 0 && !selectedStopId) {
+                    setSelectedStopId(eligibleStops[0].id);
+                  }
+                }}
+                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                  mode === 'INDIVIDUAL_TASK'
+                    ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs font-black'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <Split className="h-3.5 w-3.5" />
+                <span>{isRtl ? 'توزيع مهام فردية (كل مهمة لعربية)' : 'Distribute Individual Tasks'}</span>
+              </button>
+            </div>
+
             {/* Step 1: Select Trip */}
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
@@ -182,7 +272,11 @@ export default function BreakdownReassignmentModal({
                         type="radio"
                         name="affectedTrip"
                         checked={selectedTripId === trip.id}
-                        onChange={() => setSelectedTripId(trip.id)}
+                        onChange={() => {
+                          setSelectedTripId(trip.id);
+                          const stops = (trip.stops || []).filter(s => s.sequence > 1 && s.status !== 'COMPLETED' && s.status !== 'SKIPPED');
+                          if (stops.length > 0) setSelectedStopId(stops[0].id);
+                        }}
                         className="text-indigo-600 focus:ring-indigo-500"
                       />
                       <div>
@@ -208,10 +302,57 @@ export default function BreakdownReassignmentModal({
               </div>
             </div>
 
+            {/* Individual Task Selector (if in INDIVIDUAL_TASK mode) */}
+            {mode === 'INDIVIDUAL_TASK' && (
+              <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-2xl border border-indigo-200 dark:border-indigo-800 space-y-2">
+                <label className="block text-xs font-black text-indigo-950 dark:text-indigo-200">
+                  {isRtl ? 'اختر المهمة الفردية المراد توزيعها أو تأجيلها:' : 'Select individual task to reassign/postpone:'}
+                </label>
+
+                {eligibleStops.length === 0 ? (
+                  <p className="text-xs text-slate-500">{isRtl ? 'لا توجد مهام متبقية معلقة في هذا المشوار' : 'No pending stops left'}</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {eligibleStops.map(stop => (
+                      <label
+                        key={stop.id}
+                        className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between text-xs transition-all ${
+                          selectedStopId === stop.id
+                            ? 'bg-indigo-600 text-white border-indigo-600 font-bold shadow-sm'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="individualStop"
+                            checked={selectedStopId === stop.id}
+                            onChange={() => setSelectedStopId(stop.id)}
+                            className="text-indigo-600"
+                          />
+                          <div>
+                            <div>{stop.taskTitle || stop.location.label}</div>
+                            <div className={`text-[10px] ${selectedStopId === stop.id ? 'text-indigo-100' : 'text-slate-400'}`}>
+                              {stop.location.label}
+                            </div>
+                          </div>
+                        </div>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded ${
+                          selectedStopId === stop.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {stop.status}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Step 2: Choose Decision Type */}
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                {isRtl ? '2. قرار المشرف لهذا المشوار:' : '2. Supervisor decision for this trip:'}
+                {isRtl ? '2. قرار المشرف:' : '2. Supervisor decision:'}
               </label>
               <div className="grid grid-cols-3 gap-2">
                 <button
@@ -225,7 +366,7 @@ export default function BreakdownReassignmentModal({
                 >
                   <ArrowRightLeft className="h-4 w-4" />
                   <span className="text-xs">{isRtl ? 'إعادة إسناد الآن' : 'Reassign Now'}</span>
-                  <span className="text-[10px] opacity-75">{isRtl ? 'تحويل لأقرب مركبة' : 'Transfer to vehicle'}</span>
+                  <span className="text-[10px] opacity-75">{isRtl ? 'تحويل لعربية بديلة' : 'Transfer vehicle'}</span>
                 </button>
 
                 <button
@@ -238,7 +379,7 @@ export default function BreakdownReassignmentModal({
                   }`}
                 >
                   <Calendar className="h-4 w-4" />
-                  <span className="text-xs">{isRtl ? 'تأجيل المشوار' : 'Postpone'}</span>
+                  <span className="text-xs">{isRtl ? 'تأجيل' : 'Postpone'}</span>
                   <span className="text-[10px] opacity-75">{isRtl ? 'تحديد موعد لاحق' : 'Reschedule'}</span>
                 </button>
 
@@ -252,7 +393,7 @@ export default function BreakdownReassignmentModal({
                   }`}
                 >
                   <PauseCircle className="h-4 w-4" />
-                  <span className="text-xs">{isRtl ? 'تعليق المشوار' : 'Suspend'}</span>
+                  <span className="text-xs">{isRtl ? 'تعليق' : 'Suspend'}</span>
                   <span className="text-[10px] opacity-75">{isRtl ? 'قرار لاحق' : 'Decide later'}</span>
                 </button>
               </div>
@@ -260,7 +401,7 @@ export default function BreakdownReassignmentModal({
 
             {/* Decision Details Body */}
             {decisionType === 'REASSIGN' && (
-              <div className="space-y-3 p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <div className="space-y-3 p-3.5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
                     {isRtl ? 'اقتراحات أقرب سيارات متاحة (مرتبة حسب المسافة وتوفير السولار):' : 'Nearest available vehicles (sorted by distance & fuel economy):'}
@@ -342,87 +483,86 @@ export default function BreakdownReassignmentModal({
                   <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
                     <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
                       <User className="h-3 w-3 text-indigo-500" />
-                      {isRtl ? 'السائق المنفذ للمشوار (يمكن تشغيل أي سائق متاح على العربية البديلة):' : 'Assigned Driver:'}
+                      {isRtl ? 'السائق المنفذ (يمكن تشغيل أي سائق متاح على العربية البديلة):' : 'Assigned Driver:'}
                     </label>
                     <input
                       type="text"
                       value={selectedDriverName}
                       onChange={e => setSelectedDriverName(e.target.value)}
-                      placeholder={isRtl ? 'اسم السائق المنفذ' : 'Driver name'}
-                      className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                      placeholder={isRtl ? 'اسم السائق أو رقم تعريفه' : 'Driver name or ID'}
+                      className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                     />
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      {isRtl ? 'يتم حفظ العربية والسائق بشكل مستقل في السجل التشغيلي.' : 'Vehicle and driver are tracked independently.'}
+                    </p>
                   </div>
                 )}
               </div>
             )}
 
             {decisionType === 'POSTPONE' && (
-              <div className="p-3 bg-amber-50/60 dark:bg-amber-950/30 rounded-2xl border border-amber-200 dark:border-amber-800 space-y-2">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                  {isRtl ? 'تاريخ ووقت التأجيل المقترح:' : 'Postponed until:'}
+              <div className="p-3 bg-amber-50/50 dark:bg-amber-950/30 rounded-2xl border border-amber-200 dark:border-amber-800 space-y-2">
+                <label className="block text-xs font-bold text-amber-900 dark:text-amber-300">
+                  {isRtl ? 'الموعد الجديد للمشوار/المهمة بعد التأجيل:' : 'Postponed until date/time:'}
                 </label>
                 <input
                   type="datetime-local"
                   value={postponeUntil}
                   onChange={e => setPostponeUntil(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                  className="w-full text-xs p-2.5 rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                 />
               </div>
             )}
 
-            {decisionType === 'SUSPEND' && (
-              <div className="p-3 bg-slate-100 dark:bg-slate-850 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300">
-                {isRtl 
-                  ? 'سيتم تعليق هذا المشوار وحفظه بحالة (معلق بسبب عطل) ليتمكن المشرف من البت فيه لاحقاً عند جاهزية مركبة أو توفر سائق.'
-                  : 'This trip will be placed in suspended breakdown status for later supervisor dispatch.'}
-              </div>
-            )}
-
-            {/* Custom Reason Notes */}
+            {/* Custom Reason & Audit trail */}
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                {isRtl ? 'ملاحظات وسبب القرار (أثر تدقيق):' : 'Reason & Decision notes (Audit trail):'}
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                {isRtl ? 'سبب القرار وملاحظات المشرف الميداني (تسجيل أثر):' : 'Decision reason / notes:'}
               </label>
-              <input
-                type="text"
+              <textarea
                 value={customReason}
                 onChange={e => setCustomReason(e.target.value)}
-                placeholder={isRtl ? 'اكتب ملاحظات إضافية إن وجدت...' : 'Add additional notes if any...'}
-                className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                rows={2}
+                placeholder={isRtl ? 'اكتب ملاحظات العطل أو سبب التأجيل/الإسناد...' : 'Enter reason or operational notes...'}
+                className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
             {successMsg && (
-              <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4" />
+              <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-2xl text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
                 <span>{successMsg}</span>
               </div>
             )}
-
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 py-2.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl"
-              >
-                {isRtl ? 'إلغاء' : 'Cancel'}
-              </button>
-              <button
-                type="button"
-                disabled={!selectedTripId || (decisionType === 'REASSIGN' && !selectedVehicleId) || submitting}
-                onClick={handleExecuteDecision}
-                className="flex-1 py-2.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl shadow-sm flex items-center justify-center gap-1.5"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                <span>
-                  {submitting 
-                    ? (isRtl ? 'جاري التنفيذ...' : 'Processing...') 
-                    : (isRtl ? 'تأكيد وتنفيذ القرار' : 'Confirm Decision')}
-                </span>
-              </button>
-            </div>
           </div>
         )}
+
+        {/* Footer Actions */}
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+          >
+            {isRtl ? 'إلغاء' : 'Cancel'}
+          </button>
+
+          {affectedTrips.length > 0 && (
+            <button
+              type="button"
+              disabled={submitting || (decisionType === 'REASSIGN' && !selectedVehicleId) || (mode === 'INDIVIDUAL_TASK' && !selectedStopId)}
+              onClick={handleExecuteDecision}
+              className="px-5 py-2.5 text-xs font-black bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl shadow-md transition-all flex items-center gap-2"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              <span>
+                {submitting
+                  ? (isRtl ? 'جارٍ التنفيذ...' : 'Executing...')
+                  : (isRtl ? 'تأكيد وحفظ القرار التشغيلي' : 'Confirm Decision')}
+              </span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

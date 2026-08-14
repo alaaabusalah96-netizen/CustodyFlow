@@ -19,7 +19,8 @@ import {
   LearnedTaskLocation,
   LearnedLocationHistoryEntry,
   BreakdownDecisionType,
-  BreakdownDecisionLog
+  BreakdownDecisionLog,
+  TripChatMessage
 } from '../../types/fleet';
 
 export class FleetBusinessEngine {
@@ -1099,5 +1100,241 @@ export class FleetBusinessEngine {
     await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
 
     return updatedTrip;
+  }
+
+  /**
+   * Executes a supervisor decision on an INDIVIDUAL task/stop inside an affected trip:
+   * 1. REASSIGN: Moves the individual stop to another active trip or creates a dedicated transfer trip.
+   * 2. POSTPONE: Sets postponement datetime on the stop and records audit note.
+   * 3. SUSPEND: Flags stop as pending without blocking the overall vehicle resolution.
+   */
+  public static async executeIndividualStopDecision(
+    companyId: string,
+    operatorId: string,
+    data: {
+      tripId: string;
+      stopId: string;
+      decision: BreakdownDecisionType;
+      fromVehicleId: string;
+      toVehicleId?: string;
+      toDriverId?: string;
+      reason: string;
+      postponedUntil?: string;
+    }
+  ): Promise<{ sourceTrip: Trip; targetTrip?: Trip }> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const sourceIndex = allTrips.findIndex(t => t.id === data.tripId && t.company_id === companyId);
+    if (sourceIndex === -1) {
+      throw new Error(`Trip ${data.tripId} not found`);
+    }
+
+    const sourceTrip = allTrips[sourceIndex];
+    const stopIndex = sourceTrip.stops.findIndex(s => s.id === data.stopId);
+    if (stopIndex === -1) {
+      throw new Error(`Stop ${data.stopId} not found in trip ${data.tripId}`);
+    }
+
+    const targetStop = sourceTrip.stops[stopIndex];
+    const now = new Date().toISOString();
+
+    const decisionLog: BreakdownDecisionLog = {
+      id: `bd-stop-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      decision: data.decision,
+      stopId: data.stopId,
+      stopTaskTitle: targetStop.taskTitle || targetStop.location.label,
+      fromVehicleId: data.fromVehicleId,
+      toVehicleId: data.toVehicleId,
+      toDriverId: data.toDriverId,
+      reason: data.reason || 'قرار عطل تشغيلي لمهمة فردية',
+      postponedUntil: data.postponedUntil,
+      operatorId,
+      timestamp: now
+    };
+
+    let targetTrip: Trip | undefined;
+
+    if (data.decision === 'REASSIGN') {
+      if (!data.toVehicleId) {
+        throw new Error('Target vehicle is required for task reassignment');
+      }
+
+      const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
+      const targetVeh = allVehicles.find(v => v.id === data.toVehicleId && v.company_id === companyId);
+      const targetDriver = data.toDriverId || targetVeh?.driverName || sourceTrip.driver_id;
+
+      // Find an open/in-progress trip for this target vehicle, or create a transfer trip
+      const existingTargetTripIndex = allTrips.findIndex(
+        t => t.company_id === companyId && 
+             t.vehicle_id === data.toVehicleId && 
+             ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'DISPATCHED', 'IN_PROGRESS'].includes(t.status)
+      );
+
+      if (existingTargetTripIndex >= 0) {
+        const existing = allTrips[existingTargetTripIndex];
+        const newStop: TripStop = {
+          ...targetStop,
+          id: `stop-reassigned-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          sequence: existing.stops.length + 1,
+          notes: `${targetStop.notes || ''} [مهمة محولة من المركبة ${data.fromVehicleId}]`.trim(),
+          status: 'PENDING'
+        };
+
+        targetTrip = {
+          ...existing,
+          stops: [...existing.stops, newStop],
+          breakdownDecisions: [...(existing.breakdownDecisions || []), decisionLog]
+        };
+        allTrips[existingTargetTripIndex] = targetTrip;
+      } else {
+        // Create new transfer trip for the target vehicle
+        const startStop: TripStop = {
+          id: `stop-transfer-start-${Date.now()}`,
+          sequence: 1,
+          taskTitle: 'نقطة الانطلاق (تحويل مهمة)',
+          location: {
+            org_unit_id: targetStop.location.org_unit_id || sourceTrip.org_unit_id,
+            label: 'نقطة الانطلاق للمهمة المحولة',
+            lat: sourceTrip.startLocation?.lat,
+            lng: sourceTrip.startLocation?.lng
+          },
+          status: 'PENDING'
+        };
+
+        const destStop: TripStop = {
+          ...targetStop,
+          id: `stop-transferred-${Date.now()}`,
+          sequence: 2,
+          notes: `${targetStop.notes || ''} [مهمة محولة من المركبة ${data.fromVehicleId}]`.trim(),
+          status: 'PENDING'
+        };
+
+        targetTrip = {
+          id: `trip-reassigned-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          company_id: companyId,
+          org_unit_id: targetStop.location.org_unit_id || sourceTrip.org_unit_id,
+          vehicle_id: data.toVehicleId,
+          driver_id: targetDriver,
+          stops: [startStop, destStop],
+          tripType: `تحويل مهمة: ${targetStop.taskTitle || targetStop.location.label}`,
+          status: 'DRAFT',
+          scheduledAt: now,
+          notes: `تحويل مهمة فردية بعد عطل المركبة الأصلية: ${data.reason}`,
+          reassignedFromVehicleId: data.fromVehicleId,
+          reassignedAt: now,
+          reassignReason: data.reason,
+          breakdownDecisions: [decisionLog],
+          createdBy: operatorId,
+          createdAt: now
+        };
+        allTrips.push(targetTrip);
+      }
+
+      // Mark the original stop as skipped/reassigned in the source trip
+      const updatedSourceStops = [...sourceTrip.stops];
+      updatedSourceStops[stopIndex] = {
+        ...targetStop,
+        status: 'SKIPPED',
+        reassignedToTripId: targetTrip.id,
+        reassignedToVehicleId: data.toVehicleId,
+        reassignedToDriverId: targetDriver,
+        notes: `${targetStop.notes || ''} [تم تحويل المهمة إلى ${data.toVehicleId} - السائق: ${targetDriver}]`.trim()
+      };
+
+      // Check if all non-start stops in source trip are completed or skipped
+      const pendingRemaining = updatedSourceStops.filter(s => s.sequence > 1 && !['COMPLETED', 'SKIPPED'].includes(s.status));
+      const sourceStatus = pendingRemaining.length === 0 ? 'COMPLETED' : sourceTrip.status;
+
+      sourceTrip.stops = updatedSourceStops;
+      sourceTrip.status = sourceStatus;
+      sourceTrip.breakdownDecisions = [...(sourceTrip.breakdownDecisions || []), decisionLog];
+
+    } else if (data.decision === 'POSTPONE') {
+      const updatedSourceStops = [...sourceTrip.stops];
+      updatedSourceStops[stopIndex] = {
+        ...targetStop,
+        status: 'PENDING',
+        postponedUntil: data.postponedUntil,
+        postponeReason: data.reason,
+        notes: `${targetStop.notes || ''} [مؤجلة إلى: ${data.postponedUntil}]`.trim()
+      };
+      sourceTrip.stops = updatedSourceStops;
+      sourceTrip.breakdownDecisions = [...(sourceTrip.breakdownDecisions || []), decisionLog];
+
+    } else {
+      // SUSPEND
+      const updatedSourceStops = [...sourceTrip.stops];
+      updatedSourceStops[stopIndex] = {
+        ...targetStop,
+        status: 'PENDING',
+        notes: `${targetStop.notes || ''} [معلقة لعطل بالمركبة]`.trim()
+      };
+      sourceTrip.stops = updatedSourceStops;
+      sourceTrip.breakdownDecisions = [...(sourceTrip.breakdownDecisions || []), decisionLog];
+    }
+
+    allTrips[sourceIndex] = sourceTrip;
+    StorageEngine.setStored('fleet_trips_items', allTrips);
+    await dbSetDoc('fleet_trips_items', sourceTrip.id, sourceTrip);
+    if (targetTrip) {
+      await dbSetDoc('fleet_trips_items', targetTrip.id, targetTrip);
+    }
+
+    return { sourceTrip, targetTrip };
+  }
+
+  /**
+   * Retrieves trips assigned specifically to a driver
+   */
+  public static getTripsForDriver(companyId: string, driverIdOrName: string): Trip[] {
+    const all = this.getTripsByCompany(companyId);
+    if (!driverIdOrName) return [];
+    const norm = driverIdOrName.trim().toLowerCase();
+    return all.filter(t => 
+      (t.driver_id && t.driver_id.toLowerCase() === norm) ||
+      (t.driver_id && t.driver_id.includes(driverIdOrName))
+    );
+  }
+
+  /**
+   * Retrieves all chat messages for a specific trip
+   */
+  public static getTripChatMessages(companyId: string, tripId: string): TripChatMessage[] {
+    if (!companyId || !tripId) return [];
+    const all = StorageEngine.getStored<TripChatMessage[]>('fleet_trip_chat_messages', []);
+    return all
+      .filter(m => m.company_id === companyId && m.trip_id === tripId)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }
+
+  /**
+   * Sends a message to a trip operational chat
+   */
+  public static async sendTripChatMessage(
+    companyId: string,
+    tripId: string,
+    sender: { id: string; name: string; role?: 'DRIVER' | 'SUPERVISOR' | 'ADMIN' },
+    messageText: string
+  ): Promise<TripChatMessage> {
+    if (!messageText.trim()) {
+      throw new Error('Message cannot be empty');
+    }
+
+    const all = StorageEngine.getStored<TripChatMessage[]>('fleet_trip_chat_messages', []);
+    const newMsg: TripChatMessage = {
+      id: `tmsg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      trip_id: tripId,
+      company_id: companyId,
+      sender_id: sender.id,
+      sender_name: sender.name,
+      sender_role: sender.role || 'SUPERVISOR',
+      message: messageText.trim(),
+      created_at: new Date().toISOString()
+    };
+
+    const updated = [...all, newMsg];
+    StorageEngine.setStored('fleet_trip_chat_messages', updated);
+    await dbSetDoc('fleet_trip_chat_messages', newMsg.id, newMsg);
+
+    return newMsg;
   }
 }
