@@ -574,7 +574,8 @@ export const DEFAULT_PERMISSIONS: SystemPermission[] = [
   { id: 'reassign_vehicle', name_en: 'Reassign Vehicle / Tasks', name_ar: 'إعادة إسناد مركبة متعطلة/مهام', description_en: 'Allows reassigning vehicles and tasks during breakdown', description_ar: 'يسمح بإعادة إسناد المركبات والمهام عند الأعطال', category: 'fleet' },
   { id: 'execute_breakdown_decision', name_en: 'Execute Breakdown Decision', name_ar: 'اتخاذ قرارات أعطال المركبات', description_en: 'Allows taking breakdown redistribution, postponement, or suspension decisions', description_ar: 'يسمح باتخاذ قرارات إعادة الإسناد والتأجيل والتعليق عند أعطال المركبات', category: 'fleet' },
   { id: 'create_emergency_trip', name_en: 'Create Emergency Trip', name_ar: 'إنشاء مشوار طارئ', description_en: 'Allows creating emergency dispatch trips directly', description_ar: 'يسمح بإنشاء مشاوير طارئة فورية', category: 'fleet' },
-  { id: 'manage_vehicle_constraints', name_en: 'Manage Vehicle Access Constraints', name_ar: 'إدارة قيود وصول المركبات', description_en: 'Allows setting and managing vehicle location access constraints and geographical rules', description_ar: 'يسمح بإعداد وإدارة قيود وصول المركبات والمواقع المحظورة', category: 'fleet' }
+  { id: 'manage_vehicle_constraints', name_en: 'Manage Vehicle Access Constraints', name_ar: 'إدارة قيود وصول المركبات', description_en: 'Allows setting and managing vehicle location access constraints and geographical rules', description_ar: 'يسمح بإعداد وإدارة قيود وصول المركبات والمواقع المحظورة', category: 'fleet' },
+  { id: 'execute_trip_tasks', name_en: 'Execute Field Trip Tasks', name_ar: 'تنفيذ مهام السائق الميدانية', description_en: 'Allows executing driver trip tasks in the field portal', description_ar: 'يسمح بتنفيذ مهام المشاوير الميدانية عبر بوابة السائق', category: 'fleet' }
 ];
 
 export const DEFAULT_ROLES: SystemRole[] = [

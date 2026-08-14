@@ -51,6 +51,25 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   const companyId = CompaniesModule.getSelectedCompanyId() || 'comp-default';
   const activeUser = UsersModule.getActiveUser();
 
+  const canViewVehicles = Boolean(
+    activeUser?.permissions?.manage_fleet || 
+    activeUser?.role === 'SystemAdmin'
+  );
+
+  const canViewTrips = Boolean(
+    activeUser?.permissions?.create_trip || 
+    activeUser?.permissions?.approve_trip || 
+    activeUser?.permissions?.dispatch_trip || 
+    activeUser?.permissions?.manage_fleet || 
+    activeUser?.role === 'SystemAdmin'
+  );
+
+  const canViewDriverPortal = Boolean(
+    activeUser?.permissions?.execute_trip_tasks || 
+    activeUser?.permissions?.manage_fleet || 
+    activeUser?.role === 'SystemAdmin'
+  );
+
   const canCreateTrip = Boolean(
     activeUser?.permissions?.create_trip || 
     activeUser?.permissions?.manage_fleet || 
@@ -64,8 +83,25 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     activeUser?.role === 'SystemAdmin'
   );
 
-  // Tabs
-  const [activeTab, setActiveTab] = useState<'vehicles' | 'trips' | 'driver_portal' | 'vehicle_constraints'>('trips');
+  // Tabs - Initialized dynamically to first available tab
+  const [activeTab, setActiveTab] = useState<'vehicles' | 'trips' | 'driver_portal' | 'vehicle_constraints'>(() => {
+    if (canViewDriverPortal && !canViewTrips && !canViewVehicles) {
+      return 'driver_portal';
+    }
+    if (canViewTrips) {
+      return 'trips';
+    }
+    if (canViewVehicles) {
+      return 'vehicles';
+    }
+    if (canViewDriverPortal) {
+      return 'driver_portal';
+    }
+    if (canManageConstraints) {
+      return 'vehicle_constraints';
+    }
+    return 'trips';
+  });
 
   // State
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -794,41 +830,47 @@ export default function FleetManagement({ language }: FleetManagementProps) {
 
       {/* Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800">
-        <button
-          onClick={() => setActiveTab('vehicles')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === 'vehicles'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          <Truck className="h-4 w-4" />
-          <span>{isRtl ? 'المركبات والأسطول' : 'Vehicles'}</span>
-        </button>
+        {canViewVehicles && (
+          <button
+            onClick={() => setActiveTab('vehicles')}
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === 'vehicles'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <Truck className="h-4 w-4" />
+            <span>{isRtl ? 'المركبات والأسطول' : 'Vehicles'}</span>
+          </button>
+        )}
 
-        <button
-          onClick={() => setActiveTab('trips')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === 'trips'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          <Navigation className="h-4 w-4" />
-          <span>{isRtl ? 'المشاوير' : 'Trips'}</span>
-        </button>
+        {canViewTrips && (
+          <button
+            onClick={() => setActiveTab('trips')}
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === 'trips'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <Navigation className="h-4 w-4" />
+            <span>{isRtl ? 'المشاوير' : 'Trips'}</span>
+          </button>
+        )}
 
-        <button
-          onClick={() => setActiveTab('driver_portal')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === 'driver_portal'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          <Compass className="h-4 w-4 text-emerald-600" />
-          <span>{isRtl ? 'بوابة السائق الميدانية (الموبايل)' : 'Driver Field Portal'}</span>
-        </button>
+        {canViewDriverPortal && (
+          <button
+            onClick={() => setActiveTab('driver_portal')}
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === 'driver_portal'
+                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <Compass className="h-4 w-4 text-emerald-600" />
+            <span>{isRtl ? 'بوابة السائق الميدانية (الموبايل)' : 'Driver Field Portal'}</span>
+          </button>
+        )}
 
         {canManageConstraints && (
           <button
@@ -1299,7 +1341,8 @@ export default function FleetManagement({ language }: FleetManagementProps) {
           activeUser={{
             id: activeUser?.id || 'usr-driver-1',
             full_name: activeUser?.full_name || 'السائق الميداني',
-            role: activeUser?.role || 'driver'
+            role: activeUser?.role || 'driver',
+            permissions: activeUser?.permissions
           }}
           isRtl={isRtl}
           onRefresh={() => loadData()}

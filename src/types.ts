@@ -50,6 +50,7 @@ export interface UserPermissions {
   execute_breakdown_decision?: boolean;
   create_emergency_trip?: boolean;
   manage_vehicle_constraints?: boolean;
+  execute_trip_tasks?: boolean;
 }
 
 export interface AppUser {

@@ -4,6 +4,31 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fleet Tab Visibility Governance & Field Tasks Execution Permission (`execute_trip_tasks`)
+**Date:** 2026-08-14
+**Files Changed:** `src/types.ts`, `src/db/defaults.ts`, `src/db/users.ts`, `src/pages/FleetManagement.tsx`, `src/components/DriverPortalView.tsx`, `src/fleet_tab_visibility.test.ts`, `src/fleet_module_registration.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Step A - Generic Field Tasks Execution Permission (`src/types.ts`, `src/db/defaults.ts`, `src/db/users.ts`)**:
+  - Added `execute_trip_tasks?: boolean` to `UserPermissions`.
+  - Registered permission in `DEFAULT_PERMISSIONS` under category `fleet` with Arabic display label `"تنفيذ مهام السائق الميدانية"`.
+  - Set default value in `UsersModule.enrichUserPermissions` to `false` for all roles except `SystemAdmin`.
+- **Step B - Granular Tab Visibility Binding (`src/pages/FleetManagement.tsx`)**:
+  - Vehicles Tab ("المركبات والأسطول"): protected with `canViewVehicles` (`activeUser?.permissions?.manage_fleet || activeUser?.role === 'SystemAdmin'`).
+  - Trips Tab ("المشاوير"): protected with `canViewTrips` (`create_trip || approve_trip || dispatch_trip || manage_fleet || SystemAdmin`).
+  - Driver Field Portal Tab ("بوابة السائق الميدانية"): protected with `canViewDriverPortal` (`execute_trip_tasks || manage_fleet || SystemAdmin`).
+  - Vehicle Constraints Tab ("قيود المركبات"): preserved under `canManageConstraints`.
+- **Step C - Dynamic Active Tab Default Initialization (`src/pages/FleetManagement.tsx`)**:
+  - Initialized `activeTab` dynamically to open the first allowed tab for the user (e.g. if the user only has `execute_trip_tasks`, it opens directly to `driver_portal` instead of showing an empty or unauthorized view).
+- **Step D - Direct Authorization Enforcement inside DriverPortalView (`src/components/DriverPortalView.tsx`)**:
+  - Added access check at component entry: if user lacks `execute_trip_tasks`, `manage_fleet`, and is not `SystemAdmin`, renders an access denied banner ("غير مصرح لك بالوصول لهذه البوابة") instead of portal content.
+- **Step E - Unit Test Suite (`src/fleet_tab_visibility.test.ts`, `src/fleet_module_registration.test.ts`)**:
+  - Validated default permission values for `execute_trip_tasks` across roles.
+  - Validated that `create_trip` users see only Trips tab and not Vehicles tab.
+  - Validated that `execute_trip_tasks` users access Driver Portal directly and are blocked from other tabs.
+  - All 10 fleet suites (41 tests) passed 100% green.
+
+---
+
 ## Vehicle Access & Dispatch Constraints (BLOCK_SPECIFIC_LOCATIONS & EXTERNAL_ONLY)
 **Date:** 2026-08-14
 **Files Changed:** `src/types/fleet.ts`, `src/types.ts`, `src/db/defaults.ts`, `src/db/users.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/pages/FleetManagement.tsx`, `src/fleet_module_registration.test.ts`, `src/fleet_vehicle_constraints.test.ts`, `CHANGELOG.md`

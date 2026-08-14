@@ -4,6 +4,7 @@ import {
   Truck, User, Calendar, Clock, AlertCircle, Sparkles, Loader2, Map 
 } from 'lucide-react';
 import { Trip, TripStop } from '../types/fleet';
+import { UserPermissions } from '../types';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
 import LeafletMapPickerModal from './LeafletMapPickerModal';
 
@@ -14,6 +15,7 @@ interface DriverPortalViewProps {
     id: string;
     full_name?: string;
     role?: string;
+    permissions?: UserPermissions;
   };
   isRtl: boolean;
   onRefresh: () => void;
@@ -30,6 +32,28 @@ export default function DriverPortalView({
   onOpenChat,
   showToast
 }: DriverPortalViewProps) {
+  const hasAccess = Boolean(
+    activeUser?.permissions?.execute_trip_tasks ||
+    activeUser?.permissions?.manage_fleet ||
+    activeUser?.role === 'SystemAdmin'
+  );
+
+  if (!hasAccess) {
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 border border-slate-200/80 dark:border-slate-800/80 text-center space-y-3">
+        <AlertCircle className="h-12 w-12 text-rose-500 mx-auto" />
+        <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100">
+          {isRtl ? 'غير مصرح لك بالوصول لهذه البوابة' : 'Access Denied: You are not authorized to access this portal'}
+        </h3>
+        <p className="text-xs text-slate-500 max-w-md mx-auto">
+          {isRtl 
+            ? 'يتطلب الوصول لهذه البوابة تفعيل صلاحية تنفيذ مهام السائق الميدانية أو إدارة الأسطول.' 
+            : 'Access requires field trip tasks execution or fleet management permissions.'}
+        </p>
+      </div>
+    );
+  }
+
   const [gpsLoadingId, setGpsLoadingId] = useState<string | null>(null);
   const [mapPickerAction, setMapPickerAction] = useState<{
     type: 'START' | 'STOP' | 'COMPLETE';

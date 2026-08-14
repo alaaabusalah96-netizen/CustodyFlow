@@ -70,6 +70,7 @@ export class UsersModule {
       execute_breakdown_decision: currentPerms?.execute_breakdown_decision ?? false,
       create_emergency_trip: currentPerms?.create_emergency_trip ?? false,
       manage_vehicle_constraints: currentPerms?.manage_vehicle_constraints ?? isSystemAdmin,
+      execute_trip_tasks: currentPerms?.execute_trip_tasks ?? isSystemAdmin,
     };
   }
 
