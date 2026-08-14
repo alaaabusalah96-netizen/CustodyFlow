@@ -4,6 +4,35 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fleet Operational Task Workflow, Driver GPS Lifecycle & Smart Breakdown Reassignment
+**Date:** 2026-08-13
+**Files Changed:** `metadata.json`, `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/BreakdownReassignmentModal.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_task_reassignment_gps.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Office Operational Task Alignment (`src/types/fleet.ts`, `src/pages/FleetManagement.tsx`)**:
+  - Aligned the trip creation workflow with real field logistics: trips can now be defined by tasks (e.g. بوسطة، تغيير اسطوانات غاز / أنابيب، صيانة، استلام بضاعة ومستندات، تسليم عميل) without requiring the office to know or look up coordinates in advance.
+  - Added fast one-click Task preset badges in the Trip creation modal for instant stop population.
+- **Driver GPS Lifecycle Capture (`src/lib/enterprise/fleet_engine.ts`, `src/pages/FleetManagement.tsx`)**:
+  - Implemented `startTrip` with browser Geolocation API capture (`navigator.geolocation.getCurrentPosition`), recording the departure coordinates and updating vehicle status to `DISPATCHED` with `last_known_location`.
+  - Implemented `recordStopArrival` allowing drivers to mark arrival at task stops with live GPS capture or manual confirmation, recording `arrivedLocation` and `arrivedAt` timestamp, and updating the vehicle's last known position.
+  - Implemented `completeTrip` for finalizing multi-stop trips and restoring vehicle status to `ACTIVE`.
+- **Smart Breakdown & Out-of-Service Task Reassignment (`src/lib/enterprise/fleet_engine.ts`, `src/components/BreakdownReassignmentModal.tsx`)**:
+  - Added Haversine-based distance calculation `suggestNearestVehiclesForTasks` that computes Euclidean/spherical distances from the broken-down vehicle or pending task stops to all active fleet vehicles.
+  - Ranks replacement vehicles by physical proximity (KM distance away) to minimize fuel consumption, transit time, and operational disruption.
+  - Built `BreakdownReassignmentModal` allowing dispatchers to view open trips on a vehicle marked `BREAKDOWN` or `OUT_OF_SERVICE`, inspect proximity scores of nearby available vehicles, and reassign pending trips/tasks with audit logging (`reassignedFromVehicleId`, `reassignReason`).
+- **Permissions & Manifest**:
+  - Updated `metadata.json` to declare `requestFramePermissions: ["camera", "microphone", "geolocation"]`.
+- **Unit Testing & Verification (`src/fleet_task_reassignment_gps.test.ts`)**:
+  - Created 5 comprehensive unit tests covering:
+    1. Trip creation with task titles without requiring initial coordinates.
+    2. Trip start and driver GPS location logging.
+    3. Intermediate stop arrival recording with GPS coordinates.
+    4. Proximity ranking and nearest vehicle suggestion for breakdown scenarios (confirming <3km vehicle is suggested before >25km vehicle to save fuel).
+    5. Complete trip reassignment from broken vehicle to replacement vehicle.
+  - Vitest test suite executed 100% green (12/12 total fleet tests passing).
+  - Production build compiled successfully (`compile_applet` passed).
+
+---
+
 ## Fleet Multi-Stop Dynamic Route & OpenStreetMap/Leaflet Coordinate Selection (Steps A, B, C, D, E)
 **Date:** 2026-08-13
 **Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/LeafletMapPickerModal.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_trips_rules.test.ts`, `src/fleet_trips.test.ts`, `src/fleet_trip_stops.test.ts`, `CHANGELOG.md`

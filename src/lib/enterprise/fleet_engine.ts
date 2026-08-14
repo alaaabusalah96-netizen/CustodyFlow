@@ -4,7 +4,19 @@ import { DocumentNumberEngine } from '../../db/documentNumberEngine';
 import { CostCenterEngine } from '../../db/costCenterEngine';
 import { OrganizationEngine } from '../../db/organizationEngine';
 import { AccountingBusinessEngine } from './accounting_engine';
-import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus, Trip, TripStatus, TripStop, TripLocation } from '../../types/fleet';
+import { 
+  Vehicle, 
+  MaintenanceLog, 
+  FuelLog, 
+  VehicleType, 
+  VehicleStatus, 
+  Trip, 
+  TripStatus, 
+  TripStop, 
+  TripLocation,
+  TripStopStatus,
+  VehicleLocation
+} from '../../types/fleet';
 
 export class FleetBusinessEngine {
   /**
@@ -16,7 +28,7 @@ export class FleetBusinessEngine {
   }
 
   /**
-   * Creates a new trip in DRAFT status with multi-point stops
+   * Creates a new trip in DRAFT status with task-oriented multi-point stops
    */
   public static async createTrip(
     companyId: string,
@@ -27,9 +39,15 @@ export class FleetBusinessEngine {
       stops: Array<{
         id?: string;
         sequence?: number;
+        taskTitle?: string;
+        notes?: string;
         location: TripLocation;
-        status?: 'PENDING' | 'ARRIVED' | 'SKIPPED';
+        status?: TripStopStatus;
+        startLocation?: TripLocation;
+        arrivedLocation?: TripLocation;
+        startedAt?: string;
         arrivedAt?: string;
+        completedAt?: string;
       }>;
       tripType: string;
       scheduledAt: string;
@@ -46,14 +64,22 @@ export class FleetBusinessEngine {
     const stops: TripStop[] = data.stops.map((stop, idx) => ({
       id: stop.id || `stop-${Date.now()}-${idx + 1}-${Math.random().toString(36).substring(2, 6)}`,
       sequence: idx + 1,
+      taskTitle: stop.taskTitle || undefined,
+      notes: stop.notes || '',
       location: {
         org_unit_id: stop.location.org_unit_id || undefined,
         label: stop.location.label || '',
         lat: typeof stop.location.lat === 'number' ? stop.location.lat : undefined,
         lng: typeof stop.location.lng === 'number' ? stop.location.lng : undefined,
+        accuracy: typeof stop.location.accuracy === 'number' ? stop.location.accuracy : undefined,
+        timestamp: stop.location.timestamp
       },
       status: stop.status || 'PENDING',
+      startLocation: stop.startLocation,
+      arrivedLocation: stop.arrivedLocation,
+      startedAt: stop.startedAt,
       arrivedAt: stop.arrivedAt,
+      completedAt: stop.completedAt
     }));
 
     const newTrip: Trip = {
@@ -76,6 +102,397 @@ export class FleetBusinessEngine {
     await dbSetDoc('fleet_trips_items', newTrip.id, newTrip);
 
     return newTrip;
+  }
+
+  /**
+   * Driver begins trip: captures start GPS location, marks status DISPATCHED,
+   * records start timestamp and updates vehicle's last known location.
+   */
+  public static async startTrip(
+    companyId: string,
+    operatorId: string,
+    tripId: string,
+    coords: {
+      lat: number;
+      lng: number;
+      accuracy?: number;
+      label?: string;
+    }
+  ): Promise<Trip> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const tripIndex = allTrips.findIndex(t => t.id === tripId && t.company_id === companyId);
+    if (tripIndex === -1) {
+      throw new Error(`Trip ${tripId} not found`);
+    }
+
+    const trip = allTrips[tripIndex];
+    const now = new Date().toISOString();
+
+    const startLoc: TripLocation = {
+      label: coords.label || 'نقطة انطلاق الرحلة (GPS)',
+      lat: coords.lat,
+      lng: coords.lng,
+      accuracy: coords.accuracy,
+      timestamp: now
+    };
+
+    // Update first stop start details if pending
+    const updatedStops = trip.stops.map((stop, idx) => {
+      if (idx === 0) {
+        return {
+          ...stop,
+          startLocation: startLoc,
+          startedAt: stop.startedAt || now,
+          status: (stop.status === 'PENDING' ? 'IN_PROGRESS' : stop.status) as TripStopStatus
+        };
+      }
+      return stop;
+    });
+
+    const updatedTrip: Trip = {
+      ...trip,
+      status: 'DISPATCHED',
+      startedAt: now,
+      dispatchedAt: trip.dispatchedAt || now,
+      startLocation: startLoc,
+      stops: updatedStops
+    };
+
+    allTrips[tripIndex] = updatedTrip;
+    StorageEngine.setStored('fleet_trips_items', allTrips);
+    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
+
+    // Update vehicle's last known location and status to DISPATCHED
+    await this.updateVehicleLocationAndStatus(
+      companyId,
+      trip.vehicle_id,
+      {
+        lat: coords.lat,
+        lng: coords.lng,
+        accuracy: coords.accuracy,
+        updatedAt: now,
+        label: coords.label || 'نقطة انطلاق الرحلة'
+      },
+      'DISPATCHED'
+    );
+
+    return updatedTrip;
+  }
+
+  /**
+   * Driver arrives at task stop: captures destination GPS location,
+   * updates stop status to ARRIVED, records arrived timestamp and updates vehicle location.
+   */
+  public static async recordStopArrival(
+    companyId: string,
+    operatorId: string,
+    tripId: string,
+    stopId: string,
+    coords: {
+      lat: number;
+      lng: number;
+      accuracy?: number;
+      label?: string;
+    }
+  ): Promise<{ trip: Trip; stop: TripStop }> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const tripIndex = allTrips.findIndex(t => t.id === tripId && t.company_id === companyId);
+    if (tripIndex === -1) {
+      throw new Error(`Trip ${tripId} not found`);
+    }
+
+    const trip = allTrips[tripIndex];
+    const now = new Date().toISOString();
+
+    let targetStop: TripStop | null = null;
+
+    const updatedStops = trip.stops.map(stop => {
+      if (stop.id === stopId) {
+        const arrivalLoc: TripLocation = {
+          org_unit_id: stop.location.org_unit_id,
+          label: coords.label || stop.location.label || stop.taskTitle || 'موقع المهمة (GPS)',
+          lat: coords.lat,
+          lng: coords.lng,
+          accuracy: coords.accuracy,
+          timestamp: now
+        };
+
+        const updatedStop: TripStop = {
+          ...stop,
+          status: 'ARRIVED',
+          arrivedAt: now,
+          arrivedLocation: arrivalLoc,
+          location: {
+            ...stop.location,
+            lat: coords.lat,
+            lng: coords.lng,
+            accuracy: coords.accuracy,
+            label: stop.location.label || arrivalLoc.label
+          }
+        };
+        targetStop = updatedStop;
+        return updatedStop;
+      }
+      return stop;
+    });
+
+    if (!targetStop) {
+      throw new Error(`Stop ${stopId} not found in trip ${tripId}`);
+    }
+
+    const updatedTrip: Trip = {
+      ...trip,
+      stops: updatedStops
+    };
+
+    allTrips[tripIndex] = updatedTrip;
+    StorageEngine.setStored('fleet_trips_items', allTrips);
+    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
+
+    // Update vehicle's last known location
+    const stopObj = targetStop as TripStop;
+    await this.updateVehicleLocationAndStatus(
+      companyId,
+      trip.vehicle_id,
+      {
+        lat: coords.lat,
+        lng: coords.lng,
+        accuracy: coords.accuracy,
+        updatedAt: now,
+        label: stopObj.taskTitle || stopObj.location.label || 'موقع تنفيذ المهمة'
+      }
+    );
+
+    return { trip: updatedTrip, stop: targetStop };
+  }
+
+  /**
+   * Driver ends trip: sets status COMPLETED, records completion timestamp,
+   * and resets vehicle status to ACTIVE.
+   */
+  public static async completeTrip(
+    companyId: string,
+    operatorId: string,
+    tripId: string,
+    coords?: {
+      lat: number;
+      lng: number;
+      accuracy?: number;
+      label?: string;
+    }
+  ): Promise<Trip> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const tripIndex = allTrips.findIndex(t => t.id === tripId && t.company_id === companyId);
+    if (tripIndex === -1) {
+      throw new Error(`Trip ${tripId} not found`);
+    }
+
+    const trip = allTrips[tripIndex];
+    const now = new Date().toISOString();
+
+    const updatedTrip: Trip = {
+      ...trip,
+      status: 'COMPLETED',
+      completedAt: now
+    };
+
+    allTrips[tripIndex] = updatedTrip;
+    StorageEngine.setStored('fleet_trips_items', allTrips);
+    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
+
+    // Reset vehicle status to ACTIVE
+    const locUpdate: VehicleLocation | undefined = coords ? {
+      lat: coords.lat,
+      lng: coords.lng,
+      accuracy: coords.accuracy,
+      updatedAt: now,
+      label: coords.label || 'نهاية الرحلة'
+    } : undefined;
+
+    await this.updateVehicleLocationAndStatus(
+      companyId,
+      trip.vehicle_id,
+      locUpdate,
+      'ACTIVE'
+    );
+
+    return updatedTrip;
+  }
+
+  /**
+   * Helper to update vehicle's last known location and optional status
+   */
+  public static async updateVehicleLocationAndStatus(
+    companyId: string,
+    vehicleId: string,
+    location?: VehicleLocation,
+    status?: VehicleStatus
+  ): Promise<Vehicle | null> {
+    const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
+    const vIndex = allVehicles.findIndex(v => v.id === vehicleId && v.company_id === companyId);
+    if (vIndex === -1) return null;
+
+    const current = allVehicles[vIndex];
+    const updated: Vehicle = {
+      ...current,
+      status: status || current.status,
+      last_known_location: location || current.last_known_location
+    };
+
+    allVehicles[vIndex] = updated;
+    StorageEngine.setStored('fleet_vehicles_items', allVehicles);
+    await dbSetDoc('fleet_vehicles_items', updated.id, updated);
+
+    return updated;
+  }
+
+  /**
+   * Haversine formula to compute great-circle distance between two GPS coordinates in Kilometers
+   */
+  public static calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Earth's radius in KM
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const d = R * c;
+    return Math.round(d * 100) / 100;
+  }
+
+  /**
+   * Reassigns an active/draft trip from one vehicle to a replacement vehicle
+   */
+  public static async reassignTripVehicle(
+    companyId: string,
+    operatorId: string,
+    tripId: string,
+    newVehicleId: string,
+    newDriverId?: string,
+    reason?: string
+  ): Promise<Trip> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const tripIndex = allTrips.findIndex(t => t.id === tripId && t.company_id === companyId);
+    if (tripIndex === -1) {
+      throw new Error(`Trip ${tripId} not found`);
+    }
+
+    const trip = allTrips[tripIndex];
+    const oldVehicleId = trip.vehicle_id;
+
+    // Find new vehicle to deduce driver if not provided
+    const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
+    const newVeh = allVehicles.find(v => v.id === newVehicleId && v.company_id === companyId);
+    if (!newVeh) {
+      throw new Error(`Target vehicle ${newVehicleId} not found`);
+    }
+
+    const updatedTrip: Trip = {
+      ...trip,
+      vehicle_id: newVehicleId,
+      driver_id: newDriverId || trip.driver_id,
+      reassignedFromVehicleId: oldVehicleId,
+      reassignedAt: new Date().toISOString(),
+      reassignReason: reason || 'إعادة توزيع بسبب تعطل المركبة الأصلية'
+    };
+
+    allTrips[tripIndex] = updatedTrip;
+    StorageEngine.setStored('fleet_trips_items', allTrips);
+    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
+
+    return updatedTrip;
+  }
+
+  /**
+   * Retrieves open/active trips assigned to a specific vehicle
+   */
+  public static getOpenTripsForVehicle(companyId: string, vehicleId: string): Trip[] {
+    const trips = this.getTripsByCompany(companyId);
+    return trips.filter(t => 
+      t.vehicle_id === vehicleId && 
+      ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'DISPATCHED', 'IN_PROGRESS'].includes(t.status)
+    );
+  }
+
+  /**
+   * Suggests the nearest available vehicles to a target location (e.g. broken vehicle or task coordinates)
+   * to minimize travel time and diesel consumption.
+   */
+  public static suggestNearestVehiclesForTasks(
+    companyId: string,
+    targetCoords: { lat: number; lng: number },
+    excludeVehicleId?: string
+  ): Array<{ vehicle: Vehicle; distanceKm: number; lastLocationLabel?: string }> {
+    const allVehicles = this.getVehiclesByOrgUnit(companyId);
+    
+    // Candidates: ACTIVE or DISPATCHED vehicles (not OUT_OF_SERVICE or BREAKDOWN)
+    const available = allVehicles.filter(v => 
+      v.id !== excludeVehicleId && 
+      !['BREAKDOWN', 'OUT_OF_SERVICE', 'MAINTENANCE', 'INACTIVE'].includes(v.status)
+    );
+
+    const candidatesWithDistance = available.map(v => {
+      if (v.last_known_location && typeof v.last_known_location.lat === 'number' && typeof v.last_known_location.lng === 'number') {
+        const dist = this.calculateDistanceKm(
+          v.last_known_location.lat,
+          v.last_known_location.lng,
+          targetCoords.lat,
+          targetCoords.lng
+        );
+        return {
+          vehicle: v,
+          distanceKm: dist,
+          lastLocationLabel: v.last_known_location.label || `${v.last_known_location.lat.toFixed(3)}, ${v.last_known_location.lng.toFixed(3)}`
+        };
+      }
+      // If no GPS coords known yet, assign large distance
+      return {
+        vehicle: v,
+        distanceKm: 99999,
+        lastLocationLabel: 'الموقع غير مسجل بعد'
+      };
+    });
+
+    // Sort by shortest distance first
+    candidatesWithDistance.sort((a, b) => a.distanceKm - b.distanceKm);
+
+    return candidatesWithDistance;
+  }
+
+  /**
+   * Updates a vehicle's status (e.g. BREAKDOWN, MAINTENANCE, ACTIVE)
+   * and returns open trips affected if out of service.
+   */
+  public static async updateVehicleStatus(
+    companyId: string,
+    operatorId: string,
+    vehicleId: string,
+    status: VehicleStatus,
+    notes?: string
+  ): Promise<{ vehicle: Vehicle; affectedTrips: Trip[] }> {
+    const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
+    const vIndex = allVehicles.findIndex(v => v.id === vehicleId && v.company_id === companyId);
+    if (vIndex === -1) {
+      throw new Error(`Vehicle ${vehicleId} not found`);
+    }
+
+    const current = allVehicles[vIndex];
+    const updated: Vehicle = {
+      ...current,
+      status
+    };
+
+    allVehicles[vIndex] = updated;
+    StorageEngine.setStored('fleet_vehicles_items', allVehicles);
+    await dbSetDoc('fleet_vehicles_items', updated.id, updated);
+
+    const isOutOfService = ['BREAKDOWN', 'OUT_OF_SERVICE', 'MAINTENANCE', 'INACTIVE'].includes(status);
+    const affectedTrips = isOutOfService ? this.getOpenTripsForVehicle(companyId, vehicleId) : [];
+
+    return { vehicle: updated, affectedTrips };
   }
 
   /**

@@ -1,5 +1,13 @@
-export type VehicleStatus = 'ACTIVE' | 'MAINTENANCE' | 'INACTIVE' | 'DISPATCHED';
+export type VehicleStatus = 'ACTIVE' | 'MAINTENANCE' | 'INACTIVE' | 'DISPATCHED' | 'BREAKDOWN' | 'OUT_OF_SERVICE';
 export type VehicleType = 'TRUCK' | 'VAN' | 'CAR' | 'MOTORCYCLE' | 'PICKUP' | 'HEAVY_EQUIPMENT';
+
+export interface VehicleLocation {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  updatedAt: string;
+  label?: string;
+}
 
 export interface Vehicle {
   id: string;
@@ -17,6 +25,7 @@ export interface Vehicle {
   odometerReading: number; // in KM
   fuelCapacity: number; // in Liters
   assignedOrgUnitName?: string;
+  last_known_location?: VehicleLocation;
   createdAt: string;
 }
 
@@ -50,21 +59,31 @@ export interface FuelLog {
 }
 
 export type TripStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' 
-  | 'DISPATCHED' | 'COMPLETED' | 'REJECTED' | 'CANCELLED';
+  | 'DISPATCHED' | 'IN_PROGRESS' | 'COMPLETED' | 'REJECTED' | 'CANCELLED';
+
+export type TripStopStatus = 'PENDING' | 'IN_PROGRESS' | 'ARRIVED' | 'COMPLETED' | 'SKIPPED';
 
 export interface TripLocation {
   org_unit_id?: string;
   label: string;
   lat?: number;
   lng?: number;
+  accuracy?: number;
+  timestamp?: string;
 }
 
 export interface TripStop {
   id: string;
   sequence: number;
+  taskTitle?: string; // e.g. "بوسطة", "تغيير اسطوانات غاز", "صيانة", "استلام/تسليم"
+  notes?: string;
   location: TripLocation;
-  status: 'PENDING' | 'ARRIVED' | 'SKIPPED';
+  status: TripStopStatus;
+  startLocation?: TripLocation;
+  arrivedLocation?: TripLocation;
+  startedAt?: string;
   arrivedAt?: string;
+  completedAt?: string;
 }
 
 export interface Trip {
@@ -77,9 +96,14 @@ export interface Trip {
   tripType: string;
   status: TripStatus;
   scheduledAt: string;
+  startedAt?: string;
   dispatchedAt?: string;
   completedAt?: string;
+  startLocation?: TripLocation;
   notes?: string;
+  reassignedFromVehicleId?: string;
+  reassignedAt?: string;
+  reassignReason?: string;
   createdBy: string;
   createdAt: string;
 }

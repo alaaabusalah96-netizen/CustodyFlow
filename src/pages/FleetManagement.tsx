@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Truck, Plus, Search, Filter, Wrench, Fuel, ShieldAlert,
   Building2, Gauge, Calendar, User, FileText, CheckCircle2,
-  MapPin, Navigation, Trash2, Map
+  MapPin, Navigation, Trash2, Map, Play, ArrowRightLeft, Sparkles,
+  Clock, CheckCircle, AlertTriangle, AlertCircle, Radio, Loader2
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { UsersModule } from '../db/users';
@@ -11,13 +12,23 @@ import { LogsModule } from '../db/logs';
 import { OrganizationEngine } from '../db/organizationEngine';
 import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
 import LeafletMapPickerModal from '../components/LeafletMapPickerModal';
+import BreakdownReassignmentModal from '../components/BreakdownReassignmentModal';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
-import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus, Trip } from '../types/fleet';
+import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus, Trip, TripStop } from '../types/fleet';
 
 interface FleetManagementProps {
   language: 'ar' | 'en';
   theme?: string;
 }
+
+const TASK_PRESETS = [
+  { id: 'POST', labelAr: 'بوسطة ومراسلات', labelEn: 'Post & Mail Delivery' },
+  { id: 'GAS_CYLINDERS', labelAr: 'تغيير اسطوانات غاز / أنابيب', labelEn: 'Gas Cylinders Exchange' },
+  { id: 'MAINTENANCE', labelAr: 'صيانة وتشغيل ميداني', labelEn: 'Field Maintenance' },
+  { id: 'DELIVERY_PICKUP', labelAr: 'استلام وتسليم بضائع', labelEn: 'Pickup & Delivery' },
+  { id: 'GENERAL', labelAr: 'مهمة عمل ونقل عام', labelEn: 'General Transport' },
+  { id: 'OTHER', labelAr: 'أخرى (مهمة مخصصة)', labelEn: 'Other Custom Task' }
+];
 
 export default function FleetManagement({ language }: FleetManagementProps) {
   const isRtl = language === 'ar';
@@ -54,6 +65,13 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   const [showLogFuel, setShowLogFuel] = useState(false);
   const [selectedVehicleForLog, setSelectedVehicleForLog] = useState<Vehicle | null>(null);
 
+  // Breakdown & Reassignment Modal
+  const [showBreakdownModal, setShowBreakdownModal] = useState(false);
+  const [selectedVehicleForBreakdown, setSelectedVehicleForBreakdown] = useState<Vehicle | null>(null);
+
+  // GPS Execution State
+  const [gpsLoadingId, setGpsLoadingId] = useState<string | null>(null);
+
   // Map Picker Modal
   const [mapModalOpen, setMapModalOpen] = useState(false);
   const [activeMapStopIndex, setActiveMapStopIndex] = useState<number | null>(null);
@@ -74,12 +92,12 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   const [tripForm, setTripForm] = useState({
     vehicle_id: '',
     driver_id: '',
-    tripType: '',
+    tripType: 'مهمة تشغيلية',
     scheduledAt: new Date().toISOString().slice(0, 16),
     notes: '',
     stops: [
-      { id: 'stop-1', label: '', org_unit_id: '', lat: undefined as number | undefined, lng: undefined as number | undefined },
-      { id: 'stop-2', label: '', org_unit_id: '', lat: undefined as number | undefined, lng: undefined as number | undefined },
+      { id: 'stop-1', taskTitle: 'نقطة الانطلاق (الفرع/المحطة)', label: '', org_unit_id: '', notes: '', lat: undefined as number | undefined, lng: undefined as number | undefined },
+      { id: 'stop-2', taskTitle: 'بوسطة ومراسلات', label: '', org_unit_id: '', notes: '', lat: undefined as number | undefined, lng: undefined as number | undefined },
     ]
   });
 
@@ -232,6 +250,151 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     }
   };
 
+  const captureGpsPosition = (): Promise<{ lat: number; lng: number; accuracy?: number }> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error(isRtl 
+          ? 'خاصية تحديد الموقع الجغرافي (GPS) غير مدعومة في هذا المتصفح' 
+          : 'Geolocation is not supported by your browser'));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy
+          });
+        },
+        (error) => {
+          let msg = isRtl ? 'تعذر الحصول على إحداثيات GPS.' : 'Failed to retrieve GPS location.';
+          if (error.code === error.PERMISSION_DENIED) {
+            msg = isRtl 
+              ? 'تم رفض إذن تحديد الموقع (GPS). يرجى السماح بالوصول للموقع من إعدادات المتصفح / الجوال للمتابعة.'
+              : 'Location permission was denied. Please allow location access in your browser/device settings.';
+          } else if (error.code === error.POSITION_UNAVAILABLE) {
+            msg = isRtl 
+              ? 'إشارة الموقع (GPS) غير متاحة حالياً.' 
+              : 'GPS location information is currently unavailable.';
+          } else if (error.code === error.TIMEOUT) {
+            msg = isRtl 
+              ? 'انتهت مهلة الحصول على الموقع (GPS).' 
+              : 'GPS location request timed out.';
+          }
+          reject(new Error(msg));
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+      );
+    });
+  };
+
+  const handleDriverStartTrip = async (trip: Trip) => {
+    try {
+      setGpsLoadingId(`start-${trip.id}`);
+      const coords = await captureGpsPosition();
+      await FleetBusinessEngine.startTrip(
+        companyId, 
+        activeUser?.id || 'driver', 
+        trip.id, 
+        {
+          lat: coords.lat,
+          lng: coords.lng,
+          accuracy: coords.accuracy,
+          label: isRtl ? 'نقطة انطلاق الرحلة (GPS)' : 'Trip Start Point (GPS)'
+        }
+      );
+      showToast('success', isRtl ? 'تم تسجيل بداية الرحلة وموقع الانطلاق عبر GPS بنجاح' : 'Trip started with GPS coordinates recorded successfully');
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      showToast('error', err.message || (isRtl ? 'تعذر تسجيل بداية الرحلة' : 'Failed to start trip'));
+    } finally {
+      setGpsLoadingId(null);
+    }
+  };
+
+  const handleDriverArriveStop = async (trip: Trip, stop: TripStop) => {
+    try {
+      setGpsLoadingId(`stop-${stop.id}`);
+      const coords = await captureGpsPosition();
+      await FleetBusinessEngine.recordStopArrival(
+        companyId,
+        activeUser?.id || 'driver',
+        trip.id,
+        stop.id,
+        {
+          lat: coords.lat,
+          lng: coords.lng,
+          accuracy: coords.accuracy,
+          label: stop.taskTitle || stop.location.label || (isRtl ? 'موقع تنفيذ المهمة (GPS)' : 'Task Destination (GPS)')
+        }
+      );
+      showToast('success', isRtl ? `تم تسجيل الوصول لمهمة (${stop.taskTitle || stop.location.label}) وتحديث الموقع عبر GPS` : 'Stop arrival and GPS location recorded successfully');
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      showToast('error', err.message || (isRtl ? 'تعذر تسجيل الوصول للمهمة' : 'Failed to record arrival'));
+    } finally {
+      setGpsLoadingId(null);
+    }
+  };
+
+  const handleDriverCompleteTrip = async (trip: Trip) => {
+    try {
+      setGpsLoadingId(`complete-${trip.id}`);
+      let coords: { lat: number; lng: number; accuracy?: number } | undefined;
+      try {
+        coords = await captureGpsPosition();
+      } catch (e) {
+        // Fallback without coords
+      }
+      await FleetBusinessEngine.completeTrip(
+        companyId,
+        activeUser?.id || 'driver',
+        trip.id,
+        coords ? {
+          lat: coords.lat,
+          lng: coords.lng,
+          accuracy: coords.accuracy,
+          label: isRtl ? 'نهاية الرحلة' : 'Trip End'
+        } : undefined
+      );
+      showToast('success', isRtl ? 'تم إنهاء المشوار بنجاح وإعادة حالة المركبة لمتاحة' : 'Trip completed and vehicle marked active');
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      showToast('error', err.message || (isRtl ? 'تعذر إنهاء الرحلة' : 'Failed to complete trip'));
+    } finally {
+      setGpsLoadingId(null);
+    }
+  };
+
+  const handleVehicleStatusChange = async (vehicle: Vehicle, newStatus: VehicleStatus) => {
+    try {
+      const { vehicle: updatedVeh, affectedTrips } = await FleetBusinessEngine.updateVehicleStatus(
+        companyId,
+        activeUser?.id || 'system',
+        vehicle.id,
+        newStatus
+      );
+      showToast('success', isRtl ? `تم تحديث حالة المركبة إلى ${newStatus}` : `Vehicle status updated to ${newStatus}`);
+      loadData();
+
+      if (['BREAKDOWN', 'OUT_OF_SERVICE', 'MAINTENANCE'].includes(newStatus) && affectedTrips.length > 0) {
+        setSelectedVehicleForBreakdown(updatedVeh);
+        setShowBreakdownModal(true);
+      }
+    } catch (err: any) {
+      console.error(err);
+      showToast('error', isRtl ? 'تعذر تحديث حالة المركبة' : 'Failed to update vehicle status');
+    }
+  };
+
+  const handleOpenBreakdownModal = (vehicle: Vehicle) => {
+    setSelectedVehicleForBreakdown(vehicle);
+    setShowBreakdownModal(true);
+  };
+
   const handleAddStopRow = () => {
     setTripForm(prev => ({
       ...prev,
@@ -239,8 +402,10 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         ...prev.stops,
         {
           id: `stop-${Date.now()}-${prev.stops.length + 1}`,
+          taskTitle: 'استلام وتسليم بضائع',
           label: '',
           org_unit_id: '',
+          notes: '',
           lat: undefined,
           lng: undefined
         }
@@ -254,6 +419,28 @@ export default function FleetManagement({ language }: FleetManagementProps) {
       ...prev,
       stops: prev.stops.filter((_, idx) => idx !== index)
     }));
+  };
+
+  const handleStopTaskChange = (index: number, taskTitle: string) => {
+    setTripForm(prev => {
+      const nextStops = [...prev.stops];
+      nextStops[index] = {
+        ...nextStops[index],
+        taskTitle
+      };
+      return { ...prev, stops: nextStops };
+    });
+  };
+
+  const handleStopNotesChange = (index: number, notes: string) => {
+    setTripForm(prev => {
+      const nextStops = [...prev.stops];
+      nextStops[index] = {
+        ...nextStops[index],
+        notes
+      };
+      return { ...prev, stops: nextStops };
+    });
   };
 
   const handleStopLabelChange = (index: number, value: string) => {
@@ -312,9 +499,9 @@ export default function FleetManagement({ language }: FleetManagementProps) {
       return;
     }
 
-    const hasEmptyStop = tripForm.stops.some(s => !s.label.trim() && (s.lat === undefined || s.lng === undefined));
+    const hasEmptyStop = tripForm.stops.some(s => !s.taskTitle?.trim() && !s.label.trim() && (s.lat === undefined || s.lng === undefined));
     if (hasEmptyStop) {
-      showToast('error', isRtl ? 'يرجى إدخال اسم أو تحديد موقع لكل محطة في خط السير' : 'Please specify a name or map location for each stop');
+      showToast('error', isRtl ? 'يرجى تحديد المهمة أو الوجهة لكل محطة في المشوار' : 'Please specify a task title or destination for each stop');
       return;
     }
 
@@ -322,9 +509,11 @@ export default function FleetManagement({ language }: FleetManagementProps) {
       const stopsData = tripForm.stops.map((s, idx) => ({
         id: s.id,
         sequence: idx + 1,
+        taskTitle: s.taskTitle || undefined,
+        notes: s.notes || '',
         location: {
           org_unit_id: s.org_unit_id || undefined,
-          label: s.label.trim() || `${s.lat?.toFixed(4)}, ${s.lng?.toFixed(4)}`,
+          label: s.label.trim() || s.taskTitle || `${s.lat?.toFixed(4)}, ${s.lng?.toFixed(4)}`,
           lat: s.lat,
           lng: s.lng
         },
@@ -341,16 +530,16 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         org_unit_id: stopsData[0]?.location.org_unit_id
       });
 
-      showToast('success', isRtl ? 'تم تسجيل المشوار بصفة مسودة (DRAFT) بنجاح' : 'Trip recorded in DRAFT status successfully');
+      showToast('success', isRtl ? 'تم تسجيل المشوار بصفة مسودة (DRAFT) بنجاح - في انتظار بدء السائق للرحلة عبر GPS' : 'Trip recorded in DRAFT status successfully');
       setTripForm({
         vehicle_id: '',
         driver_id: '',
-        tripType: '',
+        tripType: 'مهمة تشغيلية',
         scheduledAt: new Date().toISOString().slice(0, 16),
         notes: '',
         stops: [
-          { id: 'stop-1', label: '', org_unit_id: '', lat: undefined, lng: undefined },
-          { id: 'stop-2', label: '', org_unit_id: '', lat: undefined, lng: undefined },
+          { id: 'stop-1', taskTitle: 'نقطة الانطلاق (الفرع/المحطة)', label: '', org_unit_id: '', notes: '', lat: undefined, lng: undefined },
+          { id: 'stop-2', taskTitle: 'بوسطة ومراسلات', label: '', org_unit_id: '', notes: '', lat: undefined, lng: undefined },
         ]
       });
       setShowAddTrip(false);
@@ -549,178 +738,369 @@ export default function FleetManagement({ language }: FleetManagementProps) {
 
           {/* Vehicle Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredVehicles.map(v => (
-              <div key={v.id} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-md">
-                        {v.code}
-                      </span>
-                      <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-md">
-                        {v.type}
-                      </span>
-                    </div>
-                    <h3 className="text-base font-extrabold text-slate-900 dark:text-white mt-1">
-                      {v.make} {v.model} ({v.year})
-                    </h3>
-                    <p className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                      {v.plateNumber}
-                    </p>
-                    {v.org_unit_id && (
-                      <div className="mt-1 flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">
-                        <Building2 className="h-3 w-3" />
-                        <span>{orgUnits.find(u => u.id === v.org_unit_id)?.name || v.org_unit_id}</span>
+            {filteredVehicles.map(v => {
+              const isBreakdown = ['BREAKDOWN', 'OUT_OF_SERVICE'].includes(v.status);
+              const openTripsCount = FleetBusinessEngine.getOpenTripsForVehicle(companyId, v.id).length;
+
+              return (
+                <div key={v.id} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-md">
+                          {v.code}
+                        </span>
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-md">
+                          {v.type}
+                        </span>
+                        <select
+                          value={v.status}
+                          onChange={(e) => handleVehicleStatusChange(v, e.target.value as VehicleStatus)}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md border focus:outline-none cursor-pointer ${
+                            v.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' :
+                            v.status === 'DISPATCHED' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800' :
+                            v.status === 'MAINTENANCE' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' :
+                            'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800'
+                          }`}
+                        >
+                          <option value="ACTIVE">{isRtl ? 'جاهزة / نشطة' : 'ACTIVE'}</option>
+                          <option value="DISPATCHED">{isRtl ? 'في مشوار ميداني' : 'DISPATCHED'}</option>
+                          <option value="MAINTENANCE">{isRtl ? 'صيانة دورية' : 'MAINTENANCE'}</option>
+                          <option value="BREAKDOWN">{isRtl ? 'معطلة / عطل مفاجئ' : 'BREAKDOWN'}</option>
+                          <option value="OUT_OF_SERVICE">{isRtl ? 'خارج الخدمة' : 'OUT_OF_SERVICE'}</option>
+                          <option value="INACTIVE">{isRtl ? 'متوقفة' : 'INACTIVE'}</option>
+                        </select>
                       </div>
-                    )}
+                      <h3 className="text-base font-extrabold text-slate-900 dark:text-white mt-1.5">
+                        {v.make} {v.model} ({v.year})
+                      </h3>
+                      <p className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                        {v.plateNumber}
+                      </p>
+                      {v.org_unit_id && (
+                        <div className="mt-1 flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">
+                          <Building2 className="h-3 w-3" />
+                          <span>{orgUnits.find(u => u.id === v.org_unit_id)?.name || v.org_unit_id}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Last Known GPS Location badge */}
+                  {v.last_known_location && (
+                    <div className="p-2 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200/60 dark:border-slate-800/60 text-[11px] text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <MapPin className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                        <span className="truncate font-medium">
+                          {v.last_known_location.label || `${v.last_known_location.lat.toFixed(4)}, ${v.last_known_location.lng.toFixed(4)}`}
+                        </span>
+                      </div>
+                      {v.last_known_location.updatedAt && (
+                        <span className="font-mono text-[9px] text-slate-400 shrink-0 mr-1 rtl:mr-0 rtl:ml-1">
+                          {new Date(v.last_known_location.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">{isRtl ? 'السائق المسؤول' : 'Assigned Driver'}</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">{v.driverName || '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">{isRtl ? 'عدّاد الكيلومترات' : 'Odometer (KM)'}</span>
+                      <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{v.odometerReading.toLocaleString()} KM</span>
+                    </div>
+                  </div>
+
+                  {/* Breakdown Redistribution Alert Button */}
+                  {isBreakdown && openTripsCount > 0 && (
+                    <button
+                      onClick={() => handleOpenBreakdownModal(v)}
+                      className="w-full py-2 px-3 text-xs font-extrabold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-all animate-pulse"
+                    >
+                      <ShieldAlert className="h-4 w-4" />
+                      <span>{isRtl ? `إعادة توزيع ${openTripsCount} مشاوير على الأقرب (توفير السولار)` : `Reassign ${openTripsCount} Trips to Nearest`}</span>
+                    </button>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                    <button
+                      onClick={() => {
+                        setSelectedVehicleForLog(v);
+                        setShowLogFuel(true);
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 rounded-xl hover:bg-amber-100 transition-all"
+                    >
+                      <Fuel className="h-3.5 w-3.5" />
+                      <span>{isRtl ? 'تموين وقود' : 'Fuel Refill'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setSelectedVehicleForLog(v);
+                        setShowLogMaintenance(true);
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-xl hover:bg-indigo-100 transition-all"
+                    >
+                      <Wrench className="h-3.5 w-3.5" />
+                      <span>{isRtl ? 'تسجيل صيانة' : 'Maintenance'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenBreakdownModal(v)}
+                      title={isRtl ? 'إعادة توزيع المهام عند العطل' : 'Reassign tasks'}
+                      className="p-1.5 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700"
+                    >
+                      <ArrowRightLeft className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">{isRtl ? 'السائق المسؤول' : 'Assigned Driver'}</span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300">{v.driverName || '-'}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">{isRtl ? 'عدّاد الكيلومترات' : 'Odometer (KM)'}</span>
-                    <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{v.odometerReading.toLocaleString()} KM</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                  <button
-                    onClick={() => {
-                      setSelectedVehicleForLog(v);
-                      setShowLogFuel(true);
-                    }}
-                    className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 rounded-xl hover:bg-amber-100 transition-all"
-                  >
-                    <Fuel className="h-3.5 w-3.5" />
-                    <span>{isRtl ? 'تموين وقود' : 'Fuel Refill'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setSelectedVehicleForLog(v);
-                      setShowLogMaintenance(true);
-                    }}
-                    className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-xl hover:bg-indigo-100 transition-all"
-                  >
-                    <Wrench className="h-3.5 w-3.5" />
-                    <span>{isRtl ? 'تسجيل صيانة' : 'Maintenance'}</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
 
       {/* Trips Tab */}
       {activeTab === 'trips' && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <h3 className="font-extrabold text-slate-900 dark:text-white text-sm flex items-center gap-2">
-              <Navigation className="h-4 w-4 text-indigo-600" />
-              <span>{isRtl ? 'جدول المشاوير والرحلات' : 'Trips Schedule'}</span>
-            </h3>
-            <span className="text-xs text-slate-500 font-mono font-bold">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm overflow-hidden space-y-4 p-4">
+          <div className="border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Navigation className="h-5 w-5 text-indigo-600" />
+              <div>
+                <h3 className="font-extrabold text-slate-900 dark:text-white text-sm">
+                  {isRtl ? 'جدول المشاوير والتشغيل الميداني' : 'Trips & Driver Operations'}
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {isRtl ? 'يقوم المكتب بتسجيل مهام المشوار، ويسجل السائق بداية الرحلة والوصول للمواقع عبر الـ GPS تلقائياً' : 'Office creates task-based trips, driver marks starts and arrivals via GPS.'}
+                </p>
+              </div>
+            </div>
+            <span className="text-xs text-slate-500 font-mono font-bold bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-xl">
               {trips.length} {isRtl ? 'مشوار مسجل' : 'trips'}
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-right rtl:text-right ltr:text-left">
-              <thead className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-100 dark:border-slate-800">
-                <tr>
-                  <th className="p-3">#</th>
-                  <th className="p-3">{isRtl ? 'المركبة' : 'Vehicle'}</th>
-                  <th className="p-3">{isRtl ? 'السائق' : 'Driver'}</th>
-                  <th className="p-3">{isRtl ? 'خط السير (المحطات)' : 'Route (Stops)'}</th>
-                  <th className="p-3">{isRtl ? 'نوع المشوار' : 'Trip Type'}</th>
-                  <th className="p-3">{isRtl ? 'الموعد المجدول' : 'Scheduled At'}</th>
-                  <th className="p-3">{isRtl ? 'الحالة' : 'Status'}</th>
-                  <th className="p-3">{isRtl ? 'ملاحظات' : 'Notes'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {trips.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">
-                      {isRtl ? 'لا توجد مشاوير مسجلة حالياً.' : 'No trips recorded yet.'}
-                    </td>
-                  </tr>
-                ) : (
-                  trips.map((t, idx) => {
-                    const vehicle = vehicles.find(v => v.id === t.vehicle_id);
-                    const driver = users.find(u => u.id === t.driver_id);
+          <div className="grid grid-cols-1 gap-4">
+            {trips.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 font-medium bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+                {isRtl ? 'لا توجد مشاوير مسجلة حالياً.' : 'No trips recorded yet.'}
+              </div>
+            ) : (
+              trips.map((t, idx) => {
+                const vehicle = vehicles.find(v => v.id === t.vehicle_id);
+                const driver = users.find(u => u.id === t.driver_id);
+                const isDispatched = ['DISPATCHED', 'IN_PROGRESS'].includes(t.status);
+                const isCompleted = t.status === 'COMPLETED';
+                const isDraft = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'].includes(t.status);
+                const startLoading = gpsLoadingId === `start-${t.id}`;
+                const completeLoading = gpsLoadingId === `complete-${t.id}`;
 
-                    return (
-                      <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                        <td className="p-3 font-mono font-bold text-slate-400">{idx + 1}</td>
-                        <td className="p-3 font-bold text-slate-800 dark:text-slate-200">
-                          {vehicle ? `${vehicle.plateNumber} (${vehicle.make})` : t.vehicle_id}
-                        </td>
-                        <td className="p-3 font-medium text-slate-700 dark:text-slate-300">
-                          {driver ? driver.full_name : t.driver_id}
-                        </td>
-                        <td className="p-3 text-slate-700 dark:text-slate-300">
-                          {t.stops && t.stops.length > 0 ? (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[11px] font-bold text-slate-500">
-                                {isRtl ? 'من' : 'From'}
-                              </span>
-                              {t.stops.map((stop, sIdx) => {
-                                const isFirst = sIdx === 0;
-                                const isLast = sIdx === t.stops.length - 1;
-                                const stopLabel =
-                                  stop.location.label ||
-                                  orgUnits.find(u => u.id === stop.location.org_unit_id)?.name ||
-                                  stop.location.org_unit_id ||
-                                  (stop.location.lat ? `${stop.location.lat.toFixed(3)}, ${stop.location.lng?.toFixed(3)}` : `Stop ${sIdx + 1}`);
-
-                                return (
-                                  <React.Fragment key={stop.id || sIdx}>
-                                    {sIdx > 0 && <span className="text-slate-400 font-bold text-xs">←</span>}
-                                    <span
-                                      className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold border ${
-                                        isFirst
-                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800/60'
-                                          : isLast
-                                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200/60 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-800/60'
-                                          : 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-                                      }`}
-                                    >
-                                      {stopLabel}
-                                    </span>
-                                  </React.Fragment>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            '-'
-                          )}
-                        </td>
-                        <td className="p-3 font-semibold text-indigo-600 dark:text-indigo-400">
+                return (
+                  <div
+                    key={t.id}
+                    className={`p-4 rounded-2xl border transition-all ${
+                      isDispatched
+                        ? 'border-indigo-300 dark:border-indigo-800 bg-indigo-50/20 dark:bg-indigo-950/20'
+                        : isCompleted
+                        ? 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50'
+                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900'
+                    }`}
+                  >
+                    {/* Trip Header */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className="font-mono font-black text-xs px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg">
+                          #{idx + 1}
+                        </span>
+                        <div className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                          <Truck className="h-4 w-4 text-indigo-600" />
+                          <span>{vehicle ? `${vehicle.plateNumber} (${vehicle.make} ${vehicle.model})` : t.vehicle_id}</span>
+                        </div>
+                        <div className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                          <User className="h-3.5 w-3.5 text-slate-400" />
+                          <span>{driver ? driver.full_name : t.driver_id}</span>
+                        </div>
+                        <span className="px-2.5 py-0.5 text-[11px] font-bold rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                           {t.tripType}
-                        </td>
-                        <td className="p-3 font-mono text-slate-600 dark:text-slate-400">
-                          {t.scheduledAt ? new Date(t.scheduledAt).toLocaleString(isRtl ? 'ar-EG' : 'en-US') : '-'}
-                        </td>
-                        <td className="p-3">
-                          <span className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
-                            {t.status === 'DRAFT' ? (isRtl ? 'مسودة (DRAFT)' : 'DRAFT') : t.status}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {t.reassignedFromVehicleId && (
+                          <span className="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 flex items-center gap-1">
+                            <ArrowRightLeft className="h-3 w-3" />
+                            {isRtl ? 'تمت إعادة توزيعه عند العطل' : 'Reassigned'}
                           </span>
-                        </td>
-                        <td className="p-3 text-slate-500 text-[11px]">
-                          {t.notes || '-'}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                        )}
+                        <span className={`px-3 py-1 text-xs font-black rounded-xl border ${
+                          t.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300' :
+                          isDispatched ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-300 animate-pulse' :
+                          'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-300'
+                        }`}>
+                          {t.status === 'DRAFT' ? (isRtl ? 'مسودة (DRAFT)' : 'DRAFT') :
+                           t.status === 'DISPATCHED' ? (isRtl ? 'في الطريق (DISPATCHED)' : 'DISPATCHED') :
+                           t.status === 'COMPLETED' ? (isRtl ? 'مكتمل (COMPLETED)' : 'COMPLETED') : t.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Multi-Task Stops List */}
+                    <div className="py-3 space-y-2">
+                      <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        {isRtl ? 'مهام ومحطات خط السير:' : 'Tasks & Route Stops:'}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        {t.stops.map((stop, sIdx) => {
+                          const isStopArrived = stop.status === 'ARRIVED';
+                          const isStopPending = stop.status === 'PENDING' || stop.status === 'IN_PROGRESS';
+                          const isStopLoading = gpsLoadingId === `stop-${stop.id}`;
+                          const stopTitle = stop.taskTitle || stop.location.label || `المهمة ${sIdx + 1}`;
+
+                          return (
+                            <div
+                              key={stop.id || sIdx}
+                              className={`p-3 rounded-xl border flex flex-col justify-between gap-2 ${
+                                isStopArrived
+                                  ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800'
+                                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                      #{sIdx + 1}
+                                    </span>
+                                    <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                                      {stopTitle}
+                                    </span>
+                                  </div>
+                                  {isStopArrived ? (
+                                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-0.5">
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      {isRtl ? 'تم الوصول' : 'Arrived'}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-slate-400">
+                                      {isRtl ? 'في الانتظار' : 'Pending'}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {stop.location.label && stop.location.label !== stopTitle && (
+                                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
+                                    📍 {stop.location.label}
+                                  </p>
+                                )}
+
+                                {stop.notes && (
+                                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 italic">
+                                    "{stop.notes}"
+                                  </p>
+                                )}
+
+                                {stop.arrivedLocation && typeof stop.arrivedLocation.lat === 'number' && (
+                                  <div className="mt-1.5 p-1 px-2 rounded-lg bg-emerald-100/70 dark:bg-emerald-900/50 text-[10px] font-mono font-bold text-emerald-800 dark:text-emerald-200 flex items-center justify-between">
+                                    <span>📍 {stop.arrivedLocation.lat.toFixed(4)}, {stop.arrivedLocation.lng?.toFixed(4)}</span>
+                                    {stop.arrivedAt && (
+                                      <span>{new Date(stop.arrivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Stop Arrival Button for Drivers */}
+                              {isDispatched && isStopPending && (
+                                <button
+                                  type="button"
+                                  disabled={isStopLoading}
+                                  onClick={() => handleDriverArriveStop(t, stop)}
+                                  className="w-full py-1.5 px-2.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg shadow-sm flex items-center justify-center gap-1 transition-all mt-1"
+                                >
+                                  {isStopLoading ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                      <span>{isRtl ? 'جاري تحديد GPS...' : 'Fetching GPS...'}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <MapPin className="h-3.5 w-3.5" />
+                                      <span>{isRtl ? 'وصلت (تسجيل موقع المهمة GPS)' : 'Arrived (Record GPS)'}</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Driver Actions Footer Bar */}
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
+                      <div className="text-[11px] text-slate-500 font-mono">
+                        <span>{isRtl ? 'الموعد:' : 'Scheduled:'} {new Date(t.scheduledAt).toLocaleString(isRtl ? 'ar-EG' : 'en-US')}</span>
+                        {t.startedAt && (
+                          <span className="mr-2 rtl:mr-2 ltr:ml-2 text-indigo-600">
+                            • {isRtl ? 'بدأ في:' : 'Started:'} {new Date(t.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Start Trip Button */}
+                        {isDraft && (
+                          <button
+                            type="button"
+                            disabled={startLoading}
+                            onClick={() => handleDriverStartTrip(t)}
+                            className="px-4 py-2 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl shadow-sm flex items-center gap-1.5 transition-all"
+                          >
+                            {startLoading ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span>{isRtl ? 'جاري جلب إحداثيات البداية...' : 'Starting with GPS...'}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-4 w-4 fill-white" />
+                                <span>{isRtl ? 'بداية الرحلة (تسجيل موقع البداية GPS)' : 'Start Trip (GPS)'}</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        {/* Complete Trip Button */}
+                        {isDispatched && (
+                          <button
+                            type="button"
+                            disabled={completeLoading}
+                            onClick={() => handleDriverCompleteTrip(t)}
+                            className="px-4 py-2 text-xs font-extrabold bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white rounded-xl shadow-sm flex items-center gap-1.5 transition-all"
+                          >
+                            {completeLoading ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span>{isRtl ? 'جاري الإغلاق...' : 'Finishing...'}</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="h-4 w-4" />
+                                <span>{isRtl ? 'إنهاء الرحلة' : 'Complete Trip'}</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -896,14 +1276,19 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                 </div>
               </div>
 
-              {/* Dynamic Multi-stop Route Section */}
+              {/* Dynamic Multi-stop Route / Tasks Section */}
               <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
                 <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60 dark:border-slate-800/60">
                   <div className="flex items-center gap-1.5">
                     <MapPin className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                      {isRtl ? 'محطات خط السير *' : 'Route Stops *'}
-                    </span>
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                        {isRtl ? 'مهام ومحطات المشوار *' : 'Trip Tasks & Stops *'}
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">
+                        {isRtl ? 'سجل المهام المطلوبة (ويتم تسجيل إحداثيات الوصول بالـ GPS تلقائياً بواسطة السائق)' : 'Register required tasks (Driver captures GPS on arrival)'}
+                      </span>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -911,8 +1296,45 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                     className="px-2.5 py-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg flex items-center gap-1 transition-all"
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    <span>{isRtl ? '+ إضافة نقطة' : '+ Add Stop'}</span>
+                    <span>{isRtl ? '+ إضافة مهمة/محطة' : '+ Add Task/Stop'}</span>
                   </button>
+                </div>
+
+                {/* Quick Task Presets */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[10px] font-bold text-slate-400">{isRtl ? 'مهام شائعة:' : 'Common Tasks:'}</span>
+                  {['بوسطة', 'تغيير اسطوانات غاز / أنابيب', 'صيانة', 'استلام بضاعة ومستندات', 'تسليم عميل'].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        // Apply preset to the last pending stop or add a new stop
+                        const lastIndex = tripForm.stops.length - 1;
+                        if (lastIndex >= 0 && !tripForm.stops[lastIndex].taskTitle && !tripForm.stops[lastIndex].label) {
+                          handleStopLabelChange(lastIndex, preset);
+                        } else {
+                          setTripForm(prev => ({
+                            ...prev,
+                            stops: [
+                              ...prev.stops,
+                              {
+                                id: `stop-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+                                taskTitle: preset,
+                                label: preset,
+                                org_unit_id: '',
+                                notes: '',
+                                lat: undefined,
+                                lng: undefined
+                              }
+                            ]
+                          }));
+                        }
+                      }}
+                      className="px-2 py-0.5 text-[10px] font-semibold bg-white dark:bg-slate-900 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950 border border-slate-200 dark:border-slate-800 rounded-md transition-all"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
                 </div>
 
                 <datalist id="fleet-org-units-list">
@@ -921,70 +1343,84 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                   ))}
                 </datalist>
 
-                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
                   {tripForm.stops.map((stop, sIdx) => {
                     const isFirst = sIdx === 0;
                     const isLast = sIdx === tripForm.stops.length - 1;
-                    const stopTitle = isFirst
-                      ? (isRtl ? 'نقطة الانطلاق (المصدر)' : 'Departure / Origin')
+                    const stopDefaultPlaceholder = isFirst
+                      ? (isRtl ? 'نقطة الانطلاق (مثال: الفرع الرئيسي)' : 'Departure / Origin')
                       : isLast
-                      ? (isRtl ? 'نقطة الوصول (الوجهة)' : 'Destination / Arrival')
-                      : (isRtl ? `نقطة وسيطة (${sIdx + 1})` : `Stop (${sIdx + 1})`);
+                      ? (isRtl ? 'المهمة الأخيرة / نقطة العودة' : 'Final Task / Destination')
+                      : (isRtl ? `المهمة / النقطة (${sIdx + 1})` : `Task (${sIdx + 1})`);
 
                     return (
                       <div
                         key={stop.id || sIdx}
-                        className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800"
+                        className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5"
                       >
-                        <span className={`px-2 py-1 text-[10px] font-black rounded-md ${
-                          isFirst ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' :
-                          isLast ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300' :
-                          'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                        }`}>
-                          #{sIdx + 1}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 text-[10px] font-black rounded-md shrink-0 ${
+                            isFirst ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' :
+                            isLast ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300' :
+                            'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                          }`}>
+                            #{sIdx + 1}
+                          </span>
 
-                        <div className="flex-1 relative">
-                          <input
-                            type="text"
-                            list="fleet-org-units-list"
-                            value={stop.label}
-                            onChange={(e) => handleStopLabelChange(sIdx, e.target.value)}
-                            placeholder={stopTitle}
-                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
-                          />
-                          {stop.lat !== undefined && stop.lng !== undefined && (
-                            <span className="absolute left-2 rtl:left-2 rtl:right-auto ltr:right-2 top-1.5 px-1.5 py-0.5 rounded text-[9px] font-mono bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 pointer-events-none">
-                              📍 {stop.lat.toFixed(3)}, {stop.lng.toFixed(3)}
-                            </span>
-                          )}
+                          <div className="flex-1 relative">
+                            <input
+                              type="text"
+                              list="fleet-org-units-list"
+                              value={stop.label}
+                              onChange={(e) => handleStopLabelChange(sIdx, e.target.value)}
+                              placeholder={stopDefaultPlaceholder}
+                              className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                            />
+                            {stop.lat !== undefined && stop.lng !== undefined && (
+                              <span className="absolute left-2 rtl:left-2 rtl:right-auto ltr:right-2 top-1.5 px-1.5 py-0.5 rounded text-[9px] font-mono bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 pointer-events-none">
+                                📍 {stop.lat.toFixed(3)}, {stop.lng.toFixed(3)}
+                              </span>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenMapPicker(sIdx)}
+                            title={isRtl ? 'اختار من الخريطة (اختياري)' : 'Select from Map (Optional)'}
+                            className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 border transition-all ${
+                              stop.lat !== undefined
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:border-slate-700'
+                            }`}
+                          >
+                            <Map className="h-3.5 w-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={tripForm.stops.length <= 2}
+                            onClick={() => handleRemoveStopRow(sIdx)}
+                            title={isRtl ? 'حذف هذه النقطة' : 'Remove Stop'}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-all"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => handleOpenMapPicker(sIdx)}
-                          title={isRtl ? 'اختار من الخريطة' : 'Select from Map'}
-                          className={`p-2 rounded-lg text-xs font-semibold flex items-center gap-1 border transition-all ${
-                            stop.lat !== undefined
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800'
-                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:border-slate-700'
-                          }`}
-                        >
-                          <Map className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline text-[10px]">
-                            {isRtl ? 'الخريطة' : 'Map'}
-                          </span>
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={tripForm.stops.length <= 2}
-                          onClick={() => handleRemoveStopRow(sIdx)}
-                          title={isRtl ? 'حذف هذه النقطة' : 'Remove Stop'}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-all"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {/* Stop Notes / Description */}
+                        <div>
+                          <input
+                            type="text"
+                            value={stop.notes || ''}
+                            onChange={(e) => {
+                              const updated = [...tripForm.stops];
+                              updated[sIdx] = { ...updated[sIdx], notes: e.target.value };
+                              setTripForm({ ...tripForm, stops: updated });
+                            }}
+                            placeholder={isRtl ? 'تفاصيل المهمة (مثال: استلام 3 طرود بريدية أو تغيير أنبوبتين بالفرع)...' : 'Task details & instructions...'}
+                            className="w-full px-2.5 py-1 text-[11px] rounded-lg border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 placeholder:text-slate-400"
+                          />
+                        </div>
                       </div>
                     );
                   })}
@@ -1203,6 +1639,24 @@ export default function FleetManagement({ language }: FleetManagementProps) {
           </div>
         </div>
       )}
+
+      {/* Breakdown Reassignment Modal (Smart Task Redistribution) */}
+      <BreakdownReassignmentModal
+        isOpen={showBreakdownModal}
+        onClose={() => {
+          setShowBreakdownModal(false);
+          setSelectedVehicleForBreakdown(null);
+        }}
+        vehicle={selectedVehicleForBreakdown}
+        companyId={companyId}
+        activeUserId={activeUser?.id || 'admin'}
+        isRtl={isRtl}
+        onReassigned={() => {
+          setShowBreakdownModal(false);
+          setSelectedVehicleForBreakdown(null);
+          loadData();
+        }}
+      />
 
       {/* Leaflet Map Picker Modal */}
       <LeafletMapPickerModal
