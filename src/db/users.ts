@@ -66,6 +66,9 @@ export class UsersModule {
       create_trip: currentPerms?.create_trip ?? false,
       approve_trip: currentPerms?.approve_trip ?? false,
       dispatch_trip: currentPerms?.dispatch_trip ?? false,
+      reassign_vehicle: currentPerms?.reassign_vehicle ?? false,
+      execute_breakdown_decision: currentPerms?.execute_breakdown_decision ?? false,
+      create_emergency_trip: currentPerms?.create_emergency_trip ?? false,
     };
   }
 

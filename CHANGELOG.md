@@ -4,6 +4,29 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fleet GPS Fallback Elimination, Granular Permissions & Driver Strict ID Matching
+**Date:** 2026-08-14
+**Files Changed:** `src/types.ts`, `src/db/users.ts`, `src/db/defaults.ts`, `src/components/DriverPortalView.tsx`, `src/components/BreakdownReassignmentModal.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_gps_and_permissions_fix.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Step A - GPS Fallback Elimination & Explicit Map Alternative (`src/components/DriverPortalView.tsx`, `src/components/BreakdownReassignmentModal.tsx`)**:
+  - Completely eradicated silent fallback to Cairo coordinates (`{ lat: 30.0444, lng: 31.2357 }`) upon GPS denial or failure.
+  - Added user-facing error message: "تعذر تحديد الموقع، لا يمكن تسجيل هذا الإجراء بدون تفعيل GPS".
+  - Prevented silent completion and introduced explicit manual Leaflet map location selection modals as an explicit, deliberate alternative for both driver actions and supervisor breakdown decisions.
+- **Step B - Granular Fleet Permissions (`src/types.ts`, `src/db/users.ts`, `src/db/defaults.ts`, `src/pages/FleetManagement.tsx`)**:
+  - Added `reassign_vehicle?: boolean`, `execute_breakdown_decision?: boolean`, `create_emergency_trip?: boolean` to `UserPermissions`.
+  - Configured `UsersModule.enrichUserPermissions` to default all three sensitive permissions to `false`.
+  - Added permissions metadata to `DEFAULT_PERMISSIONS` in `src/db/defaults.ts`.
+  - Protected "Emergency Trip" and "Breakdown Redistribution" action buttons in `FleetManagement.tsx` with their respective permission checks.
+- **Step C - Strict Driver ID Matching (`src/components/DriverPortalView.tsx`)**:
+  - Replaced name-based / partial substring matching with strict identity matching (`t.driver_id === activeUser.id`).
+  - Rendered explicit "لا توجد مشاوير مسندة إليك" state when no matching trips are assigned.
+- **Verification (`src/fleet_gps_and_permissions_fix.test.ts`)**:
+  - Added 6 unit tests validating permission defaulting, strict driver ID matching, and GPS rejection error behavior.
+  - All 6 tests passed (100% green).
+  - Production build and TypeScript linting passed cleanly with 0 errors.
+
+---
+
 ## Fleet Operational Completion: Driver Mobile Portal, Autonomous Learned Locations & In-App Operational Trip Chat
 **Date:** 2026-08-14
 **Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/DriverPortalView.tsx`, `src/components/TripChatModal.tsx`, `src/components/BreakdownReassignmentModal.tsx`, `src/components/EmergencyTripModal.tsx`, `src/pages/FleetManagement.tsx`, `CHANGELOG.md`

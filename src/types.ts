@@ -46,6 +46,9 @@ export interface UserPermissions {
   create_trip?: boolean;
   approve_trip?: boolean;
   dispatch_trip?: boolean;
+  reassign_vehicle?: boolean;
+  execute_breakdown_decision?: boolean;
+  create_emergency_trip?: boolean;
 }
 
 export interface AppUser {

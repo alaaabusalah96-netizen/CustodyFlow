@@ -652,7 +652,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          {canCreateTrip && (
+          {activeUser?.permissions?.create_emergency_trip && (
             <button
               onClick={() => setShowEmergencyModal(true)}
               className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-black bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-md transition-all animate-pulse"
@@ -848,7 +848,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                   </div>
 
                   {/* Breakdown Redistribution Alert Button */}
-                  {isBreakdown && openTripsCount > 0 && (
+                  {isBreakdown && openTripsCount > 0 && activeUser?.permissions?.execute_breakdown_decision && (
                     <button
                       onClick={() => handleOpenBreakdownModal(v)}
                       className="w-full py-2 px-3 text-xs font-extrabold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-all animate-pulse"
@@ -881,13 +881,15 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                       <span>{isRtl ? 'تسجيل صيانة' : 'Maintenance'}</span>
                     </button>
 
-                    <button
-                      onClick={() => handleOpenBreakdownModal(v)}
-                      title={isRtl ? 'إعادة توزيع المهام عند العطل' : 'Reassign tasks'}
-                      className="p-1.5 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700"
-                    >
-                      <ArrowRightLeft className="h-4 w-4" />
-                    </button>
+                    {activeUser?.permissions?.execute_breakdown_decision && (
+                      <button
+                        onClick={() => handleOpenBreakdownModal(v)}
+                        title={isRtl ? 'إعادة توزيع المهام عند العطل' : 'Reassign tasks'}
+                        className="p-1.5 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700"
+                      >
+                        <ArrowRightLeft className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { 
   Play, MapPin, CheckCircle2, Navigation, MessageSquare, 
-  Truck, User, Calendar, Clock, AlertCircle, Sparkles, Loader2 
+  Truck, User, Calendar, Clock, AlertCircle, Sparkles, Loader2, Map 
 } from 'lucide-react';
 import { Trip, TripStop } from '../types/fleet';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
+import LeafletMapPickerModal from './LeafletMapPickerModal';
 
 interface DriverPortalViewProps {
   trips: Trip[];
@@ -30,23 +31,24 @@ export default function DriverPortalView({
   showToast
 }: DriverPortalViewProps) {
   const [gpsLoadingId, setGpsLoadingId] = useState<string | null>(null);
+  const [mapPickerAction, setMapPickerAction] = useState<{
+    type: 'START' | 'STOP' | 'COMPLETE';
+    trip: Trip;
+    stop?: TripStop;
+    initialLat?: number;
+    initialLng?: number;
+    label?: string;
+  } | null>(null);
 
-  // Filter trips for this driver: either assigned by full_name or id, or show active company trips if supervisor is viewing
+  // Strict matching only: t.driver_id === activeUser.id
   const driverName = activeUser.full_name || '';
-  const myTrips = trips.filter(t => 
-    t.driver_id === driverName || 
-    t.driver_id === activeUser.id ||
-    (driverName && t.driver_id.includes(driverName))
-  );
+  const displayTrips = trips.filter(t => t.driver_id === activeUser.id);
 
-  // If driver has no specific matches (e.g. testing with admin account), show all open trips with a note
-  const displayTrips = myTrips.length > 0 ? myTrips : trips.filter(t => !['COMPLETED', 'CANCELLED'].includes(t.status));
-
-  // Geolocation helper
+  // Geolocation helper - No silent fallback, throws clear error on failure
   const captureGpsPosition = (): Promise<{ lat: number; lng: number; accuracy?: number }> => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject(new Error('Geolocation not supported on this device'));
+        reject(new Error(isRtl ? 'تعذر تحديد الموقع، لا يمكن تسجيل هذا الإجراء بدون تفعيل GPS' : 'Unable to determine location, this action cannot be recorded without GPS'));
         return;
       }
       navigator.geolocation.getCurrentPosition(
@@ -59,12 +61,7 @@ export default function DriverPortalView({
         },
         (err) => {
           console.warn('GPS location access denied or unavailable:', err);
-          // Fallback coordinate Cairo HQ
-          resolve({
-            lat: 30.0444,
-            lng: 31.2357,
-            accuracy: 50
-          });
+          reject(new Error(isRtl ? 'تعذر تحديد الموقع، لا يمكن تسجيل هذا الإجراء بدون تفعيل GPS' : 'Unable to determine location, this action cannot be recorded without GPS'));
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
@@ -85,7 +82,7 @@ export default function DriverPortalView({
       onRefresh();
     } catch (err: any) {
       console.error(err);
-      showToast('error', err.message || (isRtl ? 'تعذر بدء الرحلة' : 'Failed to start trip'));
+      showToast('error', err.message || (isRtl ? 'تعذر تحديد الموقع، لا يمكن تسجيل هذا الإجراء بدون تفعيل GPS' : 'Unable to determine location, this action cannot be recorded without GPS'));
     } finally {
       setGpsLoadingId(null);
     }
@@ -105,7 +102,7 @@ export default function DriverPortalView({
       onRefresh();
     } catch (err: any) {
       console.error(err);
-      showToast('error', err.message || (isRtl ? 'تعذر تسجيل الوصول' : 'Failed to record arrival'));
+      showToast('error', err.message || (isRtl ? 'تعذر تحديد الموقع، لا يمكن تسجيل هذا الإجراء بدون تفعيل GPS' : 'Unable to determine location, this action cannot be recorded without GPS'));
     } finally {
       setGpsLoadingId(null);
     }
@@ -125,9 +122,44 @@ export default function DriverPortalView({
       onRefresh();
     } catch (err: any) {
       console.error(err);
-      showToast('error', err.message || (isRtl ? 'تعذر إنهاء الرحلة' : 'Failed to complete trip'));
+      showToast('error', err.message || (isRtl ? 'تعذر تحديد الموقع، لا يمكن تسجيل هذا الإجراء بدون تفعيل GPS' : 'Unable to determine location, this action cannot be recorded without GPS'));
     } finally {
       setGpsLoadingId(null);
+    }
+  };
+
+  const handleManualMapConfirm = async (coords: { lat: number; lng: number }) => {
+    if (!mapPickerAction) return;
+    const { type, trip, stop } = mapPickerAction;
+    try {
+      if (type === 'START') {
+        await FleetBusinessEngine.startTrip(companyId, activeUser.id, trip.id, {
+          lat: coords.lat,
+          lng: coords.lng,
+          label: isRtl ? 'موقع بداية الرحلة (يدوي من الخريطة)' : 'Field Trip Start Location (Manual Map)'
+        });
+        showToast('success', isRtl ? 'تم بدء الرحلة وتسجيل موقع الانطلاق عبر الخريطة' : 'Trip started with map location');
+      } else if (type === 'STOP' && stop) {
+        await FleetBusinessEngine.recordStopArrival(companyId, activeUser.id, trip.id, stop.id, {
+          lat: coords.lat,
+          lng: coords.lng,
+          label: stop.location.label || stop.taskTitle || 'نقطة الوصول (يدوي من الخريطة)'
+        });
+        showToast('success', isRtl ? `تم تسجيل الوصول وتأكيد إحداثيات المهمة: ${stop.taskTitle || stop.location.label}` : 'Arrival recorded successfully');
+      } else if (type === 'COMPLETE') {
+        await FleetBusinessEngine.completeTrip(companyId, activeUser.id, trip.id, {
+          lat: coords.lat,
+          lng: coords.lng,
+          label: isRtl ? 'نهاية الرحلة (يدوي من الخريطة)' : 'Trip End (Manual Map)'
+        });
+        showToast('success', isRtl ? 'تم إنهاء المشوار بنجاح وإعادة حالة المركبة لمتاحة' : 'Trip completed and vehicle active');
+      }
+      onRefresh();
+    } catch (err: any) {
+      console.error(err);
+      showToast('error', err.message || (isRtl ? 'تعذر إتمام الإجراء' : 'Failed to perform action'));
+    } finally {
+      setMapPickerAction(null);
     }
   };
 
@@ -305,26 +337,44 @@ export default function DriverPortalView({
 
                           {/* Stop Action: Record GPS Arrival if dispatched */}
                           {isDispatched && !isStartStop && !isCompleted && !isSkipped && (
-                            <div className="shrink-0">
+                            <div className="shrink-0 flex items-center gap-2">
                               {stop.status === 'ARRIVED' || stop.status === 'COMPLETED' ? (
                                 <span className="px-3 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 rounded-xl flex items-center gap-1">
                                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                                   {isRtl ? 'تم تسجيل الوصول والموقع' : 'Arrival Confirmed'}
                                 </span>
                               ) : (
-                                <button
-                                  type="button"
-                                  disabled={gpsLoadingId === `stop-${stop.id}`}
-                                  onClick={() => handleRecordArrival(trip, stop)}
-                                  className="w-full sm:w-auto px-4 py-2.5 text-xs font-black bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl shadow-md flex items-center justify-center gap-2 transition-all active:scale-95"
-                                >
-                                  {gpsLoadingId === `stop-${stop.id}` ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Navigation className="h-4 w-4" />
-                                  )}
-                                  <span>{isRtl ? 'وصلت للموقع (GPS)' : 'Arrived (GPS)'}</span>
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={gpsLoadingId === `stop-${stop.id}`}
+                                    onClick={() => handleRecordArrival(trip, stop)}
+                                    className="w-full sm:w-auto px-4 py-2.5 text-xs font-black bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl shadow-md flex items-center justify-center gap-2 transition-all active:scale-95"
+                                  >
+                                    {gpsLoadingId === `stop-${stop.id}` ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Navigation className="h-4 w-4" />
+                                    )}
+                                    <span>{isRtl ? 'وصلت للموقع (GPS)' : 'Arrived (GPS)'}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setMapPickerAction({
+                                      type: 'STOP',
+                                      trip,
+                                      stop,
+                                      initialLat: stop.location.lat,
+                                      initialLng: stop.location.lng,
+                                      label: stop.location.label || stop.taskTitle
+                                    })}
+                                    title={isRtl ? 'تحديد الوصول يدويًا من الخريطة' : 'Select arrival point on map'}
+                                    className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-all"
+                                  >
+                                    <Map className="h-4 w-4 text-blue-600" />
+                                  </button>
+                                </>
                               )}
                             </div>
                           )}
@@ -345,36 +395,68 @@ export default function DriverPortalView({
                   <div className="w-full sm:w-auto flex items-center gap-2">
                     {/* 1. Start Trip Big Button */}
                     {isDraftOrPending && (
-                      <button
-                        type="button"
-                        disabled={gpsLoadingId === `start-${trip.id}`}
-                        onClick={() => handleStartTrip(trip)}
-                        className="w-full sm:w-auto px-6 py-3.5 text-sm font-black bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
-                      >
-                        {gpsLoadingId === `start-${trip.id}` ? (
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                        ) : (
-                          <Play className="h-5 w-5 fill-current" />
-                        )}
-                        <span>{isRtl ? 'بداية الرحلة (GPS)' : 'Start Trip (GPS)'}</span>
-                      </button>
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          disabled={gpsLoadingId === `start-${trip.id}`}
+                          onClick={() => handleStartTrip(trip)}
+                          className="flex-1 sm:flex-initial px-6 py-3.5 text-sm font-black bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
+                        >
+                          {gpsLoadingId === `start-${trip.id}` ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : (
+                            <Play className="h-5 w-5 fill-current" />
+                          )}
+                          <span>{isRtl ? 'بداية الرحلة (GPS)' : 'Start Trip (GPS)'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMapPickerAction({
+                            type: 'START',
+                            trip,
+                            initialLat: trip.startLocation?.lat,
+                            initialLng: trip.startLocation?.lng,
+                            label: isRtl ? 'نقطة البداية' : 'Start Point'
+                          })}
+                          title={isRtl ? 'تحديد موقع البداية يدويًا على الخريطة' : 'Select start location on map'}
+                          className="p-3.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-2xl border border-slate-200 dark:border-slate-700 transition-all"
+                        >
+                          <Map className="h-5 w-5 text-emerald-600" />
+                        </button>
+                      </div>
                     )}
 
                     {/* 2. Complete Trip Big Button */}
                     {isDispatched && (
-                      <button
-                        type="button"
-                        disabled={gpsLoadingId === `end-${trip.id}`}
-                        onClick={() => handleCompleteTrip(trip)}
-                        className="w-full sm:w-auto px-6 py-3.5 text-sm font-black bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
-                      >
-                        {gpsLoadingId === `end-${trip.id}` ? (
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                        ) : (
-                          <CheckCircle2 className="h-5 w-5" />
-                        )}
-                        <span>{isRtl ? 'إنهاء الرحلة بالكامل' : 'Complete Trip'}</span>
-                      </button>
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          disabled={gpsLoadingId === `end-${trip.id}`}
+                          onClick={() => handleCompleteTrip(trip)}
+                          className="flex-1 sm:flex-initial px-6 py-3.5 text-sm font-black bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
+                        >
+                          {gpsLoadingId === `end-${trip.id}` ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="h-5 w-5" />
+                          )}
+                          <span>{isRtl ? 'إنهاء الرحلة بالكامل' : 'Complete Trip'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMapPickerAction({
+                            type: 'COMPLETE',
+                            trip,
+                            initialLat: trip.startLocation?.lat,
+                            initialLng: trip.startLocation?.lng,
+                            label: isRtl ? 'نهاية الرحلة' : 'End Point'
+                          })}
+                          title={isRtl ? 'تحديد موقع النهاية يدويًا على الخريطة' : 'Select end location on map'}
+                          className="p-3.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-2xl border border-slate-200 dark:border-slate-700 transition-all"
+                        >
+                          <Map className="h-5 w-5 text-indigo-600" />
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -382,6 +464,19 @@ export default function DriverPortalView({
             );
           })}
         </div>
+      )}
+
+      {/* Manual Map Picker Alternative */}
+      {mapPickerAction && (
+        <LeafletMapPickerModal
+          isOpen={Boolean(mapPickerAction)}
+          onClose={() => setMapPickerAction(null)}
+          onConfirm={handleManualMapConfirm}
+          initialLat={mapPickerAction.initialLat}
+          initialLng={mapPickerAction.initialLng}
+          stopLabel={mapPickerAction.label || (isRtl ? 'تحديد الموقع يدويًا' : 'Manual Location')}
+          isRtl={isRtl}
+        />
       )}
     </div>
   );

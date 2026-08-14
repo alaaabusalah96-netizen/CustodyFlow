@@ -12,9 +12,9 @@ describe('Fleet Module & Permissions Registration', () => {
     expect(fleetModule?.screens).toEqual(['fleet']);
   });
 
-  it('should have all 4 fleet permissions registered in DEFAULT_PERMISSIONS with category fleet', () => {
+  it('should have all 7 fleet permissions registered in DEFAULT_PERMISSIONS with category fleet', () => {
     const fleetPermissions = DEFAULT_PERMISSIONS.filter(p => p.category === 'fleet');
-    expect(fleetPermissions.length).toBe(4);
+    expect(fleetPermissions.length).toBe(7);
 
     const manageFleet = DEFAULT_PERMISSIONS.find(p => p.id === 'manage_fleet');
     expect(manageFleet).toBeDefined();
@@ -35,6 +35,18 @@ describe('Fleet Module & Permissions Registration', () => {
     expect(dispatchTrip).toBeDefined();
     expect(dispatchTrip?.category).toBe('fleet');
     expect(dispatchTrip?.name_ar).toBe('تحريك/تنفيذ مشوار');
+
+    const reassignVehicle = DEFAULT_PERMISSIONS.find(p => p.id === 'reassign_vehicle');
+    expect(reassignVehicle).toBeDefined();
+    expect(reassignVehicle?.category).toBe('fleet');
+
+    const executeBreakdown = DEFAULT_PERMISSIONS.find(p => p.id === 'execute_breakdown_decision');
+    expect(executeBreakdown).toBeDefined();
+    expect(executeBreakdown?.category).toBe('fleet');
+
+    const createEmergency = DEFAULT_PERMISSIONS.find(p => p.id === 'create_emergency_trip');
+    expect(createEmergency).toBeDefined();
+    expect(createEmergency?.category).toBe('fleet');
   });
 
   it('should maintain all pre-existing modules and permissions without any deletions', () => {

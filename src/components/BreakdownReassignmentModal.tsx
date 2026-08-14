@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { 
   ShieldAlert, ArrowRightLeft, MapPin, CheckCircle2, Clock, Truck, 
-  Sparkles, PauseCircle, Calendar, User, Layers, CheckSquare, Split 
+  Sparkles, PauseCircle, Calendar, User, Layers, CheckSquare, Split,
+  AlertTriangle, Map 
 } from 'lucide-react';
 import { Vehicle, Trip, TripStop, BreakdownDecisionType } from '../types/fleet';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
+import LeafletMapPickerModal from './LeafletMapPickerModal';
 
 interface BreakdownReassignmentModalProps {
   isOpen: boolean;
@@ -50,21 +52,35 @@ export default function BreakdownReassignmentModal({
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Target coordinates for proximity calculation
+  // Manual map picker state (no silent fallback)
+  const [manualCoords, setManualCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+
+  // Target coordinates for proximity calculation (no silent fallback)
   const targetStop = eligibleStops.find(s => s.id === selectedStopId);
-  const targetCoords = (targetStop?.location?.lat && targetStop?.location?.lng)
+  const detectedCoords = (targetStop?.location?.lat && targetStop?.location?.lng)
     ? { lat: targetStop.location.lat, lng: targetStop.location.lng }
     : (vehicle.last_known_location?.lat && vehicle.last_known_location?.lng)
     ? { lat: vehicle.last_known_location.lat, lng: vehicle.last_known_location.lng }
     : (activeTrip?.startLocation?.lat && activeTrip?.startLocation?.lng)
     ? { lat: activeTrip.startLocation.lat, lng: activeTrip.startLocation.lng }
-    : { lat: 30.0444, lng: 31.2357 };
+    : null;
 
-  const candidateVehicles = FleetBusinessEngine.suggestNearestVehiclesForTasks(
-    companyId,
-    targetCoords,
-    vehicle.id
-  );
+  const targetCoords = manualCoords || detectedCoords;
+
+  const candidateVehicles = targetCoords
+    ? FleetBusinessEngine.suggestNearestVehiclesForTasks(
+        companyId,
+        targetCoords,
+        vehicle.id
+      )
+    : allVehicles
+        .filter(v => v.id !== vehicle.id && !['BREAKDOWN', 'OUT_OF_SERVICE', 'MAINTENANCE', 'INACTIVE'].includes(v.status))
+        .map(v => ({
+          vehicle: v,
+          distanceKm: 99999,
+          lastLocationLabel: v.last_known_location?.label
+        }));
 
   const selectedTargetVehicle = allVehicles.find(v => v.id === selectedVehicleId);
 
@@ -402,15 +418,54 @@ export default function BreakdownReassignmentModal({
             {/* Decision Details Body */}
             {decisionType === 'REASSIGN' && (
               <div className="space-y-3 p-3.5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    {isRtl ? 'اقتراحات أقرب سيارات متاحة (مرتبة حسب المسافة وتوفير السولار):' : 'Nearest available vehicles (sorted by distance & fuel economy):'}
-                  </span>
-                  <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                    <Sparkles className="h-3 w-3" />
-                    {isRtl ? 'حساب جغرافي' : 'Geo Match'}
-                  </span>
-                </div>
+                {/* Warning if no location is available */}
+                {!targetCoords ? (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 rounded-2xl text-xs space-y-2">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="font-bold">
+                        {isRtl 
+                          ? 'تعذر تحديد الموقع، لا يمكن تسجيل هذا الإجراء بدون تفعيل GPS أو تحديد الموقع عبر الخريطة.'
+                          : 'Unable to determine location, this action cannot be recorded without GPS or selecting the location on the map.'}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowMapPicker(true)}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all"
+                    >
+                      <Map className="h-3.5 w-3.5" />
+                      <span>{isRtl ? 'تحديد موقع العطل يدويًا على الخريطة' : 'Pick location on map'}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        {isRtl ? 'اقتراحات أقرب سيارات متاحة (مرتبة حسب المسافة وتوفير السولار):' : 'Nearest available vehicles (sorted by distance & fuel economy):'}
+                      </span>
+                      {manualCoords && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 rounded-lg">
+                          {isRtl ? 'موقع محدد يدويًا' : 'Manual Location'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowMapPicker(true)}
+                        className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline flex items-center gap-1"
+                      >
+                        <Map className="h-3 w-3" />
+                        <span>{isRtl ? 'تغيير الموقع بالخريطة' : 'Change on map'}</span>
+                      </button>
+                      <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                        <Sparkles className="h-3 w-3" />
+                        {isRtl ? 'حساب جغرافي' : 'Geo Match'}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {candidateVehicles.length === 0 ? (
                   <div className="p-3 text-center text-xs text-slate-500">
@@ -456,7 +511,7 @@ export default function BreakdownReassignmentModal({
                               <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
                                 <span>{isRtl ? 'السائق الأساسي:' : 'Default driver:'} {cand.vehicle.driverName || '-'}</span>
                                 <span>•</span>
-                                <span>{cand.lastLocationLabel}</span>
+                                <span>{cand.lastLocationLabel || '-'}</span>
                               </div>
                             </div>
                           </div>
@@ -550,7 +605,7 @@ export default function BreakdownReassignmentModal({
           {affectedTrips.length > 0 && (
             <button
               type="button"
-              disabled={submitting || (decisionType === 'REASSIGN' && !selectedVehicleId) || (mode === 'INDIVIDUAL_TASK' && !selectedStopId)}
+              disabled={submitting || (decisionType === 'REASSIGN' && (!selectedVehicleId || !targetCoords)) || (mode === 'INDIVIDUAL_TASK' && !selectedStopId)}
               onClick={handleExecuteDecision}
               className="px-5 py-2.5 text-xs font-black bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl shadow-md transition-all flex items-center gap-2"
             >
@@ -564,6 +619,22 @@ export default function BreakdownReassignmentModal({
           )}
         </div>
       </div>
+
+      {/* Manual Location Leaflet Map Picker Modal */}
+      {showMapPicker && (
+        <LeafletMapPickerModal
+          isOpen={showMapPicker}
+          onClose={() => setShowMapPicker(false)}
+          onConfirm={(coords) => {
+            setManualCoords(coords);
+            setShowMapPicker(false);
+          }}
+          initialLat={targetCoords?.lat}
+          initialLng={targetCoords?.lng}
+          stopLabel={isRtl ? `موقع تعطل المركبة (${vehicle.plateNumber})` : `Breakdown location for ${vehicle.plateNumber}`}
+          isRtl={isRtl}
+        />
+      )}
     </div>
   );
 }
