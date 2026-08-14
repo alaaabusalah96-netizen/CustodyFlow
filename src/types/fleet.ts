@@ -59,7 +59,7 @@ export interface FuelLog {
 }
 
 export type TripStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' 
-  | 'DISPATCHED' | 'IN_PROGRESS' | 'COMPLETED' | 'REJECTED' | 'CANCELLED';
+  | 'DISPATCHED' | 'IN_PROGRESS' | 'COMPLETED' | 'REJECTED' | 'CANCELLED' | 'POSTPONED' | 'SUSPENDED_BREAKDOWN';
 
 export type TripStopStatus = 'PENDING' | 'IN_PROGRESS' | 'ARRIVED' | 'COMPLETED' | 'SKIPPED';
 
@@ -70,6 +70,43 @@ export interface TripLocation {
   lng?: number;
   accuracy?: number;
   timestamp?: string;
+}
+
+export interface LearnedLocationHistoryEntry {
+  label: string;
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  visitedAt: string;
+  tripId?: string;
+}
+
+export interface LearnedTaskLocation {
+  id: string;
+  company_id: string;
+  org_unit_id: string; // Region or Org Unit mandatory to prevent cross-region collisions
+  task_type: string;   // Normalized task name (e.g. "بوسطة", "تغيير اسطوانات غاز", "صيانة")
+  label: string;
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  visitCount: number;
+  lastVisitedAt: string;
+  history?: LearnedLocationHistoryEntry[];
+}
+
+export type BreakdownDecisionType = 'REASSIGN' | 'POSTPONE' | 'SUSPEND';
+
+export interface BreakdownDecisionLog {
+  id: string;
+  decision: BreakdownDecisionType;
+  fromVehicleId: string;
+  toVehicleId?: string;
+  toDriverId?: string;
+  reason: string;
+  postponedUntil?: string;
+  operatorId: string;
+  timestamp: string;
 }
 
 export interface TripStop {
@@ -94,6 +131,7 @@ export interface Trip {
   driver_id: string;
   stops: TripStop[];
   tripType: string;
+  isEmergency?: boolean;
   status: TripStatus;
   scheduledAt: string;
   startedAt?: string;
@@ -104,6 +142,9 @@ export interface Trip {
   reassignedFromVehicleId?: string;
   reassignedAt?: string;
   reassignReason?: string;
+  postponedUntil?: string;
+  postponeReason?: string;
+  breakdownDecisions?: BreakdownDecisionLog[];
   createdBy: string;
   createdAt: string;
 }

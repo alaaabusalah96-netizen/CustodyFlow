@@ -3,7 +3,8 @@ import {
   Truck, Plus, Search, Filter, Wrench, Fuel, ShieldAlert,
   Building2, Gauge, Calendar, User, FileText, CheckCircle2,
   MapPin, Navigation, Trash2, Map, Play, ArrowRightLeft, Sparkles,
-  Clock, CheckCircle, AlertTriangle, AlertCircle, Radio, Loader2
+  Clock, CheckCircle, AlertTriangle, AlertCircle, Radio, Loader2,
+  Siren, PauseCircle
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { UsersModule } from '../db/users';
@@ -13,8 +14,9 @@ import { OrganizationEngine } from '../db/organizationEngine';
 import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
 import LeafletMapPickerModal from '../components/LeafletMapPickerModal';
 import BreakdownReassignmentModal from '../components/BreakdownReassignmentModal';
+import EmergencyTripModal from '../components/EmergencyTripModal';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
-import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus, Trip, TripStop } from '../types/fleet';
+import { Vehicle, MaintenanceLog, FuelLog, VehicleType, VehicleStatus, Trip, TripStop, LearnedLocationHistoryEntry } from '../types/fleet';
 
 interface FleetManagementProps {
   language: 'ar' | 'en';
@@ -68,6 +70,9 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   // Breakdown & Reassignment Modal
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
   const [selectedVehicleForBreakdown, setSelectedVehicleForBreakdown] = useState<Vehicle | null>(null);
+
+  // Emergency Trip Modal
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
   // GPS Execution State
   const [gpsLoadingId, setGpsLoadingId] = useState<string | null>(null);
@@ -641,6 +646,16 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          {canCreateTrip && (
+            <button
+              onClick={() => setShowEmergencyModal(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-black bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-md transition-all animate-pulse"
+            >
+              <Siren className="h-4 w-4" />
+              <span>{isRtl ? 'مشوار طارئ' : 'Emergency Trip'}</span>
+            </button>
+          )}
+
           {activeTab === 'vehicles' && activeUser?.permissions?.manage_fleet && (
             <button
               onClick={() => setShowAddVehicle(true)}
@@ -923,6 +938,12 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                           <User className="h-3.5 w-3.5 text-slate-400" />
                           <span>{driver ? driver.full_name : t.driver_id}</span>
                         </div>
+                        {t.isEmergency && (
+                          <span className="px-2.5 py-0.5 text-[11px] font-black rounded-lg bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300 flex items-center gap-1 animate-pulse">
+                            <Siren className="h-3 w-3" />
+                            <span>{isRtl ? 'مشوار طارئ' : 'Emergency'}</span>
+                          </span>
+                        )}
                         <span className="px-2.5 py-0.5 text-[11px] font-bold rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                           {t.tripType}
                         </span>
@@ -937,11 +958,15 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                         )}
                         <span className={`px-3 py-1 text-xs font-black rounded-xl border ${
                           t.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300' :
+                          t.status === 'POSTPONED' ? 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300' :
+                          t.status === 'SUSPENDED_BREAKDOWN' ? 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200' :
                           isDispatched ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-300 animate-pulse' :
                           'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-300'
                         }`}>
                           {t.status === 'DRAFT' ? (isRtl ? 'مسودة (DRAFT)' : 'DRAFT') :
                            t.status === 'DISPATCHED' ? (isRtl ? 'في الطريق (DISPATCHED)' : 'DISPATCHED') :
+                           t.status === 'POSTPONED' ? (isRtl ? 'مؤجل (POSTPONED)' : 'POSTPONED') :
+                           t.status === 'SUSPENDED_BREAKDOWN' ? (isRtl ? 'معلق بسبب عطل' : 'SUSPENDED') :
                            t.status === 'COMPLETED' ? (isRtl ? 'مكتمل (COMPLETED)' : 'COMPLETED') : t.status}
                         </span>
                       </div>
@@ -1654,6 +1679,20 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         onReassigned={() => {
           setShowBreakdownModal(false);
           setSelectedVehicleForBreakdown(null);
+          loadData();
+        }}
+      />
+
+      {/* Emergency Trip Fast Dispatch Modal */}
+      <EmergencyTripModal
+        isOpen={showEmergencyModal}
+        onClose={() => setShowEmergencyModal(false)}
+        companyId={companyId}
+        activeUserId={activeUser?.id || 'admin'}
+        orgUnits={orgUnits}
+        isRtl={isRtl}
+        onSuccess={() => {
+          showToast('success', isRtl ? 'تم إرسال المشوار الطارئ بنجاح وجاري المتابعة الميدانية' : 'Emergency trip dispatched successfully');
           loadData();
         }}
       />

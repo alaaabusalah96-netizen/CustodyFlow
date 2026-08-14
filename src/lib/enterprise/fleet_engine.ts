@@ -15,7 +15,11 @@ import {
   TripStop, 
   TripLocation,
   TripStopStatus,
-  VehicleLocation
+  VehicleLocation,
+  LearnedTaskLocation,
+  LearnedLocationHistoryEntry,
+  BreakdownDecisionType,
+  BreakdownDecisionLog
 } from '../../types/fleet';
 
 export class FleetBusinessEngine {
@@ -262,6 +266,28 @@ export class FleetBusinessEngine {
         label: stopObj.taskTitle || stopObj.location.label || 'موقع تنفيذ المهمة'
       }
     );
+
+    // Auto-learn task location with key: company_id + org_unit_id + task_type
+    const taskTypeToLearn = stopObj.taskTitle || stopObj.location.label;
+    const orgUnitToLearn = stopObj.location.org_unit_id || trip.org_unit_id;
+    if (orgUnitToLearn && taskTypeToLearn && typeof coords.lat === 'number' && typeof coords.lng === 'number') {
+      try {
+        await this.recordLearnedLocation(
+          companyId,
+          orgUnitToLearn,
+          taskTypeToLearn,
+          {
+            label: coords.label || stopObj.location.label || taskTypeToLearn,
+            lat: coords.lat,
+            lng: coords.lng,
+            accuracy: coords.accuracy,
+            tripId: trip.id
+          }
+        );
+      } catch (err) {
+        console.error('Failed to record learned task location:', err);
+      }
+    }
 
     return { trip: updatedTrip, stop: targetStop };
   }
@@ -735,5 +761,343 @@ export class FleetBusinessEngine {
     }
 
     return log;
+  }
+
+  /**
+   * Normalizes a task title or type for consistent multi-tenant indexing
+   */
+  public static normalizeTaskType(task: string): string {
+    if (!task) return '';
+    return task
+      .trim()
+      .toLowerCase()
+      .replace(/[^\u0600-\u06FFa-zA-Z0-9\s]/g, '')
+      .replace(/\s+/g, ' ');
+  }
+
+  /**
+   * Retrieves all learned task locations for a company, optionally filtered by org_unit_id / task_type
+   */
+  public static getLearnedLocations(
+    companyId: string,
+    org_unit_id?: string,
+    task_type?: string
+  ): LearnedTaskLocation[] {
+    const all = StorageEngine.getStored<LearnedTaskLocation[]>('fleet_learned_locations_items', []);
+    let filtered = all.filter(l => l.company_id === companyId);
+
+    if (org_unit_id && org_unit_id !== 'ALL') {
+      filtered = filtered.filter(l => l.org_unit_id === org_unit_id);
+    }
+
+    if (task_type) {
+      const norm = this.normalizeTaskType(task_type);
+      filtered = filtered.filter(l => this.normalizeTaskType(l.task_type) === norm);
+    }
+
+    return filtered;
+  }
+
+  /**
+   * Suggests top 2-3 past known locations for a given task type strictly within the specific org unit / region.
+   * Never mixes locations across different regions or companies!
+   */
+  public static getSuggestedLocationsForTask(
+    companyId: string,
+    org_unit_id: string,
+    task_type: string
+  ): LearnedLocationHistoryEntry[] {
+    if (!companyId || !org_unit_id || !task_type) {
+      return [];
+    }
+
+    const norm = this.normalizeTaskType(task_type);
+    if (!norm) return [];
+
+    const all = StorageEngine.getStored<LearnedTaskLocation[]>('fleet_learned_locations_items', []);
+    const match = all.find(
+      l => l.company_id === companyId && 
+           l.org_unit_id === org_unit_id && 
+           this.normalizeTaskType(l.task_type) === norm
+    );
+
+    if (!match) return [];
+
+    const candidates: LearnedLocationHistoryEntry[] = [];
+    
+    // Add primary current location
+    candidates.push({
+      label: match.label,
+      lat: match.lat,
+      lng: match.lng,
+      accuracy: match.accuracy,
+      visitedAt: match.lastVisitedAt
+    });
+
+    // Add unique past historical points (up to 3 total)
+    if (match.history && Array.isArray(match.history)) {
+      for (const h of match.history) {
+        if (candidates.length >= 3) break;
+        const exists = candidates.some(c => 
+          Math.abs(c.lat - h.lat) < 0.0001 && Math.abs(c.lng - h.lng) < 0.0001
+        );
+        if (!exists) {
+          candidates.push(h);
+        }
+      }
+    }
+
+    return candidates.slice(0, 3);
+  }
+
+  /**
+   * Records or updates a learned location reference keyed by (company_id + org_unit_id + task_type)
+   */
+  public static async recordLearnedLocation(
+    companyId: string,
+    org_unit_id: string,
+    task_type: string,
+    location: {
+      label: string;
+      lat: number;
+      lng: number;
+      accuracy?: number;
+      tripId?: string;
+    }
+  ): Promise<LearnedTaskLocation | null> {
+    if (!companyId || !org_unit_id || !task_type || typeof location.lat !== 'number' || typeof location.lng !== 'number') {
+      return null;
+    }
+
+    const norm = this.normalizeTaskType(task_type);
+    if (!norm) return null;
+
+    const all = StorageEngine.getStored<LearnedTaskLocation[]>('fleet_learned_locations_items', []);
+    const now = new Date().toISOString();
+    const existingIndex = all.findIndex(
+      l => l.company_id === companyId && 
+           l.org_unit_id === org_unit_id && 
+           this.normalizeTaskType(l.task_type) === norm
+    );
+
+    let resultEntry: LearnedTaskLocation;
+
+    if (existingIndex >= 0) {
+      const current = all[existingIndex];
+      const prevHistory = current.history || [];
+      
+      const newHistoryEntry: LearnedLocationHistoryEntry = {
+        label: location.label || current.label,
+        lat: location.lat,
+        lng: location.lng,
+        accuracy: location.accuracy,
+        visitedAt: now,
+        tripId: location.tripId
+      };
+
+      const updatedHistory = [newHistoryEntry, ...prevHistory.filter(h => 
+        !(Math.abs(h.lat - location.lat) < 0.0001 && Math.abs(h.lng - location.lng) < 0.0001)
+      )].slice(0, 10);
+
+      resultEntry = {
+        ...current,
+        label: location.label || current.label,
+        lat: location.lat,
+        lng: location.lng,
+        accuracy: location.accuracy,
+        visitCount: (current.visitCount || 1) + 1,
+        lastVisitedAt: now,
+        history: updatedHistory
+      };
+
+      all[existingIndex] = resultEntry;
+    } else {
+      resultEntry = {
+        id: `lloc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        company_id: companyId,
+        org_unit_id: org_unit_id,
+        task_type: task_type.trim(),
+        label: location.label || task_type.trim(),
+        lat: location.lat,
+        lng: location.lng,
+        accuracy: location.accuracy,
+        visitCount: 1,
+        lastVisitedAt: now,
+        history: [{
+          label: location.label || task_type.trim(),
+          lat: location.lat,
+          lng: location.lng,
+          accuracy: location.accuracy,
+          visitedAt: now,
+          tripId: location.tripId
+        }]
+      };
+      all.push(resultEntry);
+    }
+
+    StorageEngine.setStored('fleet_learned_locations_items', all);
+    await dbSetDoc('fleet_learned_locations_items', resultEntry.id, resultEntry);
+
+    return resultEntry;
+  }
+
+  /**
+   * Fast creation of an Internal Emergency Trip directly from the Fleet system.
+   * Completely self-contained with no external chat/messaging dependencies.
+   */
+  public static async createEmergencyTrip(
+    companyId: string,
+    creatorId: string,
+    data: {
+      vehicle_id: string;
+      driver_id: string;
+      task_type: string; // e.g. "نقل عاجل", "تغيير اسطوانات غاز طارئ", "صيانة طارئة"
+      org_unit_id: string;
+      notes?: string;
+      startLocationLabel?: string;
+      startLat?: number;
+      startLng?: number;
+      destinationLabel?: string;
+      destLat?: number;
+      destLng?: number;
+    }
+  ): Promise<Trip> {
+    const now = new Date().toISOString();
+
+    const startStop: TripStop = {
+      id: `stop-${Date.now()}-1`,
+      sequence: 1,
+      taskTitle: 'نقطة الانطلاق (مشوار طارئ)',
+      location: {
+        org_unit_id: data.org_unit_id,
+        label: data.startLocationLabel || 'نقطة الانطلاق',
+        lat: data.startLat,
+        lng: data.startLng
+      },
+      status: 'PENDING'
+    };
+
+    const destStop: TripStop = {
+      id: `stop-${Date.now()}-2`,
+      sequence: 2,
+      taskTitle: data.task_type,
+      notes: data.notes || '',
+      location: {
+        org_unit_id: data.org_unit_id,
+        label: data.destinationLabel || data.task_type,
+        lat: data.destLat,
+        lng: data.destLng
+      },
+      status: 'PENDING'
+    };
+
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const emergencyTrip: Trip = {
+      id: `trip-emg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      company_id: companyId,
+      org_unit_id: data.org_unit_id,
+      vehicle_id: data.vehicle_id,
+      driver_id: data.driver_id,
+      stops: [startStop, destStop],
+      tripType: `مشوار طارئ - ${data.task_type}`,
+      isEmergency: true,
+      status: 'DRAFT',
+      scheduledAt: now,
+      notes: data.notes || 'مشوار طارئ داخلي',
+      createdBy: creatorId,
+      createdAt: now
+    };
+
+    const updated = [...allTrips, emergencyTrip];
+    StorageEngine.setStored('fleet_trips_items', updated);
+    await dbSetDoc('fleet_trips_items', emergencyTrip.id, emergencyTrip);
+
+    return emergencyTrip;
+  }
+
+  /**
+   * Executes a supervisor decision on an open trip affected by vehicle breakdown:
+   * 1. REASSIGN: Reassigns to another vehicle & driver with distance optimization.
+   * 2. POSTPONE: Delays the trip to a future date/time with a recorded reason.
+   * 3. SUSPEND: Leaves the trip pending under breakdown status for later resolution.
+   */
+  public static async executeBreakdownDecision(
+    companyId: string,
+    operatorId: string,
+    data: {
+      tripId: string;
+      decision: BreakdownDecisionType;
+      fromVehicleId: string;
+      toVehicleId?: string;
+      toDriverId?: string;
+      reason: string;
+      postponedUntil?: string;
+    }
+  ): Promise<Trip> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const tripIndex = allTrips.findIndex(t => t.id === data.tripId && t.company_id === companyId);
+    if (tripIndex === -1) {
+      throw new Error(`Trip ${data.tripId} not found`);
+    }
+
+    const trip = allTrips[tripIndex];
+    const now = new Date().toISOString();
+
+    const decisionLog: BreakdownDecisionLog = {
+      id: `bd-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      decision: data.decision,
+      fromVehicleId: data.fromVehicleId,
+      toVehicleId: data.toVehicleId,
+      toDriverId: data.toDriverId,
+      reason: data.reason || 'قرار عطل تشغيلي',
+      postponedUntil: data.postponedUntil,
+      operatorId,
+      timestamp: now
+    };
+
+    const existingLogs = trip.breakdownDecisions || [];
+    let updatedTrip: Trip;
+
+    if (data.decision === 'REASSIGN') {
+      if (!data.toVehicleId) {
+        throw new Error('Target vehicle is required for REASSIGN decision');
+      }
+
+      // Check if target vehicle has a driver if toDriverId not explicitly passed
+      const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
+      const targetVeh = allVehicles.find(v => v.id === data.toVehicleId && v.company_id === companyId);
+
+      updatedTrip = {
+        ...trip,
+        vehicle_id: data.toVehicleId,
+        driver_id: data.toDriverId || targetVeh?.driverName || trip.driver_id,
+        reassignedFromVehicleId: data.fromVehicleId,
+        reassignedAt: now,
+        reassignReason: data.reason || 'إعادة توزيع بعد تعطل المركبة الأصلية',
+        breakdownDecisions: [...existingLogs, decisionLog]
+      };
+    } else if (data.decision === 'POSTPONE') {
+      updatedTrip = {
+        ...trip,
+        status: 'POSTPONED',
+        postponeReason: data.reason,
+        postponedUntil: data.postponedUntil,
+        breakdownDecisions: [...existingLogs, decisionLog]
+      };
+    } else {
+      // SUSPEND
+      updatedTrip = {
+        ...trip,
+        status: 'SUSPENDED_BREAKDOWN',
+        reassignReason: data.reason,
+        breakdownDecisions: [...existingLogs, decisionLog]
+      };
+    }
+
+    allTrips[tripIndex] = updatedTrip;
+    StorageEngine.setStored('fleet_trips_items', allTrips);
+    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
+
+    return updatedTrip;
   }
 }

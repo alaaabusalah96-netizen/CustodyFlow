@@ -3326,6 +3326,28 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   - `lint_applet` passed with 0 errors (`tsc --noEmit`).
   - `compile_applet` built cleanly with zero build errors.
 
+---
+
+## Fleet Learned Locations, Emergency Trips & Multi-Option Breakdown Decisions
+**Date:** 2026-08-13
+**Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/EmergencyTripModal.tsx`, `src/components/BreakdownReassignmentModal.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_learned_locations_emergency_breakdown.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Learned Task Locations Engine (`src/lib/enterprise/fleet_engine.ts`, `src/types/fleet.ts`)**:
+  - Implemented auto-learning of physical locations keyed by `(company_id + org_unit_id + task_type)`: when a driver records GPS arrival at a task stop, the coordinate and location title are automatically indexed for that task and organizational unit.
+  - Suggests the top 2-3 past known locations when creating future tasks of the same type in the same branch/region, preventing cross-region coordinate collision while speeding up dispatch.
+- **Internal Emergency Trip Fast Dispatch (`src/components/EmergencyTripModal.tsx`, `src/pages/FleetManagement.tsx`)**:
+  - Implemented a fast self-contained internal Emergency Trip modal directly in the fleet management interface.
+  - Allows single-click dispatch with preset emergency tasks, smart vehicle proximity matching, flexible driver assignment, and instant GPS tracking without relying on external chat/messaging channels.
+- **Enhanced Supervisor Breakdown Decisions (`src/components/BreakdownReassignmentModal.tsx`, `src/lib/enterprise/fleet_engine.ts`)**:
+  - Enhanced the breakdown modal to provide 3 clear operational options for open trips:
+    1. **Reassign (إعادة إسناد فورية)**: Transfers the trip to the nearest alternative vehicle with full driver flexibility (allowing any driver to operate the alternative vehicle) and distance optimization.
+    2. **Postpone (تأجيل المشوار)**: Postpones the trip to a specified date/time with audit reason logging.
+    3. **Suspend (تعليق المشوار)**: Puts the trip into `SUSPENDED_BREAKDOWN` status for subsequent supervisor dispatch.
+- **Unit Testing & Verification (`src/fleet_learned_locations_emergency_breakdown.test.ts`)**:
+  - Validated learned location recording, multi-tenant & org-unit isolation, automatic stop arrival learning, emergency trip dispatching, and all 3 breakdown decision pathways (100% passing tests).
+  - All existing fleet test suites (`fleet_task_reassignment_gps.test.ts`, `fleet_trip_stops.test.ts`, `fleet_trips.test.ts`) passing cleanly with 0 regressions.
+
+
 
 
 
