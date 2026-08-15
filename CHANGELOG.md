@@ -4,6 +4,67 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fleet Live GPS Breadcrumb Tracking & Interactive Real-Time Map Dashboard
+**Date:** 2026-08-15
+**Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/DriverPortalView.tsx`, `src/components/LiveFleetMapDashboard.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_live_breadcrumbs_tracking.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Live GPS Tracking Engine & Lifecycle Management (`src/lib/enterprise/fleet_engine.ts`)**:
+  - Implemented `recordTripBreadcrumbPoint` with 30-second throttling, status guarding (only `DISPATCHED` / `IN_PROGRESS`), distance delta calculation, and auto-sync to vehicle `last_known_location`.
+  - Implemented `endTripTrack` and wired tracking termination into `completeTrip`, `executeBreakdownDecision` (for Postpone/Suspend), and `cancelTrip`.
+  - Added `getTripTrack` for fast retrieval of historical or live polyline coordinates.
+- **Driver Field Portal Integration (`src/components/DriverPortalView.tsx`)**:
+  - Wired native `navigator.geolocation.watchPosition` into active dispatched trips with battery conservation and tab background cleanup handlers (`visibilitychange`, `beforeunload`, `pagehide`).
+  - Added live status banner on active dispatched trips displaying real-time ping timestamps and non-fatal GPS warnings.
+- **Interactive Live Fleet Map Dashboard (`src/components/LiveFleetMapDashboard.tsx`)**:
+  - Built real-time Leaflet map showing all active dispatched vehicles on the road with pulse beacons and driver/vehicle telemetry.
+  - Rendered polyline path connecting recorded breadcrumb points alongside start location, current position, and destination/intermediate stops.
+  - Implemented 30s auto-refresh toggle with manual refresh controls, total logged points, and distance counters.
+- **Fleet Management Integration (`src/pages/FleetManagement.tsx`)**:
+  - Mounted the "🗺️ التتبع المباشر والخريطة" (`live_map`) navigation tab with live dispatched counter badges.
+- **Verification (`src/fleet_live_breadcrumbs_tracking.test.ts`)**:
+  - 5 comprehensive unit tests verifying point recording, 30s interval throttling, non-active trip rejection, manual end track, and trip completion finalization.
+  - All fleet test suites passing 100% (29 unit tests across 6 test files).
+  - TypeScript linting (`tsc --noEmit`) and production compilation (`vite build && esbuild`) verified with 0 errors.
+
+---
+
+## Decommissioning Legacy Access Screens (SettingsUsersTab.tsx & PermissionMatrix.tsx)
+**Date:** 2026-08-15
+**Files Changed:** `src/components/settings/SettingsUsersTab.tsx` (Deleted), `src/components/PermissionMatrix.tsx` (Deleted), `src/pages/Settings.tsx`, `src/settings_user_migration.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Legacy Components Decommissioning**:
+  - Permanently deleted `src/components/settings/SettingsUsersTab.tsx` and `src/components/PermissionMatrix.tsx` to eliminate redundant access management interfaces and prevent conflicting states.
+  - Removed all imports and tab buttons (`matrix` tab) from `src/pages/Settings.tsx`, consolidating 100% of user management and permission matrix capabilities into the single, unified `UnifiedAccessControlCenter`.
+- **Test Suite Updates (`src/settings_user_migration.test.ts`)**:
+  - Updated test file to verify security and API migration constraints against `UnifiedAccessControlCenter.tsx` instead of the deleted legacy component.
+- **Verification**:
+  - `src/settings_user_migration.test.ts` & `src/unified_access_control.test.ts` (14 tests) passing 100% green.
+  - Zero remaining references found across the codebase via static grep analysis.
+  - Production compilation (`vite build && esbuild`) and TypeScript linting verified with 0 errors.
+
+---
+
+## Unified Access Control Center & Granular Scope Governance (شخص × فرع × موديول)
+**Date:** 2026-08-15
+**Files Changed:** `src/db/users.ts`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/components/settings/SettingsUsersTab.tsx`, `src/pages/Settings.tsx`, `src/unified_access_control.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Centralized Management & Scoping Engine (`src/db/users.ts`)**:
+  - Implemented `UsersModule.canUserManageTargetUser(currentUser, targetUser)` providing enterprise-grade multi-tenant authorization (Platform Super Admin isolation, company isolation, and hierarchical org unit / branch tree scoping).
+  - Enhanced `UsersModule.getScopedUsers()` to filter users based on `OrganizationScopeEngine.getAccessibleOrgUnitIds(currentUser)` covering both primary `org_unit_id` and secondary `assigned_org_unit_ids`.
+- **Unified Access Control UI (`src/components/settings/UnifiedAccessControlCenter.tsx`)**:
+  - Built an all-in-one Access Control and Scope Center replacing the fragmented users tab in Settings.
+  - Multi-dimension filtering (search by name/email/phone, role filter, module filter, and branch filter).
+  - Categorized module toggles (العهد والمصروفات، الفواتير والمطالبات، الأسطول والحركة، التقارير واللوحات، والتحكم والنظام) allowing two users in the same branch to have completely independent module privileges.
+  - Interactive user creation modal with temporary password generation, company and branch scoping, and full RTL / dark mode support.
+- **Settings Integration (`src/pages/Settings.tsx`, `src/components/settings/SettingsUsersTab.tsx`)**:
+  - Mounted `UnifiedAccessControlCenter` in Settings under the "👥 الصلاحيات والوصول (شخص × فرع × موديول)" tab.
+  - Bound authorization checks before performing user updates and additions.
+- **Verification (`src/unified_access_control.test.ts`)**:
+  - 8 comprehensive unit tests verifying cross-company isolation, platform owner protection, hierarchical org unit branch boundaries, and multi-user same-branch module independence.
+  - Linting (`tsc --noEmit`) and production compilation (`vite build && esbuild`) verified with 0 errors.
+
+---
+
 ## Fleet Vehicle Creation: Role-Based Scope, Validation & Streamlined Form
 **Date:** 2026-08-15
 **Files Changed:** `src/lib/enterprise/fleet_engine.ts`, `src/pages/FleetManagement.tsx`, `src/fleet_vehicle_creation_roles.test.ts`, `CHANGELOG.md`

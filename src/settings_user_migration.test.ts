@@ -4,7 +4,7 @@ import path from 'node:path';
 
 describe('Phase 2 - Settings.tsx User Creation/Editing Migration Audit', () => {
   const settingsPath = path.join(process.cwd(), 'src', 'pages', 'Settings.tsx');
-  const usersTabPath = path.join(process.cwd(), 'src', 'components', 'settings', 'SettingsUsersTab.tsx');
+  const usersTabPath = path.join(process.cwd(), 'src', 'components', 'settings', 'UnifiedAccessControlCenter.tsx');
   const settingsContent = fs.readFileSync(settingsPath, 'utf8') + '\n' + fs.readFileSync(usersTabPath, 'utf8');
 
   it('1. Verify handleAddUser uses POST /api/admin/users', () => {
@@ -21,8 +21,9 @@ describe('Phase 2 - Settings.tsx User Creation/Editing Migration Audit', () => {
     expect(settingsContent).toContain("method: 'PATCH'");
   });
 
-  it('4. Verify activation approval uses PATCH /api/admin/users/:id', () => {
-    expect(settingsContent).toContain("fetch(`/api/admin/users/${pendingUser.id}`");
+  it('4. Verify user updates and access provisioning use PATCH /api/admin/users/:id', () => {
+    expect(settingsContent).toContain("fetch(`/api/admin/users/${id}`");
+    expect(settingsContent).toContain("body: JSON.stringify(payload)");
   });
 
   it('5. Verify Authorization Bearer token or credentials header is passed', () => {

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, MapPin, CheckCircle2, Navigation, MessageSquare, 
-  Truck, User, Calendar, Clock, AlertCircle, Sparkles, Loader2, Map 
+  Truck, User, Calendar, Clock, AlertCircle, Sparkles, Loader2, Map,
+  Radio, Wifi, ShieldAlert
 } from 'lucide-react';
 import { Trip, TripStop } from '../types/fleet';
 import { UserPermissions } from '../types';
@@ -64,11 +65,144 @@ export default function DriverPortalView({
     label?: string;
   } | null>(null);
 
+  // Live GPS Tracking State & Refs
+  const [isLiveTracking, setIsLiveTracking] = useState(false);
+  const [lastLivePingTime, setLastLivePingTime] = useState<Date | null>(null);
+  const [liveTrackingNotice, setLiveTrackingNotice] = useState<string | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const lastRecordedTimeRef = useRef<number>(0);
+
   // Strict matching only: t.driver_id === activeUser.id
   const driverName = activeUser.full_name || '';
   const displayTrips = trips.filter(t => t.driver_id === activeUser.id);
 
-  // Geolocation helper - No silent fallback, throws clear error on failure
+  // Active in-progress trip that qualifies for live near-realtime tracking
+  const activeDispatchedTrip = displayTrips.find(t => t.status === 'DISPATCHED' || t.status === 'IN_PROGRESS');
+
+  // Live Trip Tracking Hook (Runs strictly during active trips, cleans up on complete, breakdown, unmount, background)
+  useEffect(() => {
+    // If no active in-progress trip, ensure any existing watch is immediately cleared
+    if (!activeDispatchedTrip) {
+      if (watchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      setIsLiveTracking(false);
+      return;
+    }
+
+    if (typeof navigator === 'undefined' || !navigator.geolocation || !navigator.geolocation.watchPosition) {
+      console.warn('Geolocation watchPosition is not supported on this browser/device.');
+      return;
+    }
+
+    const currentTripId = activeDispatchedTrip.id;
+    const currentVehicleId = activeDispatchedTrip.vehicle_id;
+
+    setIsLiveTracking(true);
+    setLiveTrackingNotice(null);
+
+    const onPositionSuccess = (pos: GeolocationPosition) => {
+      const now = Date.now();
+      // Throttle: 30 seconds minimum between recorded breadcrumb points
+      if (now - lastRecordedTimeRef.current < 30000) {
+        return;
+      }
+
+      FleetBusinessEngine.recordTripBreadcrumbPoint(
+        companyId,
+        currentTripId,
+        currentVehicleId,
+        activeUser.id,
+        {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          speed: pos.coords.speed,
+          heading: pos.coords.heading,
+          timestamp: new Date().toISOString()
+        },
+        30
+      ).then(res => {
+        if (res.recorded) {
+          lastRecordedTimeRef.current = now;
+          setLastLivePingTime(new Date());
+          setLiveTrackingNotice(null);
+        }
+      }).catch(err => {
+        console.warn('Live tracking breadcrumb record error:', err);
+      });
+    };
+
+    const onPositionError = (err: GeolocationPositionError) => {
+      console.warn('Live GPS watch signal notice (non-fatal):', err.message);
+      if (err.code === err.PERMISSION_DENIED) {
+        setLiveTrackingNotice(isRtl ? 'تم رفض إذن GPS للتتبع المباشر' : 'GPS permission denied for live tracking');
+      } else if (err.code === err.POSITION_UNAVAILABLE) {
+        setLiveTrackingNotice(isRtl ? 'إشارة GPS ضعيفة مؤقتاً - جاري المحاولة' : 'GPS signal weak, retrying');
+      }
+    };
+
+    // Avoid duplicate watchers
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      onPositionSuccess,
+      onPositionError,
+      {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 5000
+      }
+    );
+    watchIdRef.current = watchId;
+
+    // Handle tab backgrounding and unloads to conserve battery and avoid orphaned watches
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        if (watchIdRef.current !== null && navigator.geolocation) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+        }
+      } else if (document.visibilityState === 'visible') {
+        if (watchIdRef.current === null && navigator.geolocation) {
+          const newWatchId = navigator.geolocation.watchPosition(
+            onPositionSuccess,
+            onPositionError,
+            { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 }
+          );
+          watchIdRef.current = newWatchId;
+        }
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (watchIdRef.current !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handleBeforeUnload);
+
+    return () => {
+      if (watchIdRef.current !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleBeforeUnload);
+      setIsLiveTracking(false);
+    };
+  }, [activeDispatchedTrip?.id, activeDispatchedTrip?.status, companyId, activeUser.id, isRtl]);
+
+  // Geolocation helper for explicit user actions - No silent fallback, throws clear error on failure
   const captureGpsPosition = (): Promise<{ lat: number; lng: number; accuracy?: number }> => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
@@ -299,6 +433,40 @@ export default function DriverPortalView({
                     </span>
                   </div>
                 </div>
+
+                {/* Live GPS Tracking Active Indicator Banner */}
+                {isDispatched && (
+                  <div className="mx-4 sm:mx-5 mt-4 p-3 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <span className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                      </span>
+                      <div>
+                        <p className="font-bold text-slate-800 dark:text-slate-200">
+                          {isRtl ? 'التتبع اللحظي المباشر قيد العمل' : 'Live GPS Breadcrumb Tracking Active'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {isRtl 
+                            ? 'يتم تسجيل إحداثيات المسار تلقائياً كل 30 ثانية لتحديث خريطة الحركة.' 
+                            : 'Route coordinates are recorded automatically every 30s for the live fleet dashboard.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right rtl:text-left shrink-0">
+                      {lastLivePingTime && (
+                        <span className="font-mono text-[10px] text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-100 dark:bg-indigo-900/60 px-2 py-1 rounded-lg">
+                          {isRtl ? 'آخر إشارة:' : 'Last ping:'} {lastLivePingTime.toLocaleTimeString(isRtl ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </span>
+                      )}
+                      {liveTrackingNotice && (
+                        <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5">
+                          {liveTrackingNotice}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Stops Checklist */}
                 <div className="p-4 sm:p-5 space-y-3">

@@ -181,3 +181,28 @@ export interface VehicleConstraintRule {
   created_at: string;
 }
 
+export interface TripBreadcrumbPoint {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  speed?: number | null;
+  heading?: number | null;
+  timestamp: string;
+}
+
+export interface TripBreadcrumbTrack {
+  id: string;
+  company_id: string;
+  trip_id: string;
+  vehicle_id: string;
+  driver_id: string;
+  status: 'ACTIVE' | 'COMPLETED' | 'SUSPENDED' | 'CANCELLED';
+  is_active?: boolean;
+  points: TripBreadcrumbPoint[];
+  last_point?: TripBreadcrumbPoint;
+  started_at: string;
+  ended_at?: string;
+  updated_at: string;
+  total_distance_km: number;
+}
+

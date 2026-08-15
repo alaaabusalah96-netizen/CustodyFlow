@@ -6,6 +6,7 @@ import { DEFAULT_USERS, DEFAULT_PERMISSIONS, DEFAULT_ROLES } from './defaults';
 import { LogsModule } from './logs';
 import { hashPassword, legacyStretchedHashPassword1000, legacySinglePassHashPassword, legacyHashPassword } from '../lib/hash';
 import { OrganizationEngine } from './organizationEngine';
+import { OrganizationScopeEngine } from './organizationScopeEngine';
 
 const inMemoryTestCredentials = new Map<string, { passwordHash: string; salt: string }>();
 
@@ -290,6 +291,50 @@ export class UsersModule {
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Users', 'Modified user roles and system permission profiles.');
   }
 
+  static canUserManageTargetUser(currentUser: AppUser | null, targetUser: AppUser): { allowed: boolean; reason?: string } {
+    if (!currentUser) {
+      return { allowed: false, reason: 'لا توجد جلسة مستخدم نشطة / No active session.' };
+    }
+    // Platform / System Admin can manage anyone
+    if (currentUser.role === 'SystemAdmin' || currentUser.is_platform_owner) {
+      return { allowed: true };
+    }
+    // Target is SystemAdmin, but caller is not
+    if (targetUser.role === 'SystemAdmin' || targetUser.is_platform_owner) {
+      return { allowed: false, reason: 'لا يمكن تعديل حساب مدير المنصة / Cannot modify Platform Admin profile.' };
+    }
+    // Company Admin can manage any user strictly in their own company
+    if (currentUser.role === 'Admin') {
+      if (targetUser.company_id && currentUser.company_id && targetUser.company_id !== currentUser.company_id) {
+        return { allowed: false, reason: 'غير مصرح لك بتعديل مستخدم ينتمي لشركة أخرى / Cannot modify user from another company.' };
+      }
+      return { allowed: true };
+    }
+    // User with manage_users or manage_roles permission
+    if (currentUser.permissions?.manage_users || currentUser.permissions?.manage_roles) {
+      // Must be within the same company
+      if (targetUser.company_id && currentUser.company_id && targetUser.company_id !== currentUser.company_id) {
+        return { allowed: false, reason: 'غير مصرح لك بتعديل مستخدم خارج شركتك / Cannot modify user outside your company.' };
+      }
+      // If user is scoped to specific org units/regions
+      const accessibleUnits = OrganizationScopeEngine.getAccessibleOrgUnitIds(currentUser, currentUser.company_id);
+      if (accessibleUnits.length > 0) {
+        const targetUnitId = targetUser.org_unit_id;
+        const targetAssigned = targetUser.assigned_org_unit_ids || [];
+        const hasTargetInScope = (targetUnitId && accessibleUnits.includes(targetUnitId)) ||
+          targetAssigned.some(id => accessibleUnits.includes(id)) ||
+          (targetUser.region_id && currentUser.region_id === targetUser.region_id) ||
+          (targetUser.station_id && currentUser.station_id === targetUser.station_id);
+
+        if (!hasTargetInScope && targetUser.id !== currentUser.id) {
+          return { allowed: false, reason: 'المستخدم خارج نطاق فروعك التنظيمية المصرح بها / User is outside your accessible branch scope.' };
+        }
+      }
+      return { allowed: true };
+    }
+    return { allowed: false, reason: 'ليس لديك صلاحية إدارة المستخدمين / Insufficient permissions to manage user access.' };
+  }
+
   static getScopedUsers(): AppUser[] {
     const users = UsersModule.getUsers();
     const activeUser = UsersModule.getActiveUser();
@@ -306,7 +351,18 @@ export class UsersModule {
     
     let filtered = users.filter(u => u.company_id === activeUser.company_id);
     
-    if (activeUser.role === 'RegionalManager') {
+    // Check hierarchical org unit scope if user is assigned to specific branches / regions
+    const accessibleUnits = OrganizationScopeEngine.getAccessibleOrgUnitIds(activeUser, activeUser.company_id);
+    const hasOrgScope = activeUser.org_unit_id || (activeUser.assigned_org_unit_ids && activeUser.assigned_org_unit_ids.length > 0);
+
+    if (hasOrgScope && accessibleUnits.length > 0 && activeUser.role !== 'Admin') {
+      filtered = filtered.filter(u => {
+        if (u.id === activeUser.id) return true;
+        if (u.org_unit_id && accessibleUnits.includes(u.org_unit_id)) return true;
+        if (u.assigned_org_unit_ids && u.assigned_org_unit_ids.some(id => accessibleUnits.includes(id))) return true;
+        return false;
+      });
+    } else if (activeUser.role === 'RegionalManager') {
       if (activeUser.region_id) {
         const stations = StorageEngine.getStored<any[]>('stations', []);
         const regionStationIds = stations.filter(s => s.region_id === activeUser.region_id).map(s => s.id);

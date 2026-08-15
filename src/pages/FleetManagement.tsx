@@ -18,6 +18,7 @@ import BreakdownReassignmentModal from '../components/BreakdownReassignmentModal
 import EmergencyTripModal from '../components/EmergencyTripModal';
 import TripChatModal from '../components/TripChatModal';
 import DriverPortalView from '../components/DriverPortalView';
+import LiveFleetMapDashboard from '../components/LiveFleetMapDashboard';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
 import { 
   Vehicle, 
@@ -91,7 +92,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   );
 
   // Tabs - Initialized dynamically to first available tab
-  const [activeTab, setActiveTab] = useState<'vehicles' | 'trips' | 'driver_portal' | 'vehicle_constraints'>(() => {
+  const [activeTab, setActiveTab] = useState<'vehicles' | 'trips' | 'driver_portal' | 'live_map' | 'vehicle_constraints'>(() => {
     if (canViewDriverPortal && !canViewTrips && !canViewVehicles) {
       return 'driver_portal';
     }
@@ -893,6 +894,25 @@ export default function FleetManagement({ language }: FleetManagementProps) {
           </button>
         )}
 
+        {(canViewTrips || canViewVehicles) && (
+          <button
+            onClick={() => setActiveTab('live_map')}
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === 'live_map'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <Radio className="h-4 w-4 text-indigo-600 animate-pulse" />
+            <span>{isRtl ? '🗺️ التتبع المباشر والخريطة' : '🗺️ Live Tracking Map'}</span>
+            {trips.filter(t => t.status === 'DISPATCHED' || t.status === 'IN_PROGRESS').length > 0 && (
+              <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded-full">
+                {trips.filter(t => t.status === 'DISPATCHED' || t.status === 'IN_PROGRESS').length}
+              </span>
+            )}
+          </button>
+        )}
+
         {canViewDriverPortal && (
           <button
             onClick={() => setActiveTab('driver_portal')}
@@ -1386,6 +1406,17 @@ export default function FleetManagement({ language }: FleetManagementProps) {
             setShowChatModal(true);
           }}
           showToast={(type, msg) => showToast(type === 'error' ? 'error' : 'success', msg)}
+        />
+      )}
+
+      {/* Live Map & Breadcrumbs Tab */}
+      {activeTab === 'live_map' && (
+        <LiveFleetMapDashboard
+          companyId={companyId}
+          language={language}
+          vehicles={vehicles}
+          trips={trips}
+          onRefreshData={loadData}
         />
       )}
 

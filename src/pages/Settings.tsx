@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB, ModulesModule } from '../db';
 import { auth, useScreenListeners } from '../firebase';
-import PermissionMatrix from '../components/PermissionMatrix';
 import ApprovalWorkflowManager from '../components/ApprovalWorkflowManager';
 import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
 import SettingsGeneralTab from '../components/settings/SettingsGeneralTab';
-import SettingsUsersTab from '../components/settings/SettingsUsersTab';
+import UnifiedAccessControlCenter from '../components/settings/UnifiedAccessControlCenter';
+import { UsersModule } from '../db/users';
 import { translations, Language, Theme, AppUser, UserRole, Region, Station, UserPermissions } from '../types';
 import { 
   Settings as SettingsIcon, 
@@ -94,7 +94,7 @@ export default function Settings({ language, theme }: SettingsProps) {
   const currentUser = CustodyDB.getActiveUser();
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'matrix' | 'workflows'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'workflows'>('general');
 
   // General Settings State
   const [companyName, setCompanyName] = useState(() => CustodyDB.getConfig().company_name);
@@ -607,14 +607,17 @@ export default function Settings({ language, theme }: SettingsProps) {
   };
 
   const handleSaveEditUser = async (id: string) => {
-    if (currentUser.role !== 'SystemAdmin' && currentUser.role !== 'Admin' && !currentUser.permissions?.manage_users) {
-      alert(isRtl ? '⚠️ هذه الصلاحية حصرية لإدارة المنصة والشركة فقط!' : '⚠️ Privilege restricted to Platform & Company Admins.');
+    const targetUser = users.find(u => u.id === id);
+    if (!targetUser) return;
+
+    const accessCheck = UsersModule.canUserManageTargetUser(currentUser, targetUser);
+    if (!accessCheck.allowed) {
+      alert(`⚠️ ${accessCheck.reason || (isRtl ? 'ليس لديك صلاحية لتعديل هذا المستخدم!' : 'Insufficient permissions to edit this user!')}`);
       return;
     }
     if (!editUserFullName.trim()) return;
 
-    const targetUser = users.find(u => u.id === id);
-    const companyId = targetUser?.company_id || currentUser.company_id || CustodyDB.getSelectedCompanyId() || '';
+    const companyId = targetUser.company_id || currentUser.company_id || CustodyDB.getSelectedCompanyId() || '';
 
     const payload = {
       full_name: editUserFullName.trim(),
@@ -709,17 +712,7 @@ export default function Settings({ language, theme }: SettingsProps) {
               : 'border-transparent text-slate-500 hover:text-slate-400'
           }`}
         >
-          {isRtl ? '👥 الموظفون والحسابات' : '👥 Users & Accounts'}
-        </button>
-        <button
-          onClick={() => setActiveTab('matrix')}
-          className={`px-4 py-2 text-xs font-black transition-all border-b-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'matrix'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-extrabold'
-              : 'border-transparent text-slate-500 hover:text-slate-400'
-          }`}
-        >
-          {isRtl ? '🛡️ مصفوفة الصلاحيات (Matrix)' : '🛡️ Permission Matrix'}
+          {isRtl ? '👥 الصلاحيات والوصول (شخص × فرع × موديول)' : '👥 Access Control & Scope'}
         </button>
         <button
           onClick={() => setActiveTab('workflows')}
@@ -781,17 +774,15 @@ export default function Settings({ language, theme }: SettingsProps) {
         />
       )}
 
-      {/* --- TAB 3: USER ACCOUNTS & PERMISSIONS MODULE --- */}
+      {/* --- TAB 2: UNIFIED ACCESS CONTROL & PERMISSIONS (شخص × فرع × موديول) --- */}
       {activeTab === 'users' && (
-        <SettingsUsersTab
+        <UnifiedAccessControlCenter
           language={language}
           theme={theme}
           currentUser={currentUser}
           users={users}
           regions={regions}
           stations={stations}
-          pendingMappings={pendingMappings}
-          setPendingMappings={setPendingMappings}
           editingUserId={editingUserId}
           setEditingUserId={setEditingUserId}
           editUserFullName={editUserFullName}
@@ -832,10 +823,6 @@ export default function Settings({ language, theme }: SettingsProps) {
           setUsers={setUsers}
           triggerToast={triggerToast}
         />
-      )}
-
-      {activeTab === 'matrix' && (
-        <PermissionMatrix language={language} theme={theme} />
       )}
 
       {activeTab === 'workflows' && (

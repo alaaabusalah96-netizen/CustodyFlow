@@ -22,7 +22,9 @@ import {
   BreakdownDecisionLog,
   TripChatMessage,
   VehicleConstraintMode,
-  VehicleConstraintRule
+  VehicleConstraintRule,
+  TripBreadcrumbPoint,
+  TripBreadcrumbTrack
 } from '../../types/fleet';
 
 export class FleetBusinessEngine {
@@ -370,6 +372,13 @@ export class FleetBusinessEngine {
       locUpdate,
       'ACTIVE'
     );
+
+    // End active breadcrumb tracking track
+    try {
+      await this.endTripTrack(companyId, tripId, 'COMPLETED');
+    } catch (err) {
+      console.warn('Failed to end trip tracking log on completeTrip:', err);
+    }
 
     return updatedTrip;
   }
@@ -1141,6 +1150,14 @@ export class FleetBusinessEngine {
     StorageEngine.setStored('fleet_trips_items', allTrips);
     await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
 
+    if (data.decision === 'POSTPONE' || data.decision === 'SUSPEND') {
+      try {
+        await this.endTripTrack(companyId, data.tripId, 'SUSPENDED');
+      } catch (err) {
+        console.warn('Failed to suspend trip tracking track:', err);
+      }
+    }
+
     return updatedTrip;
   }
 
@@ -1490,4 +1507,228 @@ export class FleetBusinessEngine {
     const filtered = all.filter(c => !(c.id === constraintId && c.company_id === companyId));
     StorageEngine.setStored('fleet_vehicle_constraints', filtered);
   }
+
+  /**
+   * Retrieves all breadcrumb tracks for a company
+   */
+  public static getTracksByCompany(companyId: string): TripBreadcrumbTrack[] {
+    const all = StorageEngine.getStored<TripBreadcrumbTrack[]>('fleet_trip_tracks', []);
+    return all.filter(t => t.company_id === companyId);
+  }
+
+  /**
+   * Retrieves a specific trip's breadcrumb track
+   */
+  public static getTripTrack(companyId: string, tripId: string): TripBreadcrumbTrack | null {
+    const all = StorageEngine.getStored<TripBreadcrumbTrack[]>('fleet_trip_tracks', []);
+    return all.find(t => t.trip_id === tripId && t.company_id === companyId) || null;
+  }
+
+  /**
+   * Records a near real-time breadcrumb point for an active trip with strict throttling and validation.
+   * Throttling: Enforces minimum interval in seconds (default 30s) between recorded points.
+   * Scope: Strictly restricted to active trips (DISPATCHED or IN_PROGRESS).
+   */
+  public static async recordTripBreadcrumbPoint(
+    companyId: string,
+    tripId: string,
+    vehicleId: string,
+    driverId: string,
+    point: {
+      lat: number;
+      lng: number;
+      accuracy?: number;
+      speed?: number | null;
+      heading?: number | null;
+      timestamp?: string;
+    },
+    minIntervalSeconds: number = 30
+  ): Promise<{ recorded: boolean; track?: TripBreadcrumbTrack; reason?: string }> {
+    if (!companyId || !tripId || !vehicleId || typeof point.lat !== 'number' || typeof point.lng !== 'number') {
+      return { recorded: false, reason: 'Invalid tracking payload' };
+    }
+
+    // Verify trip exists and is strictly active
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const trip = allTrips.find(t => t.id === tripId && t.company_id === companyId);
+    if (!trip) {
+      return { recorded: false, reason: 'Trip not found' };
+    }
+
+    if (trip.status !== 'DISPATCHED' && trip.status !== 'IN_PROGRESS') {
+      return { recorded: false, reason: `Trip is not in active state (current: ${trip.status})` };
+    }
+
+    const allTracks = StorageEngine.getStored<TripBreadcrumbTrack[]>('fleet_trip_tracks', []);
+    let trackIndex = allTracks.findIndex(t => t.trip_id === tripId && t.company_id === companyId);
+    const nowIso = point.timestamp || new Date().toISOString();
+    const nowTime = new Date(nowIso).getTime();
+
+    let track: TripBreadcrumbTrack;
+
+    if (trackIndex >= 0) {
+      track = allTracks[trackIndex];
+      // Check if track was ended
+      if (track.status !== 'ACTIVE' || track.is_active === false) {
+        return { recorded: false, reason: 'Trip track is no longer active', track };
+      }
+      // Check throttling against last recorded point
+      if (track.last_point && track.last_point.timestamp) {
+        const lastTime = new Date(track.last_point.timestamp).getTime();
+        const diffSeconds = (nowTime - lastTime) / 1000;
+        if (diffSeconds < minIntervalSeconds) {
+          return { 
+            recorded: false, 
+            reason: `Throttled: only ${diffSeconds.toFixed(1)}s elapsed since last recorded point (min: ${minIntervalSeconds}s)`,
+            track 
+          };
+        }
+      }
+    } else {
+      // Initialize new breadcrumb track for this trip
+      track = {
+        id: `track-${tripId}`,
+        company_id: companyId,
+        trip_id: tripId,
+        vehicle_id: vehicleId,
+        driver_id: driverId,
+        status: 'ACTIVE',
+        is_active: true,
+        points: [],
+        started_at: nowIso,
+        updated_at: nowIso,
+        total_distance_km: 0
+      };
+      allTracks.push(track);
+      trackIndex = allTracks.length - 1;
+    }
+
+    // Prepare point
+    const newPoint: TripBreadcrumbPoint = {
+      lat: point.lat,
+      lng: point.lng,
+      accuracy: point.accuracy,
+      speed: point.speed ?? null,
+      heading: point.heading ?? null,
+      timestamp: nowIso
+    };
+
+    // Calculate distance delta if there is a previous point
+    let distanceDeltaKm = 0;
+    if (track.last_point && typeof track.last_point.lat === 'number' && typeof track.last_point.lng === 'number') {
+      distanceDeltaKm = this.calculateDistanceKm(
+        track.last_point.lat,
+        track.last_point.lng,
+        newPoint.lat,
+        newPoint.lng
+      );
+    }
+
+    const updatedPoints = [...track.points, newPoint];
+    const updatedTotalKm = Math.round(((track.total_distance_km || 0) + distanceDeltaKm) * 100) / 100;
+
+    const updatedTrack: TripBreadcrumbTrack = {
+      ...track,
+      status: 'ACTIVE',
+      is_active: true,
+      points: updatedPoints,
+      last_point: newPoint,
+      updated_at: nowIso,
+      total_distance_km: updatedTotalKm
+    };
+
+    allTracks[trackIndex] = updatedTrack;
+    StorageEngine.setStored('fleet_trip_tracks', allTracks);
+    await dbSetDoc('fleet_trip_tracks', updatedTrack.id, updatedTrack);
+
+    // Update vehicle's last known location for quick list display
+    try {
+      await this.updateVehicleLocationAndStatus(
+        companyId,
+        vehicleId,
+        {
+          lat: newPoint.lat,
+          lng: newPoint.lng,
+          accuracy: newPoint.accuracy,
+          updatedAt: nowIso,
+          label: 'تتبع مباشر (أثناء المشوار)'
+        }
+      );
+    } catch (err) {
+      console.warn('Failed to update vehicle last known location on breadcrumb:', err);
+    }
+
+    return { recorded: true, track: updatedTrack };
+  }
+
+  /**
+   * Finalizes or suspends a trip's breadcrumb tracking log
+   */
+  public static async endTripTrack(
+    companyId: string,
+    tripId: string,
+    finalStatus: 'COMPLETED' | 'SUSPENDED' | 'CANCELLED' = 'COMPLETED'
+  ): Promise<TripBreadcrumbTrack | null> {
+    const allTracks = StorageEngine.getStored<TripBreadcrumbTrack[]>('fleet_trip_tracks', []);
+    const trackIndex = allTracks.findIndex(t => t.trip_id === tripId && t.company_id === companyId);
+    if (trackIndex === -1) return null;
+
+    const current = allTracks[trackIndex];
+    const nowIso = new Date().toISOString();
+    const updated: TripBreadcrumbTrack = {
+      ...current,
+      status: finalStatus,
+      is_active: false,
+      ended_at: nowIso,
+      updated_at: nowIso
+    };
+
+    allTracks[trackIndex] = updated;
+    StorageEngine.setStored('fleet_trip_tracks', allTracks);
+    await dbSetDoc('fleet_trip_tracks', updated.id, updated);
+    return updated;
+  }
+
+  /**
+   * Cancels a trip and stops live tracking
+   */
+  public static async cancelTrip(
+    companyId: string,
+    operatorId: string,
+    tripId: string,
+    reason?: string
+  ): Promise<Trip> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const tripIndex = allTrips.findIndex(t => t.id === tripId && t.company_id === companyId);
+    if (tripIndex === -1) {
+      throw new Error(`Trip ${tripId} not found`);
+    }
+
+    const trip = allTrips[tripIndex];
+    const now = new Date().toISOString();
+
+    const updatedTrip: Trip = {
+      ...trip,
+      status: 'CANCELLED',
+      postponeReason: reason || 'إلغاء المشوار'
+    };
+
+    allTrips[tripIndex] = updatedTrip;
+    StorageEngine.setStored('fleet_trips_items', allTrips);
+    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
+
+    // Reset vehicle status to ACTIVE if it was dispatched
+    await this.updateVehicleLocationAndStatus(
+      companyId,
+      trip.vehicle_id,
+      undefined,
+      'ACTIVE'
+    );
+
+    // End tracking
+    await this.endTripTrack(companyId, tripId, 'CANCELLED');
+
+    return updatedTrip;
+  }
 }
+
