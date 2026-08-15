@@ -51,6 +51,13 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   const companyId = CompaniesModule.getSelectedCompanyId() || 'comp-default';
   const activeUser = UsersModule.getActiveUser();
 
+  const isCompanyLevelFleetManager = Boolean(
+    activeUser?.role === 'SystemAdmin' ||
+    activeUser?.role === 'Admin' ||
+    activeUser?.role === 'RegionalManager' ||
+    (!activeUser?.org_unit_id && activeUser?.permissions?.manage_fleet)
+  );
+
   const canViewVehicles = Boolean(
     activeUser?.permissions?.manage_fleet || 
     activeUser?.role === 'SystemAdmin'
@@ -159,11 +166,13 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   // Forms
   const [formOrgUnitId, setFormOrgUnitId] = useState<string>('');
   const [vehicleForm, setVehicleForm] = useState({
+    code: '',
     plateNumber: '',
     make: '',
     model: '',
     year: new Date().getFullYear(),
     type: 'TRUCK' as VehicleType,
+    status: 'ACTIVE' as VehicleStatus,
     driverName: '',
     odometerReading: 0,
     fuelCapacity: 100
@@ -360,38 +369,64 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   // Handlers
   const handleAddVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vehicleForm.plateNumber || !vehicleForm.make) {
-      showToast('error', isRtl ? 'يرجى إدخال رقم اللوحة والماركة' : 'Please input plate number and make');
+
+    if (!vehicleForm.plateNumber || !vehicleForm.plateNumber.trim()) {
+      showToast('error', isRtl ? 'يرجى إدخال رقم اللوحة المعدنية (إلزامي)' : 'Please enter plate number (required)');
       return;
+    }
+    if (!vehicleForm.type) {
+      showToast('error', isRtl ? 'يرجى تحديد نوع المركبة (إلزامي)' : 'Please select vehicle type (required)');
+      return;
+    }
+    if (!vehicleForm.driverName || !vehicleForm.driverName.trim()) {
+      showToast('error', isRtl ? 'يرجى إدخال اسم السائق المكلف (إلزامي)' : 'Please enter driver name (required)');
+      return;
+    }
+
+    let targetOrgUnitId: string | undefined = undefined;
+    if (isCompanyLevelFleetManager) {
+      targetOrgUnitId = formOrgUnitId || undefined;
+    } else {
+      if (!activeUser?.org_unit_id) {
+        showToast('error', isRtl
+          ? 'لا يمكن إضافة مركبة: حسابك كمدير فرع/محطة غير مرتبط بأي فرع في النظام. يرجى مراجعة إدارة النظام.'
+          : 'Cannot add vehicle: Your account is not assigned to any branch/station.');
+        return;
+      }
+      targetOrgUnitId = activeUser.org_unit_id;
     }
 
     try {
       const created = await FleetBusinessEngine.createVehicle(companyId, {
-        plateNumber: vehicleForm.plateNumber,
-        make: vehicleForm.make,
-        model: vehicleForm.model,
-        year: vehicleForm.year,
+        code: vehicleForm.code?.trim() || undefined,
+        plateNumber: vehicleForm.plateNumber.trim(),
+        make: vehicleForm.make?.trim() || undefined,
+        model: vehicleForm.model?.trim() || undefined,
+        year: vehicleForm.year ? Number(vehicleForm.year) : undefined,
         type: vehicleForm.type,
-        driverName: vehicleForm.driverName,
-        odometerReading: vehicleForm.odometerReading,
-        fuelCapacity: vehicleForm.fuelCapacity,
-        org_unit_id: formOrgUnitId || activeUser?.org_unit_id
+        status: vehicleForm.status || 'ACTIVE',
+        driverName: vehicleForm.driverName.trim(),
+        odometerReading: vehicleForm.odometerReading ? Number(vehicleForm.odometerReading) : 0,
+        fuelCapacity: vehicleForm.fuelCapacity ? Number(vehicleForm.fuelCapacity) : 0,
+        org_unit_id: targetOrgUnitId
       });
 
       LogsModule.addLog(
         activeUser?.id || 'system',
         activeUser?.full_name || 'System',
         isRtl ? 'تسجيل مركبة أسطول' : 'Register Fleet Vehicle',
-        `Registered vehicle ${created.make} (${created.plateNumber}) with code ${created.code}`
+        `Registered vehicle ${created.plateNumber} (${created.make || ''} ${created.model || ''}) with code ${created.code}`
       );
 
       showToast('success', isRtl ? 'تم تسجيل المركبة بنجاح' : 'Vehicle registered successfully');
       setVehicleForm({
+        code: '',
         plateNumber: '',
         make: '',
         model: '',
         year: new Date().getFullYear(),
         type: 'TRUCK',
+        status: 'ACTIVE',
         driverName: '',
         odometerReading: 0,
         fuelCapacity: 100
@@ -399,9 +434,9 @@ export default function FleetManagement({ language }: FleetManagementProps) {
       setFormOrgUnitId('');
       setShowAddVehicle(false);
       loadData();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showToast('error', isRtl ? 'حدث خطأ أثناء تسجيل المركبة' : 'Error registering vehicle');
+      showToast('error', err?.message || (isRtl ? 'حدث خطأ أثناء تسجيل المركبة' : 'Error registering vehicle'));
     }
   };
 
@@ -1729,46 +1764,87 @@ export default function FleetManagement({ language }: FleetManagementProps) {
       {/* Add Vehicle Modal */}
       {showAddVehicle && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 w-full max-w-lg border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 w-full max-w-lg border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
-                {isRtl ? 'تسجيل مركبة جديدة بالأسطول' : 'Register New Fleet Vehicle'}
-              </h3>
+              <div>
+                <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
+                  {isRtl ? 'تسجيل مركبة جديدة بالأسطول' : 'Register New Fleet Vehicle'}
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  {isRtl ? 'الحقول الإلزامية: رقم اللوحة، نوع المركبة، اسم السائق' : 'Required fields: Plate Number, Vehicle Type, Driver Name'}
+                </p>
+              </div>
               <button onClick={() => setShowAddVehicle(false)} className="text-slate-400 hover:text-slate-600">✕</button>
             </div>
 
             <form onSubmit={handleAddVehicle} className="space-y-3">
-              <div>
-                <OrgUnitTreeSelect
-                  label={isRtl ? 'الوحدة التنظيمية / الفرع / الموقع' : 'Organization Unit / Branch'}
-                  value={formOrgUnitId}
-                  onChange={(id) => setFormOrgUnitId(id)}
-                  placeholder={isRtl ? '-- افتراضي (حسب صلاحية المستخدم) --' : '-- Default (User Scope) --'}
-                  companyId={companyId}
-                  isRtl={isRtl}
-                  theme={undefined}
-                  showInheritanceSummary={false}
-                />
-              </div>
+              {/* Branch / Station Selection or Auto-Assignment */}
+              {isCompanyLevelFleetManager ? (
+                <div>
+                  <OrgUnitTreeSelect
+                    label={isRtl ? 'الوحدة التنظيمية / الفرع / المحطة' : 'Organization Unit / Branch / Station'}
+                    value={formOrgUnitId}
+                    onChange={(id) => setFormOrgUnitId(id)}
+                    placeholder={isRtl ? '-- حدد الفرع أو المحطة التابعة لها المركبة --' : '-- Select Branch or Station --'}
+                    companyId={companyId}
+                    isRtl={isRtl}
+                    theme={undefined}
+                    showInheritanceSummary={false}
+                  />
+                </div>
+              ) : (
+                <div>
+                  {activeUser?.org_unit_id ? (
+                    <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-800/60 rounded-2xl flex items-center justify-between">
+                      <div>
+                        <span className="block text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                          {isRtl ? 'الفرع / المحطة التابعة لها المركبة' : 'Assigned Branch / Station'}
+                        </span>
+                        <span className="text-xs font-black text-indigo-700 dark:text-indigo-300">
+                          {orgUnits.find(u => u.id === activeUser.org_unit_id)?.name || orgUnits.find(u => u.id === activeUser.org_unit_id)?.name_ar || activeUser.org_unit_id}
+                        </span>
+                      </div>
+                      <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300 font-bold px-2.5 py-1 rounded-full">
+                        {isRtl ? 'تلقائي حسب صلاحيتك' : 'Auto-Assigned'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 rounded-2xl flex items-start gap-2.5">
+                      <AlertCircle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                      <div className="text-xs text-rose-800 dark:text-rose-200 font-medium leading-relaxed">
+                        {isRtl
+                          ? 'تنبيه: حسابك غير مرتبط بأي فرع أو محطة بالهيكل التنظيمي. لا يمكنك إضافة مركبات حتى يتم ربط حسابك بفرع من قبل إدارة النظام.'
+                          : 'Notice: Your account is not assigned to any branch/station. You cannot register vehicles until assigned to a branch by an admin.'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
+              {/* Required Core Fields */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'رقم اللوحة المعدنية *' : 'Plate Number *'}</label>
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                    {isRtl ? 'رقم اللوحة المعدنية' : 'Plate Number'} <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={vehicleForm.plateNumber}
                     onChange={(e) => setVehicleForm({ ...vehicleForm, plateNumber: e.target.value })}
                     required
                     placeholder="e.g. أ ب ج 1234"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'نوع المركبة' : 'Vehicle Type'}</label>
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                    {isRtl ? 'نوع المركبة' : 'Vehicle Type'} <span className="text-rose-500">*</span>
+                  </label>
                   <select
                     value={vehicleForm.type}
                     onChange={(e) => setVehicleForm({ ...vehicleForm, type: e.target.value as any })}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"
+                    required
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   >
                     <option value="TRUCK">شاحنة نقل</option>
                     <option value="PICKUP">بيك آب / نصف نقل</option>
@@ -1779,20 +1855,45 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                 </div>
               </div>
 
+              {/* Required Driver */}
+              <div>
+                <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                  {isRtl ? 'اسم السائق المكلّف' : 'Driver Name'} <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={vehicleForm.driverName}
+                  onChange={(e) => setVehicleForm({ ...vehicleForm, driverName: e.target.value })}
+                  required
+                  placeholder={isRtl ? 'اسم السائق المسؤول عن المركبة' : 'Driver in charge'}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Optional Fields Divider */}
+              <div className="pt-2 pb-1 border-t border-slate-100 dark:border-slate-800">
+                <span className="text-[11px] font-bold text-slate-400">
+                  {isRtl ? 'بيانات ومواصفات إضافية (اختيارية):' : 'Additional details (optional):'}
+                </span>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'الماركة المصنعة *' : 'Make *'}</label>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    {isRtl ? 'الماركة المصنعة (اختياري)' : 'Make (Optional)'}
+                  </label>
                   <input
                     type="text"
                     value={vehicleForm.make}
                     onChange={(e) => setVehicleForm({ ...vehicleForm, make: e.target.value })}
-                    required
                     placeholder="e.g. Mercedes, Toyota"
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'الموديل وسنة الصنع' : 'Model & Year'}</label>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    {isRtl ? 'الموديل وسنة الصنع (اختياري)' : 'Model & Year (Optional)'}
+                  </label>
                   <input
                     type="text"
                     value={vehicleForm.model}
@@ -1803,28 +1904,46 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'اسم السائق المكلّف' : 'Driver Name'}</label>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    {isRtl ? 'كود المركبة' : 'Code'}
+                  </label>
                   <input
                     type="text"
-                    value={vehicleForm.driverName}
-                    onChange={(e) => setVehicleForm({ ...vehicleForm, driverName: e.target.value })}
+                    value={vehicleForm.code}
+                    onChange={(e) => setVehicleForm({ ...vehicleForm, code: e.target.value })}
+                    placeholder={isRtl ? 'تلقائي' : 'Auto'}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">{isRtl ? 'قراءة الكيلومترات الحالية' : 'Current Odometer (KM)'}</label>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    {isRtl ? 'قراءة العداد (KM)' : 'Odometer (KM)'}
+                  </label>
                   <input
                     type="number"
-                    value={vehicleForm.odometerReading}
+                    value={vehicleForm.odometerReading || ''}
                     onChange={(e) => setVehicleForm({ ...vehicleForm, odometerReading: Number(e.target.value) })}
+                    placeholder="0"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    {isRtl ? 'سعة الخزان (لتر)' : 'Fuel Cap. (L)'}
+                  </label>
+                  <input
+                    type="number"
+                    value={vehicleForm.fuelCapacity || ''}
+                    onChange={(e) => setVehicleForm({ ...vehicleForm, fuelCapacity: Number(e.target.value) })}
+                    placeholder="100"
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"
                   />
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center gap-2">
+              <div className="pt-3 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setShowAddVehicle(false)}
@@ -1834,9 +1953,10 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm"
+                  disabled={!isCompanyLevelFleetManager && !activeUser?.org_unit_id}
+                  className="flex-1 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl shadow-sm transition-all"
                 >
-                  {isRtl ? 'حفظ وتأكيد' : 'Save Vehicle'}
+                  {isRtl ? 'حفظ وتأكيد المركبة' : 'Save Vehicle'}
                 </button>
               </div>
             </form>

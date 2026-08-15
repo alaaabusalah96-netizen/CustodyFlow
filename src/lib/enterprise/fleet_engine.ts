@@ -571,18 +571,30 @@ export class FleetBusinessEngine {
   public static async createVehicle(
     companyId: string,
     data: {
+      code?: string;
       plateNumber: string;
-      make: string;
-      model: string;
-      year: number;
+      make?: string;
+      model?: string;
+      year?: number;
       type: VehicleType;
+      status?: VehicleStatus;
       driverName?: string;
-      odometerReading: number;
-      fuelCapacity: number;
+      odometerReading?: number;
+      fuelCapacity?: number;
       org_unit_id?: string;
       cost_center_id?: string;
     }
   ): Promise<Vehicle> {
+    if (!data.plateNumber || !data.plateNumber.trim()) {
+      throw new Error('Plate number is required');
+    }
+    if (!data.type) {
+      throw new Error('Vehicle type is required');
+    }
+    if (!data.driverName || !data.driverName.trim()) {
+      throw new Error('Driver name is required');
+    }
+
     const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
     const targetOrgUnit = data.org_unit_id || undefined;
 
@@ -593,17 +605,19 @@ export class FleetBusinessEngine {
     }
 
     // Code generation
-    let code = '';
-    try {
-      const genResult = await DocumentNumberEngine.generateNextNumberAsync({
-        companyId,
-        documentType: 'FLEET',
-        org_unit_id: targetOrgUnit
-      });
-      code = genResult.documentNumber;
-    } catch {
-      const nextNo = 101 + allVehicles.filter(v => v.company_id === companyId).length;
-      code = `FLT-${nextNo}`;
+    let code = data.code?.trim() || '';
+    if (!code) {
+      try {
+        const genResult = await DocumentNumberEngine.generateNextNumberAsync({
+          companyId,
+          documentType: 'FLEET',
+          org_unit_id: targetOrgUnit
+        });
+        code = genResult.documentNumber;
+      } catch {
+        const nextNo = 101 + allVehicles.filter(v => v.company_id === companyId).length;
+        code = `FLT-${nextNo}`;
+      }
     }
 
     const newVehicle: Vehicle = {
@@ -612,15 +626,15 @@ export class FleetBusinessEngine {
       org_unit_id: targetOrgUnit,
       cost_center_id: targetCostCenter,
       code,
-      plateNumber: data.plateNumber,
-      make: data.make,
-      model: data.model,
-      year: Number(data.year),
+      plateNumber: data.plateNumber.trim(),
+      make: data.make?.trim() || '',
+      model: data.model?.trim() || '',
+      year: Number(data.year) || new Date().getFullYear(),
       type: data.type,
-      status: 'ACTIVE',
-      driverName: data.driverName || '',
+      status: data.status || 'ACTIVE',
+      driverName: data.driverName?.trim() || '',
       odometerReading: Number(data.odometerReading) || 0,
-      fuelCapacity: Number(data.fuelCapacity) || 50,
+      fuelCapacity: Number(data.fuelCapacity) || 0,
       createdAt: new Date().toISOString()
     };
 

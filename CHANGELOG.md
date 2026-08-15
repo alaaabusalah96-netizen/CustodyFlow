@@ -4,6 +4,26 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fleet Vehicle Creation: Role-Based Scope, Validation & Streamlined Form
+**Date:** 2026-08-15
+**Files Changed:** `src/lib/enterprise/fleet_engine.ts`, `src/pages/FleetManagement.tsx`, `src/fleet_vehicle_creation_roles.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Strict Data Validation in `FleetBusinessEngine.createVehicle` (`src/lib/enterprise/fleet_engine.ts`)**:
+  - Made `plateNumber` (mandatory string), `type` (mandatory enum), and `driverName` (mandatory string) required fields with strict runtime validation.
+  - Made `make`, `model`, `year`, `odometerReading`, `fuelCapacity`, and `status` optional fields with sensible defaults (`status: 'ACTIVE'`, `odometerReading: 0`, `fuelCapacity: 0`).
+  - Standardized sequential code generation to support custom codes or fallback automatically via `DocumentNumberEngine` / `FLT-10X`.
+- **Role-Based Branch Scope Assignment (`src/pages/FleetManagement.tsx`)**:
+  - Implemented `isCompanyLevelFleetManager` constant (SystemAdmin, Admin, RegionalManager, or users with `manage_fleet` without a restricted org unit).
+  - For Company-level managers: renders `OrgUnitTreeSelect` allowing them to assign the vehicle to any branch/station or leave company-wide.
+  - For Branch/Station managers: automatically assigns the vehicle to their own `activeUser.org_unit_id` with clear visual feedback ("تلقائي حسب صلاحيتك"), preventing cross-branch vehicle creation.
+  - If a branch manager has no assigned `org_unit_id`, disables submission and shows a clear informative warning banner.
+- **Verification (`src/fleet_vehicle_creation_roles.test.ts`)**:
+  - Added 6 unit test cases verifying creation with only mandatory fields, rejection of missing required fields, optional fields handling, and branch scoping query isolation.
+  - Full fleet test suite (11 test files, 47 tests) passing 100% green.
+  - Production build and TypeScript linting verified with 0 errors.
+
+---
+
 ## Fleet Tab Visibility Governance & Field Tasks Execution Permission (`execute_trip_tasks`)
 **Date:** 2026-08-14
 **Files Changed:** `src/types.ts`, `src/db/defaults.ts`, `src/db/users.ts`, `src/pages/FleetManagement.tsx`, `src/components/DriverPortalView.tsx`, `src/fleet_tab_visibility.test.ts`, `src/fleet_module_registration.test.ts`, `CHANGELOG.md`
