@@ -22,6 +22,19 @@ import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import { runTenantMigrationUp, runTenantMigrationDown } from "./src/migrations/tenantMigration";
 import { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, getPepperByVersion, hashPasswordPBKDF2_210k, getLegacyHashDeprecationPolicy } from "./src/lib/server_hash";
+import { 
+  DEFAULT_COMPANIES, 
+  DEFAULT_REGIONS, 
+  DEFAULT_STATIONS, 
+  DEFAULT_ORGANIZATION_UNITS, 
+  DEFAULT_CATEGORIES, 
+  DEFAULT_USERS, 
+  DEFAULT_TRANSACTIONS, 
+  DEFAULT_LOGS, 
+  DEFAULT_CONFIG, 
+  DEFAULT_PERMISSIONS, 
+  DEFAULT_ROLES 
+} from "./src/db/defaults";
 
 function generateSecureTemporaryPassword(): string {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
@@ -1320,6 +1333,148 @@ async function startServer() {
       return res.status(500).json({ success: false, message: "Error retrieving hash migration status." });
     }
   });
+
+  // Helper: Server-side Firestore Seed Function with Admin SDK
+  async function seedDatabaseIfEmptyServer(adminDbInstance: FirebaseFirestore.Firestore) {
+    console.log('[Server Seed] Checking if Firestore requires initial seeding...');
+    try {
+      const metaDoc = await adminDbInstance.collection('system_meta').doc('seed_status_v7').get();
+      const companiesSnap = await adminDbInstance.collection('companies').limit(1).get();
+
+      if (metaDoc.exists && !companiesSnap.empty) {
+        console.log('[Server Seed] Database is already initialized with v7 and has companies.');
+        return { alreadySeeded: true };
+      }
+
+      console.log('[Server Seed] Database is empty or missing v7 marker. Starting server-side atomic seeding...');
+
+      // 1. Seed companies
+      const compBatch = adminDbInstance.batch();
+      DEFAULT_COMPANIES.forEach(c => {
+        compBatch.set(adminDbInstance.collection('companies').doc(c.id), c);
+      });
+      await compBatch.commit();
+      console.log(`[Server Seed] Seeded ${DEFAULT_COMPANIES.length} companies.`);
+
+      // 2. Seed regions
+      const regBatch = adminDbInstance.batch();
+      DEFAULT_REGIONS.forEach(r => {
+        regBatch.set(adminDbInstance.collection('regions').doc(r.id), r);
+      });
+      await regBatch.commit();
+      console.log(`[Server Seed] Seeded ${DEFAULT_REGIONS.length} regions.`);
+
+      // 3. Seed stations
+      const stnBatch = adminDbInstance.batch();
+      DEFAULT_STATIONS.forEach(s => {
+        stnBatch.set(adminDbInstance.collection('stations').doc(s.id), s);
+      });
+      await stnBatch.commit();
+      console.log(`[Server Seed] Seeded ${DEFAULT_STATIONS.length} stations.`);
+
+      // 4. Seed categories
+      const catBatch = adminDbInstance.batch();
+      DEFAULT_CATEGORIES.forEach(c => {
+        catBatch.set(adminDbInstance.collection('categories').doc(c.id), c);
+      });
+      await catBatch.commit();
+      console.log(`[Server Seed] Seeded ${DEFAULT_CATEGORIES.length} categories.`);
+
+      // 5. Seed organization units
+      const orgBatch = adminDbInstance.batch();
+      DEFAULT_ORGANIZATION_UNITS.forEach(u => {
+        orgBatch.set(adminDbInstance.collection('organization_units').doc(u.id), u);
+      });
+      await orgBatch.commit();
+      console.log(`[Server Seed] Seeded ${DEFAULT_ORGANIZATION_UNITS.length} organization units.`);
+
+      // 6. Seed users & user_credentials
+      const userBatch = adminDbInstance.batch();
+      DEFAULT_USERS.forEach(u => {
+        const pwd = u.password || '123456';
+        const salt = u.salt || u.email;
+        const hashedPwd = hashPassword(pwd, salt, 2);
+        const { password: _p, salt: _s, ...publicUser } = u;
+
+        userBatch.set(adminDbInstance.collection('users').doc(u.id), {
+          ...publicUser,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+        userBatch.set(adminDbInstance.collection('user_credentials').doc(u.id), {
+          id: u.id,
+          company_id: u.company_id || '',
+          email: u.email.toLowerCase().trim(),
+          password: hashedPwd,
+          salt: salt,
+          pepper_version: 2,
+          is_temporary: false,
+          updated_at: new Date().toISOString()
+        });
+      });
+      await userBatch.commit();
+      console.log(`[Server Seed] Seeded ${DEFAULT_USERS.length} users and credentials.`);
+
+      // 7. Seed config main
+      await adminDbInstance.collection('config').doc('main').set({
+        ...DEFAULT_CONFIG,
+        updated_at: new Date().toISOString()
+      });
+
+      // 8. Seed permissions and roles
+      const permBatch = adminDbInstance.batch();
+      DEFAULT_PERMISSIONS.forEach(p => {
+        permBatch.set(adminDbInstance.collection('Permissions').doc(p.id), p);
+      });
+      DEFAULT_ROLES.forEach(r => {
+        permBatch.set(adminDbInstance.collection('Roles').doc(r.id), r);
+      });
+      await permBatch.commit();
+
+      // 9. Seed logs and transactions
+      const logBatch = adminDbInstance.batch();
+      DEFAULT_LOGS.forEach(l => {
+        logBatch.set(adminDbInstance.collection('logs').doc(l.id), l);
+      });
+      DEFAULT_TRANSACTIONS.forEach(t => {
+        logBatch.set(adminDbInstance.collection('transactions').doc(t.id), t);
+      });
+      await logBatch.commit();
+
+      // 10. Mark v7 seed status
+      await adminDbInstance.collection('system_meta').doc('seed_status_v7').set({
+        seeded: true,
+        timestamp: new Date().toISOString(),
+        seededBy: 'server_bootstrap',
+        version: '7.0'
+      });
+
+      console.log('[Server Seed] Firestore seeding completed successfully.');
+      return { success: true, seededCount: DEFAULT_COMPANIES.length };
+    } catch (err: any) {
+      console.error('[Server Seed] Error during seed:', err);
+      throw err;
+    }
+  }
+
+  // API Route - Auto seed endpoint (accessible by client on initial check or bootstrap)
+  app.post("/api/seed/auto-seed", async (req, res) => {
+    try {
+      const result = await seedDatabaseIfEmptyServer(adminDb);
+      return res.json({ success: true, result });
+    } catch (err: any) {
+      console.error("Error in /api/seed/auto-seed:", err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // Run server seed on boot
+  try {
+    await seedDatabaseIfEmptyServer(adminDb);
+  } catch (err) {
+    console.error("Initial server boot seed error:", err);
+  }
 
 
 

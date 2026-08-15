@@ -4,6 +4,41 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Server-Side Automated Seeding & Live Multi-Tenant Synchronization
+**Date:** 2026-08-15
+**Files Changed:** `server.ts`, `src/firebase.ts`, `scripts/verify_seed_status.ts`, `CHANGELOG.md`
+**Summary:**
+- **Pre-Work Audit**: Checked `firebaseConfig.projectId` is locked to `"custodyflow"`. Identified root cause where unauthenticated/guest clients running `seedDatabaseIfEmpty` client-side were blocked by Firestore write security rules, leaving collections at 0 documents.
+- **Server-Side Initialization (`server.ts`)**:
+  - Implemented `seedDatabaseIfEmptyServer` using the privileged Firebase Admin SDK (`adminDb`).
+  - Executed atomic seeding on server boot when `system_meta/seed_status_v7` is missing or collections are empty.
+  - Added dedicated endpoint `POST /api/seed/auto-seed` to allow seamless client bootstrapping without security rule permission conflicts.
+- **Client Synchronization (`src/firebase.ts`)**:
+  - Wired `seedDatabaseIfEmpty` to invoke `/api/seed/auto-seed` before local fallbacks.
+  - Guaranteed instant propagation of default datasets across all live listeners.
+- **Verification**:
+  - Verified 5 seeded companies, 7 directory users, 27 organization units, and `system_meta/seed_status_v7` with `{ seeded: true }` in live Firestore.
+  - TypeScript compilation (`vite build && esbuild`) and linter (`tsc --noEmit`) verified 100% clean with 0 errors.
+
+---
+
+## Clean Reset & Re-Seed Preparation for Firestore Database
+**Date:** 2026-08-15
+**Files Changed:** `scripts/clean_and_reset_firestore.ts`, `CHANGELOG.md`
+**Summary:**
+- **Pre-Work Audit**: Verified `firebaseConfig.projectId` is strictly locked to `"custodyflow"` and database ID `"ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe"`.
+- **Target Collections Complete Deletion**:
+  - Fully purged all documents in: `companies`, `regions`, `stations`, `organization_units`, `categories`, `users` (8 orphaned docs deleted), `user_credentials` (1 doc deleted), `logs` (72 docs deleted), `transactions`, `config` (including `main`), `Permissions`, and `Roles`.
+- **Seed Status Deletion**:
+  - Deleted `system_meta/seed_status_v7` to allow clean trigger of `seedDatabaseIfEmpty`.
+- **Zero Manual Data Insertion**:
+  - Kept all target collections completely empty (0 documents) so that `seedDatabaseIfEmpty` can execute an atomic, consistent batch seed on the next application load from `src/db/defaults.ts`.
+- **Verification**:
+  - TypeScript compilation and linter passing with 0 errors.
+  - Verified 100% empty state across all 12 target collections and confirmed removal of seed marker.
+
+---
+
 ## Fleet Live GPS Breadcrumb Tracking & Interactive Real-Time Map Dashboard
 **Date:** 2026-08-15
 **Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/DriverPortalView.tsx`, `src/components/LiveFleetMapDashboard.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_live_breadcrumbs_tracking.test.ts`, `CHANGELOG.md`

@@ -198,6 +198,17 @@ export async function seedDatabaseIfEmpty(defaults: {
     }
 
     if (!alreadySeededV7) {
+      // Attempt server-side seed first (has admin privileges)
+      try {
+        const resp = await fetch('/api/seed/auto-seed', { method: 'POST' });
+        if (resp.ok) {
+          console.log('[Seed] Auto-seed completed via backend admin API.');
+          return;
+        }
+      } catch (err) {
+        console.warn('Backend auto-seed endpoint call skipped/failed, attempting client fallback...', err);
+      }
+
       // Check if database already has companies or users
       let hasExistingData = false;
       try {
