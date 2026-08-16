@@ -48,12 +48,19 @@ export class LogsModule {
       return;
     }
 
+    const isImpersonating = !!(activeUser?.impersonator);
+    const impersonator = activeUser?.impersonator;
+
+    const formattedDetails = isImpersonating && !details.includes('[Impersonated by') && !details.includes('[Support')
+      ? `[Support Mode by ${impersonator.full_name}] ${details}`
+      : details;
+
     const newLog: ActivityLog = {
       id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       user_id: userId,
       user_name: userName,
       action,
-      details,
+      details: formattedDetails,
       timestamp: new Date().toISOString(),
       station_id: stationId,
       company_id: resolvedCompanyId,
@@ -150,6 +157,24 @@ export class LogsModule {
       return;
     }
 
+    const isImpersonating = !!(activeUser?.impersonator) || !!(details?.is_impersonation) || !!(details?.impersonator_id);
+    const impersonator = activeUser?.impersonator || (details?.impersonator_id ? {
+      id: details.impersonator_id,
+      full_name: details.impersonator_name || 'System Admin'
+    } : null);
+
+    const mergedDetails: Record<string, any> = {
+      ...(details || {})
+    };
+
+    if (isImpersonating && impersonator) {
+      mergedDetails.is_impersonation = true;
+      mergedDetails.impersonator_id = impersonator.id;
+      mergedDetails.impersonator_name = impersonator.full_name;
+      mergedDetails.target_user_id = details?.target_user_id || activeUser?.id || 'unknown';
+      mergedDetails.target_user_name = details?.target_user_name || activeUser?.full_name || 'unknown';
+    }
+
     const log: AuditLog = {
       id: `audit-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       user_id: activeUser?.id || 'system',
@@ -158,10 +183,19 @@ export class LogsModule {
       ip_address: ipStr,
       device: deviceStr,
       action_type: actionType,
-      description,
+      description: (isImpersonating && impersonator && !description.includes('[Impersonation'))
+        ? `[Impersonation by ${impersonator.full_name}] ${description}`
+        : description,
       timestamp: new Date().toISOString(),
-      details,
-      company_id: companyId
+      details: mergedDetails,
+      company_id: companyId,
+      ...(isImpersonating && impersonator ? {
+        impersonator_id: impersonator.id,
+        impersonator_name: impersonator.full_name,
+        target_user_id: details?.target_user_id || activeUser?.id || 'unknown',
+        target_user_name: details?.target_user_name || activeUser?.full_name || 'unknown',
+        is_impersonation: true
+      } : {})
     };
 
     LogsModule.addAuditLog(log);

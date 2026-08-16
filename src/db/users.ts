@@ -156,6 +156,15 @@ export class UsersModule {
     }
     const parsed = JSON.parse(userStr);
     if (parsed) {
+      if (parsed.impersonator) {
+        // Active technical support impersonation session:
+        // Enforce full standard baseline permissions for the target user's role using enrichUserPermissions(parsed.role).
+        // Bypasses any individual restrictive overrides on target user that could hinder technical support,
+        // while strictly preventing any privilege escalation beyond targetUser's base role.
+        parsed.permissions = UsersModule.enrichUserPermissions(parsed.role);
+        StorageEngine.cache['active_user'] = parsed;
+        return parsed as AppUser;
+      }
       const isPlatformAdminEmail = parsed.email && UsersModule.isPlatformOwner(parsed.email);
       if (isPlatformAdminEmail && (parsed.role !== 'SystemAdmin' || !parsed.is_active || !parsed.is_platform_owner)) {
         const updated = {
@@ -379,6 +388,12 @@ export class UsersModule {
     return filtered;
   }
 
+  /**
+   * Phase 3: Strengthen Impersonation for Technical Support.
+   * Calculates session permissions via enrichUserPermissions(targetUser.role),
+   * bypassing individual restrictive overrides to allow frictionless support,
+   * while strictly constraining access within targetUser's base role (no privilege escalation).
+   */
   static impersonateUser(targetUser: AppUser, reason?: string): void {
     const activeUser = UsersModule.getActiveUser();
     if (!activeUser || (activeUser.role !== 'SystemAdmin' && !activeUser.impersonator)) {
@@ -390,11 +405,23 @@ export class UsersModule {
     const company = companies.find(c => c.id === targetUser.company_id);
     const companyName = company ? company.name : (targetUser.company_id ? `شركة (${targetUser.company_id})` : 'المنصة العامة (SaaS)');
 
+    // Calculate session permissions using enrichUserPermissions(targetUser.role).
+    // Individual restrictive overrides on targetUser.permissions are intentionally bypassed
+    // during support impersonation so technical support staff are not blocked by broken or restrictive user-level overrides.
+    // However, the session is strictly constrained to targetUser's base role (e.g. StationAdmin stays StationAdmin).
+    const sessionPermissions = UsersModule.enrichUserPermissions(targetUser.role);
+
     const impersonatedUser: AppUser = {
       ...targetUser,
-      impersonator: superAdmin
+      permissions: sessionPermissions,
+      impersonator: {
+        ...superAdmin,
+        role: 'SystemAdmin',
+        permissions: UsersModule.enrichUserPermissions('SystemAdmin')
+      }
     };
 
+    StorageEngine.cache['active_user'] = impersonatedUser;
     localStorage.setItem('custody_active_user', JSON.stringify(impersonatedUser));
 
     LogsModule.addLog(superAdmin.id, superAdmin.full_name, 'Impersonation Start', `Super Admin began impersonating ${targetUser.full_name} (${companyName})`);
@@ -406,7 +433,8 @@ export class UsersModule {
       target_user_id: targetUser.id,
       target_user_name: targetUser.full_name,
       reason: reason || 'Technical Support / الدعم الفني',
-      login_time: new Date().toISOString()
+      login_time: new Date().toISOString(),
+      is_impersonation: true
     });
 
     if (typeof window !== 'undefined') {
@@ -414,6 +442,10 @@ export class UsersModule {
     }
   }
 
+  /**
+   * Phase 3: Exit Impersonation & Revoke Permissions.
+   * Immediately revokes the assumed operational context and restores the original SystemAdmin session.
+   */
   static exitImpersonation(): void {
     const activeUser = UsersModule.getActiveUser();
     if (!activeUser || !activeUser.impersonator) {
@@ -421,21 +453,32 @@ export class UsersModule {
     }
 
     const superAdmin = activeUser.impersonator;
+    const cleanSuperAdmin: AppUser = {
+      ...superAdmin,
+      role: 'SystemAdmin',
+      is_active: true,
+      is_platform_owner: true,
+      permissions: UsersModule.enrichUserPermissions('SystemAdmin'),
+      impersonator: undefined
+    };
+
     const companies = StorageEngine.getStored<any[]>('companies', []);
     const company = companies.find(c => c.id === activeUser.company_id);
     const companyName = company ? company.name : (activeUser.company_id ? `شركة (${activeUser.company_id})` : 'المنصة العامة (SaaS)');
 
-    localStorage.setItem('custody_active_user', JSON.stringify(superAdmin));
+    StorageEngine.cache['active_user'] = cleanSuperAdmin;
+    localStorage.setItem('custody_active_user', JSON.stringify(cleanSuperAdmin));
 
-    LogsModule.addLog(superAdmin.id, superAdmin.full_name, 'Impersonation End', `Super Admin ended impersonating ${activeUser.full_name}`);
-    LogsModule.logAudit('IMPERSONATION_END', `Super Admin ${superAdmin.full_name} exited technical support session for ${activeUser.full_name} (${companyName})`, {
-      impersonator_id: superAdmin.id,
-      impersonator_name: superAdmin.full_name,
+    LogsModule.addLog(cleanSuperAdmin.id, cleanSuperAdmin.full_name, 'Impersonation End', `Super Admin ended impersonating ${activeUser.full_name}`);
+    LogsModule.logAudit('IMPERSONATION_END', `Super Admin ${cleanSuperAdmin.full_name} exited technical support session for ${activeUser.full_name} (${companyName})`, {
+      impersonator_id: cleanSuperAdmin.id,
+      impersonator_name: cleanSuperAdmin.full_name,
       company_id: activeUser.company_id || 'none',
       company_name: companyName,
       target_user_id: activeUser.id,
       target_user_name: activeUser.full_name,
-      logout_time: new Date().toISOString()
+      logout_time: new Date().toISOString(),
+      is_impersonation: true
     });
 
     if (typeof window !== 'undefined') {

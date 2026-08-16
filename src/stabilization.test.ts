@@ -98,7 +98,15 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
   describe('0.1 & 0.2: Transaction Category, Validation, and Safe Return Signatures', () => {
     it('should fallback to cat-6 if category_id is missing during creation', async () => {
       // Mock active user
-      const mockUser = DEFAULT_USERS[0]; // SystemAdmin
+      const mockUser = {
+        id: 'mock-station-user',
+        email: 'station@comp1.local',
+        full_name: 'Station Cashier',
+        role: 'StationAdmin',
+        company_id: 'comp-1',
+        station_id: 'stn-1',
+        permissions: { create_expense: true, edit_expense: true }
+      };
       StorageEngine.setStored('active_user', mockUser);
       StorageEngine.setStored('categories', [{ id: 'cat-6', name_ar: 'عام', name_en: 'General' }]);
       StorageEngine.setStored('stations', [{ id: 'stn-1', company_id: 'comp-1', custody_amount: 10000 }]);
@@ -181,8 +189,10 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
 
   describe('1.1: Platform Owner Verification', () => {
     it('should verify correct platform owner email and block incorrect typo variants', () => {
-      const defaultOwner = DEFAULT_USERS.find(u => u.is_platform_owner === true);
-      const ownerEmail = defaultOwner?.email || 'admin@kemit-erp.com';
+      const ownerEmail = 'owner@kemit-erp.local';
+      StorageEngine.setStored('users', [
+        { id: 'owner-1', email: ownerEmail, is_platform_owner: true, role: 'SystemAdmin' }
+      ]);
 
       // Correct email should be owner
       expect(UsersModule.isPlatformOwner(ownerEmail)).toBe(true);
@@ -233,7 +243,14 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
         localStorage.setItem('custody_selected_company_id', 'comp-1');
         StorageEngine.cache['selected_company_id'] = 'comp-1';
 
-        const activeUser = DEFAULT_USERS[0]; // SystemAdmin
+        const activeUser = {
+          id: 'mock-admin',
+          email: 'admin@comp1.local',
+          full_name: 'Admin User',
+          role: 'Admin',
+          company_id: 'comp-1',
+          permissions: { settle_voucher: true, approve_voucher: true, edit_custody: true }
+        };
         StorageEngine.setStored('active_user', activeUser);
 
         // Transaction under settlement
@@ -302,7 +319,14 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       localStorage.setItem('custody_selected_company_id', 'comp-1');
       StorageEngine.cache['selected_company_id'] = 'comp-1';
 
-      const activeUser = DEFAULT_USERS[0]; // SystemAdmin
+      const activeUser = {
+        id: 'mock-admin',
+        email: 'admin@comp1.local',
+        full_name: 'Admin User',
+        role: 'Admin',
+        company_id: 'comp-1',
+        permissions: { settle_voucher: true, approve_voucher: true, edit_custody: true }
+      };
       StorageEngine.setStored('active_user', activeUser);
 
       // Perform 10 consecutive settlements

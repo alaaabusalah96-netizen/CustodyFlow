@@ -537,6 +537,11 @@ export interface AuditLog {
   tenantId?: string;
   organizationId?: string;
   company_id?: string;
+  impersonator_id?: string;
+  impersonator_name?: string;
+  target_user_id?: string;
+  target_user_name?: string;
+  is_impersonation?: boolean;
 }
 
 export interface SystemPermission {

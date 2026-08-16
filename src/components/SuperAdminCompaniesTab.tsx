@@ -3,7 +3,7 @@ import { CustodyDB, ModulesModule } from '../db';
 import { Company, AppUser, Region, Station, Theme } from '../types';
 import { 
   Building2, Plus, Calendar, Sparkles, Search, Globe, X, Settings, Trash2, Edit,
-  PlusCircle, Building, Network, Power, ArrowUpDown, KeyRound
+  PlusCircle, Building, Network, Power, ArrowUpDown, KeyRound, ShieldCheck, ArrowRight, ArrowLeft
 } from 'lucide-react';
 import AdminCredentialsForm from './AdminCredentialsForm';
 
@@ -100,6 +100,42 @@ export default function SuperAdminCompaniesTab({
           <span>{structToastMsg}</span>
         </div>
       )}
+
+      {/* UNIFIED ACCESS CONTROL CENTER MIGRATION BANNER & QUICK LINK */}
+      <div 
+        id="unified-access-control-redirect-banner"
+        className="p-4 rounded-2xl bg-gradient-to-r from-blue-900/10 via-indigo-900/5 to-sky-900/10 border border-blue-200/80 dark:border-blue-800/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs"
+      >
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-sm shrink-0">
+            <ShieldCheck size={20} />
+          </div>
+          <div>
+            <h4 className="font-black text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <span>{isRtl ? 'مركز التحكم الموحد في الصلاحيات والشركات' : 'Unified Access Control & Multi-Tenant Center'}</span>
+              <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[10px] font-bold">
+                {isRtl ? 'موصى به' : 'Recommended'}
+              </span>
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+              {isRtl 
+                ? 'تم توحيد إدارة الشركات، الهيكل التنظيمي، المستخدمين، طلبات التسجيل والتصحيح في شاشة موحدة تحت الإعدادات.'
+                : 'Companies, Org Structure, User Accounts, Signups and Correction requests are now unified under Settings.'}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('navigate_tab', { 
+              detail: { tab: 'settings', settingsTab: 'permissions' } 
+            }));
+          }}
+          className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-sm shrink-0 cursor-pointer"
+        >
+          <span>{isRtl ? 'الانتقال إلى مركز التحكم الموحد' : 'Open Unified Access Control'}</span>
+          {isRtl ? <ArrowLeft size={15} /> : <ArrowRight size={15} />}
+        </button>
+      </div>
 
       {/* Header Actions */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">

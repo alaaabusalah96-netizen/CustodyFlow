@@ -78,23 +78,6 @@ export const DEFAULT_CATEGORIES: ExpenseCategory[] = [
 
 // Pre-configured Users (Seeded accounts across 3 diverse Egyptian company structures)
 export const DEFAULT_USERS: AppUser[] = [
-  {
-    id: 'dev-bypass-user',
-    email: 'dev@local',
-    full_name: 'مدير النظام الشامل (System Owner)',
-    role: 'SystemAdmin',
-    is_active: true,
-    is_platform_owner: true,
-    company_id: '',
-    permissions: {
-      create_expense: true, edit_expense: true, delete_expense: true,
-      create_voucher: true, approve_voucher: true, reject_voucher: true,
-      create_custody: true, edit_custody: true, replace_custody: true,
-      view_reports: true, manage_users: true, manage_companies: true,
-      manage_regions: true, manage_stations: true, manage_roles: true,
-      manage_settings: true, settle_voucher: true,
-    },
-  },
   // 1. Industrial / Manufacturing Company Users (El-Sewedy)
   {
     id: 'user-sewedy-admin',

@@ -4,6 +4,62 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Phase 2: Flow Migration & Access Control Requests Unification
+**Date:** 2026-08-16
+**Files Changed:** `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/unified_access_control_phase2.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Pre-Work Audit**: Verified `firebaseConfig.projectId` is strictly locked to `"custodyflow"`. Audited request workflows in `AdminCredentialsForm.tsx` and unified them into `UnifiedAccessControlCenter.tsx`.
+- **Integrated Request Subviews & Notification Banners**:
+  - Implemented 3 dedicated subviews in the Users tab: Employee Directory (`directory`), Pending Signups (`signups`), and Account Corrections (`corrections`).
+  - Added dynamic counter badges and an interactive notification banner alerting administrators of pending applications and account adjustment tickets.
+- **Request Approval & Rejection Modal Governance**:
+  - Built comprehensive review dialogs for Signup Requests (provisioning accounts, password dispatch, audit trail, and automatic cleanup) and Account Correction Requests (credential reset, profile patch, audit logging).
+  - Enforced multi-tenant isolation so Regional/Station managers only review requests within their assigned scope while Platform Admins maintain cross-tenant oversight.
+- **Verification**:
+  - Created `src/unified_access_control_phase2.test.ts` (7 tests) verifying subviews, notifications, approval/rejection flows, scoped filtering, and audit logging.
+  - All 14 tests across Phase 1 and Phase 2 test suites passed 100% green.
+  - Production build (`vite build && esbuild`) and linter (`tsc --noEmit`) verified 100% clean with 0 errors.
+
+---
+
+## Phase 1: Unified Access Control Center Refactoring & Dynamic Permission Governance
+**Date:** 2026-08-16
+**Files Changed:** `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/unified_access_control_phase1.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Pre-Work Audit**: Verified `firebaseConfig.projectId` is locked to `"custodyflow"`. Mapped `UnifiedAccessControlCenter.tsx`, `src/db/defaults.ts`, `src/pages/Settings.tsx`, and `OrganizationTreeManager.tsx`.
+- **Dynamic Category & Permission Generation**:
+  - Implemented `buildDynamicPermissionCategories(DEFAULT_PERMISSIONS)` dynamically transforming system permissions into categories and visual metadata without hardcoded static lists.
+- **Dynamic Multi-Tenant Scope & Company Selector**:
+  - Eliminated hardcoded `'comp-sewedy-mfg'` fallback across `UnifiedAccessControlCenter`.
+  - Added explicit Company Selector for `SystemAdmin` allowing seamless context switching among registered tenants. Bound non-SystemAdmin users strictly to `currentUser.company_id`.
+- **Tabbed Center Navigation & Role Visibility**:
+  - Implemented 4 dedicated tabs: Users (`users`), Organization Tree (`org_structure`), ERP Modules & Subscription (`modules`), and SaaS Companies Directory (`companies`).
+  - Enforced strict role-based visibility: scoped managers (`StationAdmin` / `RegionalManager`) are blocked from tenant-level `modules` and `companies` tabs.
+- **Verification**:
+  - Added `src/unified_access_control_phase1.test.ts` (7 tests) covering fallback elimination, dynamic permissions, tab structure, and role visibility.
+  - All 13 tests in `unified_access_control_phase1.test.ts` and `settings_user_migration.test.ts` passed 100% green.
+  - Production build (`vite build && esbuild`) and linter (`tsc --noEmit`) verified 100% clean with 0 errors.
+
+---
+
+## Clean Removal of Seeded Platform Admins & FirstRunSetup Enablement
+**Date:** 2026-08-16
+**Files Changed:** `src/db/defaults.ts`, `scripts/clean_platform_owners.ts`, `CHANGELOG.md`
+**Summary:**
+- **Pre-Work Audit**: Checked `firebaseConfig.projectId` is locked to `"custodyflow"`. Queried `users` and `user_credentials` collections in Firestore.
+- **Selective Deletion**:
+  - Deleted documents in `users` with `role == "SystemAdmin"`, `role == "super_admin"`, or `is_platform_owner == true` (including `dev-bypass-user` and `8d2vMB91X0W5SpNaDwooYxRa4Qo2`).
+  - Deleted corresponding credentials with matching IDs from `user_credentials`.
+  - Left all other users (Company Admins, Station Admins, Cashiers) and all company/unit data intact.
+- **Defaults Sanitization (`src/db/defaults.ts`)**:
+  - Removed `dev-bypass-user` from `DEFAULT_USERS` so future seed cycles cannot re-introduce hardcoded SystemAdmin or platform owner accounts.
+- **Verification**:
+  - Queried `GET /api/auth/platform-status` via live server and confirmed response is `{"hasPlatformOwner":false}`.
+  - Verified `App.tsx` conditionally routes unauthenticated initial visitors to `FirstRunSetup` screen for authentic initial Platform Owner bootstrap via `/api/auth/bootstrap-platform-owner`.
+  - Verified linter (`tsc --noEmit`) and production compilation (`vite build && esbuild`) completed with 0 errors.
+
+---
+
 ## Server-Side Automated Seeding & Live Multi-Tenant Synchronization
 **Date:** 2026-08-15
 **Files Changed:** `server.ts`, `src/firebase.ts`, `scripts/verify_seed_status.ts`, `CHANGELOG.md`
