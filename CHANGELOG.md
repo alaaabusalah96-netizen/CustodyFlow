@@ -4,6 +4,30 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Phase 3: Strengthen Impersonation for Technical Support & System Isolation
+**Date:** 2026-08-16
+**Files Changed:** `src/types.ts`, `src/db/users.ts`, `src/db/logs.ts`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/unified_access_control_phase3.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **SystemAdmin Isolation in Normal Mode**:
+  - Maintained complete platform gatekeeper boundaries: in normal operating mode, SystemAdmin has zero operational custody scope or financial transaction attachments.
+- **Enhanced Impersonation Rule for Technical Support**:
+  - Implemented dynamic baseline calculation via `enrichUserPermissions(targetUser.role)` during support sessions.
+  - Bypasses any restrictive/corrupted individual permission overrides on the target user to guarantee technical staff can troubleshoot without friction.
+  - Strictly caps permissions to the target user's role (e.g. StationAdmin stays StationAdmin; never escalates to Admin/SystemAdmin).
+  - Clear documentation in `src/db/users.ts` describing permission derivation and safety boundaries.
+- **Full Traceability & Auditing**:
+  - Enhanced `AuditLog` structure with `impersonator_id`, `impersonator_name`, `target_user_id`, `target_user_name`, and `is_impersonation` tags.
+  - Automatically prepends `[Impersonation by <Admin>]` to all audit log actions executed during impersonation sessions.
+  - Preserved `IMPERSONATION_START` and `IMPERSONATION_END` with complete company and user metadata.
+- **Clean Session Termination**:
+  - `exitImpersonation()` completely revokes assumed operational permissions, wipes target cached sessions, and cleanly restores pure SystemAdmin capabilities.
+- **Verification**:
+  - Created `src/unified_access_control_phase3.test.ts` (5 tests) verifying normal gatekeeper isolation, enhanced permissions derivation, privilege escalation prevention, dual-party audit trails, and clean session restoration.
+  - All 19 tests across Phase 1, Phase 2, and Phase 3 suites passed 100% green.
+  - Production build and linter verified clean with 0 errors.
+
+---
+
 ## Phase 2: Flow Migration & Access Control Requests Unification
 **Date:** 2026-08-16
 **Files Changed:** `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/unified_access_control_phase2.test.ts`, `CHANGELOG.md`
