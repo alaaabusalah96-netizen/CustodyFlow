@@ -4,6 +4,23 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Phase 5: Unified Access Control Navigation & Contextual Routing Fix — Completed
+**Date:** 2026-08-17
+**Files Changed:** `src/App.tsx`, `src/pages/Settings.tsx`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/pages/SuperAdmin.tsx`, `src/components/SuperAdminCompaniesTab.tsx`, `src/unified_access_control_navigation.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Cross-Component Navigation Listener**:
+  - Implemented real `navigate_tab` custom event listeners across `App.tsx`, `Settings.tsx`, and `UnifiedAccessControlCenter.tsx`.
+  - Added support for target tabs (`settings`), sub-tabs (`permissions`, `users`, `workflows`, `general`), center sub-views (`users`, `org_structure`, `modules`, `companies`), and tenant context (`selectedCompanyId`).
+- **Unified Contextual Routing**:
+  - Enabled all "Go to Unified Access Control" and "Manage in Access Center" buttons in `SuperAdmin.tsx`, `SuperAdminCompaniesTab.tsx`, `CompanyAdminDashboard.tsx`, `RegionAdminDashboard.tsx`, and `Stations.tsx` to directly switch tabs and select the corresponding company context.
+  - Added direct quick-access actions on company cards in `SuperAdminCompaniesTab.tsx` for Users/Permissions, Org Structure, and Modules.
+- **Verification & Testing**:
+  - Created `src/unified_access_control_navigation.test.ts` (3 tests) verifying `setSelectedCompanyId`, custom event payloads, and multi-tenant company retrieval in Unified Center context.
+  - All test suites passed green (2/2 files, 7 tests).
+  - TypeScript linter and production build compiled successfully with 0 errors.
+
+---
+
 ## Phase 4: Final Cleanup & Integrity Verification — Completed
 **Date:** 2026-08-17
 **Files Changed:** `src/pages/SuperAdmin.tsx`, `src/components/SuperAdminCompaniesTab.tsx`, `src/pages/CompanyAdminDashboard.tsx`, `src/pages/RegionAdminDashboard.tsx`, `src/pages/Stations.tsx`, `src/components/AdminCredentialsForm.tsx` (Deleted), `src/unified_access_control_phase4.test.ts`, `src/phase7_temp_passwords.test.ts`, `CHANGELOG.md`

@@ -42,7 +42,13 @@ import {
   FolderTree,
   Boxes,
   CreditCard,
-  UserCheck
+  UserCheck,
+  Copy,
+  EyeOff,
+  Calendar,
+  ArrowUpDown,
+  SlidersHorizontal,
+  Zap
 } from 'lucide-react';
 import { 
   Language, 
@@ -314,6 +320,10 @@ export interface UnifiedAccessControlCenterProps {
   setNewUserName: (v: string) => void;
   newUserEmail: string;
   setNewUserEmail: (v: string) => void;
+  newUserPassword?: string;
+  setNewUserPassword?: (v: string) => void;
+  newUserMustChangePassword?: boolean;
+  setNewUserMustChangePassword?: (v: boolean) => void;
   newUserRole: UserRole;
   setNewUserRole: (v: UserRole) => void;
   newUserStationId: string;
@@ -328,6 +338,8 @@ export interface UnifiedAccessControlCenterProps {
   getAuthHeaders: () => Promise<Record<string, string>>;
   setUsers: (users: AppUser[]) => void;
   triggerToast: (msg: string) => void;
+  initialCenterTab?: 'users' | 'org_structure' | 'modules' | 'companies';
+  initialSelectedCompanyId?: string;
 }
 
 export default function UnifiedAccessControlCenter({
@@ -362,6 +374,10 @@ export default function UnifiedAccessControlCenter({
   setNewUserName,
   newUserEmail,
   setNewUserEmail,
+  newUserPassword,
+  setNewUserPassword,
+  newUserMustChangePassword,
+  setNewUserMustChangePassword,
   newUserRole,
   setNewUserRole,
   newUserStationId,
@@ -375,7 +391,9 @@ export default function UnifiedAccessControlCenter({
   handleAddUser,
   getAuthHeaders,
   setUsers,
-  triggerToast
+  triggerToast,
+  initialCenterTab,
+  initialSelectedCompanyId
 }: UnifiedAccessControlCenterProps) {
   const isRtl = language === 'ar';
 
@@ -385,16 +403,127 @@ export default function UnifiedAccessControlCenter({
     return CompaniesModule.getCompanies();
   }, [companiesRefreshTrigger]);
 
+  // User creation password state (props with internal fallback)
+  const [internalNewUserPassword, setInternalNewUserPassword] = useState('');
+  const [internalNewUserMustChangePassword, setInternalNewUserMustChangePassword] = useState(true);
+  const [showNewUserPassword, setShowNewUserPassword] = useState(false);
+
+  const activeNewUserPassword = newUserPassword !== undefined ? newUserPassword : internalNewUserPassword;
+  const setActiveNewUserPassword = setNewUserPassword || setInternalNewUserPassword;
+  const activeNewUserMustChangePassword = newUserMustChangePassword !== undefined ? newUserMustChangePassword : internalNewUserMustChangePassword;
+  const setActiveNewUserMustChangePassword = setNewUserMustChangePassword || setInternalNewUserMustChangePassword;
+
+  const generateRandomPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
+    let pass = 'Pass@';
+    for (let i = 0; i < 6; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setActiveNewUserPassword(pass);
+    return pass;
+  };
+
+  // Company Management State & Filters
+  const [companySearch, setCompanySearch] = useState('');
+  const [companySortField, setCompanySortField] = useState<'name' | 'status' | 'userCount' | 'expiry'>('name');
+  const [companySortOrder, setCompanySortOrder] = useState<'asc' | 'desc'>('asc');
+
+  // Add Company Modal State
+  const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [newCompanyId, setNewCompanyId] = useState('');
+  const [newCompanyCustody, setNewCompanyCustody] = useState(0);
+  const [newCompanyPlan, setNewCompanyPlan] = useState<Company['subscription_plan']>('Pro');
+  const [newCompanyStatus, setNewCompanyStatus] = useState<Company['subscription_status']>('active');
+  const [newCompanyExpiry, setNewCompanyExpiry] = useState(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [newCompanyAdminName, setNewCompanyAdminName] = useState('');
+  const [newCompanyAdminEmail, setNewCompanyAdminEmail] = useState('');
+  const [newCompanyAdminPassword, setNewCompanyAdminPassword] = useState('');
+  const [newCompanyAdminMustChangePassword, setNewCompanyAdminMustChangePassword] = useState(true);
+  const [showNewCompanyAdminPassword, setShowNewCompanyAdminPassword] = useState(false);
+  const [newCompanyModules, setNewCompanyModules] = useState<Record<string, boolean>>({
+    expenses: true,
+    custody: true,
+    custody_cycles: true,
+    custody_settlements: true,
+    reports: true,
+    alerts: true,
+    offline_sync: true,
+    multi_branch: true,
+    audit_trail: true,
+  });
+
+  // Edit Company & Subscription Modal State
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+  const [editCompanyName, setEditCompanyName] = useState('');
+  const [editCompanyPlan, setEditCompanyPlan] = useState<Company['subscription_plan']>('Basic');
+  const [editCompanyStatus, setEditCompanyStatus] = useState<Company['subscription_status']>('active');
+  const [editCompanyExpiry, setEditCompanyExpiry] = useState('');
+  const [editCompanyModulesSettings, setEditCompanyModulesSettings] = useState<Record<string, CompanyModuleSettings>>({});
+  const [activeEditCompanyModalTab, setActiveEditCompanyModalTab] = useState<'details' | 'modules'>('details');
+
+  // Delete Company Confirmation State
+  const [deletingCompany, setDeletingCompany] = useState<Company | null>(null);
+
   // Active Center Tab State: 'users' | 'org_structure' | 'modules' | 'companies'
-  const [centerTab, setCenterTab] = useState<'users' | 'org_structure' | 'modules' | 'companies'>('users');
+  const [centerTab, setCenterTab] = useState<'users' | 'org_structure' | 'modules' | 'companies'>(
+    initialCenterTab || 'users'
+  );
 
   // Explicit Company Selection for SystemAdmin
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => {
+    if (initialSelectedCompanyId) return initialSelectedCompanyId;
     const stored = CustodyDB.getSelectedCompanyId();
     if (stored) return stored;
     const comps = CompaniesModule.getCompanies();
     return comps.length > 0 ? comps[0].id : '';
   });
+
+  useEffect(() => {
+    if (initialCenterTab) {
+      setCenterTab(initialCenterTab);
+    }
+  }, [initialCenterTab]);
+
+  useEffect(() => {
+    if (initialSelectedCompanyId) {
+      setSelectedCompanyId(initialSelectedCompanyId);
+      CustodyDB.setSelectedCompanyId(initialSelectedCompanyId);
+    }
+  }, [initialSelectedCompanyId]);
+
+  useEffect(() => {
+    const handleNavigateEvent = (e: any) => {
+      const detail = e?.detail;
+      if (!detail) return;
+      if (detail.selectedCompanyId) {
+        setSelectedCompanyId(detail.selectedCompanyId);
+        CustodyDB.setSelectedCompanyId(detail.selectedCompanyId);
+      }
+      if (detail.centerTab) {
+        setCenterTab(detail.centerTab);
+      } else if (detail.settingsTab === 'companies') {
+        setCenterTab('companies');
+      } else if (detail.settingsTab === 'org_structure') {
+        setCenterTab('org_structure');
+      } else if (detail.settingsTab === 'modules') {
+        setCenterTab('modules');
+      } else if (detail.settingsTab === 'permissions' || detail.settingsTab === 'users' || detail.settingsTab === 'access_control') {
+        if (!detail.centerTab) {
+          setCenterTab('users');
+        }
+      }
+    };
+
+    window.addEventListener('navigate_tab', handleNavigateEvent);
+    return () => {
+      window.removeEventListener('navigate_tab', handleNavigateEvent);
+    };
+  }, []);
 
   // Effective Company ID: No hardcoded fallback
   const effectiveCompanyId = useMemo(() => {
@@ -858,6 +987,191 @@ export default function UnifiedAccessControlCenter({
     setCompanyModules(updatedMods);
     ModulesModule.saveCompanyModules(effectiveCompanyId, updatedMods);
     triggerToast?.(isRtl ? '✅ تم تحديث إعدادات الموديول للشركة بنجاح!' : '✅ Company module settings updated successfully!');
+  };
+
+  // Company Management Handlers
+  const handleSortCompanies = (field: 'name' | 'status' | 'userCount' | 'expiry') => {
+    if (companySortField === field) {
+      setCompanySortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setCompanySortField(field);
+      setCompanySortOrder('asc');
+    }
+  };
+
+  const sortedAndFilteredCompanies = useMemo(() => {
+    let result = [...allCompanies];
+    if (companySearch.trim()) {
+      const q = companySearch.toLowerCase().trim();
+      result = result.filter(c => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
+    }
+    result.sort((a, b) => {
+      let valA: any = '';
+      let valB: any = '';
+      if (companySortField === 'name') {
+        valA = a.name.toLowerCase();
+        valB = b.name.toLowerCase();
+      } else if (companySortField === 'status') {
+        valA = a.subscription_status || 'active';
+        valB = b.subscription_status || 'active';
+      } else if (companySortField === 'userCount') {
+        valA = users.filter(u => u.company_id === a.id && u.is_active !== false).length;
+        valB = users.filter(u => u.company_id === b.id && u.is_active !== false).length;
+      } else if (companySortField === 'expiry') {
+        valA = a.subscription_expiry || '9999-12-31';
+        valB = b.subscription_expiry || '9999-12-31';
+      }
+      if (valA < valB) return companySortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return companySortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return result;
+  }, [allCompanies, companySearch, companySortField, companySortOrder, users]);
+
+  const handleCreateCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCompanyName.trim()) return;
+
+    try {
+      const generatedId = newCompanyId.trim() || newCompanyName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20) || `comp_${Date.now()}`;
+      
+      const newComp: Company = {
+        id: generatedId,
+        name: newCompanyName.trim(),
+        custody_value: newCompanyCustody || 0,
+        subscription_plan: newCompanyPlan,
+        subscription_status: newCompanyStatus,
+        subscription_expiry: newCompanyExpiry || undefined,
+        is_active: newCompanyStatus !== 'suspended'
+      };
+
+      CompaniesModule.addCompany(newComp);
+
+      // Save initial module settings
+      const moduleSettings: Record<string, CompanyModuleSettings> = {};
+      Object.keys(newCompanyModules).forEach(mId => {
+        moduleSettings[mId] = {
+          enabled: !!newCompanyModules[mId],
+          nameAr: ERP_MODULES_REGISTRY[mId]?.nameAr || mId,
+          nameEn: ERP_MODULES_REGISTRY[mId]?.nameEn || mId,
+          icon: ERP_MODULES_REGISTRY[mId]?.icon || 'Layers',
+          roles: ['Admin', 'StationAdmin', 'RegionalManager']
+        };
+      });
+      ModulesModule.saveCompanyModules(generatedId, moduleSettings);
+
+      // Provision Admin User if provided
+      if (newCompanyAdminEmail.trim()) {
+        const adminPass = newCompanyAdminPassword.trim() || `Pass@${Math.floor(100000 + Math.random() * 900000)}`;
+        try {
+          const res = await fetch('/api/admin/users', {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+            credentials: 'include',
+            body: JSON.stringify({
+              email: newCompanyAdminEmail.trim().toLowerCase(),
+              password: adminPass,
+              full_name: newCompanyAdminName.trim() || `Admin ${newComp.name}`,
+              role: 'Admin',
+              company_id: generatedId,
+              permissions: CustodyDB.enrichUserPermissions('Admin'),
+              must_change_password: newCompanyAdminMustChangePassword
+            })
+          });
+          const data = await res.json();
+          if (data.user) {
+            const allUsers = CustodyDB.getUsers();
+            if (!allUsers.some(u => u.id === data.user.id)) {
+              allUsers.push(data.user);
+              await CustodyDB.saveUsers(allUsers);
+              setUsers(allUsers);
+            }
+          }
+        } catch (uErr) {
+          console.warn('Failed to provision company admin user:', uErr);
+        }
+      }
+
+      setCompaniesRefreshTrigger(prev => prev + 1);
+      setShowAddCompanyModal(false);
+      setNewCompanyName('');
+      setNewCompanyId('');
+      setNewCompanyCustody(0);
+      setNewCompanyAdminName('');
+      setNewCompanyAdminEmail('');
+      setNewCompanyAdminPassword('');
+
+      triggerToast?.(isRtl ? '✅ تم إنشاء الشركة وتفعيل اشتراكها بنجاح!' : '✅ Company created and configured successfully!');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('custody_db_updated'));
+      }
+    } catch (err: any) {
+      triggerToast?.(`⚠️ ${err.message || 'Error creating company'}`);
+    }
+  };
+
+  const handleStartEditCompany = (comp: Company) => {
+    setEditingCompany(comp);
+    setEditCompanyName(comp.name);
+    setEditCompanyPlan(comp.subscription_plan || 'Basic');
+    setEditCompanyStatus(comp.subscription_status || 'active');
+    setEditCompanyExpiry(comp.subscription_expiry || '');
+    setEditCompanyModulesSettings(ModulesModule.getCompanyModules(comp.id));
+    setActiveEditCompanyModalTab('details');
+  };
+
+  const handleSaveEditCompany = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCompany || !editCompanyName.trim()) return;
+
+    const updated: Company = {
+      ...editingCompany,
+      name: editCompanyName.trim(),
+      subscription_plan: editCompanyPlan,
+      subscription_status: editCompanyStatus,
+      subscription_expiry: editCompanyExpiry || undefined,
+      is_active: editCompanyStatus !== 'suspended'
+    };
+
+    CompaniesModule.updateCompany(editingCompany.id, updated);
+    ModulesModule.saveCompanyModules(editingCompany.id, editCompanyModulesSettings);
+
+    setCompaniesRefreshTrigger(prev => prev + 1);
+    setEditingCompany(null);
+    triggerToast?.(isRtl ? '✅ تم تحديث بيانات الشركة والاشتراك بنجاح!' : '✅ Company details and subscription updated!');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('custody_db_updated'));
+    }
+  };
+
+  const handleToggleCompanyActive = (comp: Company) => {
+    const nextActive = comp.is_active === false;
+    const nextStatus = nextActive ? 'active' : 'suspended';
+    const updated: Company = {
+      ...comp,
+      is_active: nextActive,
+      subscription_status: nextStatus
+    };
+    CompaniesModule.updateCompany(comp.id, updated);
+    setCompaniesRefreshTrigger(prev => prev + 1);
+    triggerToast?.(isRtl 
+      ? (nextActive ? '✅ تم تفعيل الشركة بنجاح' : '⏸️ تم تعطيل / إيقاف الشركة') 
+      : (nextActive ? 'Company activated' : 'Company suspended')
+    );
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('custody_db_updated'));
+    }
+  };
+
+  const handleDeleteCompany = () => {
+    if (!deletingCompany) return;
+    CompaniesModule.deleteCompany(deletingCompany.id);
+    setCompaniesRefreshTrigger(prev => prev + 1);
+    setDeletingCompany(null);
+    triggerToast?.(isRtl ? '🗑️ تم حذف الشركة بنجاح.' : 'Company deleted.');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('custody_db_updated'));
+    }
   };
 
   return (
@@ -1983,105 +2297,335 @@ export default function UnifiedAccessControlCenter({
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 4: SAAS COMPANIES OVERVIEW (SystemAdmin only)                        */}
+      {/* TAB 4: SAAS COMPANIES & SUBSCRIPTIONS (SystemAdmin only)                  */}
       {/* ========================================================================= */}
       {centerTab === 'companies' && isSystemAdmin && (
         <div className="space-y-4">
-          <div className={`p-4 rounded-2xl border flex items-center justify-between ${
-            theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
-          }`}>
-            <div>
-              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Globe size={16} className="text-indigo-600" />
-                <span>{isRtl ? 'إدارة شركات ومؤسسات المنصة (Multi-Tenant SaaS)' : 'Multi-Tenant Companies Directory'}</span>
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {isRtl ? 'عرض كافة المستأجرين والشركات المسجلة في قاعدة البيانات وتبديل النطاق الإداري' : 'List all registered tenant companies and switch management context'}
+          {/* Header & KPI Summary Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className={`p-3.5 rounded-2xl border ${
+              theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-400">{isRtl ? 'إجمالي الشركات' : 'Total Companies'}</span>
+                <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
+                  <Building2 size={16} />
+                </div>
+              </div>
+              <p className="text-xl font-black text-slate-800 dark:text-slate-100 mt-1">{allCompanies.length}</p>
+              <span className="text-[10px] text-slate-400">{isRtl ? 'مؤسسات مسجلة' : 'Registered tenants'}</span>
+            </div>
+
+            <div className={`p-3.5 rounded-2xl border ${
+              theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-400">{isRtl ? 'شركات نشطة' : 'Active'}</span>
+                <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 size={16} />
+                </div>
+              </div>
+              <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                {allCompanies.filter(c => c.subscription_status === 'active' && c.is_active !== false).length}
               </p>
+              <span className="text-[10px] text-emerald-500 font-bold">{isRtl ? 'اشتراك ساري' : 'Active licenses'}</span>
+            </div>
+
+            <div className={`p-3.5 rounded-2xl border ${
+              theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-400">{isRtl ? 'معطلة / منتهية' : 'Suspended'}</span>
+                <div className="p-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400">
+                  <AlertTriangle size={16} />
+                </div>
+              </div>
+              <p className="text-xl font-black text-rose-600 dark:text-rose-400 mt-1">
+                {allCompanies.filter(c => c.subscription_status === 'suspended' || c.is_active === false).length}
+              </p>
+              <span className="text-[10px] text-rose-500 font-bold">{isRtl ? 'متوقفة مؤقتاً' : 'Suspended'}</span>
+            </div>
+
+            <div className={`p-3.5 rounded-2xl border ${
+              theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-400">{isRtl ? 'إجمالي المستخدمين' : 'Total SaaS Users'}</span>
+                <div className="p-1.5 rounded-lg bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400">
+                  <Users2 size={16} />
+                </div>
+              </div>
+              <p className="text-xl font-black text-sky-600 dark:text-sky-400 mt-1">
+                {users.filter(u => u.is_active !== false).length}
+              </p>
+              <span className="text-[10px] text-slate-400">{isRtl ? 'عبر كافة الشركات' : 'Across all tenants'}</span>
             </div>
           </div>
 
+          {/* Companies Toolbar: Search, Sort, and Add Company */}
+          <div className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+            theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+          }`}>
+            <div className="flex items-center gap-2 flex-1 max-w-md">
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border flex-1 ${
+                theme === 'dark' ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200'
+              }`}>
+                <Search size={14} className="text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder={isRtl ? 'البحث عن شركة بالاسم أو الكود...' : 'Search companies by name or ID...'}
+                  value={companySearch}
+                  onChange={(e) => setCompanySearch(e.target.value)}
+                  className="w-full bg-transparent text-xs focus:outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+                />
+                {companySearch && (
+                  <button onClick={() => setCompanySearch('')} className="text-slate-400 hover:text-slate-600">
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              {/* Sorting Filter */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleSortCompanies('name')}
+                  className={`px-2.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1 ${
+                    companySortField === 'name'
+                      ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                  title={isRtl ? 'ترتيب حسب الاسم' : 'Sort by name'}
+                >
+                  <ArrowUpDown size={12} />
+                  <span className="hidden md:inline">{isRtl ? 'الاسم' : 'Name'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSortCompanies('userCount')}
+                  className={`px-2.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1 ${
+                    companySortField === 'userCount'
+                      ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                  title={isRtl ? 'ترتيب حسب عدد الموظفين' : 'Sort by users count'}
+                >
+                  <Users2 size={12} />
+                  <span className="hidden md:inline">{isRtl ? 'الموظفين' : 'Users'}</span>
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setNewCompanyName('');
+                setNewCompanyId('');
+                setNewCompanyCustody(0);
+                setNewCompanyPlan('Pro');
+                setNewCompanyStatus('active');
+                setNewCompanyAdminName('');
+                setNewCompanyAdminEmail('');
+                setNewCompanyAdminPassword('');
+                setShowAddCompanyModal(true);
+              }}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <Plus size={14} />
+              <span>{isRtl ? 'إضافة شركة ومستأجر جديد' : 'Add New Company / Tenant'}</span>
+            </button>
+          </div>
+
+          {/* Companies Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {allCompanies.map((comp) => {
+            {sortedAndFilteredCompanies.map((comp) => {
               const isCurrent = comp.id === effectiveCompanyId;
               const companyUsersCount = users.filter(u => u.company_id === comp.id && u.is_active !== false).length;
               const companyUnitsCount = OrganizationEngine.getOrganizationUnits(comp.id).length;
+              const companyMods = ModulesModule.getCompanyModules(comp.id);
+              const enabledModsCount = Object.values(companyMods).filter(m => m.enabled).length;
+
+              const planBadgeColors = {
+                Enterprise: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/20',
+                Pro: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/20',
+                Basic: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/20',
+                Custom: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/20'
+              };
 
               return (
                 <div
                   key={comp.id}
-                  className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                  className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3.5 ${
                     isCurrent
                       ? 'border-indigo-600 bg-indigo-50/10 dark:bg-indigo-950/20 shadow-md ring-2 ring-indigo-500/20'
                       : theme === 'dark'
-                      ? 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
+                      ? 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
                       : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
                   }`}
                 >
-                  <div className="space-y-2.5">
+                  <div className="space-y-3">
+                    {/* Card Header: Icon, Name, ID, Badges */}
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 font-black text-xs">
-                          <Building2 size={16} />
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 font-black text-xs shrink-0">
+                          <Building2 size={18} />
                         </div>
                         <div>
-                          <h4 className="font-bold text-xs text-slate-800 dark:text-slate-100">
-                            {comp.name}
+                          <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                            <span>{comp.name}</span>
+                            {isCurrent && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-600 text-white">
+                                {isRtl ? 'النشطة' : 'Active Scope'}
+                              </span>
+                            )}
                           </h4>
-                          <span className="text-[10px] text-slate-400 font-mono">{comp.id}</span>
+                          <span className="text-[10px] text-slate-400 font-mono block mt-0.5">{comp.id}</span>
                         </div>
                       </div>
 
-                      <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black ${
-                        comp.subscription_status === 'active'
-                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20'
-                          : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/20'
-                      }`}>
-                        {comp.subscription_status === 'active' ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'معطل' : 'Inactive')}
-                      </span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black border ${
+                          comp.subscription_status === 'active' && comp.is_active !== false
+                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                            : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/20'
+                        }`}>
+                          {comp.subscription_status === 'active' && comp.is_active !== false ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'معطل' : 'Suspended')}
+                        </span>
+
+                        <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black border ${planBadgeColors[comp.subscription_plan || 'Basic'] || planBadgeColors.Basic}`}>
+                          {comp.subscription_plan || 'Basic'}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-                      <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                        <span className="text-[10px] text-slate-400 block">{isRtl ? 'الموظفون النشطون:' : 'Active Users:'}</span>
+                    {/* Expiry Date */}
+                    {comp.subscription_expiry && (
+                      <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                        <Calendar size={12} className="text-slate-400" />
+                        <span>{isRtl ? 'انتهاء الاشتراك:' : 'Expires:'} {comp.subscription_expiry}</span>
+                      </div>
+                    )}
+
+                    {/* Quick Metrics Grid */}
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                      <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-center">
+                        <span className="text-[10px] text-slate-400 block">{isRtl ? 'الموظفون' : 'Users'}</span>
                         <span className="font-black text-slate-700 dark:text-slate-200 text-xs">{companyUsersCount}</span>
                       </div>
 
-                      <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                        <span className="text-[10px] text-slate-400 block">{isRtl ? 'الوحدات والفروع:' : 'Org Units:'}</span>
+                      <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-center">
+                        <span className="text-[10px] text-slate-400 block">{isRtl ? 'الفروع' : 'Units'}</span>
                         <span className="font-black text-slate-700 dark:text-slate-200 text-xs">{companyUnitsCount}</span>
+                      </div>
+
+                      <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-center">
+                        <span className="text-[10px] text-slate-400 block">{isRtl ? 'الموديولات' : 'Modules'}</span>
+                        <span className="font-black text-indigo-600 dark:text-indigo-400 text-xs">{enabledModsCount}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleCompanyChange(comp.id);
-                        setCenterTab('users');
-                      }}
-                      className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                        isCurrent
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 hover:text-indigo-600'
-                      }`}
-                    >
-                      <Check size={12} />
-                      <span>{isCurrent ? (isRtl ? 'الشركة المحددة حالياً' : 'Current Active Company') : (isRtl ? 'تحديد وإدارة الشركة' : 'Manage Company')}</span>
-                    </button>
+                  {/* Actions Bar */}
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                    {/* Management Navigation Tabs */}
+                    <div className="grid grid-cols-3 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleCompanyChange(comp.id);
+                          setCenterTab('users');
+                        }}
+                        className="py-1.5 px-2 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-300 hover:text-indigo-600 transition-all flex items-center justify-center gap-1"
+                        title={isRtl ? 'إدارة موظفي وصلاحيات هذه الشركة' : 'Manage Company Users'}
+                      >
+                        <Users2 size={12} />
+                        <span>{isRtl ? 'المستخدمين' : 'Users'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleCompanyChange(comp.id);
+                          setCenterTab('org_structure');
+                        }}
+                        className="py-1.5 px-2 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-300 hover:text-indigo-600 transition-all flex items-center justify-center gap-1"
+                        title={isRtl ? 'إدارة الهيكل التنظيمي والفروع لهذه الشركة' : 'Manage Org Structure'}
+                      >
+                        <FolderTree size={12} />
+                        <span>{isRtl ? 'الهيكل' : 'Org Units'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleCompanyChange(comp.id);
+                          setCenterTab('modules');
+                        }}
+                        className="py-1.5 px-2 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-300 hover:text-indigo-600 transition-all flex items-center justify-center gap-1"
+                        title={isRtl ? 'تفعيل وتخصيص موديولات الشركة' : 'Manage Company Modules'}
+                      >
+                        <Layers size={12} />
+                        <span>{isRtl ? 'الموديولات' : 'Modules'}</span>
+                      </button>
+                    </div>
+
+                    {/* Operational Action Buttons: Edit, Toggle Active, Delete */}
+                    <div className="flex items-center justify-between gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleStartEditCompany(comp)}
+                        className="flex-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Edit2 size={12} />
+                        <span>{isRtl ? 'تعديل والاشتراك' : 'Edit & Plan'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleCompanyActive(comp)}
+                        className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                          comp.is_active !== false && comp.subscription_status === 'active'
+                            ? 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20'
+                            : 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20'
+                        }`}
+                        title={comp.is_active !== false ? (isRtl ? 'تعطيل الشركة مؤقتاً' : 'Suspend Company') : (isRtl ? 'تفعيل الشركة' : 'Activate Company')}
+                      >
+                        <Power size={13} />
+                      </button>
+
+                      {allCompanies.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setDeletingCompany(comp)}
+                          className="p-1.5 rounded-lg text-xs bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 transition-all cursor-pointer"
+                          title={isRtl ? 'حذف الشركة' : 'Delete Company'}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
+
+          {sortedAndFilteredCompanies.length === 0 && (
+            <div className={`p-8 rounded-2xl border text-center space-y-2 ${
+              theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+            }`}>
+              <Building2 size={28} className="mx-auto text-slate-400" />
+              <p className="text-xs font-bold text-slate-500">{isRtl ? 'لم يتم العثور على شركات مطابقة' : 'No companies found'}</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* New User Register Modal */}
+      {/* New User Register Modal with Password and Security Controls */}
       {showNewUserModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
-          <div className={`w-full max-w-lg p-5 rounded-2xl border shadow-2xl space-y-4 ${
+          <div className={`w-full max-w-lg p-5 rounded-2xl border shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto ${
             theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
           }`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
@@ -2132,6 +2676,69 @@ export default function UnifiedAccessControlCenter({
                     theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200'
                   }`}
                 />
+              </div>
+
+              {/* Password Management for New User */}
+              <div className="space-y-1.5 p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40">
+                <div className="flex items-center justify-between">
+                  <label className="text-slate-600 dark:text-slate-300 font-bold flex items-center gap-1.5">
+                    <KeyRound size={13} className="text-indigo-600" />
+                    <span>{isRtl ? 'كلمة المرور الأولية للإنشاء:' : 'Initial Password:'}</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={generateRandomPassword}
+                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles size={12} />
+                    <span>{isRtl ? 'توليد تلقائي' : 'Generate Random'}</span>
+                  </button>
+                </div>
+
+                <div className="relative flex items-center">
+                  <input
+                    type={showNewUserPassword ? 'text' : 'password'}
+                    placeholder={isRtl ? 'اتركها فارغة للتوليد التلقائي أو أدخل كلمة سر' : 'Enter password or leave blank to auto-generate'}
+                    value={activeNewUserPassword}
+                    onChange={(e) => setActiveNewUserPassword(e.target.value)}
+                    className={`w-full pl-16 pr-3 py-2 rounded-xl border text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200'
+                    }`}
+                  />
+                  <div className="absolute left-2 flex items-center gap-1 text-slate-400">
+                    <button
+                      type="button"
+                      onClick={() => setShowNewUserPassword(!showNewUserPassword)}
+                      className="p-1 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      {showNewUserPassword ? <EyeOff size={13} /> : <Eye size={13} />}
+                    </button>
+                    {activeNewUserPassword && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(activeNewUserPassword);
+                          triggerToast?.(isRtl ? '📋 تم نسخ كلمة المرور' : '📋 Password copied');
+                        }}
+                        className="p-1 hover:text-slate-600 dark:hover:text-slate-200"
+                      >
+                        <Copy size={13} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 pt-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={activeNewUserMustChangePassword}
+                    onChange={(e) => setActiveNewUserMustChangePassword(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-[11px] text-slate-600 dark:text-slate-300 font-bold">
+                    {isRtl ? 'إلزام الموظف بتغيير كلمة المرور عند أول تسجيل دخول' : 'Require password change on first login'}
+                  </span>
+                </label>
               </div>
 
               <div>
@@ -2185,6 +2792,429 @@ export default function UnifiedAccessControlCenter({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add New Company & Subscription */}
+      {showAddCompanyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
+          <div className={`w-full max-w-lg p-5 rounded-2xl border shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto ${
+            theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+          }`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black">
+                  <Building2 size={16} />
+                </div>
+                <h3 className="font-black text-sm">
+                  {isRtl ? 'إضافة شركة / مستأجر جديد (Multi-Tenant)' : 'Add New Tenant Company'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowAddCompanyModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCompany} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">{isRtl ? 'اسم الشركة / المؤسسة:' : 'Company Name:'}</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder={isRtl ? 'شركة الفلاح للنقليات' : 'Acme Logistics Co.'}
+                    value={newCompanyName}
+                    onChange={(e) => setNewCompanyName(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">{isRtl ? 'كود المعرف (ID):' : 'Company ID Code:'}</label>
+                  <input
+                    type="text"
+                    placeholder="comp_alfallah"
+                    value={newCompanyId}
+                    onChange={(e) => setNewCompanyId(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">{isRtl ? 'باقة الاشتراك:' : 'Subscription Plan:'}</label>
+                  <select
+                    value={newCompanyPlan}
+                    onChange={(e) => setNewCompanyPlan(e.target.value as any)}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <option value="Basic">Basic</option>
+                    <option value="Pro">Pro</option>
+                    <option value="Enterprise">Enterprise</option>
+                    <option value="Custom">Custom</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">{isRtl ? 'حالة الاشتراك:' : 'Status:'}</label>
+                  <select
+                    value={newCompanyStatus}
+                    onChange={(e) => setNewCompanyStatus(e.target.value as any)}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <option value="active">{isRtl ? 'نشط' : 'Active'}</option>
+                    <option value="suspended">{isRtl ? 'معطل / موقوف' : 'Suspended'}</option>
+                    <option value="trial">{isRtl ? 'تجريبي' : 'Trial'}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">{isRtl ? 'تاريخ الانتهاء:' : 'Expiry Date:'}</label>
+                  <input
+                    type="date"
+                    value={newCompanyExpiry}
+                    onChange={(e) => setNewCompanyExpiry(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* Initial Admin Account */}
+              <div className="p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 space-y-2.5">
+                <h4 className="font-black text-slate-700 dark:text-slate-200 text-xs flex items-center gap-1.5">
+                  <UserCheck size={14} className="text-indigo-600" />
+                  <span>{isRtl ? 'حساب مدير النظام الرئيسي للشركة (Company Admin):' : 'Company Initial Administrator Account:'}</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <input
+                    type="text"
+                    placeholder={isRtl ? 'اسم مدير الشركة (مثلاً: محمد أحمد)' : 'Admin Full Name'}
+                    value={newCompanyAdminName}
+                    onChange={(e) => setNewCompanyAdminName(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200'
+                    }`}
+                  />
+                  <input
+                    type="email"
+                    placeholder="admin@company.com"
+                    value={newCompanyAdminEmail}
+                    onChange={(e) => setNewCompanyAdminEmail(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs font-mono ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200'
+                    }`}
+                  />
+                </div>
+
+                <div className="relative flex items-center">
+                  <input
+                    type={showNewCompanyAdminPassword ? 'text' : 'password'}
+                    placeholder={isRtl ? 'كلمة المرور (اتركها فارغة للتوليد التلقائي)' : 'Admin password (leave blank for auto)'}
+                    value={newCompanyAdminPassword}
+                    onChange={(e) => setNewCompanyAdminPassword(e.target.value)}
+                    className={`w-full pl-10 pr-3 py-2 rounded-xl border text-xs font-mono ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCompanyAdminPassword(!showNewCompanyAdminPassword)}
+                    className="absolute left-2.5 p-1 text-slate-400 hover:text-slate-600"
+                  >
+                    {showNewCompanyAdminPassword ? <EyeOff size={13} /> : <Eye size={13} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Modules selection */}
+              <div className="space-y-1.5">
+                <label className="block text-slate-500 font-bold">{isRtl ? 'الموديولات المتاحة للشركة:' : 'Enabled Modules:'}</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {Object.entries(ERP_MODULES_REGISTRY).map(([mKey, mod]) => (
+                    <label key={mKey} className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer ${
+                      newCompanyModules[mKey] !== false
+                        ? 'bg-indigo-50/50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800'
+                        : 'border-slate-200 dark:border-slate-800 opacity-60'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        checked={newCompanyModules[mKey] !== false}
+                        onChange={(e) => setNewCompanyModules(prev => ({ ...prev, [mKey]: e.target.checked }))}
+                        className="rounded text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate">
+                        {isRtl ? mod.nameAr : mod.nameEn}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCompanyModal(false)}
+                  className="px-4 py-2 rounded-xl border text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-md shadow-indigo-600/20"
+                >
+                  {isRtl ? 'إنشاء الشركة وتفعيل الاشتراك' : 'Create & Activate Company'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Company & Subscription Plan */}
+      {editingCompany && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
+          <div className={`w-full max-w-lg p-5 rounded-2xl border shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto ${
+            theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+          }`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black">
+                  <Edit2 size={16} />
+                </div>
+                <h3 className="font-black text-sm">
+                  {isRtl ? `تعديل بيانات واشتراك: ${editingCompany.name}` : `Edit Tenant: ${editingCompany.name}`}
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingCompany(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Tabs: Details / Modules */}
+            <div className="flex items-center gap-2 p-1 rounded-xl bg-slate-100 dark:bg-slate-800">
+              <button
+                type="button"
+                onClick={() => setActiveEditCompanyModalTab('details')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  activeEditCompanyModalTab === 'details'
+                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                {isRtl ? 'بيانات الشركة والاشتراك' : 'Company & Plan'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveEditCompanyModalTab('modules')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  activeEditCompanyModalTab === 'modules'
+                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                {isRtl ? 'موديولات النظام المتاحة' : 'ERP Modules'}
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditCompany} className="space-y-3.5 text-xs">
+              {activeEditCompanyModalTab === 'details' ? (
+                <>
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">{isRtl ? 'اسم الشركة / المؤسسة:' : 'Company Name:'}</label>
+                    <input
+                      type="text"
+                      required
+                      value={editCompanyName}
+                      onChange={(e) => setEditCompanyName(e.target.value)}
+                      className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                        theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200'
+                      }`}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1">{isRtl ? 'باقة الاشتراك:' : 'Subscription Plan:'}</label>
+                      <select
+                        value={editCompanyPlan}
+                        onChange={(e) => setEditCompanyPlan(e.target.value as any)}
+                        className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                          theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <option value="Basic">Basic</option>
+                        <option value="Pro">Pro</option>
+                        <option value="Enterprise">Enterprise</option>
+                        <option value="Custom">Custom</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1">{isRtl ? 'حالة الاشتراك:' : 'Status:'}</label>
+                      <select
+                        value={editCompanyStatus}
+                        onChange={(e) => setEditCompanyStatus(e.target.value as any)}
+                        className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                          theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <option value="active">{isRtl ? 'نشط' : 'Active'}</option>
+                        <option value="suspended">{isRtl ? 'معطل / موقوف' : 'Suspended'}</option>
+                        <option value="trial">{isRtl ? 'تجريبي' : 'Trial'}</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1">{isRtl ? 'تاريخ الانتهاء:' : 'Expiry Date:'}</label>
+                      <input
+                        type="date"
+                        value={editCompanyExpiry}
+                        onChange={(e) => setEditCompanyExpiry(e.target.value)}
+                        className={`w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                          theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-slate-400">
+                    {isRtl ? 'حدد الموديولات المتاحة للاستخدام لموظفي هذه الشركة:' : 'Select enabled modules for this tenant:'}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {Object.entries(ERP_MODULES_REGISTRY).map(([mKey, mod]) => {
+                      const isEnabled = editCompanyModulesSettings[mKey]?.enabled !== false;
+                      return (
+                        <div
+                          key={mKey}
+                          onClick={() => {
+                            setEditCompanyModulesSettings(prev => ({
+                              ...prev,
+                              [mKey]: {
+                                ...(prev[mKey] || {
+                                  nameAr: mod.nameAr,
+                                  nameEn: mod.nameEn,
+                                  icon: mod.icon,
+                                  roles: ['Admin']
+                                }),
+                                enabled: !isEnabled
+                              }
+                            }));
+                          }}
+                          className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                            isEnabled
+                              ? 'bg-indigo-50/50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
+                              : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={isEnabled}
+                              readOnly
+                              className="rounded text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="font-bold text-xs">{isRtl ? mod.nameAr : mod.nameEn}</span>
+                          </div>
+                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+                            isEnabled ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                          }`}>
+                            {isEnabled ? (isRtl ? 'مفعل' : 'ON') : (isRtl ? 'معطل' : 'OFF')}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingCompany(null)}
+                  className="px-4 py-2 rounded-xl border text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-md shadow-indigo-600/20"
+                >
+                  {isRtl ? 'حفظ التعديلات' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete Company Confirmation */}
+      {deletingCompany && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
+          <div className={`w-full max-w-md p-5 rounded-2xl border shadow-2xl space-y-4 ${
+            theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+          }`}>
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="font-black text-sm text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                <Trash2 size={16} />
+                <span>{isRtl ? 'تأكيد حذف الشركة' : 'Confirm Company Deletion'}</span>
+              </h3>
+              <button onClick={() => setDeletingCompany(null)} className="p-1 text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+              <p>
+                {isRtl 
+                  ? `هل أنت متأكد من رغبتك في حذف الشركة (${deletingCompany.name})؟` 
+                  : `Are you sure you want to permanently delete company (${deletingCompany.name})?`}
+              </p>
+              <p className="text-[11px] text-rose-500 font-bold">
+                {isRtl 
+                  ? '⚠️ تحذير: سيتم إلغاء تفعيل كافة ارتباطات هذه الشركة.' 
+                  : '⚠️ Warning: This will remove tenant configurations.'}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setDeletingCompany(null)}
+                className="px-4 py-2 rounded-xl border text-slate-500 hover:bg-slate-100 font-bold text-xs"
+              >
+                {isRtl ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteCompany}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow-md shadow-rose-600/20"
+              >
+                {isRtl ? 'تأكيد الحذف' : 'Confirm Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}

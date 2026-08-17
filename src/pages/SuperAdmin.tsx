@@ -19,10 +19,11 @@ interface SuperAdminProps {
   theme: Theme;
   initialSubTab?: 'companies' | 'operations' | 'impersonate' | 'audit' | 'security';
   embedded?: boolean;
+  onNavigate?: (tab: string) => void;
 }
 
 
-export default function SuperAdmin({ language, theme, initialSubTab, embedded = false }: SuperAdminProps) {
+export default function SuperAdmin({ language, theme, initialSubTab, embedded = false, onNavigate }: SuperAdminProps) {
   useScreenListeners(['AuditLogs', 'logs', 'transactions', 'deleted_transactions', 'signup_requests']);
 
   const isRtl = language === 'ar';
@@ -947,13 +948,30 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
                 : 'Welcome to the complete multi-tenant SaaS management hub. Easily regulate subscriptions, toggle organization status, reset administrative passwords, and gain instant technical support access under secure audit rails.'}
             </p>
           </div>
-          <button 
-            onClick={handleRefreshData}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#2451B8] hover:bg-[#1d429a] text-white text-xs font-semibold transition-all shadow-xs active:scale-95 cursor-pointer w-full sm:w-auto self-start sm:self-auto"
-          >
-            <RefreshCw size={15} />
-            <span>{isRtl ? 'تحديث البيانات' : 'Refresh Ledger'}</span>
-          </button>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button 
+              type="button"
+              onClick={() => {
+                if (onNavigate) {
+                  onNavigate('settings');
+                }
+                window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                  detail: { tab: 'settings', settingsTab: 'permissions', centerTab: 'users' } 
+                }));
+              }}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-all shadow-xs active:scale-95 cursor-pointer flex-1 sm:flex-initial"
+            >
+              <ShieldCheck size={16} />
+              <span>{isRtl ? 'الانتقال إلى مركز التحكم الموحد' : 'Unified Access Control'}</span>
+            </button>
+            <button 
+              onClick={handleRefreshData}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all shadow-xs active:scale-95 cursor-pointer flex-1 sm:flex-initial"
+            >
+              <RefreshCw size={15} />
+              <span>{isRtl ? 'تحديث البيانات' : 'Refresh'}</span>
+            </button>
+          </div>
         </div>
       )}
 

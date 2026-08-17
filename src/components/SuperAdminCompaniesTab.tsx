@@ -3,7 +3,8 @@ import { CustodyDB, ModulesModule } from '../db';
 import { Company, AppUser, Region, Station, Theme } from '../types';
 import { 
   Building2, Plus, Calendar, Sparkles, Search, Globe, X, Settings, Trash2, Edit,
-  PlusCircle, Building, Network, Power, ArrowUpDown, KeyRound, ShieldCheck, ArrowRight, ArrowLeft
+  PlusCircle, Building, Network, Power, ArrowUpDown, KeyRound, ShieldCheck, ArrowRight, ArrowLeft,
+  Layers, Sliders
 } from 'lucide-react';
 
 interface SuperAdminCompaniesTabProps {
@@ -481,6 +482,48 @@ export default function SuperAdminCompaniesTab({
                             >
                               <Building size={13} className="text-emerald-500" />
                               <span>{isRtl ? 'فرع مباشر' : 'Direct Branch'}</span>
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-1 p-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                                  detail: { tab: 'settings', settingsTab: 'permissions', selectedCompanyId: comp.id, centerTab: 'users' } 
+                                }));
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                              title={isRtl ? 'إدارة المستخدمين والصلاحيات بالمركز الموحد' : 'Manage Users in Unified Access Center'}
+                            >
+                              <ShieldCheck size={13} />
+                              <span>{isRtl ? 'المستخدمين والصلاحيات' : 'Users & Access'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                                  detail: { tab: 'settings', settingsTab: 'permissions', selectedCompanyId: comp.id, centerTab: 'org_structure' } 
+                                }));
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-slate-700 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer border border-indigo-200 dark:border-slate-700"
+                              title={isRtl ? 'إدارة الهيكل التنظيمي بالمركز الموحد' : 'Manage Org Structure in Unified Center'}
+                            >
+                              <Layers size={13} />
+                              <span>{isRtl ? 'الهيكل التنظيمي' : 'Org Structure'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                                  detail: { tab: 'settings', settingsTab: 'permissions', selectedCompanyId: comp.id, centerTab: 'modules' } 
+                                }));
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-slate-700 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer border border-indigo-200 dark:border-slate-700"
+                              title={isRtl ? 'إدارة الموديولات والتراخيص بالمركز الموحد' : 'Manage Modules & Licenses in Unified Center'}
+                            >
+                              <Sliders size={13} />
+                              <span>{isRtl ? 'الموديولات' : 'Modules'}</span>
                             </button>
                           </div>
 

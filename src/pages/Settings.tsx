@@ -33,6 +33,10 @@ import {
 interface SettingsProps {
   language: Language;
   theme: Theme;
+  initialTab?: 'general' | 'users' | 'workflows';
+  initialCenterTab?: 'users' | 'org_structure' | 'modules' | 'companies';
+  initialSelectedCompanyId?: string;
+  onNavigate?: (tab: string) => void;
 }
 
 interface RoleDefinition {
@@ -85,7 +89,14 @@ const PERMISSIONS_LIST = [
   { key: 'manage_settings', ar: 'إدارة الإعدادات والنسخ', en: 'Manage settings & backups' },
 ] as const;
 
-export default function Settings({ language, theme }: SettingsProps) {
+export default function Settings({ 
+  language, 
+  theme,
+  initialTab,
+  initialCenterTab,
+  initialSelectedCompanyId,
+  onNavigate
+}: SettingsProps) {
   useScreenListeners(['logs', 'AuditLogs']);
 
   const t = translations[language];
@@ -94,7 +105,65 @@ export default function Settings({ language, theme }: SettingsProps) {
   const currentUser = CustodyDB.getActiveUser();
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'workflows'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'workflows'>(initialTab || 'general');
+  const [centerTab, setCenterTab] = useState<'users' | 'org_structure' | 'modules' | 'companies'>(initialCenterTab || 'users');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(initialSelectedCompanyId || CustodyDB.getSelectedCompanyId() || '');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
+  useEffect(() => {
+    if (initialCenterTab) {
+      setCenterTab(initialCenterTab);
+    }
+  }, [initialCenterTab]);
+
+  useEffect(() => {
+    if (initialSelectedCompanyId) {
+      setSelectedCompanyId(initialSelectedCompanyId);
+      CustodyDB.setSelectedCompanyId(initialSelectedCompanyId);
+    }
+  }, [initialSelectedCompanyId]);
+
+  useEffect(() => {
+    const handleNavigateEvent = (e: any) => {
+      const detail = e?.detail;
+      if (!detail) return;
+      if (detail.tab === 'settings') {
+        if (detail.settingsTab === 'permissions' || detail.settingsTab === 'users' || detail.settingsTab === 'access_control') {
+          setActiveTab('users');
+        } else if (detail.settingsTab === 'workflows') {
+          setActiveTab('workflows');
+        } else if (detail.settingsTab === 'general') {
+          setActiveTab('general');
+        }
+        if (detail.centerTab) {
+          setCenterTab(detail.centerTab);
+        } else if (detail.settingsTab === 'companies') {
+          setActiveTab('users');
+          setCenterTab('companies');
+        } else if (detail.settingsTab === 'org_structure') {
+          setActiveTab('users');
+          setCenterTab('org_structure');
+        } else if (detail.settingsTab === 'modules') {
+          setActiveTab('users');
+          setCenterTab('modules');
+        }
+        if (detail.selectedCompanyId) {
+          setSelectedCompanyId(detail.selectedCompanyId);
+          CustodyDB.setSelectedCompanyId(detail.selectedCompanyId);
+        }
+      }
+    };
+
+    window.addEventListener('navigate_tab', handleNavigateEvent);
+    return () => {
+      window.removeEventListener('navigate_tab', handleNavigateEvent);
+    };
+  }, []);
 
   // General Settings State
   const [companyName, setCompanyName] = useState(() => CustodyDB.getConfig().company_name);
@@ -125,9 +194,11 @@ export default function Settings({ language, theme }: SettingsProps) {
   const [editStnRegionId, setEditStnRegionId] = useState('');
 
   // Users Lists & Edit State
-  const [users, setUsers] = useState<AppUser[]>(() => CustodyDB.getScopedUsers());
+  const [users, setUsers] = useState<AppUser[]>(() => CustodyDB.getUsers());
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserMustChangePassword, setNewUserMustChangePassword] = useState(true);
   const [newUserRole, setNewUserRole] = useState<UserRole>('StationAdmin');
   const [newUserStationId, setNewUserStationId] = useState('');
   const [newUserRegionId, setNewUserRegionId] = useState('');
@@ -513,12 +584,13 @@ export default function Settings({ language, theme }: SettingsProps) {
       view_reports: true
     };
 
-    const companyId = currentUser.company_id || CustodyDB.getSelectedCompanyId() || '';
+    const companyId = selectedCompanyId || currentUser.company_id || CustodyDB.getSelectedCompanyId() || '';
     const tempPassword = `TempPass${Math.floor(100000 + Math.random() * 900000)}!`;
+    const finalPassword = newUserPassword.trim() || tempPassword;
 
     const payload = {
       email: newUserEmail.trim().toLowerCase(),
-      password: tempPassword,
+      password: finalPassword,
       full_name: newUserName.trim(),
       role: newUserRole,
       company_id: companyId,
@@ -527,7 +599,7 @@ export default function Settings({ language, theme }: SettingsProps) {
       org_unit_id: newUserOrgUnitId || null,
       assigned_org_unit_ids: newUserAssignedOrgUnitIds.length > 0 ? newUserAssignedOrgUnitIds : [],
       permissions: permissions,
-      must_change_password: true
+      must_change_password: newUserMustChangePassword !== undefined ? newUserMustChangePassword : true
     };
 
     try {
@@ -554,19 +626,23 @@ export default function Settings({ language, theme }: SettingsProps) {
           allUsers.push(data.user);
         }
         await CustodyDB.saveUsers(allUsers);
+        setUsers(allUsers);
+      } else {
+        setUsers(CustodyDB.getUsers());
       }
-      setUsers(CustodyDB.getScopedUsers());
 
       setNewUserName('');
       setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserMustChangePassword(true);
       setNewUserOrgUnitId('');
       setNewUserAssignedOrgUnitIds([]);
       setNewUserStationId('');
       setNewUserRegionId('');
 
       alert(isRtl
-        ? `✅ تم إنشاء وتوثيق حساب الموظف بنجاح!\n\nكلمة المرور المؤقتة هي: ${tempPassword}\n\nيرجى تسليمها للموظف لاستخدامها عند تسجيل الدخول لأول مرة.`
-        : `✅ User account created and provisioned successfully!\n\nTemporary Password: ${tempPassword}\n\nPlease share this temporary password with the user.`
+        ? `✅ تم إنشاء وتوثيق حساب الموظف بنجاح!\n\nالشركة: ${companyId}\nالبريد: ${payload.email}\nكلمة المرور المؤقتة هي: ${finalPassword}\n\nيرجى تسليمها للموظف لاستخدامها عند تسجيل الدخول لأول مرة.`
+        : `✅ User account created and provisioned successfully!\n\nCompany: ${companyId}\nEmail: ${payload.email}\nTemporary Password: ${finalPassword}\n\nPlease share this temporary password with the user.`
       );
 
       triggerToast(isRtl ? 'تم إضافة وتوثيق حساب المستخدم بنجاح.' : 'New user created successfully.');
@@ -808,6 +884,10 @@ export default function Settings({ language, theme }: SettingsProps) {
           setNewUserName={setNewUserName}
           newUserEmail={newUserEmail}
           setNewUserEmail={setNewUserEmail}
+          newUserPassword={newUserPassword}
+          setNewUserPassword={setNewUserPassword}
+          newUserMustChangePassword={newUserMustChangePassword}
+          setNewUserMustChangePassword={setNewUserMustChangePassword}
           newUserRole={newUserRole}
           setNewUserRole={setNewUserRole}
           newUserStationId={newUserStationId}
@@ -822,6 +902,8 @@ export default function Settings({ language, theme }: SettingsProps) {
           getAuthHeaders={getAuthHeaders}
           setUsers={setUsers}
           triggerToast={triggerToast}
+          initialCenterTab={centerTab}
+          initialSelectedCompanyId={selectedCompanyId}
         />
       )}
 

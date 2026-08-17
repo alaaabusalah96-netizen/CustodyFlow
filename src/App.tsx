@@ -96,6 +96,9 @@ export default function App() {
   const [selectedPendingTx, setSelectedPendingTx] = useState<Transaction | null>(null);
 
   const [dbVersion, setDbVersion] = useState(0);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'users' | 'workflows'>('general');
+  const [settingsInitialCenterTab, setSettingsInitialCenterTab] = useState<'users' | 'org_structure' | 'modules' | 'companies'>('users');
+  const [settingsSelectedCompanyId, setSettingsSelectedCompanyId] = useState<string>('');
 
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -180,6 +183,50 @@ export default function App() {
     window.addEventListener('custody_db_updated', handleUpdate);
     return () => {
       window.removeEventListener('custody_db_updated', handleUpdate);
+    };
+  }, []);
+
+  // Listen to cross-module navigate_tab CustomEvent
+  useEffect(() => {
+    const handleNavigateTab = (e: any) => {
+      const detail = e?.detail;
+      if (!detail) return;
+      const targetTab = detail.tab || 'dashboard';
+
+      if (detail.selectedCompanyId) {
+        CustodyDB.setSelectedCompanyId(detail.selectedCompanyId);
+        setSettingsSelectedCompanyId(detail.selectedCompanyId);
+      }
+
+      if (targetTab === 'settings') {
+        if (detail.settingsTab === 'permissions' || detail.settingsTab === 'users' || detail.settingsTab === 'access_control') {
+          setSettingsInitialTab('users');
+        } else if (detail.settingsTab === 'workflows') {
+          setSettingsInitialTab('workflows');
+        } else if (detail.settingsTab === 'general') {
+          setSettingsInitialTab('general');
+        }
+
+        if (detail.centerTab) {
+          setSettingsInitialCenterTab(detail.centerTab);
+        } else if (detail.settingsTab === 'companies') {
+          setSettingsInitialTab('users');
+          setSettingsInitialCenterTab('companies');
+        } else if (detail.settingsTab === 'org_structure') {
+          setSettingsInitialTab('users');
+          setSettingsInitialCenterTab('org_structure');
+        } else if (detail.settingsTab === 'modules') {
+          setSettingsInitialTab('users');
+          setSettingsInitialCenterTab('modules');
+        }
+      }
+
+      setCurrentTab(targetTab);
+    };
+
+    window.addEventListener('navigate_tab', handleNavigateTab);
+    return () => {
+      window.removeEventListener('navigate_tab', handleNavigateTab);
     };
   }, []);
 
@@ -505,7 +552,11 @@ export default function App() {
         return (
           <Settings 
             language={language} 
-            theme={theme} 
+            theme={theme}
+            initialTab={settingsInitialTab}
+            initialCenterTab={settingsInitialCenterTab}
+            initialSelectedCompanyId={settingsSelectedCompanyId}
+            onNavigate={setCurrentTab}
           />
         );
       case 'audit-log':
@@ -605,6 +656,7 @@ export default function App() {
           <SuperAdmin
             language={language}
             theme={theme}
+            onNavigate={setCurrentTab}
           />
         );
       case 'company-admin':
