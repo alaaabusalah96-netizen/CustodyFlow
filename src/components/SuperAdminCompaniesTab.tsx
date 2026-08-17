@@ -5,7 +5,6 @@ import {
   Building2, Plus, Calendar, Sparkles, Search, Globe, X, Settings, Trash2, Edit,
   PlusCircle, Building, Network, Power, ArrowUpDown, KeyRound, ShieldCheck, ArrowRight, ArrowLeft
 } from 'lucide-react';
-import AdminCredentialsForm from './AdminCredentialsForm';
 
 interface SuperAdminCompaniesTabProps {
   isRtl: boolean;
@@ -540,19 +539,39 @@ export default function SuperAdminCompaniesTab({
                       </div>
 
                       {/* Company Admin Credentials Section */}
-                      <div className="mb-6 p-4 rounded-xl bg-indigo-500/5 border border-indigo-200/30 dark:border-indigo-900/30">
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 mb-2.5">
-                          <KeyRound size={13} />
-                          <span>{isRtl ? 'حساب مدير الشركة (الأدمن)' : 'Company Administrator Account'}</span>
+                      <div className="mb-6 p-4 rounded-xl bg-indigo-500/5 border border-indigo-200/30 dark:border-indigo-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                            <KeyRound size={13} />
+                            <span>{isRtl ? 'حساب مدير الشركة (الأدمن)' : 'Company Administrator Account'}</span>
+                          </div>
+                          {(() => {
+                            const compAdmin = users.find(u => u.company_id === comp.id && u.role === 'Admin');
+                            return compAdmin ? (
+                              <div className="text-[11px] text-slate-600 dark:text-slate-300 font-mono mt-1">
+                                <span className="font-bold text-slate-400 mr-1">{isRtl ? 'البريد:' : 'Email:'}</span>
+                                <span className="bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">{compAdmin.email}</span>
+                                {compAdmin.full_name && <span className="text-slate-500 ml-2">({compAdmin.full_name})</span>}
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 italic">
+                                {isRtl ? 'لم يتم تعيين مدير شركة بعد' : 'No Company Admin assigned yet'}
+                              </div>
+                            );
+                          })()}
                         </div>
-                        <AdminCredentialsForm
-                          initialEmail={users.find(u => u.company_id === comp.id && u.role === 'Admin')?.email || ''}
-                          initialPassword={users.find(u => u.company_id === comp.id && u.role === 'Admin')?.password || ''}
-                          onSave={(email, pass, permissions) => handleSaveCompanyAdmin(comp.id, email, pass, permissions)}
-                          isRtl={isRtl}
-                          userRole="Admin"
-                          companyId={comp.id}
-                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                              detail: { tab: 'settings', settingsTab: 'permissions', selectedCompanyId: comp.id } 
+                            }));
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer self-start sm:self-auto"
+                        >
+                          <ShieldCheck size={13} />
+                          <span>{isRtl ? 'إدارة في مركز التحكم الموحد' : 'Manage in Access Center'}</span>
+                        </button>
                       </div>
 
                       {/* Tree Inner branches (Sectors and Stations) */}
@@ -615,20 +634,38 @@ export default function SuperAdminCompaniesTab({
                                   </div>
                                 </div>
 
-                                <div className="mt-2.5 mb-3 p-3 rounded-xl bg-indigo-500/5 border border-indigo-200/20 dark:border-indigo-900/20 max-w-xl">
-                                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 dark:text-indigo-400 mb-2">
-                                    <KeyRound size={12} />
-                                    <span>{isRtl ? 'حساب مدير القطاع (المنطقة)' : 'Regional Manager Account'}</span>
+                                <div className="mt-2.5 mb-3 p-3 rounded-xl bg-indigo-500/5 border border-indigo-200/20 dark:border-indigo-900/20 max-w-xl flex items-center justify-between gap-3">
+                                  <div>
+                                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 dark:text-indigo-400">
+                                      <KeyRound size={12} />
+                                      <span>{isRtl ? 'حساب مدير القطاع (المنطقة)' : 'Regional Manager Account'}</span>
+                                    </div>
+                                    {(() => {
+                                      const rmUser = users.find(u => u.region_id === reg.id && u.role === 'RegionalManager');
+                                      return rmUser ? (
+                                        <div className="text-[10px] text-slate-600 dark:text-slate-300 font-mono mt-0.5">
+                                          <span className="font-bold text-slate-400 mr-1">{isRtl ? 'البريد:' : 'Email:'}</span>
+                                          <span className="bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">{rmUser.email}</span>
+                                          {rmUser.full_name && <span className="text-slate-500 ml-1.5">({rmUser.full_name})</span>}
+                                        </div>
+                                      ) : (
+                                        <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 italic">
+                                          {isRtl ? 'لم يتم تعيين مدير قطاع بعد' : 'No Regional Manager assigned yet'}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
-                                  <AdminCredentialsForm
-                                    initialEmail={users.find(u => u.region_id === reg.id && u.role === 'RegionalManager')?.email || ''}
-                                    initialPassword={users.find(u => u.region_id === reg.id && u.role === 'RegionalManager')?.password || ''}
-                                    onSave={(email, pass, permissions) => handleSaveRegionManager(reg.id, comp.id, email, pass, permissions)}
-                                    isRtl={isRtl}
-                                    userRole="RegionalManager"
-                                    companyId={comp.id}
-                                    regionId={reg.id}
-                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                                        detail: { tab: 'settings', settingsTab: 'permissions', selectedCompanyId: comp.id } 
+                                      }));
+                                    }}
+                                    className="px-2.5 py-1 rounded bg-indigo-600/10 hover:bg-indigo-600 text-indigo-600 hover:text-white dark:text-indigo-400 dark:hover:text-white text-[10px] font-bold transition-all shrink-0 cursor-pointer"
+                                  >
+                                    {isRtl ? 'إدارة الوصول' : 'Manage Access'}
+                                  </button>
                                 </div>
 
                                 <div className="pl-6 mr-1 pr-0 sm:mr-3 sm:pr-0 border-l border-dashed border-indigo-200 dark:border-slate-800/80 my-2 space-y-3 rtl:pl-0 rtl:pr-6 rtl:border-l-0 rtl:border-r rtl:border-dashed">
@@ -675,21 +712,38 @@ export default function SuperAdminCompaniesTab({
                                           </div>
                                         </div>
 
-                                        <div className="p-2 rounded bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-                                          <div className="flex items-center gap-1 text-[10px] font-bold text-slate-450 dark:text-slate-500 mb-1.5">
-                                            <KeyRound size={10} />
-                                            <span>{isRtl ? 'حساب مسؤول الفرع (المحطة)' : 'Branch Manager Account'}</span>
+                                        <div className="p-2 rounded bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                          <div>
+                                            <div className="flex items-center gap-1 text-[10px] font-bold text-slate-450 dark:text-slate-500">
+                                              <KeyRound size={10} />
+                                              <span>{isRtl ? 'حساب مسؤول الفرع (المحطة)' : 'Branch Manager Account'}</span>
+                                            </div>
+                                            {(() => {
+                                              const stnUser = users.find(u => u.station_id === stn.id && u.role === 'StationAdmin');
+                                              return stnUser ? (
+                                                <div className="text-[9px] text-slate-600 dark:text-slate-300 font-mono mt-0.5">
+                                                  <span className="font-bold text-slate-400 mr-1">{isRtl ? 'البريد:' : 'Email:'}</span>
+                                                  <span className="bg-white dark:bg-slate-800 px-1.5 py-0.2 rounded border border-slate-200 dark:border-slate-700">{stnUser.email}</span>
+                                                  {stnUser.full_name && <span className="text-slate-500 ml-1">({stnUser.full_name})</span>}
+                                                </div>
+                                              ) : (
+                                                <div className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5 italic">
+                                                  {isRtl ? 'لم يتم تعيين مسؤول فرع' : 'No branch manager'}
+                                                </div>
+                                              );
+                                            })()}
                                           </div>
-                                          <AdminCredentialsForm
-                                            initialEmail={users.find(u => u.station_id === stn.id && u.role === 'StationAdmin')?.email || ''}
-                                            initialPassword={users.find(u => u.station_id === stn.id && u.role === 'StationAdmin')?.password || ''}
-                                            onSave={(email, pass, permissions) => handleSaveStationAdmin(stn.id, stn.region_id, comp.id, email, pass, permissions)}
-                                            isRtl={isRtl}
-                                            userRole="StationAdmin"
-                                            companyId={comp.id}
-                                            regionId={stn.region_id}
-                                            stationId={stn.id}
-                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                                                detail: { tab: 'settings', settingsTab: 'permissions', selectedCompanyId: comp.id } 
+                                              }));
+                                            }}
+                                            className="px-2 py-0.5 rounded bg-indigo-600/10 hover:bg-indigo-600 text-indigo-600 hover:text-white dark:text-indigo-400 dark:hover:text-white text-[9px] font-bold transition-all shrink-0 cursor-pointer"
+                                          >
+                                            {isRtl ? 'إدارة' : 'Manage'}
+                                          </button>
                                         </div>
                                       </div>
                                     ))
@@ -743,21 +797,38 @@ export default function SuperAdminCompaniesTab({
                                   </div>
                                 </div>
 
-                                <div className="p-2 rounded bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-                                  <div className="flex items-center gap-1 text-[10px] font-bold text-slate-450 dark:text-slate-500 mb-1.5">
-                                    <KeyRound size={10} />
-                                    <span>{isRtl ? 'حساب مسؤول الفرع (المحطة)' : 'Branch Manager Account'}</span>
+                                <div className="p-2 rounded bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                  <div>
+                                    <div className="flex items-center gap-1 text-[10px] font-bold text-slate-450 dark:text-slate-500">
+                                      <KeyRound size={10} />
+                                      <span>{isRtl ? 'حساب مسؤول الفرع (المحطة)' : 'Branch Manager Account'}</span>
+                                    </div>
+                                    {(() => {
+                                      const stnUser = users.find(u => u.station_id === stn.id && u.role === 'StationAdmin');
+                                      return stnUser ? (
+                                        <div className="text-[9px] text-slate-600 dark:text-slate-300 font-mono mt-0.5">
+                                          <span className="font-bold text-slate-400 mr-1">{isRtl ? 'البريد:' : 'Email:'}</span>
+                                          <span className="bg-white dark:bg-slate-800 px-1.5 py-0.2 rounded border border-slate-200 dark:border-slate-700">{stnUser.email}</span>
+                                          {stnUser.full_name && <span className="text-slate-500 ml-1">({stnUser.full_name})</span>}
+                                        </div>
+                                      ) : (
+                                        <div className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5 italic">
+                                          {isRtl ? 'لم يتم تعيين مسؤول فرع' : 'No branch manager'}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
-                                  <AdminCredentialsForm
-                                    initialEmail={users.find(u => u.station_id === stn.id && u.role === 'StationAdmin')?.email || ''}
-                                    initialPassword={users.find(u => u.station_id === stn.id && u.role === 'StationAdmin')?.password || ''}
-                                    onSave={(email, pass, permissions) => handleSaveStationAdmin(stn.id, stn.region_id, comp.id, email, pass, permissions)}
-                                    isRtl={isRtl}
-                                    userRole="StationAdmin"
-                                    companyId={comp.id}
-                                    regionId={stn.region_id}
-                                    stationId={stn.id}
-                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                                        detail: { tab: 'settings', settingsTab: 'permissions', selectedCompanyId: comp.id } 
+                                      }));
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-indigo-600/10 hover:bg-indigo-600 text-indigo-600 hover:text-white dark:text-indigo-400 dark:hover:text-white text-[9px] font-bold transition-all shrink-0 cursor-pointer"
+                                  >
+                                    {isRtl ? 'إدارة' : 'Manage'}
+                                  </button>
                                 </div>
                               </div>
                             ))}

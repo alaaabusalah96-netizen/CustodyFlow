@@ -37,124 +37,6 @@ import { auth } from '../firebase';
 import { translations, Language, Theme, Station, Region, Company, AppUser } from '../types';
 import OrganizationTreeManager from '../components/OrganizationTreeManager';
 
-function AdminCredentialsForm({ 
-  initialEmail, 
-  initialPassword, 
-  onSave, 
-  isRtl, 
-  placeholderEmail,
-  placeholderPassword
-}: {
-  initialEmail: string;
-  initialPassword: string;
-  onSave: (email: string, pass: string) => void;
-  isRtl: boolean;
-  placeholderEmail?: string;
-  placeholderPassword?: string;
-}) {
-  const [email, setEmail] = useState(initialEmail);
-  const [password, setPassword] = useState(initialPassword);
-  const [isEditing, setIsEditing] = useState(false);
-
-  useEffect(() => {
-    setEmail(initialEmail);
-    setPassword(initialPassword);
-  }, [initialEmail, initialPassword]);
-
-  const isPlatformAdmin = CustodyDB.getActiveUser()?.role === 'SystemAdmin';
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isPlatformAdmin) {
-      alert(isRtl ? '⚠️ هذه الصلاحية حصرية لأدمن المنصة فقط!' : '⚠️ This privilege is exclusive to Platform Admins.');
-      return;
-    }
-    if (!email.trim() || !password.trim()) {
-      alert(isRtl ? 'يرجى إدخال البريد الإلكتروني وكلمة المرور' : 'Please enter both email and password.');
-      return;
-    }
-    onSave(email.trim(), password.trim());
-    setIsEditing(false);
-  };
-
-  if (!isPlatformAdmin && !initialEmail) {
-    return (
-      <div className="text-[10px] text-slate-400 italic">
-        {isRtl ? 'لم يتم تهيئة حساب الوصول بعد من قِبل أدمن المنصة' : 'No access account set up yet by Platform Admin'}
-      </div>
-    );
-  }
-
-  if (!isEditing && initialEmail) {
-    return (
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-        <div className="font-mono text-slate-600 dark:text-slate-300">
-          <span className="font-bold text-slate-400 mr-1">{isRtl ? 'الايميل:' : 'Email:'}</span>
-          <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded select-all">{initialEmail}</span>
-          <span className="font-bold text-slate-400 mx-2">|</span>
-          <span className="font-bold text-slate-400 mr-1">{isRtl ? 'الرمز:' : 'PIN:'}</span>
-          <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded select-all font-bold">{initialPassword}</span>
-        </div>
-        {isPlatformAdmin && (
-          <button
-            type="button"
-            onClick={() => setIsEditing(true)}
-            className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold text-[10px] cursor-pointer"
-          >
-            {isRtl ? 'تعديل الحساب' : 'Edit Credentials'}
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <form onSubmit={handleSave} className="flex flex-wrap items-end gap-2">
-      <div className="flex-1 min-w-[120px]">
-        <input
-          type="email"
-          required
-          placeholder={placeholderEmail || (isRtl ? 'البريد الإلكتروني للأدمن' : 'Admin Email Address')}
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-2 py-1 text-[11px] rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-indigo-500"
-        />
-      </div>
-      <div className="flex-1 min-w-[100px]">
-        <input
-          type="text"
-          required
-          placeholder={placeholderPassword || (isRtl ? 'كلمة المرور' : 'Password')}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-2 py-1 text-[11px] rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-indigo-500 font-mono"
-        />
-      </div>
-      <div className="flex gap-1">
-        <button
-          type="submit"
-          className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold transition-all cursor-pointer"
-        >
-          {isRtl ? 'حفظ الحساب' : 'Save'}
-        </button>
-        {initialEmail && (
-          <button
-            type="button"
-            onClick={() => {
-              setEmail(initialEmail);
-              setPassword(initialPassword);
-              setIsEditing(false);
-            }}
-            className="px-2 py-1 bg-slate-100 dark:bg-slate-850 text-slate-600 dark:text-slate-400 rounded text-[10px] font-bold transition-all cursor-pointer"
-          >
-            {isRtl ? 'إلغاء' : 'Cancel'}
-          </button>
-        )}
-      </div>
-    </form>
-  );
-}
-
 interface StationsProps {
   language: Language;
   theme: Theme;
@@ -824,17 +706,34 @@ export default function Stations({
                             </div>
 
                             {/* Sector manager credentials */}
-                            <div className="mt-2.5 mb-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-800 max-w-xl">
-                              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-450 dark:text-slate-500 mb-1.5">
-                                <KeyRound size={11} />
-                                <span>{isRtl ? 'حساب مدير القطاع (إقليمي)' : 'Regional Sector Manager Account'}</span>
+                            <div className="mt-2.5 mb-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-850 max-w-xl flex items-center justify-between gap-2">
+                              <div>
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-450 dark:text-slate-500">
+                                  <KeyRound size={11} />
+                                  <span>{isRtl ? 'حساب مدير القطاع (إقليمي)' : 'Regional Sector Manager Account'}</span>
+                                </div>
+                                {users.find(u => u.region_id === reg.id && u.role === 'RegionalManager')?.email ? (
+                                  <div className="text-[10px] text-slate-600 dark:text-slate-300 font-mono mt-1">
+                                    <span className="font-bold text-slate-400 mr-1">{isRtl ? 'البريد:' : 'Email:'}</span>
+                                    {users.find(u => u.region_id === reg.id && u.role === 'RegionalManager')?.email}
+                                  </div>
+                                ) : (
+                                  <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 italic">
+                                    {isRtl ? 'لم يتم تعيين مدير للقطاع' : 'No Sector Manager assigned'}
+                                  </div>
+                                )}
                               </div>
-                              <AdminCredentialsForm
-                                initialEmail={users.find(u => u.region_id === reg.id && u.role === 'RegionalManager')?.email || ''}
-                                initialPassword={users.find(u => u.region_id === reg.id && u.role === 'RegionalManager')?.password || ''}
-                                onSave={(email, pass) => handleSaveRegionManager(reg.id, comp.id, email, pass)}
-                                isRtl={isRtl}
-                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                                    detail: { tab: 'settings', settingsTab: 'permissions', selectedCompanyId: comp.id } 
+                                  }));
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-indigo-600/10 hover:bg-indigo-600 text-indigo-600 hover:text-white dark:text-indigo-400 dark:hover:text-white text-[10px] font-bold transition-all shrink-0 cursor-pointer"
+                              >
+                                {isRtl ? 'إدارة الوصول والصلاحيات' : 'Manage Access'}
+                              </button>
                             </div>
 
                             {/* Stations list of Sector */}
@@ -883,17 +782,34 @@ export default function Stations({
                                     </div>
 
                                     {/* Station credentials */}
-                                    <div className="p-2 rounded bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-                                      <div className="flex items-center gap-1 text-[10px] font-bold text-slate-450 dark:text-slate-500 mb-1.5">
-                                        <KeyRound size={10} />
-                                        <span>{isRtl ? 'حساب مسؤول الفرع (المحطة)' : 'Branch Manager Account'}</span>
+                                    <div className="p-2 rounded bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                      <div>
+                                        <div className="flex items-center gap-1 text-[10px] font-bold text-slate-450 dark:text-slate-500">
+                                          <KeyRound size={10} />
+                                          <span>{isRtl ? 'حساب مسؤول الفرع (المحطة)' : 'Branch Manager Account'}</span>
+                                        </div>
+                                        {users.find(u => u.station_id === stn.id && u.role === 'StationAdmin')?.email ? (
+                                          <div className="text-[10px] text-slate-600 dark:text-slate-300 font-mono mt-1">
+                                            <span className="font-bold text-slate-400 mr-1">{isRtl ? 'البريد:' : 'Email:'}</span>
+                                            {users.find(u => u.station_id === stn.id && u.role === 'StationAdmin')?.email}
+                                          </div>
+                                        ) : (
+                                          <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 italic">
+                                            {isRtl ? 'لم يتم تعيين مسؤول للفرع' : 'No Branch Manager assigned'}
+                                          </div>
+                                        )}
                                       </div>
-                                      <AdminCredentialsForm
-                                        initialEmail={users.find(u => u.station_id === stn.id && u.role === 'StationAdmin')?.email || ''}
-                                        initialPassword={users.find(u => u.station_id === stn.id && u.role === 'StationAdmin')?.password || ''}
-                                        onSave={(email, pass) => handleSaveStationAdmin(stn.id, stn.region_id, comp.id, email, pass)}
-                                        isRtl={isRtl}
-                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                                            detail: { tab: 'settings', settingsTab: 'permissions', selectedCompanyId: comp.id } 
+                                          }));
+                                        }}
+                                        className="px-2 py-0.5 rounded-lg bg-indigo-600/10 hover:bg-indigo-600 text-indigo-600 hover:text-white dark:text-indigo-400 dark:hover:text-white text-[9px] font-bold transition-all shrink-0 cursor-pointer"
+                                      >
+                                        {isRtl ? 'إدارة الوصول' : 'Manage Access'}
+                                      </button>
                                     </div>
                                   </div>
                                 ))
@@ -949,17 +865,34 @@ export default function Stations({
                             </div>
 
                             {/* Station credentials */}
-                            <div className="p-2 rounded bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-                              <div className="flex items-center gap-1 text-[10px] font-bold text-slate-450 dark:text-slate-500 mb-1.5">
-                                <KeyRound size={10} />
-                                <span>{isRtl ? 'حساب مسؤول الفرع (المحطة)' : 'Branch Manager Account'}</span>
+                            <div className="p-2 rounded bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                              <div>
+                                <div className="flex items-center gap-1 text-[10px] font-bold text-slate-450 dark:text-slate-500">
+                                  <KeyRound size={10} />
+                                  <span>{isRtl ? 'حساب مسؤول الفرع (المحطة)' : 'Branch Manager Account'}</span>
+                                </div>
+                                {users.find(u => u.station_id === stn.id && u.role === 'StationAdmin')?.email ? (
+                                  <div className="text-[10px] text-slate-600 dark:text-slate-300 font-mono mt-1">
+                                    <span className="font-bold text-slate-400 mr-1">{isRtl ? 'البريد:' : 'Email:'}</span>
+                                    {users.find(u => u.station_id === stn.id && u.role === 'StationAdmin')?.email}
+                                  </div>
+                                ) : (
+                                  <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 italic">
+                                    {isRtl ? 'لم يتم تعيين مسؤول للفرع' : 'No Branch Manager assigned'}
+                                  </div>
+                                )}
                               </div>
-                              <AdminCredentialsForm
-                                initialEmail={users.find(u => u.station_id === stn.id && u.role === 'StationAdmin')?.email || ''}
-                                initialPassword={users.find(u => u.station_id === stn.id && u.role === 'StationAdmin')?.password || ''}
-                                onSave={(email, pass) => handleSaveStationAdmin(stn.id, stn.region_id, comp.id, email, pass)}
-                                isRtl={isRtl}
-                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                                    detail: { tab: 'settings', settingsTab: 'permissions', selectedCompanyId: comp.id } 
+                                  }));
+                                }}
+                                className="px-2 py-0.5 rounded-lg bg-indigo-600/10 hover:bg-indigo-600 text-indigo-600 hover:text-white dark:text-indigo-400 dark:hover:text-white text-[9px] font-bold transition-all shrink-0 cursor-pointer"
+                              >
+                                {isRtl ? 'إدارة الوصول' : 'Manage Access'}
+                              </button>
                             </div>
                           </div>
                         ))}

@@ -15,508 +15,6 @@ interface CompanyAdminDashboardProps {
   theme: Theme;
 }
 
-const PERMISSION_KEYS = [
-  { key: 'create_expense', ar: 'إضافة وتسجيل المصروفات', en: 'Create & record expenses' },
-  { key: 'delete_expense', ar: 'حذف المصروفات المسجلة', en: 'Delete recorded expenses' },
-  { key: 'settle_voucher', ar: 'تسوية وإقفال المطالبات', en: 'Settle & close vouchers' },
-  { key: 'replace_custody', ar: 'طلب استعاضة العهدة النقدية', en: 'Request replenishment' },
-  { key: 'view_reports', ar: 'عرض وتصدير التقارير المالية', en: 'View financial reports' },
-  { key: 'manage_settings', ar: 'إدارة الإعدادات والنسخ', en: 'Manage settings & backups' },
-] as const;
-
-function AdminCredentialsForm({ 
-  initialEmail, 
-  initialPassword, 
-  onSave, 
-  isRtl, 
-  placeholderEmail,
-  placeholderPassword,
-  userRole,
-  companyId,
-  regionId,
-  stationId
-}: {
-  initialEmail: string;
-  initialPassword: string;
-  onSave: (email: string, pass: string, permissions: UserPermissions) => void;
-  isRtl: boolean;
-  placeholderEmail?: string;
-  placeholderPassword?: string;
-  userRole: 'Admin' | 'RegionalManager' | 'StationAdmin';
-  companyId?: string;
-  regionId?: string;
-  stationId?: string;
-}) {
-  const [email, setEmail] = useState(initialEmail);
-  const [password, setPassword] = useState(initialPassword);
-  const [isEditing, setIsEditing] = useState(false);
-
-  const [activeSubTab, setActiveSubTab] = useState<'account' | 'requests'>('account');
-  const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
-  const [rejectionReason, setRejectionReason] = useState('');
-
-  const getDefaultPermissions = (): UserPermissions => {
-    return CustodyDB.enrichUserPermissions(userRole);
-  };
-
-  const [permissions, setPermissions] = useState<UserPermissions>(getDefaultPermissions());
-  const [isDefaultMode, setIsDefaultMode] = useState<boolean>(true);
-
-  const activeUser = CustodyDB.getActiveUser();
-
-  const canSeePendingRequests = (() => {
-    if (!activeUser) return false;
-    if (activeUser.role === 'SystemAdmin') return true;
-    if (activeUser.role === 'Admin') {
-      return userRole === 'RegionalManager' || userRole === 'StationAdmin';
-    }
-    if (activeUser.role === 'RegionalManager') {
-      return userRole === 'StationAdmin';
-    }
-    return false;
-  })();
-
-  const pendingRequests = CustodyDB.getSignupRequests().filter(r => {
-    if (r.status !== 'Pending') return false;
-    if (userRole === 'Admin') {
-      return r.role === 'Admin' && r.company_id === companyId;
-    }
-    if (userRole === 'RegionalManager') {
-      return r.role === 'RegionalManager' && r.region_id === regionId;
-    }
-    if (userRole === 'StationAdmin') {
-      return r.role === 'StationAdmin' && r.station_id === stationId;
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    setEmail(initialEmail);
-    setPassword(initialPassword);
-    let currentPerms = getDefaultPermissions();
-    if (initialEmail) {
-      const u = CustodyDB.getUsers().find(user => user.email?.toLowerCase() === initialEmail.toLowerCase());
-      if (u?.permissions) {
-        currentPerms = { ...u.permissions };
-      }
-    }
-    setPermissions(currentPerms);
-
-    const defaults = getDefaultPermissions();
-    const isMatching = PERMISSION_KEYS.every(k => !!currentPerms[k.key as keyof UserPermissions] === !!defaults[k.key as keyof UserPermissions]);
-    setIsDefaultMode(isMatching);
-  }, [initialEmail, initialPassword, userRole]);
-
-  const handleToggleMode = (useDefault: boolean) => {
-    setIsDefaultMode(useDefault);
-    if (useDefault) {
-      setPermissions(getDefaultPermissions());
-    }
-  };
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      alert(isRtl ? 'يرجى إدخال البريد الإلكتروني وكلمة المرور' : 'Please enter both email and password.');
-      return;
-    }
-    onSave(email.trim(), password.trim(), permissions);
-    setIsEditing(false);
-  };
-
-  const handleApprove = async (req: SignupRequest) => {
-    const cleanEmail = req.email.trim().toLowerCase();
-    const payload = {
-      email: cleanEmail,
-      full_name: req.full_name,
-      role: req.role,
-      company_id: req.company_id,
-      region_id: req.region_id || null,
-      station_id: req.station_id || null,
-      permissions: CustodyDB.enrichUserPermissions(req.role),
-      must_change_password: true
-    };
-
-    try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      const token = await auth.currentUser?.getIdToken();
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const res = await fetch('/api/admin/users', {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        alert(`⚠️ ${data.message || (isRtl ? 'فشل قبول وتفعيل الحساب' : 'Failed to approve signup request')}`);
-        return;
-      }
-
-      if (data.user) {
-        const usersList = CustodyDB.getUsers();
-        const existingIdx = usersList.findIndex(u => u.id === data.user.id);
-        if (existingIdx >= 0) {
-          usersList[existingIdx] = data.user;
-        } else {
-          usersList.push(data.user);
-        }
-        await CustodyDB.saveUsers(usersList);
-      }
-      await CustodyDB.deleteSignupRequest(req.id);
-      CustodyDB.logAudit('APPROVE_SIGNUP_REQUEST', `Approved signup for ${req.full_name} (${req.email}) as ${req.role}`);
-
-      const tempMsg = data.temporaryPassword ? (isRtl ? `\nكلمة المرور المؤقتة: ${data.temporaryPassword}` : `\nTemporary Password: ${data.temporaryPassword}`) : '';
-      alert((isRtl ? 'تم قبول طلب التسجيل وتفعيل الحساب بنجاح!' : 'Signup request approved successfully!') + tempMsg);
-      setActiveSubTab('account');
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('custody_db_updated'));
-      }
-    } catch (err: any) {
-      alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
-    }
-  };
-
-  const handleReject = async (req: SignupRequest) => {
-    if (!rejectionReason.trim()) {
-      alert(isRtl ? 'يرجى كتابة سبب الرفض' : 'Please provide a rejection reason.');
-      return;
-    }
-
-    const updated = {
-      ...req,
-      status: 'Rejected' as const,
-      rejection_reason: rejectionReason.trim()
-    };
-    await CustodyDB.saveSignupRequest(updated);
-    CustodyDB.logAudit('REJECT_SIGNUP_REQUEST', `Rejected signup for ${req.full_name} (${req.email}). Reason: ${rejectionReason}`);
-
-    alert(isRtl ? 'تم رفض طلب التسجيل بنجاح' : 'Signup request rejected successfully.');
-    setRejectingRequestId(null);
-    setRejectionReason('');
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('custody_db_updated'));
-    }
-  };
-
-  if (canSeePendingRequests && activeSubTab === 'requests') {
-    return (
-      <div className="space-y-3 mt-2 border-t border-slate-100 dark:border-slate-850 pt-3">
-        {/* Switcher tabs */}
-        <div className="flex gap-2.5 border-b border-slate-100 dark:border-slate-800/60 pb-1.5 text-[11px] mb-2">
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('account')}
-            className="font-bold text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
-          >
-            {isRtl ? 'الحسابات (Accounts)' : 'Accounts'}
-          </button>
-          <span className="text-slate-300">|</span>
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('requests')}
-            className="font-black text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 pb-1 px-0.5 flex items-center gap-1 transition-all cursor-pointer"
-          >
-            <span>{isRtl ? 'الطلبات المعلقة' : 'Pending Requests'}</span>
-            {pendingRequests.length > 0 && (
-              <span className="bg-rose-500 text-white text-[9px] px-1 rounded-full font-mono">
-                {pendingRequests.length}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {pendingRequests.length === 0 ? (
-          <div className="text-center p-4 text-[10px] text-slate-400 italic">
-            {isRtl ? 'لا توجد طلبات تسجيل معلقة حالياً تحت هذا العنصر الهيكلي.' : 'No pending signup requests for this item.'}
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            {pendingRequests.map(req => (
-              <div 
-                key={req.id} 
-                className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 text-[11px] space-y-1.5"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="font-bold text-slate-700 dark:text-slate-200">{req.full_name}</div>
-                    <div className="font-mono text-slate-400 text-[10px]">{req.email}</div>
-                  </div>
-                  <span className="bg-amber-500/10 text-amber-500 text-[9px] px-1.5 py-0.5 rounded-full font-bold">
-                    {isRtl ? 'قيد الانتظار' : 'Pending'}
-                  </span>
-                </div>
-
-                <div className="text-[10px] text-slate-400">
-                  <span>{isRtl ? 'تاريخ التقديم: ' : 'Submitted: '}</span>
-                  <span className="font-mono">{new Date(req.created_at).toLocaleDateString()}</span>
-                </div>
-
-                {rejectingRequestId === req.id ? (
-                  <div className="space-y-1.5 p-1.5 rounded-lg bg-rose-500/5 border border-rose-500/10">
-                    <input
-                      type="text"
-                      placeholder={isRtl ? 'اكتب سبب الرفض هنا...' : 'Enter rejection reason...'}
-                      value={rejectionReason}
-                      onChange={(e) => setRejectionReason(e.target.value)}
-                      className="w-full px-2 py-1 text-[10px] rounded border border-rose-200 dark:border-rose-900 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100"
-                    />
-                    <div className="flex gap-1.5 justify-end">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRejectingRequestId(null);
-                          setRejectionReason('');
-                        }}
-                        className="px-2 py-0.5 text-[9px] font-bold rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 cursor-pointer"
-                      >
-                        {isRtl ? 'إلغاء' : 'Cancel'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleReject(req)}
-                        className="px-2 py-0.5 text-[9px] font-bold rounded bg-rose-600 text-white hover:bg-rose-500 cursor-pointer"
-                      >
-                        {isRtl ? 'تأكيد الرفض' : 'Confirm'}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/40">
-                    <button
-                      type="button"
-                      onClick={() => setRejectingRequestId(req.id)}
-                      className="px-2.5 py-1 text-[9px] font-black rounded-lg text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 cursor-pointer transition-all"
-                    >
-                      {isRtl ? 'رفض الطلب ✕' : 'Reject'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleApprove(req)}
-                      className="px-2.5 py-1 text-[9px] font-black rounded-lg text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 cursor-pointer transition-all"
-                    >
-                      {isRtl ? 'موافقة وتفعيل ✓' : 'Approve & Activate'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (!isEditing && initialEmail) {
-    const activePermsList = PERMISSION_KEYS.filter(p => permissions[p.key as keyof UserPermissions]);
-    return (
-      <div className="space-y-2 border-t border-slate-100 dark:border-slate-800/60 pt-2.5">
-        {/* Switcher tabs */}
-        {canSeePendingRequests && (
-          <div className="flex gap-2.5 border-b border-slate-100 dark:border-slate-800/60 pb-1.5 text-[11px] mb-2">
-            <button
-              type="button"
-              onClick={() => setActiveSubTab('account')}
-              className="font-black text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 pb-1 px-0.5 transition-all cursor-pointer"
-            >
-              {isRtl ? 'الحسابات (Accounts)' : 'Accounts'}
-            </button>
-            <span className="text-slate-300">|</span>
-            <button
-              type="button"
-              onClick={() => setActiveSubTab('requests')}
-              className="font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-all cursor-pointer"
-            >
-              <span>{isRtl ? 'الطلبات المعلقة' : 'Pending Requests'}</span>
-              {pendingRequests.length > 0 && (
-                <span className="bg-rose-500 text-white text-[9px] px-1 rounded-full font-mono">
-                  {pendingRequests.length}
-                </span>
-              )}
-            </button>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-          <div className="font-mono text-slate-600 dark:text-slate-300">
-            <span className="font-bold text-slate-400 mr-1">{isRtl ? 'الايميل:' : 'Email:'}</span>
-            <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded select-all">{initialEmail}</span>
-            <span className="font-bold text-slate-400 mx-2">|</span>
-            <span className="font-bold text-slate-400 mr-1">{isRtl ? 'الرمز:' : 'PIN:'}</span>
-            <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded select-all font-bold">{initialPassword}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setIsEditing(true)}
-            className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold text-[10px] cursor-pointer"
-          >
-            {isRtl ? 'تعديل الحساب والصلاحيات' : 'Edit Account & Permissions'}
-          </button>
-        </div>
-        
-        {/* Read-only styled Permissions Badges */}
-        <div className="mt-1">
-          <span className="text-[10px] font-bold text-slate-400 block mb-1">
-            {isRtl ? 'الصلاحيات الممنوحة للمسؤول صاحب هذا الحساب:' : 'Granted Permissions for this manager account:'}
-          </span>
-          <div className="flex flex-wrap gap-1">
-            {activePermsList.length === 0 ? (
-              <span className="text-[9px] bg-slate-100 dark:bg-slate-850 text-slate-400 px-1.5 py-0.5 rounded">
-                {isRtl ? 'لا توجد صلاحيات نشطة' : 'No active permissions'}
-              </span>
-            ) : (
-              activePermsList.map(p => (
-                <span key={p.key} className="text-[9px] bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10 px-1.5 py-0.5 rounded-lg font-bold flex items-center gap-1">
-                  <span className="h-1 w-1 rounded-full bg-emerald-500" />
-                  {isRtl ? p.ar : p.en}
-                </span>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3 mt-2 border-t border-slate-100 dark:border-slate-850 pt-3">
-      {/* Switcher tabs */}
-      {canSeePendingRequests && (
-        <div className="flex gap-2.5 border-b border-slate-100 dark:border-slate-800/60 pb-1.5 text-[11px] mb-2">
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('account')}
-            className="font-black text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 pb-1 px-0.5 transition-all cursor-pointer"
-          >
-            {isRtl ? 'الحسابات (Accounts)' : 'Accounts'}
-          </button>
-          <span className="text-slate-300">|</span>
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('requests')}
-            className="font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-all cursor-pointer"
-          >
-            <span>{isRtl ? 'الطلبات المعلقة' : 'Pending Requests'}</span>
-            {pendingRequests.length > 0 && (
-              <span className="bg-rose-500 text-white text-[9px] px-1 rounded-full font-mono">
-                {pendingRequests.length}
-              </span>
-            )}
-          </button>
-        </div>
-      )}
-
-      <form onSubmit={handleSave} className="space-y-3">
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="flex-1 min-w-[120px]">
-            <input
-              type="email"
-              required
-              placeholder={placeholderEmail || (isRtl ? 'البريد الإلكتروني للأدمن' : 'Admin Email Address')}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-2 py-1 text-[11px] rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-indigo-500"
-            />
-          </div>
-          <div className="flex-1 min-w-[100px]">
-            <input
-              type="text"
-              required
-              placeholder={placeholderPassword || (isRtl ? 'كلمة المرور' : 'Password')}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-2 py-1 text-[11px] rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-indigo-500 font-mono"
-            />
-          </div>
-          <div className="flex gap-1">
-            <button
-              type="submit"
-              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold transition-all cursor-pointer"
-            >
-              {isRtl ? 'حفظ' : 'Save'}
-            </button>
-            {initialEmail && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail(initialEmail);
-                  setPassword(initialPassword);
-                  const u = CustodyDB.getUsers().find(user => user.email?.toLowerCase() === initialEmail.toLowerCase());
-                  if (u?.permissions) {
-                    setPermissions({ ...u.permissions });
-                  }
-                  setIsEditing(false);
-                }}
-                className="px-2 py-1 bg-slate-100 dark:bg-slate-850 text-slate-600 dark:text-slate-400 rounded text-[10px] font-bold transition-all cursor-pointer"
-              >
-                {isRtl ? 'إلغاء' : 'Cancel'}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Interactive Permissions checklist */}
-        <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800 space-y-2.5">
-          <span className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">
-            {isRtl ? 'تخصيص وتعديل الصلاحيات الممنوحة للرئيس المباشر:' : 'Customize Scoped Permissions:'}
-          </span>
-
-          {/* Toggle between Default and Custom */}
-          <div className="flex bg-slate-150 dark:bg-slate-950/60 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800">
-            <button
-              type="button"
-              onClick={() => handleToggleMode(true)}
-              className={`flex-1 py-1 rounded text-[9px] font-bold transition-all text-center cursor-pointer ${
-                isDefaultMode 
-                  ? 'bg-indigo-600 text-white shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-              }`}
-            >
-              {isRtl ? 'الافتراضية للدور' : 'Default for Role'}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleToggleMode(false)}
-              className={`flex-1 py-1 rounded text-[9px] font-bold transition-all text-center cursor-pointer ${
-                !isDefaultMode 
-                  ? 'bg-indigo-600 text-white shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-              }`}
-            >
-              {isRtl ? 'صلاحيات مخصصة' : 'Custom Checklist'}
-            </button>
-          </div>
-
-          {!isDefaultMode && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              {PERMISSION_KEYS.map(p => {
-                const checked = !!permissions[p.key as keyof UserPermissions];
-                return (
-                  <label key={p.key} className="flex items-start gap-2 p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800/40 cursor-pointer text-[10px] font-bold text-slate-600 dark:text-slate-350">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => {
-                        setPermissions(prev => ({
-                          ...prev,
-                          [p.key]: e.target.checked
-                        }));
-                      }}
-                      className="mt-0.5 h-3.5 w-3.5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-                    />
-                    <span>{isRtl ? p.ar : p.en}</span>
-                  </label>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </form>
-    </div>
-  );
-}
-
 export default function CompanyAdminDashboard({ activeUser, language, theme }: CompanyAdminDashboardProps) {
   useScreenListeners(['transactions', 'logs', 'Expenses', 'CashVouchers', 'TransactionHistory', 'deleted_transactions', 'signup_requests']);
 
@@ -1304,19 +802,35 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                     {/* Regional Manager Admin panel */}
                     <div className="lg:col-span-5 bg-white dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200/50 dark:border-slate-800/80 shadow-sm space-y-3">
-                      <div className="flex items-center gap-1.5 text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase">
-                        <UserCheck size={12} />
-                        <span>{isRtl ? 'حساب مدير المنطقة' : 'Regional Manager Account'}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase">
+                          <UserCheck size={12} />
+                          <span>{isRtl ? 'حساب مدير المنطقة' : 'Regional Manager Account'}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                              detail: { tab: 'settings', settingsTab: 'permissions', selectedCompanyId: myCompanyId } 
+                            }));
+                          }}
+                          className="px-2 py-0.5 rounded bg-indigo-600/10 hover:bg-indigo-600 text-indigo-600 hover:text-white dark:text-indigo-400 dark:hover:text-white text-[9px] font-bold transition-all shrink-0 cursor-pointer"
+                        >
+                          {isRtl ? 'إدارة الوصول' : 'Manage Access'}
+                        </button>
                       </div>
-                      <AdminCredentialsForm
-                        initialEmail={rmUser?.email || ''}
-                        initialPassword={rmUser?.password || ''}
-                        onSave={(email, pass, permissions) => handleSaveRegionManager(r.id, email, pass, permissions)}
-                        isRtl={isRtl}
-                        userRole="RegionalManager"
-                        companyId={myCompanyId}
-                        regionId={r.id}
-                      />
+                      <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/60">
+                        {rmUser ? (
+                          <div className="text-[10px] text-slate-600 dark:text-slate-300 font-mono space-y-1">
+                            <div><span className="font-bold text-slate-400 mr-1">{isRtl ? 'البريد:' : 'Email:'}</span>{rmUser.email}</div>
+                            {rmUser.full_name && <div><span className="font-bold text-slate-400 mr-1">{isRtl ? 'الاسم:' : 'Name:'}</span>{rmUser.full_name}</div>}
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-amber-600 dark:text-amber-400 italic">
+                            {isRtl ? 'لم يتم تعيين مدير لهذه المنطقة بعد' : 'No Regional Manager assigned yet'}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Stations inside region */}
@@ -1370,21 +884,33 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
                                   </div>
                                 </div>
 
-                                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850/60">
-                                  <div className="flex items-center gap-1 text-[9px] font-bold text-slate-450 dark:text-slate-550 mb-1.5">
-                                    <KeyRound size={9} />
-                                    <span>{isRtl ? 'حساب مسؤول الفرع' : 'Branch Manager Account'}</span>
+                                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850/60 flex items-center justify-between gap-2">
+                                  <div>
+                                    <div className="flex items-center gap-1 text-[9px] font-bold text-slate-450 dark:text-slate-550">
+                                      <KeyRound size={9} />
+                                      <span>{isRtl ? 'حساب مسؤول الفرع' : 'Branch Manager Account'}</span>
+                                    </div>
+                                    {stnUser ? (
+                                      <div className="text-[9px] text-slate-600 dark:text-slate-300 font-mono mt-0.5">
+                                        <span className="font-bold text-slate-400 mr-1">{isRtl ? 'البريد:' : 'Email:'}</span>{stnUser.email}
+                                      </div>
+                                    ) : (
+                                      <div className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5 italic">
+                                        {isRtl ? 'لم يتم التعيين' : 'Not assigned'}
+                                      </div>
+                                    )}
                                   </div>
-                                  <AdminCredentialsForm
-                                    initialEmail={stnUser?.email || ''}
-                                    initialPassword={stnUser?.password || ''}
-                                    onSave={(email, pass, permissions) => handleSaveStationAdmin(stn.id, r.id, email, pass, permissions)}
-                                    isRtl={isRtl}
-                                    userRole="StationAdmin"
-                                    companyId={myCompanyId}
-                                    regionId={r.id}
-                                    stationId={stn.id}
-                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                                        detail: { tab: 'settings', settingsTab: 'permissions', selectedCompanyId: myCompanyId } 
+                                      }));
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-indigo-600/10 hover:bg-indigo-600 text-indigo-600 hover:text-white dark:text-indigo-400 dark:hover:text-white text-[9px] font-bold transition-all shrink-0 cursor-pointer"
+                                  >
+                                    {isRtl ? 'إدارة' : 'Manage'}
+                                  </button>
                                 </div>
                               </div>
                             );
@@ -1444,21 +970,33 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
                           </div>
                         </div>
 
-                        <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850/60">
-                          <div className="flex items-center gap-1 text-[9px] font-bold text-slate-450 dark:text-slate-550 mb-1.5">
-                            <KeyRound size={9} />
-                            <span>{isRtl ? 'حساب مسؤول الفرع' : 'Branch Manager Account'}</span>
+                        <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850/60 flex items-center justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-1 text-[9px] font-bold text-slate-450 dark:text-slate-550">
+                              <KeyRound size={9} />
+                              <span>{isRtl ? 'حساب مسؤول الفرع' : 'Branch Manager Account'}</span>
+                            </div>
+                            {stnUser ? (
+                              <div className="text-[9px] text-slate-600 dark:text-slate-300 font-mono mt-0.5">
+                                <span className="font-bold text-slate-400 mr-1">{isRtl ? 'البريد:' : 'Email:'}</span>{stnUser.email}
+                              </div>
+                            ) : (
+                              <div className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5 italic">
+                                {isRtl ? 'لم يتم التعيين' : 'Not assigned'}
+                              </div>
+                            )}
                           </div>
-                          <AdminCredentialsForm
-                            initialEmail={stnUser?.email || ''}
-                            initialPassword={stnUser?.password || ''}
-                            onSave={(email, pass, permissions) => handleSaveStationAdmin(stn.id, undefined, email, pass, permissions)}
-                            isRtl={isRtl}
-                            userRole="StationAdmin"
-                            companyId={myCompanyId}
-                            regionId={undefined}
-                            stationId={stn.id}
-                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              window.dispatchEvent(new CustomEvent('navigate_tab', { 
+                                detail: { tab: 'settings', settingsTab: 'permissions', selectedCompanyId: myCompanyId } 
+                              }));
+                            }}
+                            className="px-2 py-0.5 rounded bg-indigo-600/10 hover:bg-indigo-600 text-indigo-600 hover:text-white dark:text-indigo-400 dark:hover:text-white text-[9px] font-bold transition-all shrink-0 cursor-pointer"
+                          >
+                            {isRtl ? 'إدارة' : 'Manage'}
+                          </button>
                         </div>
                       </div>
                     );
