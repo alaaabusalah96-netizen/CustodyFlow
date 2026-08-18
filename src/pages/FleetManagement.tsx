@@ -5,7 +5,7 @@ import {
   MapPin, Navigation, Trash2, Map, Play, ArrowRightLeft, Sparkles,
   Clock, CheckCircle, AlertTriangle, AlertCircle, Radio, Loader2,
   Siren, PauseCircle, MessageSquare, Compass, Ban, Lock, CheckSquare, Square,
-  Power, ShieldCheck, X
+  Power, ShieldCheck, X, Activity
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { UsersModule } from '../db/users';
@@ -19,6 +19,13 @@ import EmergencyTripModal from '../components/EmergencyTripModal';
 import TripChatModal from '../components/TripChatModal';
 import DriverPortalView from '../components/DriverPortalView';
 import LiveFleetMapDashboard from '../components/LiveFleetMapDashboard';
+import DailyOperationsDashboard from '../components/DailyOperationsDashboard';
+import TripConflictWarningModal from '../components/TripConflictWarningModal';
+import { TripStopsManagerModal } from '../components/TripStopsManagerModal';
+import TripRouteReplayModal from '../components/TripRouteReplayModal';
+import FleetCostAndMaintenanceDashboard from '../components/FleetCostAndMaintenanceDashboard';
+import DriverPerformanceAndSafetyDashboard from '../components/DriverPerformanceAndSafetyDashboard';
+import VehicleInspectionModal from '../components/VehicleInspectionModal';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
 import { 
   Vehicle, 
@@ -30,7 +37,9 @@ import {
   TripStop, 
   LearnedLocationHistoryEntry,
   VehicleConstraintMode,
-  VehicleConstraintRule
+  VehicleConstraintRule,
+  TripConflictWarning,
+  SupervisorConflictOverride
 } from '../types/fleet';
 
 interface FleetManagementProps {
@@ -91,10 +100,21 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     activeUser?.role === 'SystemAdmin'
   );
 
+  const canViewDailyOps = Boolean(
+    canViewTrips || 
+    canViewVehicles || 
+    activeUser?.role === 'SystemAdmin' ||
+    activeUser?.role === 'Admin' ||
+    activeUser?.permissions?.manage_fleet
+  );
+
   // Tabs - Initialized dynamically to first available tab
-  const [activeTab, setActiveTab] = useState<'vehicles' | 'trips' | 'driver_portal' | 'live_map' | 'vehicle_constraints'>(() => {
+  const [activeTab, setActiveTab] = useState<'daily_ops' | 'vehicles' | 'trips' | 'driver_portal' | 'live_map' | 'vehicle_constraints' | 'costs_and_maintenance' | 'driver_safety'>(() => {
     if (canViewDriverPortal && !canViewTrips && !canViewVehicles) {
       return 'driver_portal';
+    }
+    if (canViewDailyOps) {
+      return 'daily_ops';
     }
     if (canViewTrips) {
       return 'trips';
@@ -108,16 +128,23 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     if (canManageConstraints) {
       return 'vehicle_constraints';
     }
-    return 'trips';
+    return 'daily_ops';
   });
 
   // State
+  const [inspectionTargetVehicle, setInspectionTargetVehicle] = useState<Vehicle | null>(null);
+  const [inspectionTargetDriver, setInspectionTargetDriver] = useState<{ id: string; name: string } | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceLog[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLog[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [constraints, setConstraints] = useState<VehicleConstraintRule[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+
+  // Conflict Modal & Warnings State
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictWarnings, setConflictWarnings] = useState<TripConflictWarning[]>([]);
+  const [pendingTripData, setPendingTripData] = useState<any>(null);
 
   // Constraint Form State
   const [constraintForm, setConstraintForm] = useState<{
@@ -156,6 +183,14 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   // Trip Chat Modal
   const [showChatModal, setShowChatModal] = useState(false);
   const [selectedTripForChat, setSelectedTripForChat] = useState<Trip | null>(null);
+
+  // Stops Manager Modal (Phase 2)
+  const [showStopsManagerModal, setShowStopsManagerModal] = useState(false);
+  const [selectedTripForStopsManager, setSelectedTripForStopsManager] = useState<Trip | null>(null);
+
+  // Route Replay Modal (Phase 3)
+  const [showReplayModal, setShowReplayModal] = useState(false);
+  const [selectedTripForReplay, setSelectedTripForReplay] = useState<Trip | null>(null);
 
   // GPS Execution State
   const [gpsLoadingId, setGpsLoadingId] = useState<string | null>(null);
@@ -673,6 +708,51 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     }
   };
 
+  const executeCreateTrip = async (payload: any, override?: SupervisorConflictOverride) => {
+    try {
+      await FleetBusinessEngine.createTrip(companyId, activeUser?.id || 'system', {
+        ...payload,
+        conflictOverride: override
+      });
+
+      LogsModule.addLog(
+        activeUser?.id || 'system',
+        activeUser?.full_name || 'System',
+        isRtl ? 'تسجيل مشوار أسطول' : 'Register Fleet Trip',
+        override 
+          ? `Created trip with supervisor conflict override: ${override.conflictSummary || override.reason || ''}`
+          : `Created trip ${payload.tripType}`
+      );
+
+      showToast(
+        'success', 
+        override 
+          ? (isRtl ? 'تم تسجيل المشوار مع توثيق قرار تجاوز التعارض بقرار المشرف بنجاح' : 'Trip recorded with supervisor conflict override documented') 
+          : (isRtl ? 'تم تسجيل المشوار بصفة مسودة (DRAFT) بنجاح - في انتظار بدء السائق للرحلة عبر GPS' : 'Trip recorded in DRAFT status successfully')
+      );
+
+      setTripForm({
+        vehicle_id: '',
+        driver_id: '',
+        tripType: 'مهمة تشغيلية',
+        scheduledAt: new Date().toISOString().slice(0, 16),
+        notes: '',
+        stops: [
+          { id: 'stop-1', taskTitle: 'نقطة الانطلاق (الفرع/المحطة)', label: '', org_unit_id: '', notes: '', lat: undefined, lng: undefined },
+          { id: 'stop-2', taskTitle: 'بوسطة ومراسلات', label: '', org_unit_id: '', notes: '', lat: undefined, lng: undefined },
+        ]
+      });
+      setShowAddTrip(false);
+      setShowConflictModal(false);
+      setPendingTripData(null);
+      setConflictWarnings([]);
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      showToast('error', err?.message || (isRtl ? 'حدث خطأ أثناء تسجيل المشوار' : 'Error creating trip'));
+    }
+  };
+
   const handleCreateTrip = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canCreateTrip) {
@@ -696,49 +776,66 @@ export default function FleetManagement({ language }: FleetManagementProps) {
       return;
     }
 
-    try {
-      const stopsData = tripForm.stops.map((s, idx) => ({
-        id: s.id,
-        sequence: idx + 1,
-        taskTitle: s.taskTitle || undefined,
-        notes: s.notes || '',
-        location: {
-          org_unit_id: s.org_unit_id || undefined,
-          label: s.label.trim() || s.taskTitle || `${s.lat?.toFixed(4)}, ${s.lng?.toFixed(4)}`,
-          lat: s.lat,
-          lng: s.lng
-        },
-        status: 'PENDING' as const
-      }));
+    const stopsData = tripForm.stops.map((s, idx) => ({
+      id: s.id,
+      sequence: idx + 1,
+      taskTitle: s.taskTitle || undefined,
+      notes: s.notes || '',
+      location: {
+        org_unit_id: s.org_unit_id || undefined,
+        label: s.label.trim() || s.taskTitle || `${s.lat?.toFixed(4)}, ${s.lng?.toFixed(4)}`,
+        lat: s.lat,
+        lng: s.lng
+      },
+      status: 'PENDING' as const
+    }));
 
-      await FleetBusinessEngine.createTrip(companyId, activeUser?.id || 'system', {
-        vehicle_id: tripForm.vehicle_id,
-        driver_id: tripForm.driver_id,
-        tripType: tripForm.tripType,
-        scheduledAt: tripForm.scheduledAt,
-        notes: tripForm.notes,
-        stops: stopsData,
-        org_unit_id: stopsData[0]?.location.org_unit_id
-      });
+    const tripPayload = {
+      vehicle_id: tripForm.vehicle_id,
+      driver_id: tripForm.driver_id,
+      tripType: tripForm.tripType,
+      scheduledAt: tripForm.scheduledAt,
+      notes: tripForm.notes,
+      stops: stopsData,
+      org_unit_id: stopsData[0]?.location.org_unit_id
+    };
 
-      showToast('success', isRtl ? 'تم تسجيل المشوار بصفة مسودة (DRAFT) بنجاح - في انتظار بدء السائق للرحلة عبر GPS' : 'Trip recorded in DRAFT status successfully');
-      setTripForm({
-        vehicle_id: '',
-        driver_id: '',
-        tripType: 'مهمة تشغيلية',
-        scheduledAt: new Date().toISOString().slice(0, 16),
-        notes: '',
-        stops: [
-          { id: 'stop-1', taskTitle: 'نقطة الانطلاق (الفرع/المحطة)', label: '', org_unit_id: '', notes: '', lat: undefined, lng: undefined },
-          { id: 'stop-2', taskTitle: 'بوسطة ومراسلات', label: '', org_unit_id: '', notes: '', lat: undefined, lng: undefined },
-        ]
-      });
-      setShowAddTrip(false);
-      loadData();
-    } catch (err: any) {
-      console.error(err);
-      showToast('error', err?.message || (isRtl ? 'حدث خطأ أثناء تسجيل المشوار' : 'Error creating trip'));
+    // Detect Operational Conflicts on the same date/destination/task/vehicle
+    const detectedConflicts = FleetBusinessEngine.detectTripConflicts(companyId, tripPayload);
+    if (detectedConflicts.length > 0) {
+      setPendingTripData(tripPayload);
+      setConflictWarnings(detectedConflicts);
+      setShowConflictModal(true);
+      return;
     }
+
+    await executeCreateTrip(tripPayload);
+  };
+
+  const handleProceedConflictOverride = async (reason: string) => {
+    if (!pendingTripData) return;
+    const override: SupervisorConflictOverride = {
+      overridden: true,
+      overriddenBy: activeUser?.id || 'system',
+      overriddenByName: activeUser?.full_name || 'المشرف المسؤول',
+      reason: reason.trim() || (isRtl ? 'قرار المشرف: متابعة التشغيل وتجاوز التعارض يدوياً' : 'Supervisor manual override'),
+      timestamp: new Date().toISOString(),
+      conflictingTripIds: conflictWarnings.map(w => w.conflictingTripId),
+      conflictSummary: conflictWarnings.map(w => isRtl ? w.messageAr : w.messageEn).join(' | ')
+    };
+    await executeCreateTrip(pendingTripData, override);
+  };
+
+  const handleEditAssignmentFromConflict = () => {
+    setShowConflictModal(false);
+    // Keep showAddTrip open so supervisor can change vehicle or destination
+  };
+
+  const handleCancelConflict = () => {
+    setShowConflictModal(false);
+    setShowAddTrip(false);
+    setPendingTripData(null);
+    setConflictWarnings([]);
   };
 
   const handleLogMaintenance = async (e: React.FormEvent) => {
@@ -866,6 +963,25 @@ export default function FleetManagement({ language }: FleetManagementProps) {
 
       {/* Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800">
+        {canViewDailyOps && (
+          <button
+            onClick={() => setActiveTab('daily_ops')}
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === 'daily_ops'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <Activity className="h-4 w-4 text-indigo-600" />
+            <span>{isRtl ? 'لوحة تشغيل اليوم' : 'Daily Operations'}</span>
+            {trips.filter(t => t.scheduledAt?.split('T')[0] === new Date().toISOString().split('T')[0] && t.status !== 'CANCELLED').length > 0 && (
+              <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 rounded-full">
+                {trips.filter(t => t.scheduledAt?.split('T')[0] === new Date().toISOString().split('T')[0] && t.status !== 'CANCELLED').length}
+              </span>
+            )}
+          </button>
+        )}
+
         {canViewVehicles && (
           <button
             onClick={() => setActiveTab('vehicles')}
@@ -945,7 +1061,92 @@ export default function FleetManagement({ language }: FleetManagementProps) {
             )}
           </button>
         )}
+
+        {canViewVehicles && (
+          <button
+            onClick={() => setActiveTab('costs_and_maintenance')}
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === 'costs_and_maintenance'
+                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <Gauge className="h-4 w-4 text-emerald-600" />
+            <span>{isRtl ? '📊 تكاليف التشغيل وصحة الصيانة' : '📊 Costs & Maintenance'}</span>
+            {(() => {
+              const alerts = FleetBusinessEngine.evaluateVehicleMaintenanceAlerts(companyId);
+              if (alerts.length === 0) return null;
+              const hasOverdue = alerts.some(a => a.urgency === 'OVERDUE');
+              return (
+                <span className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-full ${
+                  hasOverdue 
+                    ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200 animate-pulse' 
+                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200'
+                }`}>
+                  {alerts.length}
+                </span>
+              );
+            })()}
+          </button>
+        )}
+
+        {canViewVehicles && (
+          <button
+            onClick={() => setActiveTab('driver_safety')}
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === 'driver_safety'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <Award className="h-4 w-4 text-indigo-600" />
+            <span>{isRtl ? '⭐ تقييم السائقين وفحص السلامة' : '⭐ Driver Scorecards & Safety'}</span>
+            {(() => {
+              const pendingCount = FleetBusinessEngine.getFleetDriverPerformanceSummary(companyId).criticalDefectIncidents;
+              if (pendingCount === 0) return null;
+              return (
+                <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200 animate-pulse">
+                  {pendingCount}
+                </span>
+              );
+            })()}
+          </button>
+        )}
       </div>
+
+      {/* Daily Operations Hub Tab */}
+      {activeTab === 'daily_ops' && (
+        <DailyOperationsDashboard
+          language={language}
+          companyId={companyId}
+          vehicles={vehicles}
+          trips={trips}
+          users={users}
+          orgUnits={orgUnits}
+          onRefresh={loadData}
+          onOpenAddTrip={() => setShowAddTrip(true)}
+          onOpenEmergencyModal={() => setShowEmergencyModal(true)}
+          onOpenChatModal={(t) => {
+            setSelectedTripForChat(t);
+            setShowChatModal(true);
+          }}
+          onOpenStopsManager={(t) => {
+            setSelectedTripForStopsManager(t);
+            setShowStopsManagerModal(true);
+          }}
+          onOpenBreakdownModal={(v) => {
+            setSelectedVehicleForBreakdown(v);
+            setShowBreakdownModal(true);
+          }}
+          onNavigateToLiveMap={() => setActiveTab('live_map')}
+          onNavigateToTrips={() => setActiveTab('trips')}
+          onNavigateToVehicles={() => setActiveTab('vehicles')}
+          onDispatchTrip={(tripId) => {
+            const trip = trips.find(t => t.id === tripId);
+            if (trip) handleDriverStartTrip(trip);
+          }}
+        />
+      )}
 
       {/* Vehicles Tab */}
       {activeTab === 'vehicles' && (
@@ -1321,6 +1522,34 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {/* Manage Stops and In-Field Tasks Button (Phase 2) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedTripForStopsManager(t);
+                            setShowStopsManagerModal(true);
+                          }}
+                          className="px-3 py-2 text-xs font-bold bg-blue-50 hover:bg-blue-100 dark:bg-blue-950 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-xl flex items-center gap-1.5 transition-all border border-blue-200 dark:border-blue-800"
+                          title={isRtl ? 'إدارة محطات ومهام خط السير وإعادة التوزيع' : 'Manage route stops & tasks'}
+                        >
+                          <MapPin className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          <span>{isRtl ? 'المحطات والمهام' : 'Stops & Tasks'}</span>
+                        </button>
+
+                        {/* Route Replay Button (Phase 3) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedTripForReplay(t);
+                            setShowReplayModal(true);
+                          }}
+                          className="px-3 py-2 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-xl flex items-center gap-1.5 transition-all border border-indigo-200 dark:border-indigo-800"
+                          title={isRtl ? 'إعادة تشغيل المسار وتتبع حركة المشوار' : 'Replay route & telemetry'}
+                        >
+                          <Play className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                          <span>{isRtl ? 'تشغيل المسار' : 'Replay Route'}</span>
+                        </button>
+
                         {/* Operational Trip Chat Button */}
                         <button
                           type="button"
@@ -1790,6 +2019,75 @@ export default function FleetManagement({ language }: FleetManagementProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Costs & Maintenance Health Tab */}
+      {activeTab === 'costs_and_maintenance' && (
+        <FleetCostAndMaintenanceDashboard
+          companyId={companyId}
+          isRtl={isRtl}
+          onRefresh={loadData}
+          onOpenLogMaintenance={(veh, defaultType) => {
+            const actualVeh = vehicles.find(v => v.id === veh.id) || veh;
+            setSelectedVehicleForLog(actualVeh);
+            if (defaultType) {
+              setMaintenanceForm(prev => ({
+                ...prev,
+                type: defaultType,
+                description: defaultType === 'OIL_CHANGE' 
+                  ? (isRtl ? 'تغيير زيت وفلتر دوري' : 'Periodic Oil & Filter Change')
+                  : defaultType === 'TIRES'
+                  ? (isRtl ? 'صيانة وترصيص وتغيير إطارات' : 'Tire & Brake Service')
+                  : (isRtl ? 'صيانة دورية شاملة' : 'Routine Comprehensive Service'),
+                odometerAtService: actualVeh.odometerReading || 0
+              }));
+            }
+            setShowLogMaintenance(true);
+          }}
+          onOpenLogFuel={(veh) => {
+            const actualVeh = vehicles.find(v => v.id === veh.id) || veh;
+            setSelectedVehicleForLog(actualVeh);
+            setFuelForm(prev => ({
+              ...prev,
+              odometerReading: actualVeh.odometerReading || 0
+            }));
+            setShowLogFuel(true);
+          }}
+        />
+      )}
+
+      {/* Driver Performance Scorecards & Digital Safety Inspection Tab */}
+      {activeTab === 'driver_safety' && (
+        <DriverPerformanceAndSafetyDashboard
+          companyId={companyId}
+          isRtl={isRtl}
+          onRefresh={loadData}
+          onOpenPerformInspection={(veh, driverId, driverName) => {
+            setInspectionTargetVehicle(veh);
+            setInspectionTargetDriver({ id: driverId, name: driverName });
+          }}
+        />
+      )}
+
+      {/* Standalone Inspection Modal triggered from Management */}
+      {inspectionTargetVehicle && inspectionTargetDriver && (
+        <VehicleInspectionModal
+          isOpen={Boolean(inspectionTargetVehicle)}
+          onClose={() => {
+            setInspectionTargetVehicle(null);
+            setInspectionTargetDriver(null);
+          }}
+          vehicle={inspectionTargetVehicle}
+          driverId={inspectionTargetDriver.id}
+          driverName={inspectionTargetDriver.name}
+          companyId={companyId}
+          isRtl={isRtl}
+          onInspectionSubmitted={() => {
+            loadData();
+            setInspectionTargetVehicle(null);
+            setInspectionTargetDriver(null);
+          }}
+        />
       )}
 
       {/* Add Vehicle Modal */}
@@ -2510,6 +2808,55 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         }}
         isRtl={isRtl}
       />
+
+      {/* Trip Conflict Warning Modal (Manual Supervisor Decisions) */}
+      <TripConflictWarningModal
+        isOpen={showConflictModal}
+        onClose={handleCancelConflict}
+        conflicts={conflictWarnings}
+        onProceedWithOverride={handleProceedConflictOverride}
+        onEditAssignment={handleEditAssignmentFromConflict}
+        onCancel={handleCancelConflict}
+        language={language}
+        candidateVehiclePlate={vehicles.find(v => v.id === pendingTripData?.vehicle_id)?.plateNumber}
+        candidateVehicleCode={vehicles.find(v => v.id === pendingTripData?.vehicle_id)?.code}
+        candidateDriverName={users.find(u => u.id === pendingTripData?.driver_id)?.full_name}
+        scheduledAt={pendingTripData?.scheduledAt}
+      />
+
+      {/* Dynamic Route Stops & Tasks Manager Modal (Phase 2) */}
+      {showStopsManagerModal && selectedTripForStopsManager && (
+        <TripStopsManagerModal
+          trip={selectedTripForStopsManager}
+          companyId={companyId}
+          currentUserId={activeUser?.id || 'admin'}
+          allTrips={trips}
+          vehicles={vehicles}
+          drivers={users.filter(u => u.is_active).map(u => ({ id: u.id, name: u.full_name || u.name || u.email }))}
+          onClose={() => {
+            setShowStopsManagerModal(false);
+            setSelectedTripForStopsManager(null);
+          }}
+          onTripUpdated={(updatedTrip) => {
+            setSelectedTripForStopsManager(updatedTrip);
+            loadData();
+          }}
+        />
+      )}
+
+      {/* Historical Route Replay Modal (Phase 3) */}
+      {showReplayModal && selectedTripForReplay && (
+        <TripRouteReplayModal
+          isOpen={showReplayModal}
+          onClose={() => {
+            setShowReplayModal(false);
+            setSelectedTripForReplay(null);
+          }}
+          trip={selectedTripForReplay}
+          companyId={companyId}
+          isRtl={isRtl}
+        />
+      )}
     </div>
   );
 }

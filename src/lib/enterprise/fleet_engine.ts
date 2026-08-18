@@ -3,6 +3,7 @@ import { dbSetDoc } from '../../firebase';
 import { DocumentNumberEngine } from '../../db/documentNumberEngine';
 import { CostCenterEngine } from '../../db/costCenterEngine';
 import { OrganizationEngine } from '../../db/organizationEngine';
+import { UsersModule } from '../../db/users';
 import { AccountingBusinessEngine } from './accounting_engine';
 import { 
   Vehicle, 
@@ -24,7 +25,26 @@ import {
   VehicleConstraintMode,
   VehicleConstraintRule,
   TripBreadcrumbPoint,
-  TripBreadcrumbTrack
+  TripBreadcrumbTrack,
+  TripConflictWarning,
+  TripConflictType,
+  SupervisorConflictOverride,
+  DailyOperationsSummary,
+  TripTelemetryAnalysis,
+  GeofenceArrivalCheckResult,
+  VehicleMaintenanceThresholds,
+  MaintenanceUrgency,
+  MaintenanceHealthAlert,
+  VehicleCostBreakdown,
+  FleetCostSummary,
+  InspectionType,
+  InspectionStatus,
+  ChecklistItemKey,
+  InspectionChecklistItem,
+  VehicleInspectionRecord,
+  DriverPerformanceTier,
+  DriverScorecard,
+  FleetDriverPerformanceSummary
 } from '../../types/fleet';
 
 export class FleetBusinessEngine {
@@ -128,6 +148,7 @@ export class FleetBusinessEngine {
       status: 'DRAFT',
       scheduledAt: data.scheduledAt,
       notes: data.notes || '',
+      conflictOverride: (data as any).conflictOverride || undefined,
       createdBy: creatorId,
       createdAt: new Date().toISOString(),
     };
@@ -137,6 +158,315 @@ export class FleetBusinessEngine {
     await dbSetDoc('fleet_trips_items', newTrip.id, newTrip);
 
     return newTrip;
+  }
+
+  /**
+   * Detects potential daily operational conflicts for a trip candidate before creation/dispatch.
+   * Checks for:
+   * 1. Same destination (org_unit_id or location label) on the same date by another vehicle.
+   * 2. Same task type (taskTitle or tripType) on the same date in the same company.
+   * 3. Same vehicle assigned to multiple active trips on the same date.
+   * 4. Same driver assigned to multiple active trips on the same date.
+   * Note: This returns non-blocking warnings to guide supervisor decisions without enforcing rigid automated blockage.
+   */
+  public static detectTripConflicts(
+    companyId: string,
+    data: {
+      vehicle_id?: string;
+      driver_id?: string;
+      scheduledAt: string;
+      tripType?: string;
+      stops: Array<{
+        location?: { org_unit_id?: string; label?: string };
+        taskTitle?: string;
+      }>;
+    },
+    currentTripId?: string
+  ): TripConflictWarning[] {
+    const warnings: TripConflictWarning[] = [];
+    if (!companyId || !data.scheduledAt) return warnings;
+
+    const targetDate = data.scheduledAt.split('T')[0];
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
+    const allUsers = UsersModule.getUsers();
+
+    // Filter trips belonging to same company, on the same calendar day, excluding current trip and cancelled trips
+    const candidateTrips = allTrips.filter(t => 
+      t.company_id === companyId && 
+      t.id !== currentTripId && 
+      t.status !== 'CANCELLED' && 
+      t.scheduledAt && 
+      t.scheduledAt.split('T')[0] === targetDate
+    );
+
+    const destStops = data.stops || [];
+
+    for (const otherTrip of candidateTrips) {
+      const otherVehicle = allVehicles.find(v => v.id === otherTrip.vehicle_id);
+      const otherDriver = allUsers.find(u => u.id === otherTrip.driver_id);
+      const vehicleDesc = otherVehicle ? `${otherVehicle.code} (${otherVehicle.plateNumber})` : otherTrip.vehicle_id;
+      const driverDesc = otherDriver ? otherDriver.full_name : otherTrip.driver_id;
+
+      // 1. Same vehicle overlap on same day
+      if (data.vehicle_id && otherTrip.vehicle_id === data.vehicle_id) {
+        warnings.push({
+          conflictingTripId: otherTrip.id,
+          conflictType: 'SAME_VEHICLE',
+          conflictingVehicleId: otherTrip.vehicle_id,
+          conflictingVehicleCode: otherVehicle?.code,
+          conflictingVehiclePlate: otherVehicle?.plateNumber,
+          conflictingDriverId: otherTrip.driver_id,
+          conflictingDriverName: driverDesc,
+          tripType: otherTrip.tripType,
+          scheduledAt: otherTrip.scheduledAt,
+          status: otherTrip.status,
+          messageAr: `المركبة (${vehicleDesc}) مسند إليها مشوار آخر (${otherTrip.tripType}) في نفس اليوم (${targetDate}) في حالة (${otherTrip.status})`,
+          messageEn: `Vehicle (${vehicleDesc}) is already assigned to another trip (${otherTrip.tripType}) on (${targetDate}) in status (${otherTrip.status})`
+        });
+      }
+
+      // 2. Same driver overlap on same day
+      if (data.driver_id && otherTrip.driver_id === data.driver_id && (!data.vehicle_id || otherTrip.vehicle_id !== data.vehicle_id)) {
+        warnings.push({
+          conflictingTripId: otherTrip.id,
+          conflictType: 'SAME_DRIVER',
+          conflictingVehicleId: otherTrip.vehicle_id,
+          conflictingVehicleCode: otherVehicle?.code,
+          conflictingVehiclePlate: otherVehicle?.plateNumber,
+          conflictingDriverId: otherTrip.driver_id,
+          conflictingDriverName: driverDesc,
+          tripType: otherTrip.tripType,
+          scheduledAt: otherTrip.scheduledAt,
+          status: otherTrip.status,
+          messageAr: `السائق (${driverDesc}) مسند إليه مشوار آخر (${otherTrip.tripType}) مع المركبة (${vehicleDesc}) في نفس اليوم (${targetDate})`,
+          messageEn: `Driver (${driverDesc}) is already assigned to another trip (${otherTrip.tripType}) with vehicle (${vehicleDesc}) on (${targetDate})`
+        });
+      }
+
+      // 3. Same destination check across stops
+      for (const newStop of destStops) {
+        const newOrgId = newStop.location?.org_unit_id?.trim();
+        const newLabel = (newStop.location?.label || '').trim().toLowerCase();
+
+        for (const otherStop of (otherTrip.stops || [])) {
+          const otherOrgId = otherStop.location?.org_unit_id?.trim();
+          const otherLabel = (otherStop.location?.label || '').trim().toLowerCase();
+
+          const isOrgMatch = Boolean(newOrgId && otherOrgId && newOrgId === otherOrgId);
+          const isLabelMatch = Boolean(!isOrgMatch && newLabel && otherLabel && newLabel.length > 2 && newLabel === otherLabel);
+
+          if (isOrgMatch || isLabelMatch) {
+            const destName = otherStop.location?.label || newStop.location?.label || otherOrgId || 'الوجهة المحددة';
+            warnings.push({
+              conflictingTripId: otherTrip.id,
+              conflictType: 'SAME_DESTINATION',
+              conflictingVehicleId: otherTrip.vehicle_id,
+              conflictingVehicleCode: otherVehicle?.code,
+              conflictingVehiclePlate: otherVehicle?.plateNumber,
+              conflictingDriverId: otherTrip.driver_id,
+              conflictingDriverName: driverDesc,
+              destinationLabel: destName,
+              destinationOrgUnitId: otherOrgId || newOrgId,
+              taskTitle: otherStop.taskTitle || otherTrip.tripType,
+              tripType: otherTrip.tripType,
+              scheduledAt: otherTrip.scheduledAt,
+              status: otherTrip.status,
+              messageAr: `توجد مركبة أخرى (${vehicleDesc} بقيادة ${driverDesc}) متجهة لنفس الوجهة (${destName}) في نفس اليوم (${targetDate})`,
+              messageEn: `Another vehicle (${vehicleDesc} driven by ${driverDesc}) is already scheduled to visit (${destName}) on the same date (${targetDate})`
+            });
+            break; // avoid duplicate warning for same otherTrip
+          }
+        }
+      }
+
+      // 4. Same specific task type check on same day
+      for (const newStop of destStops) {
+        const newTaskTitle = (newStop.taskTitle || data.tripType || '').trim().toLowerCase();
+        if (!newTaskTitle || newTaskTitle === 'مهمة عمل ونقل عام' || newTaskTitle === 'أخرى (مهمة مخصصة)' || newTaskTitle === 'مهمة تشغيلية') continue;
+
+        for (const otherStop of (otherTrip.stops || [])) {
+          const otherTaskTitle = (otherStop.taskTitle || otherTrip.tripType || '').trim().toLowerCase();
+          if (otherTaskTitle && otherTaskTitle === newTaskTitle) {
+            // Check if already warned for same destination
+            const alreadyWarned = warnings.some(w => w.conflictingTripId === otherTrip.id && w.conflictType === 'SAME_TASK_TYPE');
+            if (!alreadyWarned) {
+              warnings.push({
+                conflictingTripId: otherTrip.id,
+                conflictType: 'SAME_TASK_TYPE',
+                conflictingVehicleId: otherTrip.vehicle_id,
+                conflictingVehicleCode: otherVehicle?.code,
+                conflictingVehiclePlate: otherVehicle?.plateNumber,
+                conflictingDriverId: otherTrip.driver_id,
+                conflictingDriverName: driverDesc,
+                taskTitle: otherStop.taskTitle || otherTrip.tripType,
+                tripType: otherTrip.tripType,
+                scheduledAt: otherTrip.scheduledAt,
+                status: otherTrip.status,
+                messageAr: `يوجد مشوار آخر للمركبة (${vehicleDesc}) بنفس نوع المهمة (${otherStop.taskTitle || otherTrip.tripType}) في نفس اليوم (${targetDate})`,
+                messageEn: `Another vehicle (${vehicleDesc}) is scheduled for the same task type (${otherStop.taskTitle || otherTrip.tripType}) on (${targetDate})`
+              });
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    return warnings;
+  }
+
+  /**
+   * Retrieves a comprehensive daily operational summary for supervisors:
+   * - Vehicles breakdown by 4 clear statuses: Idle/Available, In-Trip, Breakdown, Maintenance/Out-of-Service.
+   * - Open trips for target date.
+   * - Delayed / Not started trips.
+   * - Unregistered / Not started drivers.
+   * - Conflicted trips with supervisor override statuses.
+   */
+  public static getDailyOperationsSummary(companyId: string, targetDate?: string): DailyOperationsSummary {
+    const dateStr = targetDate || new Date().toISOString().split('T')[0];
+    const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []).filter(v => v.company_id === companyId);
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []).filter(t => t.company_id === companyId);
+    const allUsers = UsersModule.getUsers();
+
+    // Vehicles categorisation
+    const availableVehicles = allVehicles.filter(v => v.status === 'ACTIVE' || v.status === 'INACTIVE');
+    const inTripVehicles = allVehicles.filter(v => v.status === 'DISPATCHED');
+    const breakdownVehicles = allVehicles.filter(v => v.status === 'BREAKDOWN');
+    const outOfServiceVehicles = allVehicles.filter(v => v.status === 'OUT_OF_SERVICE' || v.status === 'MAINTENANCE');
+
+    // Trips for target date (or active in-progress trips)
+    const todayTrips = allTrips.filter(t => {
+      if (t.status === 'CANCELLED') return false;
+      const tripDate = t.scheduledAt ? t.scheduledAt.split('T')[0] : '';
+      return tripDate === dateStr || t.status === 'DISPATCHED' || t.status === 'IN_PROGRESS';
+    });
+
+    const openTrips = todayTrips.filter(t => 
+      ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'DISPATCHED', 'IN_PROGRESS'].includes(t.status)
+    );
+
+    // Delayed or Not Started: Scheduled date is today or earlier and trip is not completed/dispatched
+    const now = new Date();
+    const delayedOrNotStartedTrips = todayTrips.filter(t => {
+      if (t.status === 'COMPLETED' || t.status === 'CANCELLED' || t.status === 'DISPATCHED' || t.status === 'IN_PROGRESS') {
+        return false;
+      }
+      return t.status === 'DRAFT' || t.status === 'APPROVED' || t.status === 'PENDING_APPROVAL';
+    });
+
+    // Unregistered / Not Started Drivers
+    const driverMap = new Map<string, {
+      driverId: string;
+      driverName: string;
+      tripId: string;
+      scheduledAt: string;
+      vehicleCode?: string;
+      vehiclePlate?: string;
+      taskTitle?: string;
+    }>();
+
+    for (const trip of todayTrips) {
+      if (['DRAFT', 'APPROVED', 'PENDING_APPROVAL'].includes(trip.status) && !trip.startedAt) {
+        const driverUser = allUsers.find(u => u.id === trip.driver_id);
+        const vehicle = allVehicles.find(v => v.id === trip.vehicle_id);
+        const driverName = driverUser?.full_name || trip.driver_id;
+        if (!driverMap.has(trip.driver_id)) {
+          driverMap.set(trip.driver_id, {
+            driverId: trip.driver_id,
+            driverName,
+            tripId: trip.id,
+            scheduledAt: trip.scheduledAt,
+            vehicleCode: vehicle?.code,
+            vehiclePlate: vehicle?.plateNumber,
+            taskTitle: trip.stops?.[1]?.taskTitle || trip.stops?.[1]?.location?.label || trip.tripType
+          });
+        }
+      }
+    }
+
+    // Detect conflicts for all open today trips
+    const conflictedTrips: Array<{ trip: Trip; conflicts: TripConflictWarning[] }> = [];
+    for (const trip of todayTrips) {
+      const conflicts = this.detectTripConflicts(companyId, {
+        vehicle_id: trip.vehicle_id,
+        driver_id: trip.driver_id,
+        scheduledAt: trip.scheduledAt,
+        tripType: trip.tripType,
+        stops: trip.stops || []
+      }, trip.id);
+
+      if (conflicts.length > 0) {
+        conflictedTrips.push({ trip, conflicts });
+      }
+    }
+
+    return {
+      date: dateStr,
+      vehicles: {
+        total: allVehicles.length,
+        available: availableVehicles.length,
+        inTrip: inTripVehicles.length,
+        breakdown: breakdownVehicles.length,
+        outOfService: outOfServiceVehicles.length,
+        availableVehicles,
+        inTripVehicles,
+        breakdownVehicles,
+        outOfServiceVehicles
+      },
+      openTrips,
+      delayedOrNotStartedTrips,
+      unregisteredDrivers: Array.from(driverMap.values()),
+      conflictedTrips
+    };
+  }
+
+  /**
+   * Records supervisor's manual decision to proceed with a trip despite conflicts.
+   */
+  public static async recordSupervisorConflictOverride(
+    companyId: string,
+    operatorId: string,
+    tripId: string,
+    overrideData: {
+      reason?: string;
+      conflictingTripIds: string[];
+      conflictSummary?: string;
+    }
+  ): Promise<Trip> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const tripIndex = allTrips.findIndex(t => t.id === tripId && t.company_id === companyId);
+    if (tripIndex === -1) {
+      throw new Error(`Trip ${tripId} not found`);
+    }
+
+    const allUsers = UsersModule.getUsers();
+    const operator = allUsers.find(u => u.id === operatorId);
+
+    const trip = allTrips[tripIndex];
+    const now = new Date().toISOString();
+
+    const override: SupervisorConflictOverride = {
+      overridden: true,
+      overriddenBy: operatorId,
+      overriddenByName: operator?.full_name || operatorId,
+      reason: overrideData.reason || 'قرار المشرف: متابعة التشغيل وتجاوز التعارض يدوياً',
+      timestamp: now,
+      conflictingTripIds: overrideData.conflictingTripIds,
+      conflictSummary: overrideData.conflictSummary
+    };
+
+    const updatedTrip: Trip = {
+      ...trip,
+      conflictOverride: override
+    };
+
+    allTrips[tripIndex] = updatedTrip;
+    StorageEngine.setStored('fleet_trips_items', allTrips);
+    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
+
+    return updatedTrip;
   }
 
   /**
@@ -381,6 +711,326 @@ export class FleetBusinessEngine {
     }
 
     return updatedTrip;
+  }
+
+  /**
+   * Phase 2: Add a new task/stop dynamically to an existing trip (DRAFT, DISPATCHED, or IN_PROGRESS)
+   */
+  public static async addStopToTrip(
+    companyId: string,
+    operatorId: string,
+    tripId: string,
+    stopData: {
+      taskTitle?: string;
+      notes?: string;
+      location: TripLocation;
+    }
+  ): Promise<Trip> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const tripIndex = allTrips.findIndex(t => t.id === tripId && t.company_id === companyId);
+    if (tripIndex === -1) {
+      throw new Error(`Trip ${tripId} not found`);
+    }
+
+    const trip = allTrips[tripIndex];
+    if (trip.status === 'COMPLETED' || trip.status === 'CANCELLED') {
+      throw new Error('لا يمكن إضافة محطات لرحلة مكتملة أو ملغاة');
+    }
+
+    // Validate stop against active vehicle access constraints
+    const activeConstraints = this.getActiveVehicleConstraints(companyId, trip.vehicle_id);
+    if (activeConstraints.length > 0) {
+      const orgUnits = OrganizationEngine.getUnits(companyId);
+      for (const rule of activeConstraints) {
+        if (rule.mode === 'EXTERNAL_ONLY' && stopData.location.org_unit_id) {
+          const matchedUnit = orgUnits.find(u => u.id === stopData.location.org_unit_id);
+          const unitName = matchedUnit ? `${matchedUnit.name} (${matchedUnit.code})` : stopData.location.label;
+          throw new Error(`المركبة محددة للمهام الخارجية فقط وممنوعة من زيارة (${unitName})`);
+        } else if (rule.mode === 'BLOCK_SPECIFIC_LOCATIONS' && stopData.location.org_unit_id) {
+          if ((rule.blocked_org_unit_ids || []).includes(stopData.location.org_unit_id)) {
+            const matchedUnit = orgUnits.find(u => u.id === stopData.location.org_unit_id);
+            const unitName = matchedUnit ? `${matchedUnit.name} (${matchedUnit.code})` : stopData.location.label;
+            throw new Error(`المركبة ممنوعة من زيارة الموقع المحدد (${unitName}) بموجب قيود الوصول النشطة`);
+          }
+        }
+      }
+    }
+
+    const maxSeq = trip.stops.length > 0 ? Math.max(...trip.stops.map(s => s.sequence || 0)) : 0;
+    const newStop: TripStop = {
+      id: `stop-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      sequence: maxSeq + 1,
+      taskTitle: stopData.taskTitle || undefined,
+      notes: stopData.notes || '',
+      location: {
+        org_unit_id: stopData.location.org_unit_id || undefined,
+        label: stopData.location.label || stopData.taskTitle || 'محطة إضافية',
+        lat: typeof stopData.location.lat === 'number' ? stopData.location.lat : undefined,
+        lng: typeof stopData.location.lng === 'number' ? stopData.location.lng : undefined,
+        accuracy: typeof stopData.location.accuracy === 'number' ? stopData.location.accuracy : undefined,
+        timestamp: stopData.location.timestamp
+      },
+      status: 'PENDING'
+    };
+
+    const updatedTrip: Trip = {
+      ...trip,
+      stops: [...trip.stops, newStop]
+    };
+
+    allTrips[tripIndex] = updatedTrip;
+    StorageEngine.setStored('fleet_trips_items', allTrips);
+    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
+
+    return updatedTrip;
+  }
+
+  /**
+   * Phase 2: Reorder stops within a trip
+   */
+  public static async reorderTripStops(
+    companyId: string,
+    operatorId: string,
+    tripId: string,
+    orderedStopIds: string[]
+  ): Promise<Trip> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const tripIndex = allTrips.findIndex(t => t.id === tripId && t.company_id === companyId);
+    if (tripIndex === -1) {
+      throw new Error(`Trip ${tripId} not found`);
+    }
+
+    const trip = allTrips[tripIndex];
+    if (trip.status === 'COMPLETED' || trip.status === 'CANCELLED') {
+      throw new Error('لا يمكن إعادة ترتيب محطات رحلة مكتملة أو ملغاة');
+    }
+
+    const stopMap = new Map(trip.stops.map(s => [s.id, s]));
+    const reorderedStops: TripStop[] = [];
+
+    orderedStopIds.forEach((id, index) => {
+      const stop = stopMap.get(id);
+      if (stop) {
+        reorderedStops.push({
+          ...stop,
+          sequence: index + 1
+        });
+        stopMap.delete(id);
+      }
+    });
+
+    // Append any leftover stops
+    stopMap.forEach(stop => {
+      reorderedStops.push({
+        ...stop,
+        sequence: reorderedStops.length + 1
+      });
+    });
+
+    const updatedTrip: Trip = {
+      ...trip,
+      stops: reorderedStops
+    };
+
+    allTrips[tripIndex] = updatedTrip;
+    StorageEngine.setStored('fleet_trips_items', allTrips);
+    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
+
+    return updatedTrip;
+  }
+
+  /**
+   * Phase 2: Skip or Cancel an individual stop with reason
+   */
+  public static async skipOrCancelStop(
+    companyId: string,
+    operatorId: string,
+    tripId: string,
+    stopId: string,
+    reason: string
+  ): Promise<Trip> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const tripIndex = allTrips.findIndex(t => t.id === tripId && t.company_id === companyId);
+    if (tripIndex === -1) {
+      throw new Error(`Trip ${tripId} not found`);
+    }
+
+    const trip = allTrips[tripIndex];
+    let found = false;
+
+    const updatedStops = trip.stops.map(stop => {
+      if (stop.id === stopId) {
+        found = true;
+        return {
+          ...stop,
+          status: 'SKIPPED' as const,
+          skippedReason: reason || 'تم تخطي المحطة بقرار المشرف'
+        };
+      }
+      return stop;
+    });
+
+    if (!found) {
+      throw new Error(`Stop ${stopId} not found in trip ${tripId}`);
+    }
+
+    const updatedTrip: Trip = {
+      ...trip,
+      stops: updatedStops
+    };
+
+    allTrips[tripIndex] = updatedTrip;
+    StorageEngine.setStored('fleet_trips_items', allTrips);
+    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
+
+    return updatedTrip;
+  }
+
+  /**
+   * Phase 2: Reassign a single pending stop to another active/pending trip
+   */
+  public static async reassignStopToAnotherTrip(
+    companyId: string,
+    operatorId: string,
+    sourceTripId: string,
+    stopId: string,
+    targetTripId: string,
+    reason?: string
+  ): Promise<{ sourceTrip: Trip; targetTrip: Trip }> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const sourceIndex = allTrips.findIndex(t => t.id === sourceTripId && t.company_id === companyId);
+    const targetIndex = allTrips.findIndex(t => t.id === targetTripId && t.company_id === companyId);
+
+    if (sourceIndex === -1) throw new Error(`Source trip ${sourceTripId} not found`);
+    if (targetIndex === -1) throw new Error(`Target trip ${targetTripId} not found`);
+
+    const sourceTrip = allTrips[sourceIndex];
+    const targetTrip = allTrips[targetIndex];
+
+    const stopToMove = sourceTrip.stops.find(s => s.id === stopId);
+    if (!stopToMove) throw new Error(`Stop ${stopId} not found in source trip`);
+
+    // 1. Mark stop in source trip as REASSIGNED
+    const updatedSourceStops = sourceTrip.stops.map(s => {
+      if (s.id === stopId) {
+        return {
+          ...s,
+          status: 'REASSIGNED' as const,
+          reassignedToTripId: targetTrip.id,
+          reassignedToVehicleId: targetTrip.vehicle_id,
+          reassignedToDriverId: targetTrip.driver_id,
+          notes: `${s.notes ? s.notes + ' | ' : ''}تمت إعادة التوزيع إلى مشوار آخر: ${reason || ''}`.trim()
+        };
+      }
+      return s;
+    });
+
+    const updatedSourceTrip: Trip = {
+      ...sourceTrip,
+      stops: updatedSourceStops
+    };
+
+    // 2. Add stop to target trip
+    const maxTargetSeq = targetTrip.stops.length > 0 ? Math.max(...targetTrip.stops.map(s => s.sequence || 0)) : 0;
+    const newTargetStop: TripStop = {
+      id: `stop-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      sequence: maxTargetSeq + 1,
+      taskTitle: stopToMove.taskTitle,
+      notes: `${stopToMove.notes ? stopToMove.notes + ' | ' : ''}محولة من مشوار سابق`.trim(),
+      location: { ...stopToMove.location },
+      status: 'PENDING'
+    };
+
+    const updatedTargetTrip: Trip = {
+      ...targetTrip,
+      stops: [...targetTrip.stops, newTargetStop]
+    };
+
+    allTrips[sourceIndex] = updatedSourceTrip;
+    allTrips[targetIndex] = updatedTargetTrip;
+    StorageEngine.setStored('fleet_trips_items', allTrips);
+    await dbSetDoc('fleet_trips_items', updatedSourceTrip.id, updatedSourceTrip);
+    await dbSetDoc('fleet_trips_items', updatedTargetTrip.id, updatedTargetTrip);
+
+    return { sourceTrip: updatedSourceTrip, targetTrip: updatedTargetTrip };
+  }
+
+  /**
+   * Phase 2: Split a pending stop into a brand-new trip for another vehicle/driver
+   */
+  public static async splitStopToNewTrip(
+    companyId: string,
+    operatorId: string,
+    sourceTripId: string,
+    stopId: string,
+    newTripConfig: {
+      vehicle_id: string;
+      driver_id: string;
+      scheduledAt?: string;
+      tripType?: string;
+      notes?: string;
+    }
+  ): Promise<{ sourceTrip: Trip; newTrip: Trip }> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const sourceIndex = allTrips.findIndex(t => t.id === sourceTripId && t.company_id === companyId);
+    if (sourceIndex === -1) throw new Error(`Source trip ${sourceTripId} not found`);
+
+    const sourceTrip = allTrips[sourceIndex];
+    const stopToMove = sourceTrip.stops.find(s => s.id === stopId);
+    if (!stopToMove) throw new Error(`Stop ${stopId} not found in source trip`);
+
+    // Create the new trip with 2 stops (Origin + the reallocated task stop)
+    const newTrip = await this.createTrip(companyId, operatorId, {
+      vehicle_id: newTripConfig.vehicle_id,
+      driver_id: newTripConfig.driver_id,
+      tripType: newTripConfig.tripType || stopToMove.taskTitle || 'مهمة محولة من مشوار آخر',
+      scheduledAt: newTripConfig.scheduledAt || new Date().toISOString().slice(0, 16),
+      notes: newTripConfig.notes || `مهمة محولة من المشوار (${sourceTrip.id})`,
+      stops: [
+        {
+          id: `stop-${Date.now()}-origin`,
+          sequence: 1,
+          taskTitle: 'نقطة الانطلاق (المقر/المحطة)',
+          location: { label: 'نقطة الانطلاق' },
+          status: 'PENDING'
+        },
+        {
+          id: `stop-${Date.now()}-dest`,
+          sequence: 2,
+          taskTitle: stopToMove.taskTitle,
+          notes: stopToMove.notes,
+          location: { ...stopToMove.location },
+          status: 'PENDING'
+        }
+      ]
+    });
+
+    // Mark stop on source trip as REASSIGNED
+    const refreshedTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const refreshedSourceIndex = refreshedTrips.findIndex(t => t.id === sourceTripId && t.company_id === companyId);
+    if (refreshedSourceIndex !== -1) {
+      const curSource = refreshedTrips[refreshedSourceIndex];
+      const updatedStops = curSource.stops.map(s => {
+        if (s.id === stopId) {
+          return {
+            ...s,
+            status: 'REASSIGNED' as const,
+            reassignedToTripId: newTrip.id,
+            reassignedToVehicleId: newTrip.vehicle_id,
+            reassignedToDriverId: newTrip.driver_id,
+            notes: `${s.notes ? s.notes + ' | ' : ''}تم تفريغ المهمة في مشوار جديد: ${newTrip.id}`.trim()
+          };
+        }
+        return s;
+      });
+      const finalSource: Trip = { ...curSource, stops: updatedStops };
+      refreshedTrips[refreshedSourceIndex] = finalSource;
+      StorageEngine.setStored('fleet_trips_items', refreshedTrips);
+      await dbSetDoc('fleet_trips_items', finalSource.id, finalSource);
+      return { sourceTrip: finalSource, newTrip };
+    }
+
+    return { sourceTrip, newTrip };
   }
 
   /**
@@ -702,11 +1352,31 @@ export class FleetBusinessEngine {
     StorageEngine.setStored('fleet_maintenance_logs', [...logs, log]);
     await dbSetDoc('fleet_maintenance_logs', log.id, log);
 
-    // Update vehicle odometer if higher
-    if (vehicle && Number(data.odometerAtService) > vehicle.odometerReading) {
-      const updatedVehicles = allVehicles.map(v => v.id === vehicle.id ? { ...v, odometerReading: Number(data.odometerAtService) } : v);
+    // Update vehicle odometer and maintenance thresholds
+    if (vehicle) {
+      const currentThresholds = vehicle.maintenanceThresholds || {};
+      const updatedThresholds: VehicleMaintenanceThresholds = { ...currentThresholds };
+      const serviceKm = Number(data.odometerAtService) || vehicle.odometerReading || 0;
+
+      if (data.type === 'OIL_CHANGE') {
+        updatedThresholds.lastOilChangeKm = serviceKm;
+      } else if (data.type === 'ROUTINE') {
+        updatedThresholds.lastRoutineKm = serviceKm;
+        updatedThresholds.lastOilChangeKm = serviceKm;
+      } else if (data.type === 'TIRES') {
+        updatedThresholds.lastTireKm = serviceKm;
+      }
+
+      const finalOdo = Math.max(vehicle.odometerReading || 0, serviceKm);
+      const updatedVehicle: Vehicle = {
+        ...vehicle,
+        odometerReading: finalOdo,
+        maintenanceThresholds: updatedThresholds
+      };
+
+      const updatedVehicles = allVehicles.map(v => v.id === vehicle.id ? updatedVehicle : v);
       StorageEngine.setStored('fleet_vehicles_items', updatedVehicles);
-      await dbSetDoc('fleet_vehicles_items', vehicle.id, { ...vehicle, odometerReading: Number(data.odometerAtService) });
+      await dbSetDoc('fleet_vehicles_items', vehicle.id, updatedVehicle);
     }
 
     // Post GL Double-Entry for Maintenance Expense (510301)
@@ -1730,5 +2400,938 @@ export class FleetBusinessEngine {
 
     return updatedTrip;
   }
+
+  /**
+   * Phase 3: Checks if a current GPS coordinate is inside the geofence perimeter of a target stop or location.
+   * Default radius: 150 meters (can be customized).
+   */
+  public static checkGeofenceArrival(
+    currentCoord: { lat: number; lng: number },
+    targetCoord: { lat: number; lng: number },
+    geofenceRadiusMeters: number = 150,
+    targetStop?: TripStop
+  ): GeofenceArrivalCheckResult {
+    const distKm = this.calculateDistanceKm(
+      currentCoord.lat,
+      currentCoord.lng,
+      targetCoord.lat,
+      targetCoord.lng
+    );
+    const distMeters = Math.round(distKm * 1000);
+    const isInside = distMeters <= geofenceRadiusMeters;
+
+    const stopName = targetStop?.taskTitle || targetStop?.location?.label || 'الموقع المستهدف';
+
+    return {
+      isInsideGeofence: isInside,
+      distanceMeters: distMeters,
+      matchedStop: targetStop,
+      matchedStopId: targetStop?.id,
+      geofenceRadiusMeters,
+      messageAr: isInside 
+        ? `المركبة داخل النطاق الجغرافي لـ (${stopName}) على بعد ${distMeters} متر` 
+        : `المركبة على بعد ${distMeters} متر من (${stopName})`,
+      messageEn: isInside 
+        ? `Vehicle is within the geofence perimeter of (${stopName}) at ${distMeters}m` 
+        : `Vehicle is ${distMeters}m away from (${stopName})`
+    };
+  }
+
+  /**
+   * Phase 3: Automatically processes geofence arrivals for all pending stops in an active trip.
+   * If the driver enters the geofence perimeter of a pending stop, records arrivedAt and arrivedLocation automatically.
+   */
+  public static async autoProcessTripArrivals(
+    companyId: string,
+    tripId: string,
+    driverId: string,
+    currentPoint: { lat: number; lng: number; accuracy?: number; timestamp?: string },
+    geofenceRadiusMeters: number = 150
+  ): Promise<{ trip: Trip; newlyArrivedStops: TripStop[] }> {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const tripIndex = allTrips.findIndex(t => t.id === tripId && t.company_id === companyId);
+    if (tripIndex === -1) {
+      throw new Error(`Trip ${tripId} not found`);
+    }
+
+    const trip = allTrips[tripIndex];
+    if (trip.status !== 'DISPATCHED' && trip.status !== 'IN_PROGRESS') {
+      return { trip, newlyArrivedStops: [] };
+    }
+
+    const nowIso = currentPoint.timestamp || new Date().toISOString();
+    const newlyArrivedStops: TripStop[] = [];
+
+    const updatedStops = trip.stops.map(stop => {
+      // Only process PENDING or IN_PROGRESS stops that have known coordinates
+      if (
+        (stop.status === 'PENDING' || stop.status === 'IN_PROGRESS') &&
+        stop.location &&
+        typeof stop.location.lat === 'number' &&
+        typeof stop.location.lng === 'number'
+      ) {
+        const check = this.checkGeofenceArrival(
+          { lat: currentPoint.lat, lng: currentPoint.lng },
+          { lat: stop.location.lat, lng: stop.location.lng },
+          geofenceRadiusMeters,
+          stop
+        );
+
+        if (check.isInsideGeofence) {
+          const arrivedStop: TripStop = {
+            ...stop,
+            status: 'ARRIVED',
+            arrivedAt: stop.arrivedAt || nowIso,
+            arrivedLocation: {
+              label: stop.location.label,
+              lat: currentPoint.lat,
+              lng: currentPoint.lng,
+              accuracy: currentPoint.accuracy,
+              timestamp: nowIso
+            }
+          };
+          newlyArrivedStops.push(arrivedStop);
+          return arrivedStop;
+        }
+      }
+      return stop;
+    });
+
+    if (newlyArrivedStops.length > 0) {
+      const updatedTrip: Trip = {
+        ...trip,
+        status: 'IN_PROGRESS',
+        stops: updatedStops
+      };
+
+      allTrips[tripIndex] = updatedTrip;
+      StorageEngine.setStored('fleet_trips_items', allTrips);
+      await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
+
+      return { trip: updatedTrip, newlyArrivedStops };
+    }
+
+    return { trip, newlyArrivedStops: [] };
+  }
+
+  /**
+   * Phase 3: Computes deep telemetry analytics & metrics for a trip based on its breadcrumb trajectory.
+   * Calculates moving vs idle duration, maximum speed, average moving speed, estimated fuel, and stop compliance.
+   */
+  public static analyzeTripTelemetry(companyId: string, tripId: string): TripTelemetryAnalysis | null {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+    const trip = allTrips.find(t => t.id === tripId && t.company_id === companyId);
+    if (!trip) return null;
+
+    const track = this.getTripTrack(companyId, tripId);
+    const points = track?.points || [];
+
+    const totalStops = trip.stops.length;
+    const completedStops = trip.stops.filter(s => s.status === 'COMPLETED' || s.status === 'ARRIVED').length;
+    const skippedOrReassignedStops = trip.stops.filter(s => s.status === 'SKIPPED' || s.status === 'REASSIGNED').length;
+
+    if (points.length === 0) {
+      return {
+        tripId,
+        vehicleId: trip.vehicle_id,
+        totalDistanceKm: track?.total_distance_km || 0,
+        totalDurationMinutes: 0,
+        movingDurationMinutes: 0,
+        idleDurationMinutes: 0,
+        maxSpeedKmh: 0,
+        avgMovingSpeedKmh: 0,
+        estimatedFuelLiters: 0,
+        totalStops,
+        completedStops,
+        skippedOrReassignedStops,
+        startedAt: track?.started_at || trip.startedAt || trip.scheduledAt,
+        endedAt: track?.ended_at || trip.completedAt,
+        pointsCount: 0
+      };
+    }
+
+    let maxSpeed = 0;
+    let speedSum = 0;
+    let movingPointsCount = 0;
+    let idleDurationMs = 0;
+    let movingDurationMs = 0;
+
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      const speedKmh = typeof p.speed === 'number' && !isNaN(p.speed) ? (p.speed > 10 ? p.speed : p.speed * 3.6) : 0; // Handle m/s vs km/h if applicable
+      if (speedKmh > maxSpeed) {
+        maxSpeed = speedKmh;
+      }
+
+      if (speedKmh > 2) {
+        speedSum += speedKmh;
+        movingPointsCount++;
+      }
+
+      if (i > 0) {
+        const prev = points[i - 1];
+        const timeDiff = new Date(p.timestamp).getTime() - new Date(prev.timestamp).getTime();
+        if (timeDiff > 0 && timeDiff < 3600000) { // cap single gap at 1h
+          if (speedKmh > 2) {
+            movingDurationMs += timeDiff;
+          } else {
+            idleDurationMs += timeDiff;
+          }
+        }
+      }
+    }
+
+    const firstTime = new Date(points[0].timestamp).getTime();
+    const lastTime = new Date(points[points.length - 1].timestamp).getTime();
+    const totalDurationMs = Math.max(0, lastTime - firstTime);
+
+    const totalDistanceKm = track?.total_distance_km || 0;
+    const avgMovingSpeed = movingPointsCount > 0 ? Math.round((speedSum / movingPointsCount) * 10) / 10 : 0;
+    
+    // Standard commercial fleet fuel consumption baseline: ~10 Liters / 100 KM (0.1 L / KM)
+    const estimatedFuelLiters = Math.round(totalDistanceKm * 0.1 * 10) / 10;
+
+    return {
+      tripId,
+      vehicleId: trip.vehicle_id,
+      totalDistanceKm,
+      totalDurationMinutes: Math.round(totalDurationMs / 60000),
+      movingDurationMinutes: Math.round(movingDurationMs / 60000),
+      idleDurationMinutes: Math.round(idleDurationMs / 60000),
+      maxSpeedKmh: Math.round(maxSpeed * 10) / 10,
+      avgMovingSpeedKmh: avgMovingSpeed,
+      estimatedFuelLiters,
+      totalStops,
+      completedStops,
+      skippedOrReassignedStops,
+      startedAt: track?.started_at || points[0].timestamp,
+      endedAt: track?.ended_at || points[points.length - 1].timestamp,
+      pointsCount: points.length
+    };
+  }
+
+  /**
+   * Evaluates dynamic periodic maintenance thresholds for all fleet vehicles or a specific vehicle.
+   * Checks Oil Change, Routine Service, and Tires/Brakes against odometer readings and service history.
+   */
+  public static evaluateVehicleMaintenanceAlerts(
+    companyId: string,
+    targetVehicleId?: string
+  ): MaintenanceHealthAlert[] {
+    const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', [])
+      .filter(v => v.company_id === companyId && (!targetVehicleId || v.id === targetVehicleId));
+    
+    const allLogs = StorageEngine.getStored<MaintenanceLog[]>('fleet_maintenance_logs', [])
+      .filter(l => l.company_id === companyId);
+
+    const alerts: MaintenanceHealthAlert[] = [];
+
+    for (const vehicle of allVehicles) {
+      const currentOdo = vehicle.odometerReading || 0;
+      const thresholds = vehicle.maintenanceThresholds || {};
+      const vehicleLogs = allLogs.filter(l => l.vehicle_id === vehicle.id);
+
+      // Define default intervals
+      const oilInterval = thresholds.oilChangeIntervalKm || 5000;
+      const routineInterval = thresholds.routineIntervalKm || 15000;
+      const tireInterval = thresholds.tireIntervalKm || 40000;
+
+      // Determine last service km from threshold or latest log
+      const findLastKm = (type: string, fallbackThresholdKm?: number): number => {
+        if (typeof fallbackThresholdKm === 'number' && fallbackThresholdKm > 0) {
+          return fallbackThresholdKm;
+        }
+        const relevantLogs = vehicleLogs
+          .filter(l => l.type === type && typeof l.odometerAtService === 'number')
+          .sort((a, b) => b.odometerAtService - a.odometerAtService);
+        return relevantLogs.length > 0 ? relevantLogs[0].odometerAtService : 0;
+      };
+
+      const lastOilKm = findLastKm('OIL_CHANGE', thresholds.lastOilChangeKm);
+      const lastRoutineKm = findLastKm('ROUTINE', thresholds.lastRoutineKm);
+      const lastTireKm = findLastKm('TIRES', thresholds.lastTireKm);
+
+      const checks: Array<{
+        type: 'OIL_CHANGE' | 'ROUTINE' | 'TIRES';
+        typeAr: string;
+        typeEn: string;
+        interval: number;
+        lastKm: number;
+      }> = [
+        { type: 'OIL_CHANGE', typeAr: 'تغيير زيت المحرك والفلاتر', typeEn: 'Engine Oil & Filter Change', interval: oilInterval, lastKm: lastOilKm },
+        { type: 'ROUTINE', typeAr: 'الصيانة الدورية الشاملة', typeEn: 'Routine Comprehensive Service', interval: routineInterval, lastKm: lastRoutineKm },
+        { type: 'TIRES', typeAr: 'صيانة الإطارات والفرامل', typeEn: 'Tire & Brake Service', interval: tireInterval, lastKm: lastTireKm }
+      ];
+
+      for (const check of checks) {
+        const nextDueKm = check.lastKm + check.interval;
+        const kmRemaining = nextDueKm - currentOdo;
+        let urgency: MaintenanceUrgency = 'HEALTHY';
+
+        if (kmRemaining <= 0) {
+          urgency = 'OVERDUE';
+        } else if (kmRemaining <= 500) {
+          urgency = 'DUE_SOON';
+        }
+
+        if (urgency !== 'HEALTHY') {
+          alerts.push({
+            vehicleId: vehicle.id,
+            vehicleCode: vehicle.code,
+            plateNumber: vehicle.plateNumber,
+            serviceType: check.type,
+            serviceTypeAr: check.typeAr,
+            serviceTypeEn: check.typeEn,
+            currentOdometer: currentOdo,
+            lastServiceKm: check.lastKm,
+            intervalKm: check.interval,
+            nextServiceDueKm: nextDueKm,
+            kmRemaining,
+            urgency,
+            messageAr: urgency === 'OVERDUE'
+              ? `متأخرة عن موعد ${check.typeAr} بمقدار ${Math.abs(kmRemaining).toLocaleString()} كم (العداد: ${currentOdo.toLocaleString()} / المستحق: ${nextDueKm.toLocaleString()})`
+              : `موعد ${check.typeAr} مستحق قريباً بعد ${kmRemaining.toLocaleString()} كم (العداد: ${currentOdo.toLocaleString()})`,
+            messageEn: urgency === 'OVERDUE'
+              ? `Overdue for ${check.typeEn} by ${Math.abs(kmRemaining).toLocaleString()} km (Current: ${currentOdo.toLocaleString()} / Due: ${nextDueKm.toLocaleString()})`
+              : `${check.typeEn} due soon in ${kmRemaining.toLocaleString()} km (Current: ${currentOdo.toLocaleString()})`
+          });
+        }
+      }
+    }
+
+    // Sort: OVERDUE first, then lowest remaining KM
+    return alerts.sort((a, b) => {
+      if (a.urgency === 'OVERDUE' && b.urgency !== 'OVERDUE') return -1;
+      if (a.urgency !== 'OVERDUE' && b.urgency === 'OVERDUE') return 1;
+      return a.kmRemaining - b.kmRemaining;
+    });
+  }
+
+  /**
+   * Calculates comprehensive fleet operating cost, fuel efficiency, and TCO summary.
+   */
+  public static calculateFleetCostAnalytics(
+    companyId: string,
+    options?: { vehicleId?: string; orgUnitId?: string; startDate?: string; endDate?: string }
+  ): FleetCostSummary {
+    let vehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', [])
+      .filter(v => v.company_id === companyId);
+    
+    if (options?.vehicleId) {
+      vehicles = vehicles.filter(v => v.id === options.vehicleId);
+    }
+    if (options?.orgUnitId) {
+      vehicles = vehicles.filter(v => v.org_unit_id === options.orgUnitId);
+    }
+
+    const allFuelLogs = StorageEngine.getStored<FuelLog[]>('fleet_fuel_logs', [])
+      .filter(l => l.company_id === companyId);
+
+    const allMaintLogs = StorageEngine.getStored<MaintenanceLog[]>('fleet_maintenance_logs', [])
+      .filter(l => l.company_id === companyId);
+
+    const allAlerts = this.evaluateVehicleMaintenanceAlerts(companyId);
+
+    let totalFleetFuelCost = 0;
+    let totalFleetFuelLiters = 0;
+    let totalFleetMaintenanceCost = 0;
+    let totalFleetDistanceKm = 0;
+
+    const vehicleBreakdowns: VehicleCostBreakdown[] = vehicles.map(vehicle => {
+      const vFuelLogs = allFuelLogs.filter(l => l.vehicle_id === vehicle.id);
+      const vMaintLogs = allMaintLogs.filter(l => l.vehicle_id === vehicle.id);
+      const vAlerts = allAlerts.filter(a => a.vehicleId === vehicle.id);
+
+      const vFuelCost = vFuelLogs.reduce((sum, l) => sum + (Number(l.totalCost) || (Number(l.liters) * Number(l.costPerLiter)) || 0), 0);
+      const vFuelLiters = vFuelLogs.reduce((sum, l) => sum + (Number(l.liters) || 0), 0);
+      const vMaintCost = vMaintLogs.reduce((sum, l) => sum + (Number(l.cost) || 0), 0);
+      const vOperatingCost = vFuelCost + vMaintCost;
+      const vDistance = vehicle.odometerReading || 0;
+
+      const vCostPerKm = vDistance > 0 ? Math.round((vOperatingCost / vDistance) * 100) / 100 : 0;
+      const vFuelEfficiency = vFuelLiters > 0 ? Math.round((vDistance / vFuelLiters) * 10) / 10 : 0;
+
+      const hasOverdue = vAlerts.some(a => a.urgency === 'OVERDUE');
+      const hasDueSoon = vAlerts.some(a => a.urgency === 'DUE_SOON');
+      const highestUrgency: MaintenanceUrgency = hasOverdue ? 'OVERDUE' : hasDueSoon ? 'DUE_SOON' : 'HEALTHY';
+
+      totalFleetFuelCost += vFuelCost;
+      totalFleetFuelLiters += vFuelLiters;
+      totalFleetMaintenanceCost += vMaintCost;
+      totalFleetDistanceKm += vDistance;
+
+      return {
+        vehicleId: vehicle.id,
+        vehicleCode: vehicle.code,
+        plateNumber: vehicle.plateNumber,
+        makeModel: `${vehicle.make} ${vehicle.model}`,
+        totalDistanceTraveledKm: vDistance,
+        totalFuelCost: vFuelCost,
+        totalFuelLiters: vFuelLiters,
+        fuelEfficiencyKmPerLiter: vFuelEfficiency,
+        totalMaintenanceCost: vMaintCost,
+        totalOperatingCost: vOperatingCost,
+        costPerKm: vCostPerKm,
+        maintenanceAlertsCount: vAlerts.length,
+        highestMaintenanceUrgency: highestUrgency
+      };
+    });
+
+    const totalFleetOperatingCost = totalFleetFuelCost + totalFleetMaintenanceCost;
+    const avgCostPerKm = totalFleetDistanceKm > 0 ? Math.round((totalFleetOperatingCost / totalFleetDistanceKm) * 100) / 100 : 0;
+    const avgFuelEfficiency = totalFleetFuelLiters > 0 ? Math.round((totalFleetDistanceKm / totalFleetFuelLiters) * 10) / 10 : 0;
+
+    const overdueCount = allAlerts.filter(a => a.urgency === 'OVERDUE').length;
+    const dueSoonCount = allAlerts.filter(a => a.urgency === 'DUE_SOON').length;
+
+    return {
+      totalOperatingCost: totalFleetOperatingCost,
+      totalFuelCost: totalFleetFuelCost,
+      totalMaintenanceCost: totalFleetMaintenanceCost,
+      totalLitersConsumed: totalFleetFuelLiters,
+      totalDistanceKm: totalFleetDistanceKm,
+      averageCostPerKm: avgCostPerKm,
+      averageFuelEfficiencyKmPerLiter: avgFuelEfficiency,
+      activeAlertsCount: allAlerts.length,
+      overdueAlertsCount: overdueCount,
+      dueSoonAlertsCount: dueSoonCount,
+      vehicles: vehicleBreakdowns
+    };
+  }
+
+  /**
+   * Records a new maintenance log, syncs vehicle odometer reading, and updates service thresholds.
+   */
+  public static async recordVehicleMaintenance(
+    companyId: string,
+    data: {
+      vehicle_id: string;
+      type: 'ROUTINE' | 'REPAIR' | 'OIL_CHANGE' | 'TIRES' | 'INSPECTION';
+      description: string;
+      cost: number;
+      odometerAtService: number;
+      providerName?: string;
+      org_unit_id?: string;
+      cost_center_id?: string;
+      maintenanceDate?: string;
+    }
+  ): Promise<MaintenanceLog> {
+    const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
+    const vIndex = allVehicles.findIndex(v => v.id === data.vehicle_id && v.company_id === companyId);
+    if (vIndex === -1) {
+      throw new Error(`Vehicle ${data.vehicle_id} not found in company ${companyId}`);
+    }
+
+    const vehicle = allVehicles[vIndex];
+    const logId = `maint-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const now = new Date().toISOString();
+
+    const log: MaintenanceLog = {
+      id: logId,
+      company_id: companyId,
+      vehicle_id: data.vehicle_id,
+      org_unit_id: data.org_unit_id || vehicle.org_unit_id,
+      cost_center_id: data.cost_center_id || vehicle.cost_center_id,
+      maintenanceDate: data.maintenanceDate || now.split('T')[0],
+      type: data.type,
+      description: data.description,
+      cost: Number(data.cost) || 0,
+      providerName: data.providerName || '',
+      odometerAtService: Number(data.odometerAtService) || vehicle.odometerReading || 0,
+      createdAt: now
+    };
+
+    // Save Maintenance Log
+    const allLogs = StorageEngine.getStored<MaintenanceLog[]>('fleet_maintenance_logs', []);
+    allLogs.push(log);
+    StorageEngine.setStored('fleet_maintenance_logs', allLogs);
+    await dbSetDoc('fleet_maintenance_logs', log.id, log);
+
+    // Update vehicle thresholds & odometer
+    const updatedThresholds: VehicleMaintenanceThresholds = {
+      ...(vehicle.maintenanceThresholds || {})
+    };
+
+    if (data.type === 'OIL_CHANGE') {
+      updatedThresholds.lastOilChangeKm = log.odometerAtService;
+    } else if (data.type === 'ROUTINE') {
+      updatedThresholds.lastRoutineKm = log.odometerAtService;
+      updatedThresholds.lastOilChangeKm = log.odometerAtService; // Routine includes oil change
+    } else if (data.type === 'TIRES') {
+      updatedThresholds.lastTireKm = log.odometerAtService;
+    }
+
+    const updatedVehicle: Vehicle = {
+      ...vehicle,
+      odometerReading: Math.max(vehicle.odometerReading || 0, log.odometerAtService),
+      maintenanceThresholds: updatedThresholds
+    };
+
+    allVehicles[vIndex] = updatedVehicle;
+    StorageEngine.setStored('fleet_vehicles_items', allVehicles);
+    await dbSetDoc('fleet_vehicles_items', updatedVehicle.id, updatedVehicle);
+
+    return log;
+  }
+
+  /**
+   * Records a fuel refill log and syncs vehicle odometer reading.
+   */
+  public static async recordVehicleFuelRefill(
+    companyId: string,
+    data: {
+      vehicle_id: string;
+      liters: number;
+      costPerLiter: number;
+      odometerReading: number;
+      logDate?: string;
+      org_unit_id?: string;
+      cost_center_id?: string;
+    }
+  ): Promise<FuelLog> {
+    const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
+    const vIndex = allVehicles.findIndex(v => v.id === data.vehicle_id && v.company_id === companyId);
+    if (vIndex === -1) {
+      throw new Error(`Vehicle ${data.vehicle_id} not found in company ${companyId}`);
+    }
+
+    const vehicle = allVehicles[vIndex];
+    const logId = `fuel-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const now = new Date().toISOString();
+    const liters = Number(data.liters) || 0;
+    const costPerLiter = Number(data.costPerLiter) || 0;
+    const totalCost = Math.round(liters * costPerLiter * 100) / 100;
+    const odo = Number(data.odometerReading) || vehicle.odometerReading || 0;
+
+    const log: FuelLog = {
+      id: logId,
+      company_id: companyId,
+      vehicle_id: data.vehicle_id,
+      org_unit_id: data.org_unit_id || vehicle.org_unit_id,
+      cost_center_id: data.cost_center_id || vehicle.cost_center_id,
+      logDate: data.logDate || now.split('T')[0],
+      liters,
+      costPerLiter,
+      totalCost,
+      odometerReading: odo,
+      createdAt: now
+    };
+
+    // Save Fuel Log
+    const allLogs = StorageEngine.getStored<FuelLog[]>('fleet_fuel_logs', []);
+    allLogs.push(log);
+    StorageEngine.setStored('fleet_fuel_logs', allLogs);
+    await dbSetDoc('fleet_fuel_logs', log.id, log);
+
+    // Update vehicle odometer if higher
+    if (odo > (vehicle.odometerReading || 0)) {
+      const updatedVehicle: Vehicle = {
+        ...vehicle,
+        odometerReading: odo
+      };
+      allVehicles[vIndex] = updatedVehicle;
+      StorageEngine.setStored('fleet_vehicles_items', allVehicles);
+      await dbSetDoc('fleet_vehicles_items', updatedVehicle.id, updatedVehicle);
+    }
+
+    return log;
+  }
+
+  /**
+   * Syncs vehicle odometer reading monotonically.
+   */
+  public static async syncVehicleOdometer(
+    companyId: string,
+    vehicleId: string,
+    newOdometerReading: number
+  ): Promise<Vehicle> {
+    const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
+    const vIndex = allVehicles.findIndex(v => v.id === vehicleId && v.company_id === companyId);
+    if (vIndex === -1) {
+      throw new Error(`Vehicle ${vehicleId} not found in company ${companyId}`);
+    }
+
+    const vehicle = allVehicles[vIndex];
+    const finalOdo = Math.max(vehicle.odometerReading || 0, Number(newOdometerReading) || 0);
+
+    const updatedVehicle: Vehicle = {
+      ...vehicle,
+      odometerReading: finalOdo
+    };
+
+    allVehicles[vIndex] = updatedVehicle;
+    StorageEngine.setStored('fleet_vehicles_items', allVehicles);
+    await dbSetDoc('fleet_vehicles_items', updatedVehicle.id, updatedVehicle);
+
+    return updatedVehicle;
+  }
+
+  /**
+   * Returns the standard pre-trip / post-trip inspection checklist template.
+   */
+  public static getDefaultInspectionChecklist(): InspectionChecklistItem[] {
+    return [
+      {
+        key: 'BRAKES',
+        labelAr: 'الفرامل وفرامل اليد (الاستجابة والضغط)',
+        labelEn: 'Brakes & Handbrake Response',
+        isCritical: true,
+        status: 'PASS'
+      },
+      {
+        key: 'TIRES',
+        labelAr: 'الإطارات وضغط الهواء والإطار الاحتياطي',
+        labelEn: 'Tires, Pressure & Spare Tire',
+        isCritical: true,
+        status: 'PASS'
+      },
+      {
+        key: 'FLUIDS',
+        labelAr: 'مستويات الزيت، مياه الردياتير، وزيت الفرامل',
+        labelEn: 'Engine Oil, Coolant & Brake Fluid Levels',
+        isCritical: true,
+        status: 'PASS'
+      },
+      {
+        key: 'LIGHTS',
+        labelAr: 'الإضاءة الأمامية والخلفية وإشارات التنبيه',
+        labelEn: 'Headlights, Taillights & Turn Signals',
+        isCritical: false,
+        status: 'PASS'
+      },
+      {
+        key: 'SAFETY_EQUIPMENT',
+        labelAr: 'مطفأة الحريق، مثلث الطوارئ، وحقيبة الإسعافات',
+        labelEn: 'Fire Extinguisher, Warning Triangle & First Aid Kit',
+        isCritical: false,
+        status: 'PASS'
+      },
+      {
+        key: 'BODY_DAMAGE',
+        labelAr: 'هيكل السيارة الخارجي والمرايا والزجاج',
+        labelEn: 'Body Exterior, Mirrors & Windshield',
+        isCritical: false,
+        status: 'PASS'
+      },
+      {
+        key: 'CLEANLINESS',
+        labelAr: 'نظافة الكابينة وصندوق الشحن',
+        labelEn: 'Cabin & Cargo Area Cleanliness',
+        isCritical: false,
+        status: 'PASS'
+      },
+      {
+        key: 'DOCUMENTS',
+        labelAr: 'رخصة السيارة، بطاقة التشغيل، ورخصة القيادة',
+        labelEn: 'Vehicle License, Operation Card & Driver Permit',
+        isCritical: false,
+        status: 'PASS'
+      }
+    ];
+  }
+
+  /**
+   * Submits a digital pre-trip or post-trip vehicle inspection.
+   * Auto-flags vehicle status to MAINTENANCE if critical defect is found to prevent unsafe trips.
+   */
+  public static async submitVehicleInspection(
+    companyId: string,
+    data: {
+      vehicle_id: string;
+      driver_id: string;
+      driver_name?: string;
+      trip_id?: string;
+      type: InspectionType;
+      odometerReading: number;
+      items: InspectionChecklistItem[];
+      driverNotes?: string;
+      driverSignatureName: string;
+    }
+  ): Promise<VehicleInspectionRecord> {
+    const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
+    const vIndex = allVehicles.findIndex(v => v.id === data.vehicle_id && v.company_id === companyId);
+    if (vIndex === -1) {
+      throw new Error(`Vehicle ${data.vehicle_id} not found in company ${companyId}`);
+    }
+
+    const vehicle = allVehicles[vIndex];
+    const now = new Date().toISOString();
+
+    // Count defects
+    let criticalDefectsCount = 0;
+    let minorDefectsCount = 0;
+
+    data.items.forEach(item => {
+      if (item.status === 'DEFECT_CRITICAL') {
+        criticalDefectsCount += 1;
+      } else if (item.status === 'DEFECT_MINOR') {
+        minorDefectsCount += 1;
+      }
+    });
+
+    let overallStatus: InspectionStatus = 'PASSED';
+    if (criticalDefectsCount > 0) {
+      overallStatus = 'FAILED_CRITICAL';
+    } else if (minorDefectsCount > 0) {
+      overallStatus = 'PASSED_WITH_DEFECTS';
+    }
+
+    const inspectionId = `insp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const record: VehicleInspectionRecord = {
+      id: inspectionId,
+      company_id: companyId,
+      vehicle_id: data.vehicle_id,
+      vehicle_code: vehicle.code,
+      plate_number: vehicle.plateNumber,
+      driver_id: data.driver_id,
+      driver_name: data.driver_name || '',
+      trip_id: data.trip_id,
+      type: data.type,
+      status: overallStatus,
+      odometerReading: Number(data.odometerReading) || vehicle.odometerReading || 0,
+      items: data.items,
+      criticalDefectsFound: criticalDefectsCount,
+      minorDefectsFound: minorDefectsCount,
+      driverNotes: data.driverNotes || '',
+      driverSignatureName: data.driverSignatureName,
+      supervisorReviewStatus: overallStatus === 'PASSED' ? 'APPROVED' : 'PENDING_REVIEW',
+      createdAt: now
+    };
+
+    // Save record
+    const allRecords = StorageEngine.getStored<VehicleInspectionRecord[]>('fleet_inspections_records', []);
+    allRecords.push(record);
+    StorageEngine.setStored('fleet_inspections_records', allRecords);
+    await dbSetDoc('fleet_inspections_records', record.id, record);
+
+    // Update vehicle status if critical defect found
+    let updatedVehicle: Vehicle = { ...vehicle };
+    if (overallStatus === 'FAILED_CRITICAL') {
+      updatedVehicle.status = 'MAINTENANCE';
+    }
+    
+    // Monotonically advance vehicle odometer
+    if (record.odometerReading > (vehicle.odometerReading || 0)) {
+      updatedVehicle.odometerReading = record.odometerReading;
+    }
+
+    allVehicles[vIndex] = updatedVehicle;
+    StorageEngine.setStored('fleet_vehicles_items', allVehicles);
+    await dbSetDoc('fleet_vehicles_items', updatedVehicle.id, updatedVehicle);
+
+    return record;
+  }
+
+  /**
+   * Supervisor reviews and resolves a vehicle inspection record.
+   */
+  public static async reviewVehicleInspection(
+    companyId: string,
+    inspectionId: string,
+    reviewerId: string,
+    decision: 'APPROVED' | 'OVERRIDDEN',
+    supervisorNotes?: string,
+    restoreVehicleToActive?: boolean
+  ): Promise<VehicleInspectionRecord> {
+    const allRecords = StorageEngine.getStored<VehicleInspectionRecord[]>('fleet_inspections_records', []);
+    const rIndex = allRecords.findIndex(r => r.id === inspectionId && r.company_id === companyId);
+    if (rIndex === -1) {
+      throw new Error(`Inspection record ${inspectionId} not found`);
+    }
+
+    const record = allRecords[rIndex];
+    const now = new Date().toISOString();
+
+    const updatedRecord: VehicleInspectionRecord = {
+      ...record,
+      supervisorReviewStatus: decision,
+      supervisorNotes: supervisorNotes || '',
+      reviewedBy: reviewerId,
+      reviewedAt: now
+    };
+
+    allRecords[rIndex] = updatedRecord;
+    StorageEngine.setStored('fleet_inspections_records', allRecords);
+    await dbSetDoc('fleet_inspections_records', updatedRecord.id, updatedRecord);
+
+    if (restoreVehicleToActive) {
+      const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
+      const vIndex = allVehicles.findIndex(v => v.id === record.vehicle_id && v.company_id === companyId);
+      if (vIndex !== -1) {
+        allVehicles[vIndex] = {
+          ...allVehicles[vIndex],
+          status: 'ACTIVE'
+        };
+        StorageEngine.setStored('fleet_vehicles_items', allVehicles);
+        await dbSetDoc('fleet_vehicles_items', record.vehicle_id, allVehicles[vIndex]);
+      }
+    }
+
+    return updatedRecord;
+  }
+
+  /**
+   * Calculates detailed performance scorecard for a single driver.
+   */
+  public static calculateDriverScorecard(
+    companyId: string,
+    driverId: string,
+    driverName?: string
+  ): DriverScorecard {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', [])
+      .filter(t => t.company_id === companyId && t.driver_id === driverId);
+
+    const allInspections = StorageEngine.getStored<VehicleInspectionRecord[]>('fleet_inspections_records', [])
+      .filter(i => i.company_id === companyId && i.driver_id === driverId);
+
+    const totalTrips = allTrips.length;
+    const completedTrips = allTrips.filter(t => t.status === 'COMPLETED').length;
+    const cancelledOrBreakdownTrips = allTrips.filter(t => t.status === 'CANCELLED' || t.status === 'BREAKDOWN').length;
+
+    let totalStopsAssigned = 0;
+    let completedStops = 0;
+
+    allTrips.forEach(t => {
+      (t.stops || []).forEach(s => {
+        totalStopsAssigned += 1;
+        if (s.status === 'COMPLETED') {
+          completedStops += 1;
+        }
+      });
+    });
+
+    const stopCompletionRate = totalStopsAssigned > 0 
+      ? Math.round((completedStops / totalStopsAssigned) * 1000) / 10 
+      : 100;
+
+    const inspectionsCompleted = allInspections.length;
+    const passedInspections = allInspections.filter(i => i.status === 'PASSED' || i.status === 'PASSED_WITH_DEFECTS').length;
+    const inspectionsPassedRate = inspectionsCompleted > 0
+      ? Math.round((passedInspections / inspectionsCompleted) * 1000) / 10
+      : 100;
+
+    const criticalDefectsReported = allInspections.reduce((sum, i) => sum + (i.criticalDefectsFound || 0), 0);
+
+    // Total distance driven
+    let totalDistanceDrivenKm = 0;
+    allTrips.forEach(t => {
+      if (t.telemetry?.totalDistanceKm) {
+        totalDistanceDrivenKm += t.telemetry.totalDistanceKm;
+      }
+    });
+
+    // Score Algorithm (0-100):
+    // 1. Stop completion weight (45%)
+    // 2. Inspection diligence & pass rate weight (35%)
+    // 3. Trip reliability (non-cancellation/breakdown) (20%)
+    let tripReliabilityRate = totalTrips > 0 
+      ? Math.max(0, 100 - (cancelledOrBreakdownTrips / totalTrips) * 100) 
+      : 100;
+
+    let compositeScore = Math.round(
+      (stopCompletionRate * 0.45) + 
+      (inspectionsPassedRate * 0.35) + 
+      (tripReliabilityRate * 0.20)
+    );
+
+    compositeScore = Math.min(100, Math.max(0, compositeScore));
+
+    let tierRating: DriverPerformanceTier = 'GOOD';
+    let ratingStars = 3;
+
+    if (compositeScore >= 90) {
+      tierRating = 'EXCELLENT';
+      ratingStars = 5;
+    } else if (compositeScore >= 80) {
+      tierRating = 'VERY_GOOD';
+      ratingStars = 4;
+    } else if (compositeScore >= 65) {
+      tierRating = 'GOOD';
+      ratingStars = 3;
+    } else {
+      tierRating = 'NEEDS_IMPROVEMENT';
+      ratingStars = 2;
+    }
+
+    const lastTripDate = allTrips.length > 0 
+      ? allTrips.map(t => t.scheduled_date || t.createdAt).sort().reverse()[0] 
+      : undefined;
+
+    return {
+      driverId,
+      driverName: driverName || (allTrips[0]?.driver_id === driverId ? 'سائق' : driverId),
+      totalTrips,
+      completedTrips,
+      cancelledOrBreakdownTrips,
+      totalStopsAssigned,
+      completedStops,
+      stopCompletionRate,
+      inspectionsCompleted,
+      inspectionsPassedRate,
+      criticalDefectsReported,
+      totalDistanceDrivenKm: Math.round(totalDistanceDrivenKm * 10) / 10,
+      safetyScore: compositeScore,
+      tierRating,
+      ratingStars,
+      lastActiveDate: lastTripDate
+    };
+  }
+
+  /**
+   * Retrieves summary analytics and rankings for all drivers in the company.
+   */
+  public static getFleetDriverPerformanceSummary(companyId: string): FleetDriverPerformanceSummary {
+    const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', [])
+      .filter(t => t.company_id === companyId);
+    
+    const allInspections = StorageEngine.getStored<VehicleInspectionRecord[]>('fleet_inspections_records', [])
+      .filter(i => i.company_id === companyId);
+
+    // Identify unique drivers from trips and inspections
+    const driverMap = new Map<string, string>();
+    allTrips.forEach(t => {
+      if (t.driver_id) {
+        driverMap.set(t.driver_id, t.driver_id);
+      }
+    });
+    allInspections.forEach(i => {
+      if (i.driver_id) {
+        driverMap.set(i.driver_id, i.driver_name || i.driver_id);
+      }
+    });
+
+    const driverScorecards: DriverScorecard[] = [];
+    driverMap.forEach((name, id) => {
+      driverScorecards.push(this.calculateDriverScorecard(companyId, id, name));
+    });
+
+    // Sort by safety score descending
+    driverScorecards.sort((a, b) => b.safetyScore - a.safetyScore);
+
+    const totalDrivers = driverScorecards.length;
+    const avgSafetyScore = totalDrivers > 0 
+      ? Math.round((driverScorecards.reduce((sum, d) => sum + d.safetyScore, 0) / totalDrivers) * 10) / 10 
+      : 100;
+    
+    const totalAssignedStops = driverScorecards.reduce((sum, d) => sum + d.totalStopsAssigned, 0);
+    const totalCompletedStops = driverScorecards.reduce((sum, d) => sum + d.completedStops, 0);
+    const overallCompletionRate = totalAssignedStops > 0 
+      ? Math.round((totalCompletedStops / totalAssignedStops) * 1000) / 10 
+      : 100;
+
+    const totalInspections = allInspections.length;
+    const criticalDefectIncidents = allInspections.filter(i => i.status === 'FAILED_CRITICAL').length;
+
+    return {
+      totalDrivers,
+      averageSafetyScore: avgSafetyScore,
+      overallCompletionRate,
+      totalInspectionsConducted: totalInspections,
+      criticalDefectIncidents,
+      driverScorecards
+    };
+  }
 }
+
+
 

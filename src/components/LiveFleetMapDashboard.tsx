@@ -4,10 +4,11 @@ import 'leaflet/dist/leaflet.css';
 import { 
   Navigation, Truck, RefreshCw, Radio, MapPin, Gauge, Clock, 
   Calendar, CheckCircle2, AlertCircle, ArrowUpRight, Compass,
-  Layers, ShieldAlert, Sparkles, User, Map as MapIcon, ChevronRight
+  Layers, ShieldAlert, Sparkles, User, Map as MapIcon, ChevronRight, Play
 } from 'lucide-react';
 import { Trip, Vehicle, TripBreadcrumbTrack, TripBreadcrumbPoint } from '../types/fleet';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
+import TripRouteReplayModal from './TripRouteReplayModal';
 
 interface LiveFleetMapDashboardProps {
   companyId: string;
@@ -42,6 +43,7 @@ export default function LiveFleetMapDashboard({
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<TripBreadcrumbTrack | null>(null);
+  const [showReplayModal, setShowReplayModal] = useState(false);
 
   // Auto-refresh interval (every 30 seconds matching tracking throttle)
   useEffect(() => {
@@ -466,6 +468,15 @@ export default function LiveFleetMapDashboard({
                   </div>
                 </div>
               )}
+
+              <button
+                type="button"
+                onClick={() => setShowReplayModal(true)}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-xs transition-colors"
+              >
+                <Play className="h-4 w-4" />
+                <span>{isRtl ? 'إعادة تشغيل مسار المشوار وتتبع السرعة' : 'Replay Route & Telemetry'}</span>
+              </button>
             </div>
           )}
         </div>
@@ -501,6 +512,17 @@ export default function LiveFleetMapDashboard({
           </div>
         </div>
       </div>
+
+      {/* Route Replay Modal */}
+      {selectedTrip && (
+        <TripRouteReplayModal
+          isOpen={showReplayModal}
+          onClose={() => setShowReplayModal(false)}
+          trip={selectedTrip}
+          companyId={companyId}
+          isRtl={isRtl}
+        />
+      )}
     </div>
   );
 }

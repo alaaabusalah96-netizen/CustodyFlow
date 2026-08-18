@@ -433,7 +433,7 @@ export default function UnifiedAccessControlCenter({
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newCompanyId, setNewCompanyId] = useState('');
   const [newCompanyCustody, setNewCompanyCustody] = useState(0);
-  const [newCompanyPlan, setNewCompanyPlan] = useState<Company['subscription_plan']>('Pro');
+  const [newCompanyPlan, setNewCompanyPlan] = useState<Company['subscription_plan']>('Basic');
   const [newCompanyStatus, setNewCompanyStatus] = useState<Company['subscription_status']>('active');
   const [newCompanyExpiry, setNewCompanyExpiry] = useState(() => {
     const d = new Date();
@@ -446,15 +446,20 @@ export default function UnifiedAccessControlCenter({
   const [newCompanyAdminMustChangePassword, setNewCompanyAdminMustChangePassword] = useState(true);
   const [showNewCompanyAdminPassword, setShowNewCompanyAdminPassword] = useState(false);
   const [newCompanyModules, setNewCompanyModules] = useState<Record<string, boolean>>({
-    expenses: true,
     custody: true,
-    custody_cycles: true,
-    custody_settlements: true,
+    inventory: true,
     reports: true,
-    alerts: true,
-    offline_sync: true,
-    multi_branch: true,
-    audit_trail: true,
+    audit: true,
+    purchasing: false,
+    accounting: false,
+    sales_ar: false,
+    pos: false,
+    crm: false,
+    fixed_assets: false,
+    hr_payroll: false,
+    contracting: false,
+    restaurant: false,
+    fleet: false,
   });
 
   // Edit Company & Subscription Modal State
@@ -1033,32 +1038,26 @@ export default function UnifiedAccessControlCenter({
     if (!newCompanyName.trim()) return;
 
     try {
-      const generatedId = newCompanyId.trim() || newCompanyName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20) || `comp_${Date.now()}`;
+      const createdComp = CustodyDB.addCompany(newCompanyName.trim(), newCompanyCustody || 0);
+      const targetCompanyId = newCompanyId.trim() || createdComp.id;
       
-      const newComp: Company = {
-        id: generatedId,
-        name: newCompanyName.trim(),
-        custody_value: newCompanyCustody || 0,
+      CustodyDB.updateCompany(createdComp.id, {
+        id: targetCompanyId,
         subscription_plan: newCompanyPlan,
         subscription_status: newCompanyStatus,
         subscription_expiry: newCompanyExpiry || undefined,
         is_active: newCompanyStatus !== 'suspended'
-      };
-
-      CompaniesModule.addCompany(newComp);
+      });
 
       // Save initial module settings
-      const moduleSettings: Record<string, CompanyModuleSettings> = {};
+      const moduleSettings = ModulesModule.getDefaultModulesForPlan(newCompanyPlan);
       Object.keys(newCompanyModules).forEach(mId => {
-        moduleSettings[mId] = {
-          enabled: !!newCompanyModules[mId],
-          nameAr: ERP_MODULES_REGISTRY[mId]?.nameAr || mId,
-          nameEn: ERP_MODULES_REGISTRY[mId]?.nameEn || mId,
-          icon: ERP_MODULES_REGISTRY[mId]?.icon || 'Layers',
-          roles: ['Admin', 'StationAdmin', 'RegionalManager']
-        };
+        if (moduleSettings[mId]) {
+          moduleSettings[mId].enabled = !!newCompanyModules[mId];
+          moduleSettings[mId].status = newCompanyModules[mId] ? 'active' : 'inactive';
+        }
       });
-      ModulesModule.saveCompanyModules(generatedId, moduleSettings);
+      ModulesModule.saveCompanyModules(targetCompanyId, moduleSettings);
 
       // Provision Admin User if provided
       if (newCompanyAdminEmail.trim()) {
@@ -1071,9 +1070,9 @@ export default function UnifiedAccessControlCenter({
             body: JSON.stringify({
               email: newCompanyAdminEmail.trim().toLowerCase(),
               password: adminPass,
-              full_name: newCompanyAdminName.trim() || `Admin ${newComp.name}`,
+              full_name: newCompanyAdminName.trim() || `Admin ${newCompanyName.trim()}`,
               role: 'Admin',
-              company_id: generatedId,
+              company_id: targetCompanyId,
               permissions: CustodyDB.enrichUserPermissions('Admin'),
               must_change_password: newCompanyAdminMustChangePassword
             })
@@ -2423,7 +2422,7 @@ export default function UnifiedAccessControlCenter({
                 setNewCompanyName('');
                 setNewCompanyId('');
                 setNewCompanyCustody(0);
-                setNewCompanyPlan('Pro');
+                setNewCompanyPlan('Basic');
                 setNewCompanyStatus('active');
                 setNewCompanyAdminName('');
                 setNewCompanyAdminEmail('');
@@ -2860,9 +2859,8 @@ export default function UnifiedAccessControlCenter({
                     }`}
                   >
                     <option value="Basic">Basic</option>
-                    <option value="Pro">Pro</option>
+                    <option value="Professional">Professional</option>
                     <option value="Enterprise">Enterprise</option>
-                    <option value="Custom">Custom</option>
                   </select>
                 </div>
 
@@ -2946,20 +2944,20 @@ export default function UnifiedAccessControlCenter({
               <div className="space-y-1.5">
                 <label className="block text-slate-500 font-bold">{isRtl ? 'الموديولات المتاحة للشركة:' : 'Enabled Modules:'}</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {Object.entries(ERP_MODULES_REGISTRY).map(([mKey, mod]) => (
-                    <label key={mKey} className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer ${
-                      newCompanyModules[mKey] !== false
+                  {ERP_MODULES_REGISTRY.map((mod) => (
+                    <label key={mod.id} className={`flex items-center gap-2 p-2 rounded-xl border cursor-pointer ${
+                      newCompanyModules[mod.id] !== false
                         ? 'bg-indigo-50/50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800'
                         : 'border-slate-200 dark:border-slate-800 opacity-60'
                     }`}>
                       <input
                         type="checkbox"
-                        checked={newCompanyModules[mKey] !== false}
-                        onChange={(e) => setNewCompanyModules(prev => ({ ...prev, [mKey]: e.target.checked }))}
+                        checked={newCompanyModules[mod.id] !== false}
+                        onChange={(e) => setNewCompanyModules(prev => ({ ...prev, [mod.id]: e.target.checked }))}
                         className="rounded text-indigo-600 focus:ring-indigo-500"
                       />
                       <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate">
-                        {isRtl ? mod.nameAr : mod.nameEn}
+                        {isRtl ? mod.name_ar : mod.name_en}
                       </span>
                     </label>
                   ))}
@@ -3063,9 +3061,8 @@ export default function UnifiedAccessControlCenter({
                         }`}
                       >
                         <option value="Basic">Basic</option>
-                        <option value="Pro">Pro</option>
+                        <option value="Professional">Professional</option>
                         <option value="Enterprise">Enterprise</option>
-                        <option value="Custom">Custom</option>
                       </select>
                     </div>
 
@@ -3103,20 +3100,20 @@ export default function UnifiedAccessControlCenter({
                     {isRtl ? 'حدد الموديولات المتاحة للاستخدام لموظفي هذه الشركة:' : 'Select enabled modules for this tenant:'}
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {Object.entries(ERP_MODULES_REGISTRY).map(([mKey, mod]) => {
-                      const isEnabled = editCompanyModulesSettings[mKey]?.enabled !== false;
+                    {ERP_MODULES_REGISTRY.map((mod) => {
+                      const isEnabled = editCompanyModulesSettings[mod.id]?.enabled !== false;
                       return (
                         <div
-                          key={mKey}
+                          key={mod.id}
                           onClick={() => {
                             setEditCompanyModulesSettings(prev => ({
                               ...prev,
-                              [mKey]: {
-                                ...(prev[mKey] || {
-                                  nameAr: mod.nameAr,
-                                  nameEn: mod.nameEn,
-                                  icon: mod.icon,
-                                  roles: ['Admin']
+                              [mod.id]: {
+                                ...(prev[mod.id] || {
+                                  plan: editCompanyPlan || 'Basic',
+                                  status: 'active',
+                                  activation_date: new Date().toISOString().split('T')[0],
+                                  expiry_date: editCompanyExpiry || '2028-12-31'
                                 }),
                                 enabled: !isEnabled
                               }
@@ -3135,7 +3132,7 @@ export default function UnifiedAccessControlCenter({
                               readOnly
                               className="rounded text-indigo-600 focus:ring-indigo-500"
                             />
-                            <span className="font-bold text-xs">{isRtl ? mod.nameAr : mod.nameEn}</span>
+                            <span className="font-bold text-xs">{isRtl ? mod.name_ar : mod.name_en}</span>
                           </div>
                           <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
                             isEnabled ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'

@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Play, MapPin, CheckCircle2, Navigation, MessageSquare, 
   Truck, User, Calendar, Clock, AlertCircle, Sparkles, Loader2, Map,
-  Radio, Wifi, ShieldAlert
+  Radio, Wifi, ShieldAlert, ClipboardCheck
 } from 'lucide-react';
-import { Trip, TripStop } from '../types/fleet';
+import { Trip, TripStop, Vehicle } from '../types/fleet';
 import { UserPermissions } from '../types';
 import { FleetBusinessEngine } from '../lib/enterprise/fleet_engine';
+import { StorageEngine } from '../db/storage';
 import LeafletMapPickerModal from './LeafletMapPickerModal';
+import VehicleInspectionModal from './VehicleInspectionModal';
 
 interface DriverPortalViewProps {
   trips: Trip[];
@@ -56,6 +58,7 @@ export default function DriverPortalView({
   }
 
   const [gpsLoadingId, setGpsLoadingId] = useState<string | null>(null);
+  const [selectedTripForInspection, setSelectedTripForInspection] = useState<Trip | null>(null);
   const [mapPickerAction, setMapPickerAction] = useState<{
     type: 'START' | 'STOP' | 'COMPLETE';
     trip: Trip;
@@ -123,11 +126,34 @@ export default function DriverPortalView({
           timestamp: new Date().toISOString()
         },
         30
-      ).then(res => {
+      ).then(async res => {
         if (res.recorded) {
           lastRecordedTimeRef.current = now;
           setLastLivePingTime(new Date());
           setLiveTrackingNotice(null);
+
+          // Phase 3: Auto Geofence arrival check
+          try {
+            const arrivalRes = await FleetBusinessEngine.autoProcessTripArrivals(
+              companyId,
+              currentTripId,
+              activeUser.id,
+              {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+                timestamp: new Date().toISOString()
+              },
+              200 // 200m geofence radius
+            );
+            if (arrivalRes.newlyArrivedStops.length > 0) {
+              const stopTitle = arrivalRes.newlyArrivedStops[0].taskTitle || arrivalRes.newlyArrivedStops[0].location.label || 'المحطة';
+              showToast('info', isRtl ? `تم تسجيل الوصول التلقائي إلى: ${stopTitle}` : `Auto-arrived at: ${stopTitle}`);
+              onRefresh();
+            }
+          } catch (err) {
+            console.warn('Geofence auto arrival check notice:', err);
+          }
         }
       }).catch(err => {
         console.warn('Live tracking breadcrumb record error:', err);
@@ -412,6 +438,17 @@ export default function DriverPortalView({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* Safety Inspection button */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTripForInspection(trip)}
+                      className="px-3 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-all shadow-xs"
+                      title={isRtl ? 'إجراء فحص السلامة ومعاينة المركبة' : 'Conduct Vehicle Safety Inspection'}
+                    >
+                      <ClipboardCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>{isRtl ? 'فحص السلامة' : 'Inspection'}</span>
+                    </button>
+
                     {/* Chat with supervisor button */}
                     <button
                       type="button"
@@ -670,6 +707,43 @@ export default function DriverPortalView({
           isRtl={isRtl}
         />
       )}
+
+      {/* Digital Safety Inspection Modal */}
+      {selectedTripForInspection && (() => {
+        const allVehs = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
+        const currentVeh = allVehs.find(v => v.id === selectedTripForInspection.vehicle_id) || {
+          id: selectedTripForInspection.vehicle_id,
+          company_id: companyId,
+          code: selectedTripForInspection.vehicle_id,
+          plateNumber: selectedTripForInspection.vehicle_id,
+          make: 'Fleet',
+          model: 'Vehicle',
+          year: 2024,
+          type: 'TRUCK',
+          status: 'ACTIVE',
+          odometerReading: 0,
+          fuelCapacity: 80,
+          createdAt: ''
+        } as Vehicle;
+
+        return (
+          <VehicleInspectionModal
+            isOpen={Boolean(selectedTripForInspection)}
+            onClose={() => setSelectedTripForInspection(null)}
+            vehicle={currentVeh}
+            driverId={activeUser.id}
+            driverName={driverName}
+            tripId={selectedTripForInspection.id}
+            companyId={companyId}
+            isRtl={isRtl}
+            onInspectionSubmitted={(record) => {
+              showToast('success', isRtl ? 'تم تسجيل واعتماد فحص السلامة بنجاح' : 'Safety inspection recorded successfully');
+              setSelectedTripForInspection(null);
+              onRefresh();
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

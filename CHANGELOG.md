@@ -4,6 +4,115 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fleet Module Phase 4: Proactive Maintenance Health Alerts, Fuel Intelligence & Operating Cost Analytics
+**Date:** 2026-08-18
+**Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/FleetCostAndMaintenanceDashboard.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_phase4_maintenance_fuel_cost.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Proactive Maintenance Health Engine (`FleetBusinessEngine`)**:
+  - Implemented `evaluateVehicleMaintenanceAlerts`: Dynamically assesses vehicle health thresholds against odometer readings across routine services, oil & filter changes, and tires/brake inspections.
+  - Generates clear urgency states (`OVERDUE`, `DUE_SOON`, `HEALTHY`) with distance remaining/exceeded and overdue days indicators.
+  - Implemented `recordVehicleMaintenance`: Records maintenance cost, updates vehicle odometer, updates threshold intervals (`lastOilChangeKm`, `lastRoutineKm`, `lastTireKm`), and automatically clears overdue maintenance alerts.
+  - Implemented `recordVehicleFuelRefill`: Logs fuel refills, computes total costs, and synchronizes vehicle odometer monotonically.
+  - Implemented `calculateFleetCostAnalytics`: Aggregates total fuel and maintenance expenses, fuel economy (KM/L), and fleet-wide Cost-Per-KM (CPK).
+- **Interactive Operating Costs & Maintenance Dashboard (`FleetCostAndMaintenanceDashboard`)**:
+  - Built high-contrast KPI cards: Total Operating Cost, Total Fuel Spend, Total Maintenance Spend, Average Fleet Cost/KM (EGP/KM), and Average Fuel Economy (KM/L).
+  - Proactive Maintenance Health Alerts section with one-click "Record Maintenance" action that opens the maintenance logger pre-filled with the exact service type.
+  - Vehicle-by-Vehicle Cost Breakdown table with filter/search, health badge, total expense breakdown, and one-click quick actions.
+  - Recent Maintenance Log and Recent Fuel Refill Log tables.
+- **Fleet Management Integration (`src/pages/FleetManagement.tsx`)**:
+  - Added dedicated navigation tab "📊 تكاليف التشغيل وصحة الصيانة" (`costs_and_maintenance`) with dynamic pulse badge displaying active maintenance alerts.
+  - Connected one-click maintenance and fuel log modal openers directly from the cost dashboard.
+- **Verification & Testing**:
+  - Created `src/fleet_phase4_maintenance_fuel_cost.test.ts` (5 tests) verifying maintenance alert evaluation, threshold updating on service log, fuel log calculation, cost analytics aggregation, and monotonic odometer synchronization.
+  - All unit tests passed 100% green.
+  - TypeScript linter (`tsc --noEmit`) and production compilation (`compile_applet`) verified clean with 0 errors.
+
+---
+
+## Fleet Module Phase 3: Route Historical Replay, Intelligent Geofencing Arrival Detection, & Telemetry Analytics
+**Date:** 2026-08-18
+**Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/TripRouteReplayModal.tsx`, `src/components/LiveFleetMapDashboard.tsx`, `src/components/DriverPortalView.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_phase3_replay_geofence.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Historical Route Replay & Telemetry Engine (`TripRouteReplayModal`)**:
+  - Built an interactive Leaflet route replay modal allowing supervisors to scrub and play through GPS breadcrumb trails.
+  - Controls: Play/Pause, speed presets (1x, 2x, 5x, 10x), step navigation, timeline progress slider, and dynamic moving vehicle marker with compass heading.
+  - HUD displays live speed (km/h), moving vs idle duration, total distance, stop compliance, and estimated fuel consumed.
+- **Intelligent Geofencing & Automated Arrival Detection (`FleetBusinessEngine`)**:
+  - `checkGeofenceArrival`: Calculates precise distance between current vehicle coordinates and target stops with custom geofence radius (default 150-200m).
+  - `autoProcessTripArrivals`: Seamlessly auto-records stop arrival timestamps and coordinates when the driver enters the geofence perimeter.
+  - `analyzeTripTelemetry`: Evaluates deep trip metrics including maximum speed, average moving speed, active trip duration, idle duration, and fuel consumption estimation.
+- **UI & Driver Portal Integration**:
+  - Added "Replay Route / تشغيل المسار" buttons in `LiveFleetMapDashboard.tsx` and `FleetManagement.tsx` trips table.
+  - Connected `autoProcessTripArrivals` into `DriverPortalView.tsx` background GPS watch callback with real-time arrival toast notifications.
+- **Verification & Testing**:
+  - Created `src/fleet_phase3_replay_geofence.test.ts` (4 tests) covering proximity geofencing, auto arrival processing, telemetry analytics, and track lifecycle management.
+  - All test suites (Phase 1, Phase 2, Phase 3 — 14 tests) passed green.
+  - TypeScript linter (`tsc --noEmit`) and production build compiled successfully with 0 errors.
+
+---
+
+## Fleet Module Phase 2: Dynamic In-Field Tasks & Route Stops Reassignment & Split
+**Date:** 2026-08-18
+**Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/TripStopsManagerModal.tsx`, `src/components/DailyOperationsDashboard.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_phase2_task_dispatch.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Dynamic Task and Stop Life-Cycle Engine (`FleetBusinessEngine`)**:
+  - `addStopToTrip`: Allows dynamic addition of tasks/stops during trip dispatch or drafting, automatically enforcing vehicle access and routing constraints.
+  - `reorderTripStops`: Enables instant route optimization and reordering of tasks/stops by supervisors based on urgent field priorities.
+  - `skipOrCancelStop`: Supports skipping or cancelling specific stops with mandatory auditable reasons without cancelling the parent trip.
+  - `reassignStopToAnotherTrip`: Seamlessly migrates a pending stop from one active trip to another active trip, updating both trips atomically.
+  - `splitStopToNewTrip`: Allows splitting a pending stop out of a delayed or overloaded trip into a new standalone trip assigned to a relief vehicle/driver.
+- **Supervisor In-Field Management UI (`TripStopsManagerModal`)**:
+  - Built an intuitive, zero-training modal with 4 actionable sub-panels:
+    1. Stop List with reordering (Up/Down) and status indicators.
+    2. Add New Task / Stop modal form with task preset selector and custom location fields.
+    3. Reassign Stop to Another Active Trip with real-time target trip preview.
+    4. Split Task into New Trip with target vehicle and driver selection.
+  - Integrated into `FleetManagement.tsx` trips table and `DailyOperationsDashboard.tsx` trip cards.
+- **Verification & Testing**:
+  - Created `src/fleet_phase2_task_dispatch.test.ts` (5 tests) verifying dynamic stop addition, stop reordering, stop skipping with reason logging, cross-trip stop reassignment, and stop splitting to new trips.
+  - All test suites (Phase 1 & Phase 2, 10 tests) passed green.
+  - Full application build (`compile_applet`) succeeded with 0 errors.
+
+---
+
+## Fleet Module Phase 1: Daily Operations Dashboard & Non-Blocking Supervisor Conflict Override
+**Date:** 2026-08-18
+**Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/DailyOperationsDashboard.tsx`, `src/components/TripConflictWarningModal.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_phase1_daily_ops.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Daily Operations Hub & Supervisor Visibility**:
+  - Implemented `DailyOperationsDashboard` providing real-time fleet metrics for supervisors (Total, Available, In-Trip, Breakdown, Maintenance vehicles).
+  - Added dedicated operational cards for Open Trips Today, Delayed/Not-Started Trips, Unregistered Drivers, and Active Conflict Warnings.
+  - Provided direct quick-actions for Discard/Dispatch, Reassignment, Quick Emergency Dispatch, Live Map navigation, and Operational Chat.
+- **Smart Operational Conflict Detection**:
+  - Implemented `FleetBusinessEngine.detectTripConflicts` for detecting same-destination, same-task-type, and duplicate-vehicle trips scheduled on the same calendar day.
+  - Conflict alerts are non-blocking: warns supervisors rather than enforcing rigid system blockades, respecting business operational flexibility.
+- **Manual Override with Full Auditability**:
+  - Built `TripConflictWarningModal` allowing supervisors to review conflict details, choose to reassign/edit candidate trips, or proceed with manual override.
+  - Overridden decisions record supervisor ID, name, timestamp, override rationale, and conflicting trip IDs in both trip document and system logs (`LogsModule`).
+- **Verification & Testing**:
+  - Created unit test suite `src/fleet_phase1_daily_ops.test.ts` (5 tests) verifying summary aggregation, destination conflict detection, task-type conflict detection, manual override auditability, and delayed/unregistered driver detection.
+  - All 13 fleet tests passed green.
+  - TypeScript linter (`tsc --noEmit`) and production build compiled successfully with 0 errors.
+
+---
+
+## Phase 6: Unified Access Control Center Full Consolidation & Rich Company Management
+**Date:** 2026-08-18
+**Files Changed:** `src/components/settings/UnifiedAccessControlCenter.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Single Source of Truth for Administration**:
+  - Fully consolidated all enterprise company management, organization structure, user/role permissions, signup and correction workflows, and module subscription governance into `UnifiedAccessControlCenter` in Settings.
+  - Aligned data layer integration with `CustodyDB` and `ModulesModule` for multi-tenant company creation and update flows.
+  - Fixed user creation with clear password provisioning, automatic password generation, temporary password options, and force-reset toggles.
+  - Added multi-tenant company filtering in Employee Directory with "All Companies" filter option to guarantee newly provisioned users are never hidden.
+- **Data Model & Type Alignments**:
+  - Aligned subscription plan types to standard `Basic`, `Professional`, and `Enterprise`.
+  - Mapped ERP module registry schemas correctly using `ERP_MODULES_REGISTRY` (`mod.id`, `mod.name_ar`, `mod.name_en`).
+- **Verification**:
+  - `lint_applet` (`tsc --noEmit`) and `compile_applet` build succeeded with 0 errors.
+
+---
+
 ## Phase 5: Unified Access Control Navigation & Contextual Routing Fix — Completed
 **Date:** 2026-08-17
 **Files Changed:** `src/App.tsx`, `src/pages/Settings.tsx`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/pages/SuperAdmin.tsx`, `src/components/SuperAdminCompaniesTab.tsx`, `src/unified_access_control_navigation.test.ts`, `CHANGELOG.md`

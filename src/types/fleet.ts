@@ -9,6 +9,15 @@ export interface VehicleLocation {
   label?: string;
 }
 
+export interface VehicleMaintenanceThresholds {
+  oilChangeIntervalKm?: number; // e.g. 5000 or 10000 KM
+  routineIntervalKm?: number; // e.g. 15000 or 20000 KM
+  tireIntervalKm?: number; // e.g. 40000 KM
+  lastOilChangeKm?: number;
+  lastRoutineKm?: number;
+  lastTireKm?: number;
+}
+
 export interface Vehicle {
   id: string;
   company_id: string;
@@ -26,7 +35,57 @@ export interface Vehicle {
   fuelCapacity: number; // in Liters
   assignedOrgUnitName?: string;
   last_known_location?: VehicleLocation;
+  maintenanceThresholds?: VehicleMaintenanceThresholds;
   createdAt: string;
+}
+
+export type MaintenanceUrgency = 'OVERDUE' | 'DUE_SOON' | 'HEALTHY';
+
+export interface MaintenanceHealthAlert {
+  vehicleId: string;
+  vehicleCode: string;
+  plateNumber: string;
+  serviceType: 'OIL_CHANGE' | 'ROUTINE' | 'TIRES';
+  serviceTypeAr: string;
+  serviceTypeEn: string;
+  currentOdometer: number;
+  lastServiceKm: number;
+  intervalKm: number;
+  nextServiceDueKm: number;
+  kmRemaining: number;
+  urgency: MaintenanceUrgency;
+  messageAr: string;
+  messageEn: string;
+}
+
+export interface VehicleCostBreakdown {
+  vehicleId: string;
+  vehicleCode: string;
+  plateNumber: string;
+  makeModel: string;
+  totalDistanceTraveledKm: number;
+  totalFuelCost: number;
+  totalFuelLiters: number;
+  fuelEfficiencyKmPerLiter: number;
+  totalMaintenanceCost: number;
+  totalOperatingCost: number;
+  costPerKm: number;
+  maintenanceAlertsCount: number;
+  highestMaintenanceUrgency: MaintenanceUrgency;
+}
+
+export interface FleetCostSummary {
+  totalOperatingCost: number;
+  totalFuelCost: number;
+  totalMaintenanceCost: number;
+  totalLitersConsumed: number;
+  totalDistanceKm: number;
+  averageCostPerKm: number;
+  averageFuelEfficiencyKmPerLiter: number;
+  activeAlertsCount: number;
+  overdueAlertsCount: number;
+  dueSoonAlertsCount: number;
+  vehicles: VehicleCostBreakdown[];
 }
 
 export interface MaintenanceLog {
@@ -61,7 +120,7 @@ export interface FuelLog {
 export type TripStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' 
   | 'DISPATCHED' | 'IN_PROGRESS' | 'COMPLETED' | 'REJECTED' | 'CANCELLED' | 'POSTPONED' | 'SUSPENDED_BREAKDOWN';
 
-export type TripStopStatus = 'PENDING' | 'IN_PROGRESS' | 'ARRIVED' | 'COMPLETED' | 'SKIPPED';
+export type TripStopStatus = 'PENDING' | 'IN_PROGRESS' | 'ARRIVED' | 'COMPLETED' | 'SKIPPED' | 'REASSIGNED';
 
 export interface TripLocation {
   org_unit_id?: string;
@@ -134,6 +193,7 @@ export interface TripStop {
   reassignedToTripId?: string;
   reassignedToVehicleId?: string;
   reassignedToDriverId?: string;
+  skippedReason?: string;
   postponedUntil?: string;
   postponeReason?: string;
   startedAt?: string;
@@ -163,8 +223,69 @@ export interface Trip {
   postponedUntil?: string;
   postponeReason?: string;
   breakdownDecisions?: BreakdownDecisionLog[];
+  conflictOverride?: SupervisorConflictOverride;
   createdBy: string;
   createdAt: string;
+}
+
+export type TripConflictType = 'SAME_DESTINATION' | 'SAME_TASK_TYPE' | 'SAME_VEHICLE' | 'SAME_DRIVER';
+
+export interface TripConflictWarning {
+  conflictingTripId: string;
+  conflictType: TripConflictType;
+  conflictingVehicleId?: string;
+  conflictingVehicleCode?: string;
+  conflictingVehiclePlate?: string;
+  conflictingDriverId?: string;
+  conflictingDriverName?: string;
+  destinationLabel?: string;
+  destinationOrgUnitId?: string;
+  taskTitle?: string;
+  tripType?: string;
+  scheduledAt: string;
+  status: TripStatus;
+  messageAr: string;
+  messageEn: string;
+}
+
+export interface SupervisorConflictOverride {
+  overridden: boolean;
+  overriddenBy: string;
+  overriddenByName?: string;
+  reason?: string;
+  timestamp: string;
+  conflictingTripIds: string[];
+  conflictSummary?: string;
+}
+
+export interface DailyOperationsSummary {
+  date: string;
+  vehicles: {
+    total: number;
+    available: number;
+    inTrip: number;
+    breakdown: number;
+    outOfService: number;
+    availableVehicles: Vehicle[];
+    inTripVehicles: Vehicle[];
+    breakdownVehicles: Vehicle[];
+    outOfServiceVehicles: Vehicle[];
+  };
+  openTrips: Trip[];
+  delayedOrNotStartedTrips: Trip[];
+  unregisteredDrivers: Array<{
+    driverId: string;
+    driverName: string;
+    tripId: string;
+    scheduledAt: string;
+    vehicleCode?: string;
+    vehiclePlate?: string;
+    taskTitle?: string;
+  }>;
+  conflictedTrips: Array<{
+    trip: Trip;
+    conflicts: TripConflictWarning[];
+  }>;
 }
 
 export type VehicleConstraintMode = 'BLOCK_SPECIFIC_LOCATIONS' | 'EXTERNAL_ONLY';
@@ -205,4 +326,108 @@ export interface TripBreadcrumbTrack {
   updated_at: string;
   total_distance_km: number;
 }
+
+export interface TripTelemetryAnalysis {
+  tripId: string;
+  vehicleId: string;
+  totalDistanceKm: number;
+  totalDurationMinutes: number;
+  movingDurationMinutes: number;
+  idleDurationMinutes: number;
+  maxSpeedKmh: number;
+  avgMovingSpeedKmh: number;
+  estimatedFuelLiters: number;
+  totalStops: number;
+  completedStops: number;
+  skippedOrReassignedStops: number;
+  startedAt?: string;
+  endedAt?: string;
+  pointsCount: number;
+}
+
+export interface GeofenceArrivalCheckResult {
+  isInsideGeofence: boolean;
+  distanceMeters: number;
+  matchedStop?: TripStop;
+  matchedStopId?: string;
+  geofenceRadiusMeters: number;
+  messageAr: string;
+  messageEn: string;
+}
+
+export type InspectionType = 'PRE_TRIP' | 'POST_TRIP' | 'ROUTINE';
+export type InspectionStatus = 'PASSED' | 'PASSED_WITH_DEFECTS' | 'FAILED_CRITICAL';
+export type ChecklistItemKey = 
+  | 'BRAKES' 
+  | 'TIRES' 
+  | 'LIGHTS' 
+  | 'FLUIDS' 
+  | 'BODY_DAMAGE' 
+  | 'SAFETY_EQUIPMENT' 
+  | 'CLEANLINESS' 
+  | 'DOCUMENTS';
+
+export interface InspectionChecklistItem {
+  key: ChecklistItemKey;
+  labelAr: string;
+  labelEn: string;
+  isCritical: boolean;
+  status: 'PASS' | 'DEFECT_MINOR' | 'DEFECT_CRITICAL';
+  notes?: string;
+}
+
+export interface VehicleInspectionRecord {
+  id: string;
+  company_id: string;
+  vehicle_id: string;
+  vehicle_code?: string;
+  plate_number?: string;
+  driver_id: string;
+  driver_name?: string;
+  trip_id?: string;
+  type: InspectionType;
+  status: InspectionStatus;
+  odometerReading: number;
+  items: InspectionChecklistItem[];
+  criticalDefectsFound: number;
+  minorDefectsFound: number;
+  driverNotes?: string;
+  driverSignatureName: string;
+  supervisorReviewStatus?: 'PENDING_REVIEW' | 'APPROVED' | 'OVERRIDDEN';
+  supervisorNotes?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+}
+
+export type DriverPerformanceTier = 'EXCELLENT' | 'VERY_GOOD' | 'GOOD' | 'NEEDS_IMPROVEMENT';
+
+export interface DriverScorecard {
+  driverId: string;
+  driverName: string;
+  totalTrips: number;
+  completedTrips: number;
+  cancelledOrBreakdownTrips: number;
+  totalStopsAssigned: number;
+  completedStops: number;
+  stopCompletionRate: number; // percentage 0-100
+  inspectionsCompleted: number;
+  inspectionsPassedRate: number; // percentage 0-100
+  criticalDefectsReported: number;
+  totalDistanceDrivenKm: number;
+  safetyScore: number; // overall composite 0-100 score
+  tierRating: DriverPerformanceTier;
+  ratingStars: number; // 1 to 5
+  lastActiveDate?: string;
+}
+
+export interface FleetDriverPerformanceSummary {
+  totalDrivers: number;
+  averageSafetyScore: number;
+  overallCompletionRate: number;
+  totalInspectionsConducted: number;
+  criticalDefectIncidents: number;
+  driverScorecards: DriverScorecard[];
+}
+
 
