@@ -5,7 +5,7 @@ import {
   MapPin, Navigation, Trash2, Map, Play, ArrowRightLeft, Sparkles,
   Clock, CheckCircle, AlertTriangle, AlertCircle, Radio, Loader2,
   Siren, PauseCircle, MessageSquare, Compass, Ban, Lock, CheckSquare, Square,
-  Power, ShieldCheck, X, Activity
+  Power, ShieldCheck, X, Activity, Award
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { UsersModule } from '../db/users';
