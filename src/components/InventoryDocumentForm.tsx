@@ -104,7 +104,7 @@ export default function InventoryDocumentForm({
   const samplePurchaseOrders: PurchaseOrder[] = useMemo(() => [
     {
       id: 'sample-po-1',
-      company_id: activeUser?.company_id || 'comp-1',
+      company_id: activeUser?.company_id || '',
       poNumber: 'PO-2026-0001',
       vendorId: 'sup-1',
       vendorName: 'Shell Egypt (شل مصر)',
@@ -116,11 +116,11 @@ export default function InventoryDocumentForm({
         { productId: 'prod-1', productCode: 'PRD-MTR-01', productName: 'Shell Helix Motor Oil 4L (زيت محرك شل هيلكس 4 لتر)', unit: 'عبوة (Bottle)', qty: 50, unitPrice: 1200, totalPrice: 60000 },
         { productId: 'prod-4', productCode: 'PRD-FIL-04', productName: 'Air Filter (فلتر هواء محرك)', unit: 'عدد (Piece)', qty: 30, unitPrice: 350, totalPrice: 10500 }
       ],
-      metadata: { tenantId: activeUser?.company_id || 'comp-1', organizationId: activeUser?.company_id || 'comp-1', created_at: new Date().toISOString(), created_by: 'system', companyId: activeUser?.company_id || 'comp-1', version: 1 }
+      metadata: { tenantId: activeUser?.company_id || '', organizationId: activeUser?.company_id || '', created_at: new Date().toISOString(), created_by: 'system', companyId: activeUser?.company_id || '', version: 1 }
     },
     {
       id: 'sample-po-2',
-      company_id: activeUser?.company_id || 'comp-1',
+      company_id: activeUser?.company_id || '',
       poNumber: 'PO-2026-0002',
       vendorId: 'sup-2',
       vendorName: 'Bridgestone Middle East (بريدجستون الشرق الأوسط)',
@@ -131,11 +131,11 @@ export default function InventoryDocumentForm({
       items: [
         { productId: 'prod-3', productCode: 'PRD-TIR-03', productName: 'Bridgestone Tire 205/55R16 (إطار بريدجستون 205/55R16)', unit: 'عدد (Piece)', qty: 20, unitPrice: 4800, totalPrice: 96000 }
       ],
-      metadata: { tenantId: activeUser?.company_id || 'comp-1', organizationId: activeUser?.company_id || 'comp-1', created_at: new Date().toISOString(), created_by: 'system', companyId: activeUser?.company_id || 'comp-1', version: 1 }
+      metadata: { tenantId: activeUser?.company_id || '', organizationId: activeUser?.company_id || '', created_at: new Date().toISOString(), created_by: 'system', companyId: activeUser?.company_id || '', version: 1 }
     },
     {
       id: 'sample-po-3',
-      company_id: activeUser?.company_id || 'comp-1',
+      company_id: activeUser?.company_id || '',
       poNumber: 'PO-2026-0003',
       vendorId: 'sup-3',
       vendorName: 'El-Ahram Batteries Co. (شركة الأهرام للبطاريات)',
@@ -147,11 +147,11 @@ export default function InventoryDocumentForm({
         { productId: 'prod-2', productCode: 'PRD-BAT-02', productName: '12V 70Ah Car Battery (بطارية سيارة 12 فولت 70 أمبير)', unit: 'عدد (Piece)', qty: 15, unitPrice: 3500, totalPrice: 52500 },
         { productId: 'prod-5', productCode: 'PRD-BRK-05', productName: 'Front Brake Pads Set (طقم تيل فرامل أمامي)', unit: 'طقم (Set)', qty: 25, unitPrice: 850, totalPrice: 21250 }
       ],
-      metadata: { tenantId: activeUser?.company_id || 'comp-1', organizationId: activeUser?.company_id || 'comp-1', created_at: new Date().toISOString(), created_by: 'system', companyId: activeUser?.company_id || 'comp-1', version: 1 }
+      metadata: { tenantId: activeUser?.company_id || '', organizationId: activeUser?.company_id || '', created_at: new Date().toISOString(), created_by: 'system', companyId: activeUser?.company_id || '', version: 1 }
     },
     {
       id: 'sample-po-4',
-      company_id: activeUser?.company_id || 'comp-1',
+      company_id: activeUser?.company_id || '',
       poNumber: 'PO-2026-0004',
       vendorId: 'sup-4',
       vendorName: 'Ghabour Auto Parts (جي بي غبور لقطع الغيار)',
@@ -163,7 +163,7 @@ export default function InventoryDocumentForm({
         { productId: 'prod-5', productCode: 'PRD-BRK-05', productName: 'Front Brake Pads Set (طقم تيل فرامل أمامي)', unit: 'طقم (Set)', qty: 40, unitPrice: 820, totalPrice: 32800 },
         { productId: 'prod-4', productCode: 'PRD-FIL-04', productName: 'Air Filter (فلتر هواء محرك)', unit: 'عدد (Piece)', qty: 60, unitPrice: 340, totalPrice: 20400 }
       ],
-      metadata: { tenantId: activeUser?.company_id || 'comp-1', organizationId: activeUser?.company_id || 'comp-1', created_at: new Date().toISOString(), created_by: 'system', companyId: activeUser?.company_id || 'comp-1', version: 1 }
+      metadata: { tenantId: activeUser?.company_id || '', organizationId: activeUser?.company_id || '', created_at: new Date().toISOString(), created_by: 'system', companyId: activeUser?.company_id || '', version: 1 }
     }
   ], [activeUser]);
 
@@ -201,9 +201,9 @@ export default function InventoryDocumentForm({
       recipient: 'أحمد المحمودي (سائق الشاحنة #542)',
       statement: 'شحنة زيوت وبطاريات محولة من المخزن الرئيسي بالقاهرة',
       status: 'Posted' as InventoryDocStatus,
-      company_id: activeUser?.company_id || 'comp-1',
-      tenantId: activeUser?.company_id || 'comp-1',
-      organizationId: activeUser?.company_id || 'comp-1',
+      company_id: activeUser?.company_id || '',
+      tenantId: activeUser?.company_id || '',
+      organizationId: activeUser?.company_id || '',
       version: 1,
       created_at: new Date().toISOString(),
       created_by: 'system',
@@ -224,9 +224,9 @@ export default function InventoryDocumentForm({
       recipient: 'محمود الخولي (سائق النقل)',
       statement: 'إذن تحويل وارد من مستودع الإسكندرية الفرعي',
       status: 'Posted' as InventoryDocStatus,
-      company_id: activeUser?.company_id || 'comp-1',
-      tenantId: activeUser?.company_id || 'comp-1',
-      organizationId: activeUser?.company_id || 'comp-1',
+      company_id: activeUser?.company_id || '',
+      tenantId: activeUser?.company_id || '',
+      organizationId: activeUser?.company_id || '',
       version: 1,
       created_at: new Date().toISOString(),
       created_by: 'system',
@@ -247,9 +247,9 @@ export default function InventoryDocumentForm({
       recipient: 'سامح حسن (مندوب الفرع)',
       statement: 'شحنة أطقم تيل فرامل وزيوت محركات',
       status: 'Posted' as InventoryDocStatus,
-      company_id: activeUser?.company_id || 'comp-1',
-      tenantId: activeUser?.company_id || 'comp-1',
-      organizationId: activeUser?.company_id || 'comp-1',
+      company_id: activeUser?.company_id || '',
+      tenantId: activeUser?.company_id || '',
+      organizationId: activeUser?.company_id || '',
       version: 1,
       created_at: new Date().toISOString(),
       created_by: 'system',
@@ -479,6 +479,12 @@ export default function InventoryDocumentForm({
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
+    if (!activeUser?.company_id || !activeUser.company_id.trim()) {
+      newErrors.global = isRtl
+        ? 'خطأ أمني: لم يتم العثور على شركة تابعة لحساب المستخدم الحالي. تم إيقاف عملية الحفظ لمنع تداخل البيانات.'
+        : 'Security Error: No company associated with the active user. Save operation blocked to prevent tenant isolation breaches.';
+    }
+
     if (!sourceWarehouseId) {
       newErrors.sourceWarehouseId = isRtl ? 'المخزن المستلم/الرئيسي إلزامي' : 'Main/Receiving warehouse is required';
     }
@@ -575,6 +581,9 @@ export default function InventoryDocumentForm({
       if (docId) {
         // Update draft
         InventoryModule.updateInventoryDocument(docId, {
+          company_id: activeUser.company_id,
+          tenantId: activeUser.company_id,
+          organizationId: activeUser.company_id,
           date,
           doc_type: docType,
           source_warehouse_id: sourceWarehouseId,
@@ -593,6 +602,9 @@ export default function InventoryDocumentForm({
       } else {
         // Add new document
         await InventoryModule.addInventoryDocument({
+          company_id: activeUser.company_id,
+          tenantId: activeUser.company_id,
+          organizationId: activeUser.company_id,
           date,
           doc_type: docType,
           source_warehouse_id: sourceWarehouseId,
@@ -606,7 +618,7 @@ export default function InventoryDocumentForm({
           notes,
           items: enrichedItems,
           scrap_action: docType === 'Damage' ? scrapAction : undefined
-        });
+        } as any);
         setSuccessMsg(isRtl ? 'تم إنشاء السند المخزني كمسودة بنجاح!' : 'Inventory document draft created successfully!');
       }
 

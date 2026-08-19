@@ -3785,6 +3785,18 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   - Validated learned location recording, multi-tenant & org-unit isolation, automatic stop arrival learning, emergency trip dispatching, and all 3 breakdown decision pathways (100% passing tests).
   - All existing fleet test suites (`fleet_task_reassignment_gps.test.ts`, `fleet_trip_stops.test.ts`, `fleet_trips.test.ts`) passing cleanly with 0 regressions.
 
+---
+
+## Phase 1: Lock comp-1 Fallbacks in InventoryDocumentForm
+**Date:** 2026-08-19
+**Files Changed:** `src/components/InventoryDocumentForm.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Multi-Tenant Data Isolation (`src/components/InventoryDocumentForm.tsx`)**:
+  - Removed hard-coded `|| 'comp-1'` fallbacks across sample Purchase Orders (`sample-po-1` through `sample-po-4`), sample Transfer Shipments (`sample-trf-1` through `sample-trf-3`), and associated metadata fields (`tenantId`, `organizationId`, `companyId`).
+  - Enforced validation check in `validateForm()`: explicitly blocks save operations with a clear bilingual security error (`خطأ أمني: لم يتم العثور على شركة تابعة لحساب المستخدم الحالي. تم إيقاف عملية الحفظ لمنع تداخل البيانات.` / `Security Error: No company associated with the active user. Save operation blocked to prevent tenant isolation breaches.`) if `activeUser.company_id` is missing.
+- **Verification**: Production compilation (`compile_applet`) succeeded with 0 errors.
+
+
 
 
 
