@@ -25,14 +25,14 @@ import {
 } from 'lucide-react';
 
 interface WarehouseHierarchyManagerProps {
-  companyId?: string;
+  companyId: string;
   isRtl?: boolean;
   theme?: 'light' | 'dark';
   onWarehousesUpdated?: () => void;
 }
 
 export const WarehouseHierarchyManager: React.FC<WarehouseHierarchyManagerProps> = ({
-  companyId = 'comp-1',
+  companyId,
   isRtl = true,
   theme = 'light',
   onWarehousesUpdated,

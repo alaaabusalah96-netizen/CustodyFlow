@@ -29,7 +29,7 @@ export const RestaurantMenu: React.FC<RestaurantMenuProps> = () => {
   const activeUser = UsersModule.getActiveUser();
   const companies = CompaniesModule.getCompanies();
   const activeCompany = companies.find(c => c.id === activeUser?.company_id);
-  const companyId = activeCompany?.id || activeUser?.company_id || 'comp-restaurant-01';
+  const companyId = activeCompany?.id || activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || '';
   const isRtl = document.documentElement.dir === 'rtl';
 
   const [refreshKey, setRefreshKey] = useState(0);
@@ -84,6 +84,10 @@ export const RestaurantMenu: React.FC<RestaurantMenuProps> = () => {
 
   const handleSaveCategory = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!companyId) {
+      alert(isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     if (!catNameAr.trim()) return;
 
     if (editingCategory) {
@@ -136,6 +140,10 @@ export const RestaurantMenu: React.FC<RestaurantMenuProps> = () => {
 
   const handleSaveItem = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!companyId) {
+      alert(isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     if (!itemNameAr.trim() || !itemCategoryId) return;
 
     const priceNum = typeof itemPrice === 'number' ? itemPrice : parseFloat(itemPrice) || 0;
@@ -222,6 +230,10 @@ export const RestaurantMenu: React.FC<RestaurantMenuProps> = () => {
 
   const handleSaveRecipe = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!companyId) {
+      alert(isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     if (!selectedItemForRecipe) return;
 
     RestaurantEngine.saveRecipe({

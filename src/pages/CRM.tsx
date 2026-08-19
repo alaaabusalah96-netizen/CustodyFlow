@@ -40,8 +40,8 @@ export interface LeadInteraction {
 
 export default function CRM({ language, theme }: CRMProps) {
   const isRtl = language === 'ar';
-  const companyId = CompaniesModule.getSelectedCompanyId() || 'comp-default';
   const activeUser = UsersModule.getActiveUser();
+  const companyId = activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || '';
 
   // Core CRM States
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -131,6 +131,10 @@ export default function CRM({ language, theme }: CRMProps) {
   // Submit Lead
   const handleAddLead = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!companyId) {
+      showToast('error', isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     if (!leadForm.name) {
       showToast('error', isRtl ? 'يرجى إدخال اسم العميل المحتمل' : 'Please input prospect name');
       return;

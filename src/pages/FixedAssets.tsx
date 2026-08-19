@@ -24,8 +24,8 @@ interface FixedAssetsProps {
 
 export default function FixedAssets({ language, theme }: FixedAssetsProps) {
   const isRtl = language === 'ar';
-  const companyId = CompaniesModule.getSelectedCompanyId() || 'comp-default';
   const activeUser = UsersModule.getActiveUser();
+  const companyId = activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || '';
 
   // Core States
   const [assets, setAssets] = useState<FixedAsset[]>([]);
@@ -125,6 +125,10 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
   // Submit Asset
   const handleAddAsset = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!companyId) {
+      showToast('error', isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     if (!assetForm.name) {
       showToast('error', isRtl ? 'يرجى إدخال اسم الأصل الثابت' : 'Please input asset name');
       return;
@@ -165,6 +169,10 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
 
   // Run Depreciation Pre-calculation (Monthly Straight Line)
   const handleCalculateDepreciation = () => {
+    if (!companyId) {
+      showToast('error', isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     const logItems = AssetBusinessEngine.calculateMonthlyDepreciation(assets);
     setRunLogs(logItems);
     setIsCalculated(true);
@@ -172,6 +180,10 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
 
   // Post Depreciation Run to database ledger
   const handlePostDepreciationRun = async () => {
+    if (!companyId) {
+      showToast('error', isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     if (runLogs.length === 0) return;
 
     try {
@@ -206,6 +218,10 @@ export default function FixedAssets({ language, theme }: FixedAssetsProps) {
 
   const handleDisposeAsset = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!companyId) {
+      showToast('error', isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     if (!selectedAssetForDisposal) return;
 
     try {

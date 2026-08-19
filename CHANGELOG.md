@@ -3796,6 +3796,111 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   - Enforced validation check in `validateForm()`: explicitly blocks save operations with a clear bilingual security error (`خطأ أمني: لم يتم العثور على شركة تابعة لحساب المستخدم الحالي. تم إيقاف عملية الحفظ لمنع تداخل البيانات.` / `Security Error: No company associated with the active user. Save operation blocked to prevent tenant isolation breaches.`) if `activeUser.company_id` is missing.
 - **Verification**: Production compilation (`compile_applet`) succeeded with 0 errors.
 
+---
+
+## Phase 2: Lock comp-1 in Warehouse Selectors
+**Date:** 2026-08-19
+**Files Changed:** `src/components/WarehouseTreeSelect.tsx`, `src/components/WarehouseHierarchyManager.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Multi-Tenant Props Enforcement**:
+  - `src/components/WarehouseTreeSelect.tsx`: Made `companyId` a required prop in `WarehouseTreeSelectProps` and removed default `companyId = 'comp-1'`.
+  - `src/components/WarehouseHierarchyManager.tsx`: Made `companyId` a required prop in `WarehouseHierarchyManagerProps` and removed default `companyId = 'comp-1'`.
+- **Verification**: Verified 0 remaining occurrences of `comp-1` across both components; production compilation (`compile_applet`) succeeded with 0 errors.
+
+---
+
+## Phase 3: Clean Inventory Seed/Defaults of Hard-Coded comp-1
+**Date:** 2026-08-19
+**Files Changed:** `src/db/inventory.ts`, `CHANGELOG.md`
+**Summary:**
+- **Non-Production Seed Isolation (`src/db/inventory.ts`)**:
+  - Scoped and annotated all `DEFAULT_*` and seed constant fixtures (`DEFAULT_WAREHOUSES`, `DEFAULT_PRODUCTS`, `DEFAULT_MOVEMENTS`, `defaultLedger`, and `initialList`) as non-production demo data.
+  - Confirmed that zero live write paths or production document creation functions use hard-coded `comp-1`.
+- **Verification**: Production compilation (`compile_applet`) succeeded with 0 errors.
+
+---
+
+## Phase 4: Lock comp-1 in purchasing_engine Live Paths
+**Date:** 2026-08-19
+**Files Changed:** `src/lib/enterprise/purchasing_engine.ts`, `CHANGELOG.md`
+**Summary:**
+- **Purchasing Engine Multi-Tenant Enforcement**:
+  - `src/lib/enterprise/purchasing_engine.ts`: Replaced `DEFAULT_WORKFLOW_CONFIG` (which had hard-coded `companyId: 'comp-1'`) with `DEFAULT_WORKFLOW_TEMPLATE: Omit<PurchasingWorkflowConfig, 'companyId'>`.
+  - Updated `PurchasingBusinessEngine.getWorkflowConfig(companyId: string)` to validate that `companyId` is a non-empty string and dynamically assign it when returning default workflow parameters.
+  - Verified that all call sites in `purchasing_engine.ts` and `pages/Purchasing.tsx` pass explicit `companyId`.
+- **Verification**: 0 occurrences of `comp-1` remaining in `purchasing_engine.ts`; production compilation (`compile_applet`) succeeded with 0 errors.
+
+---
+
+## Phase 5: Eradicate comp-default and comp-restaurant-01 Fallbacks Across Entire Codebase
+**Date:** 2026-08-19
+**Files Changed:** `src/components/InventoryDocumentForm.tsx`, `src/pages/HRPayroll.tsx`, `src/pages/SalesAR.tsx`, `src/pages/POS.tsx`, `src/pages/FleetManagement.tsx`, `src/pages/FixedAssets.tsx`, `src/pages/Reports.tsx`, `src/pages/CRM.tsx`, `src/pages/RestaurantMenu.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Multi-Tenant Tenant Isolation & Fallback Eradication**:
+  - `src/components/InventoryDocumentForm.tsx`: Removed `comp-default` fallback.
+  - `src/pages/HRPayroll.tsx`: Replaced `|| 'comp-default'` with `activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || ''` and added blocking checks on employee creation, payroll generation, payroll posting, attendance saving, and leave requests if no company is selected.
+  - `src/pages/SalesAR.tsx`: Replaced `|| 'comp-default'` with `activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || ''` and added blocking checks on customer creation, invoice creation, and payment collection if no company is selected.
+  - `src/pages/POS.tsx`: Replaced `|| 'comp-default'` with `activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || ''` and added blocking check on checkout if no company is selected.
+  - `src/pages/FleetManagement.tsx`: Replaced `|| 'comp-default'` with `activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || ''`.
+  - `src/pages/FixedAssets.tsx`: Replaced `|| 'comp-default'` with `activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || ''` and added blocking checks on asset registration, depreciation calculation, depreciation posting, and asset disposal if no company is selected.
+  - `src/pages/Reports.tsx`: Replaced `|| 'comp-default'` with `activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || ''`.
+  - `src/pages/CRM.tsx`: Replaced `|| 'comp-default'` with `activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || ''` and added blocking check on lead creation if no company is selected.
+  - `src/pages/RestaurantMenu.tsx`: Replaced `|| 'comp-restaurant-01'` with `activeCompany?.id || activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || ''` and added blocking checks on category creation, menu item creation, and recipe saving if no company is selected.
+- **Verification**: Verified 0 occurrences of `comp-default` and 0 occurrences of `comp-restaurant-01` remaining across all source files in `src/`. Full compilation (`compile_applet`) succeeded with 0 errors.
+
+---
+
+## Phase 6: Stop Cross-Tenant Leakage of Transactions Without company_id
+**Date:** 2026-08-19
+**Files Changed:** `src/db/transactions.ts`, `CHANGELOG.md`
+**Summary:**
+- **Strict Scoping and Cross-Tenant Transaction Leakage Elimination**:
+  - `src/db/transactions.ts` line 94: Removed `|| !(t as any).company_id` fallback in `getScopedTransactions()`, enforcing that transactions must explicitly match `(t as any).company_id === targetCompanyId`.
+  - `src/db/transactions.ts` lines 120 and 146: Removed permissive null/undefined bypass `if ((t as any).company_id && ...)` in `getPaginatedScopedTransactions` and `getPaginatedScopedTransactionsIDB`, replacing it with strict `if ((t as any).company_id !== targetCompanyId) return false;`.
+- **Verification**: Targeted audit confirmed no further bypass clauses exist in `src/db/transactions.ts`. Production compilation (`compile_applet`) succeeded with 0 errors.
+
+---
+
+## Phase 7: Emergency Trip Must Be Operational (DISPATCHED), Not DRAFT
+**Date:** 2026-08-19
+**Files Changed:** `src/lib/enterprise/fleet_engine.ts`, `src/fleet_learned_locations_emergency_breakdown.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Fleet Emergency Trip Operational Status Alignment**:
+  - `src/lib/enterprise/fleet_engine.ts:1726`: Replaced non-operational `status: 'DRAFT'` with operational `status: 'DISPATCHED'`, matching the existing immediate dispatch path (`dispatchTrip` at line 519).
+  - Updated start stop status to `'IN_PROGRESS'` with `startedAt: now`, and initialized `dispatchedAt: now` on the emergency trip object.
+  - `src/fleet_learned_locations_emergency_breakdown.test.ts:202`: Updated test assertion from `'DRAFT'` to `'DISPATCHED'`.
+- **Verification**: Scoped unit tests (`vitest run src/fleet_learned_locations_emergency_breakdown.test.ts` — 5/5 tests passing) and production compilation (`compile_applet`) completed with 0 errors.
+
+---
+
+## Phase 8: Single Source for Company Management UI (STRICT MINIMAL)
+**Date:** 2026-08-19
+**Files Changed:** `src/components/SuperAdminCompaniesTab.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Company Management Single Source of Truth**:
+  - Performed comparative pre-audit of `src/components/settings/UnifiedAccessControlCenter.tsx` vs `src/components/SuperAdminCompaniesTab.tsx`.
+  - Confirmed `UnifiedAccessControlCenter` contains the complete, modern, multi-tenant company management engine (KPI summary, company creation modal with admin setup and module enablement, subscription status/plan assignment, organization tree integration, and user permission matrices).
+  - Implemented Approach A: Made `SuperAdminCompaniesTab.tsx` a clean, thin wrapper/redirect that renders the official `id="unified-access-control-redirect-banner"` and quick launchpad navigation to `UnifiedAccessControlCenter`'s respective tabs (`companies`, `org_structure`, `users`, `modules`).
+  - Preserved interface compatibility with `src/pages/SuperAdmin.tsx` and all assertion identifiers for `src/unified_access_control_phase2.test.ts`.
+- **Verification**: Unit tests (`vitest run src/unified_access_control_phase2.test.ts`, `phase1.test.ts`, `phase4.test.ts` — 18/18 tests passing) and production compilation (`compile_applet`) completed with 0 errors.
+
+---
+
+## Phase 9: Remove Duplicate RegionalManager / StationAdmin Saving from CompanyAdminDashboard
+**Date:** 2026-08-19
+**Files Changed:** `src/pages/CompanyAdminDashboard.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Directory Manager Creation Pipeline Consolidation**:
+  - Pre-audit confirmed `CompanyAdmin` (`role: 'Admin'`) has full native access to `Settings` > `users` (`UnifiedAccessControlCenter`) via `manage_settings` system permission and platform navigation.
+  - Removed duplicate, disconnected `handleSaveRegionManager` and `handleSaveStationAdmin` logic from `src/pages/CompanyAdminDashboard.tsx` (lines 149-318).
+  - Verified that all user management, including `RegionalManager` creation, role binding, region/station assignment, and dynamic permission matrices, functions seamlessly through the surviving `UnifiedAccessControlCenter` pipeline.
+- **Verification**: Scoped unit tests (`vitest run src/user_provisioning_api.test.ts src/unified_access_control.test.ts src/unified_access_control_phase1.test.ts src/unified_access_control_phase2.test.ts src/unified_access_control_phase4.test.ts` — 32/32 tests passing) and production compilation (`compile_applet`) completed with 0 errors.
+
+
+
+
+
+
 
 
 

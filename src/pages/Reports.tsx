@@ -41,7 +41,7 @@ export default function Reports({ language, theme }: ReportsProps) {
   const isRtl = language === 'ar';
 
   const activeUser = CustodyDB.getActiveUser();
-  const selectedCompanyId = CompaniesModule.getSelectedCompanyId() || 'comp-default';
+  const selectedCompanyId = activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || '';
   const allStations = CustodyDB.getScopedStations();
   
   // Organization Engine & Enterprise Dimensions

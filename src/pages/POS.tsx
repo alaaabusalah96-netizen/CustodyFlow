@@ -29,8 +29,8 @@ interface PosCartItem {
 
 export default function POS({ language, theme }: POSProps) {
   const isRtl = language === 'ar';
-  const companyId = CompaniesModule.getSelectedCompanyId() || 'comp-default';
   const activeUser = UsersModule.getActiveUser();
+  const companyId = activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || '';
 
   // Core POS States
   const [products, setProducts] = useState<any[]>([]);
@@ -146,6 +146,10 @@ export default function POS({ language, theme }: POSProps) {
 
   // Finalize Sale
   const handleCheckout = async () => {
+    if (!companyId) {
+      alert(isRtl ? 'يرجى تحديد الشركة أولاً' : 'Please select a company first');
+      return;
+    }
     if (cart.length === 0) return;
 
     try {

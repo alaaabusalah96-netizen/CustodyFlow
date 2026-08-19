@@ -1696,7 +1696,8 @@ export class FleetBusinessEngine {
         lat: data.startLat,
         lng: data.startLng
       },
-      status: 'PENDING'
+      status: 'IN_PROGRESS',
+      startedAt: now
     };
 
     const destStop: TripStop = {
@@ -1723,8 +1724,10 @@ export class FleetBusinessEngine {
       stops: [startStop, destStop],
       tripType: `مشوار طارئ - ${data.task_type}`,
       isEmergency: true,
-      status: 'DRAFT',
+      status: 'DISPATCHED',
       scheduledAt: now,
+      startedAt: now,
+      dispatchedAt: now,
       notes: data.notes || 'مشوار طارئ داخلي',
       createdBy: creatorId,
       createdAt: now

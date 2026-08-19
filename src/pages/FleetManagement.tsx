@@ -58,8 +58,8 @@ const TASK_PRESETS = [
 
 export default function FleetManagement({ language }: FleetManagementProps) {
   const isRtl = language === 'ar';
-  const companyId = CompaniesModule.getSelectedCompanyId() || 'comp-default';
   const activeUser = UsersModule.getActiveUser();
+  const companyId = activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || '';
 
   const isCompanyLevelFleetManager = Boolean(
     activeUser?.role === 'SystemAdmin' ||

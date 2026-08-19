@@ -199,7 +199,7 @@ describe('Fleet Learned Locations, Emergency Trips & Breakdown Decisions Suite',
     );
 
     expect(emergencyTrip.isEmergency).toBe(true);
-    expect(emergencyTrip.status).toBe('DRAFT');
+    expect(emergencyTrip.status).toBe('DISPATCHED');
     expect(emergencyTrip.stops).toHaveLength(2);
     expect(emergencyTrip.stops[1].taskTitle).toBe('تغيير اسطوانات غاز طارئ');
     expect(emergencyTrip.stops[1].location.lat).toBe(30.0612);

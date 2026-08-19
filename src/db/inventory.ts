@@ -13,14 +13,21 @@ import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 import { CostCenterEngine } from './costCenterEngine';
 import { OrganizationEngine } from './organizationEngine';
 
-// Default seeded warehouses
+// ============================================================================
+// NON-PRODUCTION SEED DATA / DEMO FIXTURES
+// The following DEFAULT_* constants provide sample seed records for initial
+// sandbox demonstration only. In live production workflows, all entities are
+// partitioned strictly by company_id without fallback to demo identifiers.
+// ============================================================================
+
+// NON-PRODUCTION SEED DATA: Default warehouses fixture
 const DEFAULT_WAREHOUSES: Warehouse[] = [
   {
     id: 'wh-1',
     name: 'Cairo Main Warehouse (مخزن القاهرة الرئيسي)',
     code: 'WH-CAI-MAIN',
     is_active: true,
-    company_id: 'comp-1',
+    company_id: 'comp-1', // Non-production seed company ID
     location: 'Abbassia, Cairo',
     receiving_approval_workflow: true
   },
@@ -29,7 +36,7 @@ const DEFAULT_WAREHOUSES: Warehouse[] = [
     name: 'Alexandria Delivery Depot (مستودع الإسكندرية)',
     code: 'WH-ALX-DEPOT',
     is_active: true,
-    company_id: 'comp-1',
+    company_id: 'comp-1', // Non-production seed company ID
     location: 'Smouha, Alexandria',
     receiving_approval_workflow: false
   },
@@ -38,13 +45,13 @@ const DEFAULT_WAREHOUSES: Warehouse[] = [
     name: 'Giza Secondary Store (مخزن الجيزة الفرعي)',
     code: 'WH-GIZ-SUB',
     is_active: true,
-    company_id: 'comp-1',
+    company_id: 'comp-1', // Non-production seed company ID
     location: 'Haram, Giza',
     receiving_approval_workflow: true
   }
 ];
 
-// Default seeded products
+// NON-PRODUCTION SEED DATA: Default products fixture
 const DEFAULT_PRODUCTS: Product[] = [
   {
     id: 'prod-1',
@@ -55,7 +62,7 @@ const DEFAULT_PRODUCTS: Product[] = [
     min_stock: 15,
     last_purchase_price: 1200,
     is_active: true,
-    company_id: 'comp-1',
+    company_id: 'comp-1', // Non-production seed company ID
     description: 'زيت تخليقي بالكامل لمحركات البنزين والديزل عالية الأداء'
   },
   {
@@ -67,7 +74,7 @@ const DEFAULT_PRODUCTS: Product[] = [
     min_stock: 5,
     last_purchase_price: 3500,
     is_active: true,
-    company_id: 'comp-1',
+    company_id: 'comp-1', // Non-production seed company ID
     description: 'بطارية سائلة عالية الكفاءة مع ضمان سنة كاملة'
   },
   {
@@ -79,7 +86,7 @@ const DEFAULT_PRODUCTS: Product[] = [
     min_stock: 8,
     last_purchase_price: 4800,
     is_active: true,
-    company_id: 'comp-1',
+    company_id: 'comp-1', // Non-production seed company ID
     description: 'إطار صيفي مريح وذو ثبات فائق على السرعات'
   },
   {
@@ -91,7 +98,7 @@ const DEFAULT_PRODUCTS: Product[] = [
     min_stock: 20,
     last_purchase_price: 350,
     is_active: true,
-    company_id: 'comp-1',
+    company_id: 'comp-1', // Non-production seed company ID
     description: 'فلتر هواء ذو كفاءة تنقية عالية للمحرك'
   },
   {
@@ -103,12 +110,12 @@ const DEFAULT_PRODUCTS: Product[] = [
     min_stock: 12,
     last_purchase_price: 950,
     is_active: true,
-    company_id: 'comp-1',
+    company_id: 'comp-1', // Non-production seed company ID
     description: 'تيل فرامل أمامي ياباني أصلي آمن ومعمر'
   }
 ];
 
-// Initial pre-seeded Stock Movements to provide some starting inventory
+// NON-PRODUCTION SEED DATA: Default starting stock movements fixture
 const DEFAULT_MOVEMENTS: StockMovement[] = [
   {
     id: 'm-init-1',
@@ -121,7 +128,7 @@ const DEFAULT_MOVEMENTS: StockMovement[] = [
     type: 'IN',
     current_balance_after: 100,
     date: '2026-06-01',
-    company_id: 'comp-1',
+    company_id: 'comp-1', // Non-production seed company ID
     created_at: '2026-06-01T08:00:00Z',
     created_by: 'system'
   },
@@ -136,7 +143,7 @@ const DEFAULT_MOVEMENTS: StockMovement[] = [
     type: 'IN',
     current_balance_after: 25,
     date: '2026-06-01',
-    company_id: 'comp-1',
+    company_id: 'comp-1', // Non-production seed company ID
     created_at: '2026-06-01T08:00:00Z',
     created_by: 'system'
   },
@@ -151,7 +158,7 @@ const DEFAULT_MOVEMENTS: StockMovement[] = [
     type: 'IN',
     current_balance_after: 40,
     date: '2026-06-01',
-    company_id: 'comp-1',
+    company_id: 'comp-1', // Non-production seed company ID
     created_at: '2026-06-01T08:00:00Z',
     created_by: 'system'
   },
@@ -166,7 +173,7 @@ const DEFAULT_MOVEMENTS: StockMovement[] = [
     type: 'IN',
     current_balance_after: 50,
     date: '2026-06-01',
-    company_id: 'comp-1',
+    company_id: 'comp-1', // Non-production seed company ID
     created_at: '2026-06-01T08:00:00Z',
     created_by: 'system'
   }
@@ -724,10 +731,11 @@ export class InventoryModule {
   // Ledger Entries
   static getInventoryLedger(): InventoryLedgerEntry[] {
     const companyId = CompaniesModule.getSelectedCompanyId();
+    // NON-PRODUCTION SEED DATA: Default inventory ledger fixture
     const defaultLedger: InventoryLedgerEntry[] = [
       {
         id: 'led-init-1',
-        company_id: 'comp-1',
+        company_id: 'comp-1', // Non-production seed company ID
         warehouse_id: 'wh-1',
         product_id: 'prod-1',
         transaction_type: 'Receipt',
@@ -746,7 +754,7 @@ export class InventoryModule {
       },
       {
         id: 'led-init-2',
-        company_id: 'comp-1',
+        company_id: 'comp-1', // Non-production seed company ID
         warehouse_id: 'wh-1',
         product_id: 'prod-2',
         transaction_type: 'Receipt',
@@ -765,7 +773,7 @@ export class InventoryModule {
       },
       {
         id: 'led-init-3',
-        company_id: 'comp-1',
+        company_id: 'comp-1', // Non-production seed company ID
         warehouse_id: 'wh-1',
         product_id: 'prod-3',
         transaction_type: 'Receipt',
@@ -784,7 +792,7 @@ export class InventoryModule {
       },
       {
         id: 'led-init-4',
-        company_id: 'comp-1',
+        company_id: 'comp-1', // Non-production seed company ID
         warehouse_id: 'wh-2',
         product_id: 'prod-1',
         transaction_type: 'Receipt',
@@ -810,11 +818,11 @@ export class InventoryModule {
     const companyId = CompaniesModule.getSelectedCompanyId();
     const all = StorageEngine.getStored<InventoryLedgerEntry[]>('inventory_ledger', []);
     
-    // In case storage was completely empty, seed the defaults
+    // NON-PRODUCTION SEED DATA: Default inventory ledger fixture for uninitialized storage
     const initialList = all.length === 0 ? [
       {
         id: 'led-init-1',
-        company_id: 'comp-1',
+        company_id: 'comp-1', // Non-production seed company ID
         warehouse_id: 'wh-1',
         product_id: 'prod-1',
         transaction_type: 'Receipt',
@@ -833,7 +841,7 @@ export class InventoryModule {
       },
       {
         id: 'led-init-2',
-        company_id: 'comp-1',
+        company_id: 'comp-1', // Non-production seed company ID
         warehouse_id: 'wh-1',
         product_id: 'prod-2',
         transaction_type: 'Receipt',
@@ -852,7 +860,7 @@ export class InventoryModule {
       },
       {
         id: 'led-init-3',
-        company_id: 'comp-1',
+        company_id: 'comp-1', // Non-production seed company ID
         warehouse_id: 'wh-1',
         product_id: 'prod-3',
         transaction_type: 'Receipt',
@@ -871,7 +879,7 @@ export class InventoryModule {
       },
       {
         id: 'led-init-4',
-        company_id: 'comp-1',
+        company_id: 'comp-1', // Non-production seed company ID
         warehouse_id: 'wh-2',
         product_id: 'prod-1',
         transaction_type: 'Receipt',

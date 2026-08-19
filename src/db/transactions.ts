@@ -91,7 +91,7 @@ export class TransactionsModule {
       ? CompaniesModule.getSelectedCompanyId() 
       : user.company_id;
       
-    const companyTxs = txs.filter(t => (t as any).company_id === targetCompanyId || !(t as any).company_id);
+    const companyTxs = txs.filter(t => (t as any).company_id === targetCompanyId);
     
     if (user.role === 'SystemAdmin' || user.role === 'Admin') {
       return companyTxs;
@@ -117,7 +117,7 @@ export class TransactionsModule {
 
     const scopedFilter = (t: Transaction): boolean => {
       if (t.status === 'Deleted' || (t.status as string) === 'deleted') return false;
-      if ((t as any).company_id && (t as any).company_id !== targetCompanyId) return false;
+      if ((t as any).company_id !== targetCompanyId) return false;
       if (user.role !== 'SystemAdmin' && user.role !== 'Admin') {
         if (!OrganizationScopeEngine.isTargetInUserScope(t as any, user)) return false;
       }
@@ -143,7 +143,7 @@ export class TransactionsModule {
 
     const scopedFilter = (t: Transaction): boolean => {
       if (t.status === 'Deleted' || (t.status as string) === 'deleted') return false;
-      if ((t as any).company_id && (t as any).company_id !== targetCompanyId) return false;
+      if ((t as any).company_id !== targetCompanyId) return false;
       if (user.role !== 'SystemAdmin' && user.role !== 'Admin') {
         if (!OrganizationScopeEngine.isTargetInUserScope(t as any, user)) return false;
       }

@@ -26,8 +26,8 @@ interface SalesARProps {
 
 export default function SalesAR({ language, theme }: SalesARProps) {
   const isRtl = language === 'ar';
-  const companyId = CompaniesModule.getSelectedCompanyId() || 'comp-default';
   const activeUser = UsersModule.getActiveUser();
+  const companyId = activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || '';
 
   // Tabs: 'overview' | 'invoices' | 'customers'
   const [activeTab, setActiveTab] = useState<'overview' | 'invoices' | 'customers'>('overview');
@@ -148,6 +148,10 @@ export default function SalesAR({ language, theme }: SalesARProps) {
   // 1. Add Customer
   const handleAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!companyId) {
+      showToast('error', isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     if (!customerForm.nameAr || !customerForm.nameEn) {
       showToast('error', isRtl ? 'يرجى ملء اسم العميل باللغتين العربي والانجليزي' : 'Please fill customer name in both languages');
       return;
@@ -220,6 +224,10 @@ export default function SalesAR({ language, theme }: SalesARProps) {
   // 3. Submit Sales Invoice
   const handleCreateSalesInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!companyId) {
+      showToast('error', isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     if (!selectedCustomerId) {
       showToast('error', isRtl ? 'يرجى تحديد العميل' : 'Please select a customer');
       return;
@@ -282,6 +290,10 @@ export default function SalesAR({ language, theme }: SalesARProps) {
   // 4. Record Customer Payment Collection
   const handleRecordPayment = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!companyId) {
+      showToast('error', isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     if (!paymentCustomerId) {
       showToast('error', isRtl ? 'يرجى تحديد العميل' : 'Please select a customer');
       return;

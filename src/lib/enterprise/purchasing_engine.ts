@@ -17,8 +17,7 @@ import { DocumentNumberEngine } from '../../db/documentNumberEngine';
 import { CostCenterEngine } from '../../db/costCenterEngine';
 import { OrganizationEngine } from '../../db/organizationEngine';
 
-const DEFAULT_WORKFLOW_CONFIG: PurchasingWorkflowConfig = {
-  companyId: 'comp-1',
+const DEFAULT_WORKFLOW_TEMPLATE: Omit<PurchasingWorkflowConfig, 'companyId'> = {
   prPrefix: 'PR',
   poPrefix: 'PO',
   rfqPrefix: 'RFQ',
@@ -132,11 +131,14 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
   // Standard in-memory / local storage helper methods
   static getWorkflowConfig(companyId: string): PurchasingWorkflowConfig {
+    if (!companyId || !companyId.trim()) {
+      throw new Error('Valid companyId is required to retrieve purchasing workflow configuration.');
+    }
     const list = StorageEngine.getStored<PurchasingWorkflowConfig[]>('purchasing_workflow_configs', []);
     const found = list.find(c => c.companyId === companyId);
     if (found) return found;
 
-    return { ...DEFAULT_WORKFLOW_CONFIG, companyId };
+    return { ...DEFAULT_WORKFLOW_TEMPLATE, companyId };
   }
 
   static saveWorkflowConfig(config: PurchasingWorkflowConfig): void {

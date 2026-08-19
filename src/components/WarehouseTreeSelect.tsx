@@ -18,7 +18,7 @@ import {
 export interface WarehouseTreeSelectProps {
   value: string;
   onChange: (warehouseId: string, warehouse?: Warehouse) => void;
-  companyId?: string;
+  companyId: string;
   placeholder?: string;
   isRtl?: boolean;
   theme?: 'light' | 'dark';
@@ -138,7 +138,7 @@ function flattenTreeForSelect(
 export const WarehouseTreeSelect: React.FC<WarehouseTreeSelectProps> = ({
   value,
   onChange,
-  companyId = 'comp-1',
+  companyId,
   placeholder,
   isRtl = true,
   theme = 'light',

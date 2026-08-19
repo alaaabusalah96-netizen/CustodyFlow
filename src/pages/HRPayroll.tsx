@@ -23,8 +23,8 @@ interface HRPayrollProps {
 
 export default function HRPayroll({ language, theme }: HRPayrollProps) {
   const isRtl = language === 'ar';
-  const companyId = CompaniesModule.getSelectedCompanyId() || 'comp-default';
   const activeUser = UsersModule.getActiveUser();
+  const companyId = activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || '';
 
   // Core States
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -164,6 +164,10 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
   // Submit Employee
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!companyId) {
+      showToast('error', isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     if (!empForm.name || !empForm.jobTitle) {
       showToast('error', isRtl ? 'يرجى ملء جميع الحقول المطلوبة' : 'Please fill all required fields');
       return;
@@ -234,6 +238,10 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
 
   // Generate Payroll Sheet
   const handleGeneratePayrollSheet = () => {
+    if (!companyId) {
+      showToast('error', isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     const list = HRBusinessEngine.calculateMonthlyPayrollSheet(companyId, payrollPeriod, selectedOrgUnitFilter);
     setPayrollSheet(list);
     setIsPayrollGenerated(true);
@@ -258,6 +266,10 @@ export default function HRPayroll({ language, theme }: HRPayrollProps) {
 
   // Post Settle Payroll Sheet
   const handlePostPayroll = async () => {
+    if (!companyId) {
+      showToast('error', isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
+      return;
+    }
     if (payrollSheet.length === 0) return;
 
     const totalGross = payrollSheet.reduce((sum, item) => sum + item.baseSalary + item.allowances, 0);

@@ -75,7 +75,7 @@ export default function InventoryDocumentForm({
   const activeUser = CustodyDB.getActiveUser();
 
   // Load basic lists
-  const selectedCompanyId = CompaniesModule.getSelectedCompanyId() || 'comp-default';
+  const selectedCompanyId = activeUser?.company_id || CompaniesModule.getSelectedCompanyId() || '';
   const warehouses = useMemo(() => InventoryModule.getWarehouses(), []);
   const products = useMemo(() => InventoryModule.getProducts(), []);
   const stations = useMemo(() => CustodyDB.getStations(), []);
