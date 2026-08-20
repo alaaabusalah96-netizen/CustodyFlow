@@ -117,7 +117,7 @@ export class FleetBusinessEngine {
     const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
 
     const stops: TripStop[] = data.stops.map((stop, idx) => ({
-      id: stop.id || `stop-${Date.now()}-${idx + 1}-${Math.random().toString(36).substring(2, 6)}`,
+      id: stop.id || `stop-${crypto.randomUUID()}`,
       sequence: idx + 1,
       taskTitle: stop.taskTitle || undefined,
       notes: stop.notes || '',
@@ -138,7 +138,7 @@ export class FleetBusinessEngine {
     }));
 
     const newTrip: Trip = {
-      id: `trip-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `trip-${crypto.randomUUID()}`,
       company_id: companyId,
       org_unit_id: data.org_unit_id || stops[0]?.location.org_unit_id || undefined,
       vehicle_id: data.vehicle_id,
@@ -758,7 +758,7 @@ export class FleetBusinessEngine {
 
     const maxSeq = trip.stops.length > 0 ? Math.max(...trip.stops.map(s => s.sequence || 0)) : 0;
     const newStop: TripStop = {
-      id: `stop-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `stop-${crypto.randomUUID()}`,
       sequence: maxSeq + 1,
       taskTitle: stopData.taskTitle || undefined,
       notes: stopData.notes || '',
@@ -933,7 +933,7 @@ export class FleetBusinessEngine {
     // 2. Add stop to target trip
     const maxTargetSeq = targetTrip.stops.length > 0 ? Math.max(...targetTrip.stops.map(s => s.sequence || 0)) : 0;
     const newTargetStop: TripStop = {
-      id: `stop-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `stop-${crypto.randomUUID()}`,
       sequence: maxTargetSeq + 1,
       taskTitle: stopToMove.taskTitle,
       notes: `${stopToMove.notes ? stopToMove.notes + ' | ' : ''}محولة من مشوار سابق`.trim(),
@@ -1280,7 +1280,7 @@ export class FleetBusinessEngine {
     }
 
     const newVehicle: Vehicle = {
-      id: `veh-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `veh-${crypto.randomUUID()}`,
       company_id: companyId,
       org_unit_id: targetOrgUnit,
       cost_center_id: targetCostCenter,
@@ -1635,7 +1635,7 @@ export class FleetBusinessEngine {
       all[existingIndex] = resultEntry;
     } else {
       resultEntry = {
-        id: `lloc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id: `lloc-${crypto.randomUUID()}`,
         company_id: companyId,
         org_unit_id: org_unit_id,
         task_type: task_type.trim(),
@@ -1716,7 +1716,7 @@ export class FleetBusinessEngine {
 
     const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
     const emergencyTrip: Trip = {
-      id: `trip-emg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `trip-emg-${crypto.randomUUID()}`,
       company_id: companyId,
       org_unit_id: data.org_unit_id,
       vehicle_id: data.vehicle_id,
@@ -1769,7 +1769,7 @@ export class FleetBusinessEngine {
     const now = new Date().toISOString();
 
     const decisionLog: BreakdownDecisionLog = {
-      id: `bd-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `bd-${crypto.randomUUID()}`,
       decision: data.decision,
       fromVehicleId: data.fromVehicleId,
       toVehicleId: data.toVehicleId,
@@ -1870,7 +1870,7 @@ export class FleetBusinessEngine {
     const now = new Date().toISOString();
 
     const decisionLog: BreakdownDecisionLog = {
-      id: `bd-stop-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `bd-stop-${crypto.randomUUID()}`,
       decision: data.decision,
       stopId: data.stopId,
       stopTaskTitle: targetStop.taskTitle || targetStop.location.label,
@@ -1905,7 +1905,7 @@ export class FleetBusinessEngine {
         const existing = allTrips[existingTargetTripIndex];
         const newStop: TripStop = {
           ...targetStop,
-          id: `stop-reassigned-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          id: `stop-reassigned-${crypto.randomUUID()}`,
           sequence: existing.stops.length + 1,
           notes: `${targetStop.notes || ''} [مهمة محولة من المركبة ${data.fromVehicleId}]`.trim(),
           status: 'PENDING'
@@ -1941,7 +1941,7 @@ export class FleetBusinessEngine {
         };
 
         targetTrip = {
-          id: `trip-reassigned-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          id: `trip-reassigned-${crypto.randomUUID()}`,
           company_id: companyId,
           org_unit_id: targetStop.location.org_unit_id || sourceTrip.org_unit_id,
           vehicle_id: data.toVehicleId,
@@ -2053,7 +2053,7 @@ export class FleetBusinessEngine {
 
     const all = StorageEngine.getStored<TripChatMessage[]>('fleet_trip_chat_messages', []);
     const newMsg: TripChatMessage = {
-      id: `tmsg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `tmsg-${crypto.randomUUID()}`,
       trip_id: tripId,
       company_id: companyId,
       sender_id: sender.id,
@@ -2130,7 +2130,7 @@ export class FleetBusinessEngine {
     }
 
     const newRule: VehicleConstraintRule = {
-      id: `vconst-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `vconst-${crypto.randomUUID()}`,
       company_id: companyId,
       vehicle_id: data.vehicle_id,
       mode: data.mode,
@@ -2826,7 +2826,7 @@ export class FleetBusinessEngine {
     }
 
     const vehicle = allVehicles[vIndex];
-    const logId = `maint-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const logId = `maint-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
 
     const log: MaintenanceLog = {
@@ -2899,7 +2899,7 @@ export class FleetBusinessEngine {
     }
 
     const vehicle = allVehicles[vIndex];
-    const logId = `fuel-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const logId = `fuel-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
     const liters = Number(data.liters) || 0;
     const costPerLiter = Number(data.costPerLiter) || 0;
@@ -3079,7 +3079,7 @@ export class FleetBusinessEngine {
       overallStatus = 'PASSED_WITH_DEFECTS';
     }
 
-    const inspectionId = `insp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const inspectionId = `insp-${crypto.randomUUID()}`;
     const record: VehicleInspectionRecord = {
       id: inspectionId,
       company_id: companyId,
@@ -3189,7 +3189,7 @@ export class FleetBusinessEngine {
 
     const totalTrips = allTrips.length;
     const completedTrips = allTrips.filter(t => t.status === 'COMPLETED').length;
-    const cancelledOrBreakdownTrips = allTrips.filter(t => t.status === 'CANCELLED' || t.status === 'BREAKDOWN').length;
+    const cancelledOrBreakdownTrips = allTrips.filter(t => t.status === 'CANCELLED' || t.status === 'SUSPENDED_BREAKDOWN' || (t.status as string) === 'BREAKDOWN').length;
 
     let totalStopsAssigned = 0;
     let completedStops = 0;
@@ -3218,8 +3218,8 @@ export class FleetBusinessEngine {
     // Total distance driven
     let totalDistanceDrivenKm = 0;
     allTrips.forEach(t => {
-      if (t.telemetry?.totalDistanceKm) {
-        totalDistanceDrivenKm += t.telemetry.totalDistanceKm;
+      if ((t as any).telemetry?.totalDistanceKm) {
+        totalDistanceDrivenKm += (t as any).telemetry.totalDistanceKm;
       }
     });
 
@@ -3257,7 +3257,7 @@ export class FleetBusinessEngine {
     }
 
     const lastTripDate = allTrips.length > 0 
-      ? allTrips.map(t => t.scheduled_date || t.createdAt).sort().reverse()[0] 
+      ? allTrips.map(t => (t as any).scheduled_date || t.scheduledAt || t.createdAt).sort().reverse()[0] 
       : undefined;
 
     return {

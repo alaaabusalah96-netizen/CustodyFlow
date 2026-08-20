@@ -140,5 +140,53 @@ describe('Phase 15: Stop Silent comp-1 Write Fallback (Custody Paths Only)', () 
     expect(res.success).toBe(false);
     expect(res.messageAr).toContain('يجب اختيار شركة');
   });
+
+  it('11. StationsModule.addRegion throws bilingual error when company_id is empty', () => {
+    expect(() => {
+      StationsModule.addRegion('Region Test', 'REG-T', '');
+    }).toThrow('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
+  });
+
+  it('12. StationsModule.addStation throws bilingual error when company_id is empty', () => {
+    expect(() => {
+      StationsModule.addStation('Station Test', 'STN-T', 500, undefined, '');
+    }).toThrow('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
+  });
+
+  it('13. isValidCompanyId and requireCompanyId guard behavior', async () => {
+    const { isValidCompanyId, requireCompanyId, REQUIRE_COMPANY_ID_ERROR } = await import('./db/companyGuard');
+    expect(isValidCompanyId('')).toBe(false);
+    expect(isValidCompanyId('   ')).toBe(false);
+    expect(isValidCompanyId(null)).toBe(false);
+    expect(isValidCompanyId(undefined)).toBe(false);
+    expect(isValidCompanyId('comp-real')).toBe(true);
+
+    expect(() => requireCompanyId('')).toThrow(REQUIRE_COMPANY_ID_ERROR);
+    expect(requireCompanyId('comp-123')).toBe('comp-123');
+  });
+
+  it('14. Static codebase scan: No live write path in src/db contains silent comp-1 / comp-default / comp-restaurant-01 fallback', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+
+    const dbDir = path.resolve(process.cwd(), 'src/db');
+    const files = fs.readdirSync(dbDir).filter(f => f.endsWith('.ts') && f !== 'defaults.ts');
+
+    const forbiddenPatterns = [
+      /\|\|\s*['"]comp-1['"]/g,
+      /\?\?\s*['"]comp-1['"]/g,
+      /\|\|\s*['"]comp-default['"]/g,
+      /\?\?\s*['"]comp-default['"]/g,
+      /\|\|\s*['"]comp-restaurant-01['"]/g,
+      /\?\?\s*['"]comp-restaurant-01['"]/g,
+    ];
+
+    for (const file of files) {
+      const content = fs.readFileSync(path.join(dbDir, file), 'utf-8');
+      for (const pattern of forbiddenPatterns) {
+        expect(pattern.test(content)).toBe(false);
+      }
+    }
+  });
 });
 

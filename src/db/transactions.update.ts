@@ -8,7 +8,7 @@ import { CompaniesModule } from './companies';
 import { TransactionsVoucherModule } from './transactions.voucher';
 import { TransactionsHistoryModule } from './transactions.history';
 import { CustodyService } from './custodyService';
-import { ValidationEngine } from './validation';
+import { ValidationEngine, isValidCompanyId, REQUIRE_COMPANY_ID_ERROR } from './validation';
 import { DEFAULT_TRANSACTIONS } from './defaults';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 import { CustodyDB } from '../db';
@@ -43,10 +43,10 @@ export class TransactionsUpdateModule {
 
         const newVersion = currentVersion + 1;
         const compId = ('company_id' in updates ? updates.company_id : undefined) ?? old.company_id ?? user?.company_id ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('custody_selected_company_id') : null);
-        if (!compId || compId.trim() === '') {
+        if (!isValidCompanyId(compId)) {
           return {
             success: false,
-            errors: ['يجب اختيار شركة قبل الحفظ. / Please select a company before saving.']
+            errors: [REQUIRE_COMPANY_ID_ERROR]
           };
         }
         const updated = {

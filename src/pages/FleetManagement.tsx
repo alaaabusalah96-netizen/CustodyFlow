@@ -7,6 +7,7 @@ import {
   Siren, PauseCircle, MessageSquare, Compass, Ban, Lock, CheckSquare, Square,
   Power, ShieldCheck, X, Activity, Award
 } from 'lucide-react';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { StorageEngine } from '../db/storage';
 import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
@@ -899,7 +900,8 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   });
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+    <ErrorBoundary>
+      <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
       {/* Toast Notification */}
       {toast && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl shadow-xl border text-xs font-bold flex items-center gap-2 ${
@@ -2857,6 +2859,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
           isRtl={isRtl}
         />
       )}
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }

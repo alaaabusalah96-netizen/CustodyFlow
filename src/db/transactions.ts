@@ -9,6 +9,7 @@ import {
 } from '../types';
 import { dbSetDoc, dbFetchPaginated } from '../firebase';
 import { StorageEngine } from './storage';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_CATEGORIES, DEFAULT_TRANSACTIONS } from './defaults';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
@@ -33,7 +34,7 @@ export class TransactionsModule {
 
   static saveCategories(categories: ExpenseCategory[]): void {
     StorageEngine.setStored('categories', categories);
-    categories.forEach(c => dbSetDoc('categories', c.id, c));
+    categories.forEach(c => syncWriteWithOfflineFallback('categories', c.id, c).catch(() => {}));
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Categories', 'Modified available expense category configurations.');
   }

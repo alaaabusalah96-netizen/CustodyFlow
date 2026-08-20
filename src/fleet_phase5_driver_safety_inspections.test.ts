@@ -158,19 +158,22 @@ describe('Phase 5: Digital Vehicle Safety Inspections & Driver Performance Score
     const driverName = 'ياسر إبراهيم';
 
     // Seed trips with completed stops
-    const trips: Trip[] = [
+    const trips: any[] = [
       {
         id: 'trp-1',
         company_id: companyId,
         trip_number: 'TRP-101',
         vehicle_id: 'veh-1',
         driver_id: driverId,
+        tripType: 'GENERAL',
+        scheduledAt: '2026-08-10',
+        createdBy: 'usr-1',
         start_location: 'مستودع القاهرة',
         end_location: 'فرع الإسكندرية',
         status: 'COMPLETED',
         stops: [
-          { id: 'stp-1', stop_number: 1, location_name: 'نقطة 1', status: 'COMPLETED' },
-          { id: 'stp-2', stop_number: 2, location_name: 'نقطة 2', status: 'COMPLETED' }
+          { id: 'stp-1', sequence: 1, location: { label: 'نقطة 1' }, status: 'COMPLETED' },
+          { id: 'stp-2', sequence: 2, location: { label: 'نقطة 2' }, status: 'COMPLETED' }
         ],
         telemetry: { totalDistanceKm: 220, recordedPointsCount: 20 },
         createdAt: '2026-08-10'
@@ -181,12 +184,15 @@ describe('Phase 5: Digital Vehicle Safety Inspections & Driver Performance Score
         trip_number: 'TRP-102',
         vehicle_id: 'veh-1',
         driver_id: driverId,
+        tripType: 'GENERAL',
+        scheduledAt: '2026-08-12',
+        createdBy: 'usr-1',
         start_location: 'مستودع القاهرة',
         end_location: 'فرع طنطا',
         status: 'COMPLETED',
         stops: [
-          { id: 'stp-3', stop_number: 1, location_name: 'نقطة 3', status: 'COMPLETED' },
-          { id: 'stp-4', stop_number: 2, location_name: 'نقطة 4', status: 'COMPLETED' }
+          { id: 'stp-3', sequence: 1, location: { label: 'نقطة 3' }, status: 'COMPLETED' },
+          { id: 'stp-4', sequence: 2, location: { label: 'نقطة 4' }, status: 'COMPLETED' }
         ],
         telemetry: { totalDistanceKm: 110, recordedPointsCount: 15 },
         createdAt: '2026-08-12'
@@ -229,17 +235,20 @@ describe('Phase 5: Digital Vehicle Safety Inspections & Driver Performance Score
   });
 
   it('5. Generates fleet-wide driver performance summary and leaderboards', () => {
-    const trips: Trip[] = [
+    const trips: any[] = [
       {
         id: 'trp-a',
         company_id: companyId,
         trip_number: 'TRP-201',
         vehicle_id: 'veh-1',
         driver_id: 'drv-a',
+        tripType: 'GENERAL',
+        scheduledAt: '2026-08-15',
+        createdBy: 'usr-1',
         start_location: 'القاهرة',
         end_location: 'الجيزة',
         status: 'COMPLETED',
-        stops: [{ id: 's1', stop_number: 1, location_name: 'نقطة أ', status: 'COMPLETED' }],
+        stops: [{ id: 's1', sequence: 1, location: { label: 'نقطة أ' }, status: 'COMPLETED' }],
         createdAt: '2026-08-15'
       },
       {
@@ -248,11 +257,14 @@ describe('Phase 5: Digital Vehicle Safety Inspections & Driver Performance Score
         trip_number: 'TRP-202',
         vehicle_id: 'veh-2',
         driver_id: 'drv-b',
+        tripType: 'GENERAL',
+        scheduledAt: '2026-08-15',
+        createdBy: 'usr-1',
         start_location: 'القاهرة',
         end_location: 'السويس',
-        status: 'BREAKDOWN',
+        status: 'SUSPENDED_BREAKDOWN',
         stops: [
-          { id: 's2', stop_number: 1, location_name: 'نقطة ب', status: 'CANCELLED' }
+          { id: 's2', sequence: 1, location: { label: 'نقطة ب' }, status: 'SKIPPED' }
         ],
         createdAt: '2026-08-15'
       }

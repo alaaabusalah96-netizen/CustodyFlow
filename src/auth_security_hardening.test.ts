@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { hashPassword, hashPasswordPBKDF2_210k, getPepperByVersion } from './lib/server_hash';
 import { UsersModule } from './db/users';
+import { StorageEngine } from './db/storage';
+import { AppUser } from './types';
 import fs from 'fs';
 import path from 'path';
 
@@ -49,11 +51,21 @@ describe('v49-security-hardening: Authentication & Security Standards Verificati
   });
 
   it('should correctly validate platform owner identity without wildcard matching', () => {
-    const ownerEmail = process.env.PLATFORM_OWNER_EMAIL || 'admin@kemit-erp.com';
-    expect(UsersModule.isPlatformOwner(ownerEmail)).toBe(true);
-    expect(UsersModule.isPlatformOwner(` ${ownerEmail} `)).toBe(true);
-    expect(UsersModule.isPlatformOwner('random_user@domain.com')).toBe(false);
-    expect(UsersModule.isPlatformOwner('')).toBe(false);
+    const origOwner = process.env.PLATFORM_OWNER_EMAIL;
+    try {
+      const testOwnerEmail = 'admin@your-domain.com';
+      process.env.PLATFORM_OWNER_EMAIL = testOwnerEmail;
+
+      expect(UsersModule.isPlatformOwner(testOwnerEmail)).toBe(true);
+      expect(UsersModule.isPlatformOwner(` ${testOwnerEmail} `)).toBe(true);
+      expect(UsersModule.isPlatformOwner(testOwnerEmail.toUpperCase())).toBe(true);
+      expect(UsersModule.isPlatformOwner('random_user@domain.com')).toBe(false);
+      expect(UsersModule.isPlatformOwner('')).toBe(false);
+      expect(UsersModule.isPlatformOwner(null)).toBe(false);
+      expect(UsersModule.isPlatformOwner(undefined)).toBe(false);
+    } finally {
+      process.env.PLATFORM_OWNER_EMAIL = origOwner;
+    }
   });
 
   it('should verify STRICT_PROD_SECURITY disables plaintext fallback even if ALLOW_PLAINTEXT_DEV_FALLBACK is true', () => {
@@ -71,5 +83,101 @@ describe('v49-security-hardening: Authentication & Security Standards Verificati
       process.env.STRICT_PROD_SECURITY = origStrict;
       process.env.ALLOW_PLAINTEXT_DEV_FALLBACK = origFallback;
     }
+  });
+
+  it('should verify verifyUserPassword only accepts valid hashes and rejects plaintext passwords', () => {
+    // If a user document somehow had a raw plaintext string that does not match a valid cryptographic hash of that plain text
+    const testUser = {
+      id: 'usr-plaintext-test',
+      username: 'plaintest',
+      full_name: 'Plaintext Test User',
+      email: 'plaintest@kemit-erp.com',
+      role: 'StationAdmin' as const,
+      password: 'mypassword123', // Raw string in legacy field
+      salt: 'plaintest@kemit-erp.com'
+    };
+
+    // Storing user directly in StorageEngine
+    const existing = StorageEngine.getStored<any[]>('users', []);
+    StorageEngine.setStored('users', [...existing, testUser]);
+
+    // Attempting to verify with 'mypassword123' should FAIL because stored password is not the hash of 'mypassword123'
+    const result = UsersModule.verifyUserPassword('plaintest@kemit-erp.com', 'mypassword123');
+    expect(result).toBeNull();
+  });
+
+  it('should not trust localStorage alone for authorization elevation', () => {
+    // Clear storage cache
+    StorageEngine.cache = {};
+
+    // Genuine canonical registered user is StationAdmin
+    const realUser: AppUser = {
+      id: 'usr-real-station-admin',
+      full_name: 'Genuine Station Admin',
+      email: 'station.admin@kemit-erp.com',
+      role: 'StationAdmin',
+      company_id: 'comp-100',
+      is_active: true,
+      permissions: UsersModule.enrichUserPermissions('StationAdmin')
+    };
+    StorageEngine.setStored('users', [realUser]);
+
+    // Attacker modifies localStorage 'custody_active_user' to claim SystemAdmin role and elevated permissions
+    const tamperedLocalStorageUser = {
+      id: 'usr-real-station-admin',
+      full_name: 'Genuine Station Admin',
+      email: 'station.admin@kemit-erp.com',
+      role: 'SystemAdmin', // Tampered!
+      company_id: 'comp-100',
+      is_active: true,
+      permissions: {
+        ...UsersModule.enrichUserPermissions('SystemAdmin'),
+        manage_companies: true,
+        manage_users: true
+      }
+    };
+
+    localStorage.setItem('custody_active_user', JSON.stringify(tamperedLocalStorageUser));
+
+    // getActiveUser() should reconcile against canonical registered user record and deny tampered privilege
+    const resolvedUser = UsersModule.getActiveUser();
+    expect(resolvedUser).not.toBeNull();
+    expect(resolvedUser?.role).toBe('StationAdmin');
+    expect(resolvedUser?.permissions.manage_companies).toBe(false);
+    expect(resolvedUser?.permissions.manage_users).toBe(false);
+    expect(resolvedUser?.permissions.create_expense).toBe(true);
+  });
+
+  it('should reject forged impersonation sessions where impersonator is not a registered SystemAdmin or Platform Owner', () => {
+    StorageEngine.cache = {};
+
+    const targetUser: AppUser = {
+      id: 'usr-target-manager',
+      full_name: 'Target Regional Manager',
+      email: 'manager@kemit-erp.com',
+      role: 'RegionalManager',
+      company_id: 'comp-100',
+      is_active: true,
+      permissions: UsersModule.enrichUserPermissions('RegionalManager')
+    };
+    StorageEngine.setStored('users', [targetUser]);
+
+    // Forged impersonation claim with non-existent or unprivileged impersonator
+    const forgedImpersonation = {
+      ...targetUser,
+      impersonator: {
+        id: 'usr-fake-attacker',
+        email: 'attacker@evil.com',
+        full_name: 'Attacker User',
+        role: 'StationAdmin'
+      }
+    };
+
+    localStorage.setItem('custody_active_user', JSON.stringify(forgedImpersonation));
+
+    // getActiveUser() must detect that the impersonator is not a genuine SystemAdmin or Platform Owner and purge the session
+    const resolvedUser = UsersModule.getActiveUser();
+    expect(resolvedUser).toBeNull();
+    expect(localStorage.getItem('custody_active_user')).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 import { Region, Station } from '../types';
 import { dbSetDoc, dbDeleteDoc } from '../firebase';
 import { StorageEngine } from './storage';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_REGIONS, DEFAULT_STATIONS } from './defaults';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
@@ -8,6 +9,7 @@ import { CompaniesModule } from './companies';
 import { OrganizationScopeEngine } from './organizationScopeEngine';
 import { OrganizationEngine } from './organizationEngine';
 import { OrganizationUnit } from '../types/organization';
+import { requireCompanyId } from './companyGuard';
 
 export class StationsModule {
   // Regions
@@ -56,15 +58,12 @@ export class StationsModule {
 
   static saveRegions(regions: Region[]): void {
     StorageEngine.setStored('regions', regions);
-    regions.forEach(r => dbSetDoc('regions', r.id, r));
+    regions.forEach(r => syncWriteWithOfflineFallback('regions', r.id, r).catch(() => {}));
   }
 
   static addRegion(name: string, code?: string, companyId?: string): Region {
     const regions = StationsModule.getRegions();
-    const compId = companyId || CompaniesModule.getSelectedCompanyId();
-    if (!compId || compId.trim() === '') {
-      throw new Error('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
-    }
+    const compId = requireCompanyId(companyId || CompaniesModule.getSelectedCompanyId());
     const regId = `reg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const org_unit_id = `org-unit-region-${regId}`;
 
@@ -134,7 +133,7 @@ export class StationsModule {
   static deleteRegion(id: string): void {
     const regions = StationsModule.getRegions().filter(r => r.id !== id);
     StationsModule.saveRegions(regions);
-    dbDeleteDoc('regions', id);
+    syncWriteWithOfflineFallback('regions', id, null).catch(() => {});
 
     // Compatibility sync: delete corresponding OrganizationUnit
     try {
@@ -191,17 +190,14 @@ export class StationsModule {
 
   static saveStations(stations: Station[]): void {
     StorageEngine.setStored('stations', stations);
-    stations.forEach(s => dbSetDoc('stations', s.id, s));
+    stations.forEach(s => syncWriteWithOfflineFallback('stations', s.id, s).catch(() => {}));
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Stations', 'Modified available cash custody stations configuration.');
   }
 
   static addStation(name: string, code: string, custodyAmount: number, regionId?: string, companyId?: string): Station {
     const stations = StationsModule.getStations();
-    const compId = companyId || CompaniesModule.getSelectedCompanyId();
-    if (!compId || compId.trim() === '') {
-      throw new Error('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
-    }
+    const compId = requireCompanyId(companyId || CompaniesModule.getSelectedCompanyId());
     const stnId = `stn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const org_unit_id = `org-unit-station-${stnId}`;
 
@@ -292,7 +288,6 @@ export class StationsModule {
           };
           companies[compIdx] = updatedCompany;
           CompaniesModule.saveCompanies(companies);
-          dbSetDoc('companies', compId, updatedCompany);
         }
       }
 
@@ -309,7 +304,7 @@ export class StationsModule {
     const before = StationsModule.getStations().find(s => s.id === id);
     const stations = StationsModule.getStations().filter(s => s.id !== id);
     StationsModule.saveStations(stations);
-    dbDeleteDoc('stations', id);
+    syncWriteWithOfflineFallback('stations', id, null).catch(() => {});
 
     // Compatibility sync: delete corresponding OrganizationUnit
     try {

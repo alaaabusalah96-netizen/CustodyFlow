@@ -1,6 +1,7 @@
 import { Company } from '../types';
 import { dbSetDoc, dbDeleteDoc } from '../firebase';
 import { StorageEngine } from './storage';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_COMPANIES } from './defaults';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
@@ -12,7 +13,7 @@ export class CompaniesModule {
 
   static saveCompanies(companies: Company[]): void {
     StorageEngine.setStored('companies', companies);
-    companies.forEach(c => dbSetDoc('companies', c.id, c));
+    companies.forEach(c => syncWriteWithOfflineFallback('companies', c.id, c).catch(() => {}));
   }
 
   static addCompany(name: string, custodyValue?: number): Company {
@@ -45,7 +46,7 @@ export class CompaniesModule {
   static deleteCompany(id: string): void {
     const companies = CompaniesModule.getCompanies().filter(c => c.id !== id);
     CompaniesModule.saveCompanies(companies);
-    dbDeleteDoc('companies', id);
+    syncWriteWithOfflineFallback('companies', id, null).catch(() => {});
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Delete Company', `Deleted company ID: ${id}`);
   }

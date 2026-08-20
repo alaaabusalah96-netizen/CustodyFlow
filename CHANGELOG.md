@@ -4,6 +4,108 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Phase 19: Harden Impersonation (SECURE, DO NOT REMOVE)
+**Date:** 2026-08-20
+**Files Changed:** `src/db/users.ts`, `src/auth_security_hardening.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Cryptographic & Authority Validation for Impersonation Sessions**:
+  - Maintained complete SuperAdmin technical support impersonation workflow (`impersonateUser`, `exitImpersonation`, full audit log attribution `IMPERSONATION_START` / `IMPERSONATION_END` with `impersonator_id`, `target_user_id`, `reason`).
+  - Hardened `UsersModule.getActiveUser()` to validate that any active `impersonator` context references a legitimate, registered `SystemAdmin` or Platform Owner from the canonical user catalog. Forged impersonation payloads are immediately purged from memory and `localStorage`.
+  - Reconciled target user's role against registered catalog data to strictly prevent privilege escalation beyond the target user's base role during support sessions.
+- **Verification & Testing**:
+  - Scoped tests passed: `src/auth_security_hardening.test.ts` (8 passed), `src/unified_access_control_phase3.test.ts` (5 passed), `src/unified_access_control.test.ts` (8 passed) — 21/21 passed.
+  - TypeScript linter (`lint_applet`) and compilation (`compile_applet`) passed with 0 errors.
+
+---
+
+## Phase 18: Do Not Trust localStorage Alone for Authorization
+**Date:** 2026-08-20
+**Files Changed:** `src/db/users.ts`, `src/auth_security_hardening.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Reconciliation Against Canonical Records**:
+  - Hardened `UsersModule.getActiveUser()` to reconcile the active user profile from `localStorage` against registered user records (`users`) stored in the system.
+  - Ensured roles and permissions are always validated and recalculated via `UsersModule.enrichUserPermissions`, preventing client-side `localStorage` tampering from granting arbitrary privilege escalation (e.g. elevating StationAdmin to SystemAdmin).
+  - Maintained full support for Firebase Auth synchronization in `App.tsx`, technical support impersonation, and offline caching without altering login/logout success paths.
+- **Verification & Testing**:
+  - Scoped tests passed: `src/auth_security_hardening.test.ts` (7 passed), `src/platform_admin_bootstrap.test.ts` (6 passed), `src/unified_access_control.test.ts` (8 passed), `src/unified_access_control_phase1.test.ts` (7 passed), `src/unified_access_control_phase2.test.ts` (7 passed), `src/unified_access_control_phase3.test.ts` (5 passed), `src/unified_access_control_phase4.test.ts` (4 passed) — 44/44 passed.
+  - TypeScript linter (`lint_applet`) and compilation (`compile_applet`) passed with 0 errors.
+
+---
+
+## Phase 17: Fix auth_security_hardening.test.ts Drift
+**Date:** 2026-08-20
+**Files Changed:** `src/auth_security_hardening.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Synchronized Security & Environment Assertions**:
+  - Replaced stale test email fallback (`admin@kemit-erp.com`) in `src/auth_security_hardening.test.ts` with test-scoped `process.env.PLATFORM_OWNER_EMAIL = 'admin@your-domain.com'`, matching `.env.example` and `UsersModule.isPlatformOwner`.
+  - Added explicit test assertions for casing (`toUpperCase`), whitespace trimming, empty/null/undefined handling, and random non-owner email rejection.
+- **Verification & Testing**:
+  - Scoped tests passed: `src/auth_security_hardening.test.ts` (6 passed), `src/platform_admin_bootstrap.test.ts` (6 passed) — 12/12 passed.
+  - TypeScript linter (`lint_applet`) and compilation (`compile_applet`) passed with 0 errors.
+
+---
+
+## Phase 16: Disable Plaintext Password Acceptance
+**Date:** 2026-08-20
+**Files Changed:** `src/db/users.ts`, `src/auth_security_hardening.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Disable Plaintext Authentication Fallback**:
+  - Removed `storedPassword === passwordPlain` condition from `UsersModule.verifyUserPassword` in `src/db/users.ts`.
+  - Enforced that authentication strictly evaluates cryptographic hash paths (`hash10k`, `hash1k`, `hashSingle`, `legacy`) and never raw plaintext matches.
+- **Verification & Testing**:
+  - Added test case to `src/auth_security_hardening.test.ts` verifying rejection of raw plaintext passwords stored in legacy fields.
+  - Scoped suites `src/auth_security_hardening.test.ts` (6 passed) and `src/part2_account_correction.test.ts` (2 passed).
+  - TypeScript linter (`lint_applet`) and production build (`compile_applet`) passed with 0 errors.
+
+---
+
+## Phase 15: Prevent comp-1 / comp-default Regression in Live Write Paths
+**Date:** 2026-08-20
+**Files Changed:** `src/phase15_comp1_fallback.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Regression Guard & Testing Suite**:
+  - Expanded `src/phase15_comp1_fallback.test.ts` to 14 automated test assertions protecting live write paths against reintroducing `'comp-1'`, `'comp-default'`, or `'comp-restaurant-01'` fallbacks.
+  - Added test cases verifying that `StationsModule.addRegion` and `StationsModule.addStation` reject empty company IDs with bilingual error messages.
+  - Added unit test coverage for `isValidCompanyId` and `requireCompanyId` guard functions.
+  - Added dynamic filesystem scan test across `src/db/*.ts` asserting no live write paths contain silent fallback patterns (`|| 'comp-1'`, `?? 'comp-1'`, `|| 'comp-default'`, `?? 'comp-default'`, `|| 'comp-restaurant-01'`, `?? 'comp-restaurant-01'`).
+- **Verification & Testing**:
+  - Scoped suite `src/phase15_comp1_fallback.test.ts` (14 tests passed).
+  - TypeScript linter (`lint_applet`) and production compilation (`compile_applet`) passed with 0 errors.
+
+---
+
+## Phase 14: Extract Shared companyId-guard Helper
+**Date:** 2026-08-20
+**Files Changed:** `src/db/companyGuard.ts`, `src/db/validation.ts`, `src/db/transactions.voucher.ts`, `src/db/stations.ts`, `src/db/transactions.create.ts`, `src/db/transactions.update.ts`, `CHANGELOG.md`
+**Summary:**
+- **Centralized Guard Extraction (`companyGuard.ts`)**:
+  - Extracted single authoritative `isValidCompanyId`, `requireCompanyId`, and standard bilingual error string `REQUIRE_COMPANY_ID_ERROR` ('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.').
+  - Re-exported utilities through `src/db/validation.ts` for clean developer experience without circular dependencies.
+- **De-duplicated Call Sites**:
+  - `TransactionsVoucherModule.saveExpense` & `saveCashVoucher`: Replaced inline `if (!company_id)` checks with `requireCompanyId`.
+  - `StationsModule.addRegion` & `addStation`: Replaced inline `if (!compId)` checks with `requireCompanyId`.
+  - `TransactionsCreateModule.addTransaction` & `TransactionsUpdateModule.updateTransaction`: Standardized validation using `isValidCompanyId` and `REQUIRE_COMPANY_ID_ERROR`.
+- **Verification & Testing**:
+  - Scoped suite `src/phase15_comp1_fallback.test.ts` (10 tests passed).
+  - TypeScript linter (`lint_applet`) and production compilation (`compile_applet`) passed with 0 errors.
+
+---
+
+## Phase 13: Reduce localStorage + Firestore Inconsistency Risk on Critical Writes
+**Date:** 2026-08-20
+**Files Changed:** `src/db/companies.ts`, `src/db/stations.ts`, `src/db/businessGroups.ts`, `src/db/transactions.ts`, `src/db/users.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/fleet_phase5_driver_safety_inspections.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Critical Write Path Synchronization (`syncWriteWithOfflineFallback`)**:
+  - Audited all critical write paths and wrapped direct `dbSetDoc`/`dbDeleteDoc` calls in `CompaniesModule`, `StationsModule`, `BusinessGroupsModule`, and `TransactionsModule` with `syncWriteWithOfflineFallback` to ensure offline resilience and error propagation.
+  - Fixed `UsersModule.saveUsers` state commit order: Sanitized users are now only committed to `StorageEngine` after all Firestore sync operations succeed, preventing local cache divergence when remote writes fail.
+  - Eliminated duplicate un-synced fire-and-forget writes during station custody diff propagation.
+- **Verification & Testing**:
+  - `src/fleet_phase5_driver_safety_inspections.test.ts` (5 tests passed).
+  - `src/phase15_comp1_fallback.test.ts` and `src/security_role_boundary.test.ts` (10 tests passed).
+  - Production TypeScript validation (`lint_applet`) and production build (`compile_applet`) passed with 0 errors.
+
+---
+
 ## Fleet Module Phase 4: Proactive Maintenance Health Alerts, Fuel Intelligence & Operating Cost Analytics
 **Date:** 2026-08-18
 **Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `src/components/FleetCostAndMaintenanceDashboard.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_phase4_maintenance_fuel_cost.test.ts`, `CHANGELOG.md`
@@ -3895,6 +3997,44 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   - Removed duplicate, disconnected `handleSaveRegionManager` and `handleSaveStationAdmin` logic from `src/pages/CompanyAdminDashboard.tsx` (lines 149-318).
   - Verified that all user management, including `RegionalManager` creation, role binding, region/station assignment, and dynamic permission matrices, functions seamlessly through the surviving `UnifiedAccessControlCenter` pipeline.
 - **Verification**: Scoped unit tests (`vitest run src/user_provisioning_api.test.ts src/unified_access_control.test.ts src/unified_access_control_phase1.test.ts src/unified_access_control_phase2.test.ts src/unified_access_control_phase4.test.ts` — 32/32 tests passing) and production compilation (`compile_applet`) completed with 0 errors.
+
+---
+
+## Phase 10: Stabilize FleetManagement Module
+**Date:** 2026-08-20
+**Files Changed:** `src/pages/FleetManagement.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Fleet Module Stabilization & Error Resilience**:
+  - Audited `src/pages/FleetManagement.tsx` import statements and JSX identifier usages to ensure 100% resolution of all modals, icons, data modules, and enterprise types.
+  - Wrapped `FleetManagement`'s root render tree in `ErrorBoundary` (`src/components/ErrorBoundary.tsx`) to guard against unexpected Leaflet map rendering exceptions, dynamic dashboard failures, or modal crashes.
+  - Verified trip lifecycle test coverage across all fleet sub-modules (daily ops, dispatch, live replay, geofencing, fuel/maintenance cost analysis, driver safety & inspections, and permissions).
+- **Verification**: Scoped unit tests (`vitest run src/fleet_*.test.ts` — 38/38 tests passing across 9 test suites) and production compilation (`compile_applet`) completed with 0 errors.
+
+---
+
+## Phase 11: Document Three-Way Matching Gap
+**Date:** 2026-08-20
+**Files Changed:** `docs/adr/0011-three-way-matching-not-yet-implemented.md`, `CHANGELOG.md`
+**Summary:**
+- **Three-Way Matching Gap Documentation (ADR 0011)**:
+  - Audited `src/types/purchasing.ts`, `src/lib/enterprise/purchasing_engine.ts`, and `src/pages/Purchasing.tsx` to verify the state of Purchase Order, Goods Receipt, and Vendor Invoice reconciliation.
+  - Formally recorded `docs/adr/0011-three-way-matching-not-yet-implemented.md` detailing the absence of `po_id`/`invoice_id`/`receipt_id` linking models, the current direct-receipt ledger flow, and the rationale for deferring this major feature addition from the remediation phase to protect stability.
+  - Zero application code changed as mandated.
+
+---
+
+## Phase 12: Filter Modules by Company Industry / Module Settings Gap Documentation
+**Date:** 2026-08-20
+**Files Changed:** `docs/adr/0012-company-industry-module-filtering-gap.md`, `CHANGELOG.md`
+**Summary:**
+- **Module & Industry Filtering Architecture Audit (ADR 0012)**:
+  - Audited `src/db/companies.ts`, `src/db/modules.ts`, `src/components/Layout.tsx`, and `src/App.tsx`.
+  - Confirmed that module-level navigation filtering is already wired to `ModulesModule.isScreenEnabledForCompany(companyId, screenId)` in `Layout.tsx`.
+  - Verified that automatic industry-based module filtering (`company.industry` -> module preset enforcement) is absent in current codebase.
+  - Documented findings, architectural state, and recommendations in `docs/adr/0012-company-industry-module-filtering-gap.md` without making intrusive runtime changes (documentation only per plan).
+
+
+
 
 
 

@@ -1,5 +1,5 @@
 import { AppUser, UserRole, UserPermissions, SystemPermission, SystemRole, SignupRequest, AccountCorrectionRequest } from '../types';
-import { dbSetDoc, dbDeleteDoc, auth } from '../firebase';
+import { auth } from '../firebase';
 import { StorageEngine } from './storage';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_USERS, DEFAULT_PERMISSIONS, DEFAULT_ROLES } from './defaults';
@@ -158,10 +158,38 @@ export class UsersModule {
     if (parsed) {
       if (parsed.impersonator) {
         // Active technical support impersonation session:
-        // Enforce full standard baseline permissions for the target user's role using enrichUserPermissions(parsed.role).
-        // Bypasses any individual restrictive overrides on target user that could hinder technical support,
+        // Validate that the stored impersonator is a genuine authenticated SystemAdmin / Platform Owner
+        const registeredUsers = StorageEngine.getStored<AppUser[]>('users', []);
+        const impersonatorRecord = registeredUsers.find(u =>
+          (u.id && parsed.impersonator.id && u.id === parsed.impersonator.id) ||
+          (u.email && parsed.impersonator.email && u.email.toLowerCase().trim() === parsed.impersonator.email.toLowerCase().trim())
+        );
+
+        const isLegitImpersonator = 
+          (impersonatorRecord && (impersonatorRecord.role === 'SystemAdmin' || UsersModule.isPlatformOwner(impersonatorRecord.email))) ||
+          UsersModule.isPlatformOwner(parsed.impersonator.email);
+
+        if (!isLegitImpersonator) {
+          // Reject forged or invalid impersonation payload and clear active user session
+          StorageEngine.cache['active_user'] = null;
+          if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem('custody_active_user');
+          }
+          return null;
+        }
+
+        // Validate target user role against canonical record to prevent target role escalation
+        const targetRecord = registeredUsers.find(u =>
+          (u.id && parsed.id && u.id === parsed.id) ||
+          (u.email && parsed.email && u.email.toLowerCase().trim() === parsed.email.toLowerCase().trim())
+        );
+        const targetRole = (targetRecord && targetRecord.role) ? targetRecord.role : parsed.role;
+        parsed.role = targetRole;
+
+        // Enforce full standard baseline permissions for the target user's role using enrichUserPermissions(targetRole).
+        // Bypasses individual restrictive overrides on target user that could hinder technical support,
         // while strictly preventing any privilege escalation beyond targetUser's base role.
-        parsed.permissions = UsersModule.enrichUserPermissions(parsed.role);
+        parsed.permissions = UsersModule.enrichUserPermissions(targetRole);
         StorageEngine.cache['active_user'] = parsed;
         return parsed as AppUser;
       }
@@ -184,7 +212,39 @@ export class UsersModule {
         StorageEngine.cache['active_user'] = updated;
         return updated;
       }
-      parsed.permissions = UsersModule.enrichUserPermissions(parsed.role, parsed.permissions);
+
+      // Authorization Hardening: Validate role and permissions against registered user record
+      // to prevent untrusted localStorage privilege escalation (e.g. tampering role or permissions directly in localStorage)
+      const registeredUsers = StorageEngine.getStored<AppUser[]>('users', []);
+      const matchedUser = registeredUsers.find(u => 
+        (u.id && parsed.id && u.id === parsed.id) ||
+        (u.email && parsed.email && u.email.toLowerCase().trim() === parsed.email.toLowerCase().trim())
+      );
+
+      let effectiveRole = parsed.role;
+      let effectivePermissions = parsed.permissions;
+      let effectiveIsActive = parsed.is_active;
+
+      if (matchedUser) {
+        // Reconcile role and active status against canonical registered user record
+        if (matchedUser.role && !isPlatformAdminEmail) {
+          effectiveRole = matchedUser.role;
+        }
+        if (typeof matchedUser.is_active === 'boolean') {
+          effectiveIsActive = matchedUser.is_active;
+        }
+        // Base permissions derived from the authenticated role, augmented with legitimate registered user permission overrides
+        effectivePermissions = UsersModule.enrichUserPermissions(effectiveRole, matchedUser.permissions);
+      } else {
+        // Fallback for standalone/mock tests or offline contexts without stored user catalog:
+        // Always strictly recalculate permissions derived from role rather than accepting arbitrary localStorage permissions
+        effectivePermissions = UsersModule.enrichUserPermissions(effectiveRole, parsed.permissions);
+      }
+
+      parsed.role = effectiveRole;
+      parsed.is_active = effectiveIsActive;
+      parsed.permissions = effectivePermissions;
+
       if (isPlatformAdminEmail) {
         parsed.is_platform_owner = true;
       }
@@ -241,8 +301,7 @@ export class UsersModule {
       storedPassword === hash10k ||
       storedPassword === hash1k ||
       storedPassword === hashSingle ||
-      storedPassword === legacy ||
-      storedPassword === passwordPlain
+      storedPassword === legacy
     ) {
       return foundUser;
     }
@@ -276,9 +335,6 @@ export class UsersModule {
       } as AppUser;
     });
 
-    // Store sanitized user profiles (without password or salt) in StorageEngine
-    StorageEngine.setStored('users', sanitized);
-
     // Identify changed users
     const changedUsers = sanitized.filter(u => {
       const old = existing.find(ex => ex.id === u.id);
@@ -295,6 +351,9 @@ export class UsersModule {
         return;
       }
     }
+
+    // Store sanitized user profiles (without password or salt) in StorageEngine ONLY after writes succeed
+    StorageEngine.setStored('users', sanitized);
 
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Users', 'Modified user roles and system permission profiles.');

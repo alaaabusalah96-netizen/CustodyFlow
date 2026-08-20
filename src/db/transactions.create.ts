@@ -5,7 +5,7 @@ import { UsersModule } from './users';
 import { LogsModule } from './logs';
 import { CompaniesModule } from './companies';
 import { TransactionsHistoryModule } from './transactions.history';
-import { ValidationEngine } from './validation';
+import { ValidationEngine, isValidCompanyId, REQUIRE_COMPANY_ID_ERROR } from './validation';
 import { DEFAULT_TRANSACTIONS } from './defaults';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { ApprovalEngine } from './approvalEngine';
@@ -17,10 +17,10 @@ export class TransactionsCreateModule {
       const user = UsersModule.getActiveUser();
       const station_id = data.station_id || user?.station_id;
       const company_id = data.company_id || user?.company_id || (typeof localStorage !== 'undefined' ? localStorage.getItem('custody_selected_company_id') : null);
-      if (!company_id || company_id.trim() === '') {
+      if (!isValidCompanyId(company_id)) {
         return {
           success: false,
-          errors: ['يجب اختيار شركة قبل الحفظ. / Please select a company before saving.']
+          errors: [REQUIRE_COMPANY_ID_ERROR]
         };
       }
       const status = data.status || 'Pending';

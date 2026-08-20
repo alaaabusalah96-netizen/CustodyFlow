@@ -1,6 +1,7 @@
 import { BusinessGroup } from '../types';
 import { dbSetDoc } from '../firebase';
 import { StorageEngine } from './storage';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
 
@@ -11,7 +12,7 @@ export class BusinessGroupsModule {
 
   static saveGroups(groups: BusinessGroup[]): void {
     StorageEngine.setStored('business_groups', groups);
-    groups.forEach(g => dbSetDoc('business_groups', g.id, g));
+    groups.forEach(g => syncWriteWithOfflineFallback('business_groups', g.id, g).catch(() => {}));
   }
 
   static addGroup(code: string, nameAr: string, nameEn: string): BusinessGroup {
