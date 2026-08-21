@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { 
   FileText, 
   Plus, 
@@ -317,7 +318,8 @@ export default function Inventory({ language, theme }: InventoryProps) {
   }, [products, warehouses, refreshKey]);
 
   return (
-    <div id="inventory-module-page" className="space-y-6">
+    <ErrorBoundary>
+      <div id="inventory-module-page" className="space-y-6">
       {/* Title & Stats */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
@@ -1044,5 +1046,6 @@ export default function Inventory({ language, theme }: InventoryProps) {
         </div>
       )}
     </div>
+    </ErrorBoundary>
   );
 }

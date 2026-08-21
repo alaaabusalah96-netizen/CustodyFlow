@@ -422,21 +422,61 @@ export default function Settings({
 
     fileReader.onload = async (event) => {
       try {
-        const parsed = JSON.parse(event.target?.result as string);
+        const rawContent = event.target?.result as string;
+        const parsed = JSON.parse(rawContent);
         
-        // Validation checks
-        if (!parsed.companies || !parsed.users || !parsed.transactions) {
-          alert(isRtl ? 'ملف النسخة الاحتياطية غير صالح أو ناقص البنية!' : 'Invalid backup file schema!');
+        // Strict validation of backup root structure and required collections
+        if (
+          !parsed ||
+          typeof parsed !== 'object' ||
+          !Array.isArray(parsed.companies) ||
+          !Array.isArray(parsed.users) ||
+          !Array.isArray(parsed.transactions) ||
+          (parsed.regions && !Array.isArray(parsed.regions)) ||
+          (parsed.stations && !Array.isArray(parsed.stations)) ||
+          (parsed.categories && !Array.isArray(parsed.categories))
+        ) {
+          alert(
+            isRtl
+              ? 'ملف النسخة الاحتياطية غير صالح أو ناقص البنية الأساسية (يلزم وجود مصفوفات للشركات والمستخدمين والمعاملات)!'
+              : 'Invalid backup file schema! Backup must contain valid arrays for companies, users, and transactions.'
+          );
+          if (e.target) e.target.value = '';
+          return;
+        }
+
+        // Validate basic record shape in required collections to prevent corrupted restores
+        const hasValidCompanies = parsed.companies.every((c: any) => c && typeof c === 'object' && typeof c.id === 'string' && typeof c.name === 'string');
+        const hasValidUsers = parsed.users.every((u: any) => u && typeof u === 'object' && typeof u.id === 'string' && typeof u.email === 'string');
+        const hasValidTransactions = parsed.transactions.every((t: any) => t && typeof t === 'object' && typeof t.id === 'string');
+
+        if (!hasValidCompanies || !hasValidUsers || !hasValidTransactions) {
+          alert(
+            isRtl
+              ? 'فشل التحقق من صحة بنية السجلات في ملف النسخة الاحتياطية. تم رفض الاستعادة لمنع تلف البيانات.'
+              : 'Backup records validation failed. Restore rejected to prevent data corruption.'
+          );
+          if (e.target) e.target.value = '';
+          return;
+        }
+
+        // Explicit user confirmation before executing restore
+        const confirmMsg = isRtl
+          ? `تنبيه أمني: هل أنت متأكد من رغبتك في استعادة قاعدة البيانات من هذه النسخة الاحتياطية؟\n\nتتضمن النسخة:\n- ${parsed.companies.length} شركة\n- ${parsed.users.length} مستخدم\n- ${parsed.transactions.length} معاملة\n\nسيتم تحديث واستبدال السجلات المطابقة في النظام.`
+          : `Security Confirmation: Are you sure you want to restore the database from this backup file?\n\nBackup contains:\n- ${parsed.companies.length} Companies\n- ${parsed.users.length} Users\n- ${parsed.transactions.length} Transactions\n\nMatching records will be updated and synchronized.`;
+
+        if (!window.confirm(confirmMsg)) {
+          if (e.target) e.target.value = '';
           return;
         }
 
         // Write directly to local DB
-        if (parsed.companies) CustodyDB.saveCompanies(parsed.companies);
+        CustodyDB.saveCompanies(parsed.companies);
         if (parsed.regions) CustodyDB.saveRegions(parsed.regions);
         if (parsed.stations) CustodyDB.saveStations(parsed.stations);
         if (parsed.categories) CustodyDB.saveCategories(parsed.categories);
-        if (parsed.users) await CustodyDB.saveUsers(parsed.users);
-        if (parsed.transactions) CustodyDB.saveTransactions(parsed.transactions);
+        await CustodyDB.saveUsers(parsed.users);
+        CustodyDB.saveTransactions(parsed.transactions);
 
         // Reload page states
         setCompanyName(CustodyDB.getConfig().company_name);
@@ -455,6 +495,8 @@ export default function Settings({
         triggerToast(isRtl ? 'تم استعادة قاعدة البيانات وتحديث النظام بالكامل بنجاح!' : 'Database successfully restored and synchronized.');
       } catch (err) {
         alert(isRtl ? 'فشل قراءة الملف كبنية JSON صالحة.' : 'Failed to parse JSON backup file.');
+      } finally {
+        if (e.target) e.target.value = '';
       }
     };
     fileReader.readAsText(file);

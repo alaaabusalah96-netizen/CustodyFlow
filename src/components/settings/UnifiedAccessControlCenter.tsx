@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { 
   Users2, 
   ShieldCheck, 
@@ -1174,7 +1175,8 @@ export default function UnifiedAccessControlCenter({
   };
 
   return (
-    <div className="space-y-6 animate-fade-in" id="unified-access-control-center">
+    <ErrorBoundary>
+      <div className="space-y-6 animate-fade-in" id="unified-access-control-center">
       {/* Top Banner / Scope Summary Header */}
       <div className={`p-5 rounded-2xl border ${
         theme === 'dark' 
@@ -3426,5 +3428,6 @@ export default function UnifiedAccessControlCenter({
         </div>
       )}
     </div>
+    </ErrorBoundary>
   );
 }

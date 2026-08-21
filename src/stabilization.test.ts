@@ -829,7 +829,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
       (navigator as any).onLine = true;
     });
 
-    it('should store users locally when offline and warn without throwing (Non-blocking fallback)', async () => {
+    it('should reject user mutation when offline and preserve local storage without unpersisted modification', async () => {
       const existingUser: any = {
         id: 'usr-phase2-existing',
         email: 'existing@example.com',
@@ -848,10 +848,10 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
 
       await expect(UsersModule.saveUsers([updatedUser])).resolves.toBeUndefined();
 
-      // Verify local storage was updated cleanly for offline resilience
+      // Verify local storage was preserved cleanly without unpersisted changes
       const stored = StorageEngine.getStored<any[]>('users', []);
       const checkUser = stored.find(u => u.id === 'usr-phase2-existing');
-      expect(checkUser.full_name).toBe('Updated Offline Name');
+      expect(checkUser.full_name).toBe('Existing User');
 
       // Reset online state
       (navigator as any).onLine = true;

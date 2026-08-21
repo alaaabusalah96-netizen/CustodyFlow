@@ -114,7 +114,9 @@ export class CustodyDB {
     StorageEngine.setStored('categories', DEFAULT_CATEGORIES);
     StorageEngine.setStored('expenses', DEFAULT_EXPENSES);
     StorageEngine.setStored('vouchers', DEFAULT_VOUCHERS);
+    StorageEngine.setStored('Permissions', DEFAULT_PERMISSIONS);
     StorageEngine.setStored('permissions', DEFAULT_PERMISSIONS);
+    StorageEngine.setStored('Roles', DEFAULT_ROLES);
     StorageEngine.setStored('roles', DEFAULT_ROLES);
 
     CustodyDB.clearCache();

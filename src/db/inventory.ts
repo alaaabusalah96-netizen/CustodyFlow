@@ -191,14 +191,25 @@ export class InventoryModule {
   private static cachedStockIndex: StockLookupIndex | null = null;
   private static stockIndexVersionKey: string = '';
 
+  private static stockWriteEpoch: number = 0;
+
   static clearStockLookupIndex(): void {
     InventoryModule.cachedStockIndex = null;
     InventoryModule.stockIndexVersionKey = '';
+    InventoryModule.stockWriteEpoch++;
   }
 
   static getStockLookupIndex(): StockLookupIndex {
     const movements = InventoryModule.getStockMovements();
-    const currentVersionKey = `${movements.length}_${movements[0]?.id || ''}_${movements[movements.length - 1]?.id || ''}_${movements[0]?.current_balance_after || ''}_${movements[movements.length - 1]?.current_balance_after || ''}`;
+    // Robust cache key incorporating monotonic write epoch, movement length, and structural hash of IDs
+    let movementIdHash = 0;
+    for (let i = 0; i < movements.length; i++) {
+      const id = movements[i]?.id || '';
+      for (let j = 0; j < id.length; j++) {
+        movementIdHash = ((movementIdHash << 5) - movementIdHash + id.charCodeAt(j)) | 0;
+      }
+    }
+    const currentVersionKey = `epoch_${InventoryModule.stockWriteEpoch}_len_${movements.length}_hash_${movementIdHash}`;
     if (InventoryModule.cachedStockIndex && InventoryModule.stockIndexVersionKey === currentVersionKey) {
       return InventoryModule.cachedStockIndex;
     }
@@ -331,7 +342,7 @@ export class InventoryModule {
     const companyId = warehouse.company_id || CompaniesModule.getSelectedCompanyId();
     const newW: Warehouse = {
       ...warehouse,
-      id: `wh-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
+      id: `wh-${crypto.randomUUID()}`,
       company_id: companyId
     };
     list.push(newW);
@@ -357,7 +368,7 @@ export class InventoryModule {
     const list = StorageEngine.getStored<WarehouseBin[]>('warehouse_bins', []);
     const newBin: WarehouseBin = {
       ...bin,
-      id: `bin-${Date.now()}-${Math.random().toString(36).substring(2, 6)}` // FIX: avoid id collisions under concurrent creation
+      id: `bin-${crypto.randomUUID()}`
     };
     list.push(newBin);
     InventoryModule.saveWarehouseBins(list);
@@ -431,8 +442,17 @@ export class InventoryModule {
     if (sourceStock < qty) {
       return {
         success: false,
-        messageAr: 'عذراً، رصيد الحاوية المصدر غير كافٍ لإتمام عملية النقل',
-        messageEn: 'Sorry, the source bin does not have enough stock to complete the transfer'
+        messageAr: `عذراً، رصيد الحاوية المصدر غير كافٍ لإتمام عملية النقل (المتاح: ${sourceStock}، المطلوب: ${qty})`,
+        messageEn: `Sorry, insufficient stock in source bin to complete transfer (Available: ${sourceStock}, Requested: ${qty})`
+      };
+    }
+
+    const currentWarehouseStock = InventoryModule.getProductStock(productId, warehouseId);
+    if (currentWarehouseStock < qty) {
+      return {
+        success: false,
+        messageAr: `عذراً، رصيد المستودع غير كافٍ لإتمام عملية النقل (المتاح: ${currentWarehouseStock}، المطلوب: ${qty})`,
+        messageEn: `Sorry, insufficient stock in warehouse to complete transfer (Available: ${currentWarehouseStock}, Requested: ${qty})`
       };
     }
 
@@ -453,8 +473,8 @@ export class InventoryModule {
     if (destBin.max_capacity_qty && (destCurrentStock + qty) > destBin.max_capacity_qty) {
       return {
         success: false,
-        messageAr: `عذراً، عملية النقل تتجاوز السعة القصوى للحاوية المستهدفة (${destBin.name}). السعة المتاحة: ${destBin.max_capacity_qty - destCurrentStock} وحدة.`,
-        messageEn: `Sorry, this relocation exceeds the maximum capacity of target bin (${destBin.name}). Available capacity: ${destBin.max_capacity_qty - destCurrentStock} units.`
+        messageAr: `عذراً، عملية النقل تتجاوز السعة القصوى للحاوية المستهدفة (${destBin.name}). السعة المتاحة: ${Math.max(0, destBin.max_capacity_qty - destCurrentStock)} وحدة.`,
+        messageEn: `Sorry, this relocation exceeds the maximum capacity of target bin (${destBin.name}). Available capacity: ${Math.max(0, destBin.max_capacity_qty - destCurrentStock)} units.`
       };
     }
 
@@ -465,12 +485,17 @@ export class InventoryModule {
     const movements = InventoryModule.getStockMovements();
     const ledgerEntries = InventoryModule.getInventoryLedger();
 
-    // 1. Negative movement from source bin
-    const uniqueSuffix = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
-    const relocDocId = `reloc-${Date.now()}-${uniqueSuffix}`;
-    const relocDocNo = `RELOC-${Date.now()}-${uniqueSuffix}`;
+    // Compute consistent balances for the movements and ledger
+    const balanceBeforeOut = currentWarehouseStock;
+    const balanceAfterOut = Math.max(0, currentWarehouseStock - qty);
+    const balanceBeforeIn = balanceAfterOut;
+    const balanceAfterIn = currentWarehouseStock;
 
-    const movFromId = `mov-${Date.now()}-${productId}-reloc-out-${Math.floor(Math.random() * 1000)}`;
+    // 1. Negative movement from source bin
+    const relocDocId = `reloc-${crypto.randomUUID()}`;
+    const relocDocNo = `RELOC-${Date.now()}`;
+
+    const movFromId = `mov-${crypto.randomUUID()}`;
     const movFrom: StockMovement = {
       id: movFromId,
       doc_id: relocDocId,
@@ -480,7 +505,7 @@ export class InventoryModule {
       warehouse_id: warehouseId,
       qty_change: -qty,
       type: 'OUT',
-      current_balance_after: InventoryModule.getProductStock(productId, warehouseId) - qty,
+      current_balance_after: balanceAfterOut,
       date: new Date().toISOString().split('T')[0],
       company_id: companyId,
       created_at: new Date().toISOString(),
@@ -490,7 +515,7 @@ export class InventoryModule {
     };
 
     // 2. Positive movement to destination bin
-    const movToId = `mov-${Date.now()}-${productId}-reloc-in-${Math.floor(Math.random() * 1000)}`;
+    const movToId = `mov-${crypto.randomUUID()}`;
     const movTo: StockMovement = {
       id: movToId,
       doc_id: movFrom.doc_id,
@@ -500,7 +525,7 @@ export class InventoryModule {
       warehouse_id: warehouseId,
       qty_change: qty,
       type: 'IN',
-      current_balance_after: InventoryModule.getProductStock(productId, warehouseId),
+      current_balance_after: balanceAfterIn,
       date: movFrom.date,
       company_id: companyId,
       created_at: new Date().toISOString(),
@@ -513,7 +538,7 @@ export class InventoryModule {
 
     // Ledger records
     const ledFrom: InventoryLedgerEntry = {
-      id: `led-${Date.now()}-${productId}-reloc-out-${Math.floor(Math.random() * 1000)}`,
+      id: `led-${crypto.randomUUID()}`,
       company_id: companyId,
       warehouse_id: warehouseId,
       product_id: productId,
@@ -522,8 +547,8 @@ export class InventoryModule {
       reference_document_no: movFrom.doc_no,
       qty_in: 0,
       qty_out: qty,
-      balance_before: InventoryModule.getProductStock(productId, warehouseId),
-      balance_after: InventoryModule.getProductStock(productId, warehouseId) - qty,
+      balance_before: balanceBeforeOut,
+      balance_after: balanceAfterOut,
       unit_cost: 0,
       running_cost: 0,
       timestamp: new Date().toISOString(),
@@ -535,7 +560,7 @@ export class InventoryModule {
     };
 
     const ledTo: InventoryLedgerEntry = {
-      id: `led-${Date.now()}-${productId}-reloc-in-${Math.floor(Math.random() * 1000)}`,
+      id: `led-${crypto.randomUUID()}`,
       company_id: companyId,
       warehouse_id: warehouseId,
       product_id: productId,
@@ -544,8 +569,8 @@ export class InventoryModule {
       reference_document_no: movTo.doc_no,
       qty_in: qty,
       qty_out: 0,
-      balance_before: InventoryModule.getProductStock(productId, warehouseId) - qty,
-      balance_after: InventoryModule.getProductStock(productId, warehouseId),
+      balance_before: balanceBeforeIn,
+      balance_after: balanceAfterIn,
       unit_cost: 0,
       running_cost: 0,
       timestamp: new Date().toISOString(),
@@ -630,7 +655,7 @@ export class InventoryModule {
     const list = InventoryModule.getProducts(companyId);
     const newP: Product = {
       ...product,
-      id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
+      id: `prod-${crypto.randomUUID()}`,
       company_id: companyId
     };
     list.push(newP);
@@ -992,7 +1017,7 @@ export class InventoryModule {
     }
     const org_unit_id = InventoryModule.resolveWarehouseOrgUnit(warehouseId, companyId);
     const movement: StockMovement = {
-      id: `m-adj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `m-adj-${crypto.randomUUID()}`,
       doc_id: 'direct-adjust',
       doc_no: `ADJ-${Date.now()}`,
       doc_type: docType,

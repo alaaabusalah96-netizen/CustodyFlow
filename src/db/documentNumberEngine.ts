@@ -210,11 +210,14 @@ export class DocumentNumberEngine {
         }
       }
       if (!success) {
-        console.warn('[DocumentNumberEngine] All atomic SequenceEngine retries failed. Falling back to local sequence increment:', lastError);
-        nextSeq = config.currentSequence === 0 ? startVal : config.currentSequence + 1;
+        throw new Error(
+          `فشل توليد الرقم التسلسلي للمستند (${documentType}) عبر المعاملة المتزامنة بعد عدة محاولات. يلزم وجود اتصال مستقر بالإنترنت لمنع تكرار الأرقام. / Failed to generate atomic document sequence for (${documentType}) after retries: ${lastError?.message || 'Server connection required'}`
+        );
       }
     } else {
-      nextSeq = config.currentSequence === 0 ? startVal : config.currentSequence + 1;
+      throw new Error(
+        `قاعدة البيانات غير متاحة لتوليد الرقم التسلسلي المتزامن للمستند (${documentType}). / Database instance unavailable for atomic document sequencing.`
+      );
     }
 
     config.currentSequence = nextSeq;

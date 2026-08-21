@@ -39,6 +39,11 @@ export const db = initializeFirestore(app, { experimentalForceLongPolling: true 
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
+const isDev = Boolean(
+  (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') ||
+  (typeof (import.meta as any) !== 'undefined' && (import.meta as any).env?.DEV)
+);
+
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -137,13 +142,15 @@ export function onSnapshot(
 
   const wrappedOnNext = (snapshot: any) => {
     snapshotCounters[key] = (snapshotCounters[key] || 0) + 1;
-    if (snapshotCounters[key] === 1) {
-      console.log(`[DEBUG_LOG] 6. FIRST snapshot for collection: ${key}`);
+    if (isDev) {
+      if (snapshotCounters[key] === 1) {
+        console.log(`[DEBUG_LOG] 6. FIRST snapshot for collection: ${key}`);
+      }
+      const size = typeof snapshot.size === 'number' 
+        ? snapshot.size 
+        : (typeof snapshot.exists === 'function' && snapshot.exists() ? 1 : 0);
+      console.log(`[DEBUG_LOG] 7. Incoming Firestore elements count for [${key}]:`, size);
     }
-    const size = typeof snapshot.size === 'number' 
-      ? snapshot.size 
-      : (typeof snapshot.exists === 'function' && snapshot.exists() ? 1 : 0);
-    console.log(`[DEBUG_LOG] 7. Incoming Firestore elements count for [${key}]:`, size);
     
     onNext(snapshot);
   };
@@ -173,13 +180,17 @@ export async function seedDatabaseIfEmpty(defaults: {
   roles?: SystemRole[];
   organizationUnits?: OrganizationUnit[];
 }) {
-  console.log('[DEBUG_LOG] 3. Before executing seedDatabaseIfEmpty');
+  if (isDev) {
+    console.log('[DEBUG_LOG] 3. Before executing seedDatabaseIfEmpty');
+  }
   try {
     // Check if seeded with v7 already
     let alreadySeededV7 = false;
     let checkSuccess = false;
     try {
-      console.log('[DEBUG_LOG] 1. Before reading system_meta collection');
+      if (isDev) {
+        console.log('[DEBUG_LOG] 1. Before reading system_meta collection');
+      }
       const snap = await getDocs(query(collection(db, 'system_meta'), limit(10)));
       snap.forEach(d => {
         if (d.id === 'seed_status_v7') {
@@ -187,7 +198,9 @@ export async function seedDatabaseIfEmpty(defaults: {
         }
       });
       checkSuccess = true;
-      console.log('[DEBUG_LOG] 2. After reading system_meta. Doc count:', snap.size, 'alreadySeededV7:', alreadySeededV7, 'docs:', snap.docs.map(d => ({id: d.id, data: d.data()})));
+      if (isDev) {
+        console.log('[DEBUG_LOG] 2. After reading system_meta. Doc count:', snap.size, 'alreadySeededV7:', alreadySeededV7, 'docs:', snap.docs.map(d => ({id: d.id, data: d.data()})));
+      }
     } catch (e) {
       console.warn('Error checking seed_status_v7:', e);
     }
@@ -328,14 +341,18 @@ export async function seedDatabaseIfEmpty(defaults: {
       await finalBatch.commit();
 
       console.log('Seeding v7 completed successfully.');
-      console.log('[DEBUG_LOG] 4. After completing seedDatabaseIfEmpty (New seed performed)');
+      if (isDev) {
+        console.log('[DEBUG_LOG] 4. After completing seedDatabaseIfEmpty (New seed performed)');
+      }
       
       // Force refresh of local state
       localStorage.clear();
       window.location.reload();
     } else {
       console.log('Database already seeded with v7. Skipping seed.');
-      console.log('[DEBUG_LOG] 4. After seedDatabaseIfEmpty (Database already seeded with v7, skipping)');
+      if (isDev) {
+        console.log('[DEBUG_LOG] 4. After seedDatabaseIfEmpty (Database already seeded with v7, skipping)');
+      }
     }
   } catch (error) {
     console.error('Error seeding Firebase:', error);
@@ -359,7 +376,9 @@ export function clearActiveUnsubscribes() {
 
 function rebuildListeners(activeUser: AppUser | null, rawCompanyId?: string | null) {
   const companyId = rawCompanyId || (activeUser ? activeUser.company_id : '') || '';
-  console.log('[DEBUG_LOG] 5. Before running rebuildListeners(). ActiveUser ID:', activeUser?.id, 'Company ID:', companyId);
+  if (isDev) {
+    console.log('[DEBUG_LOG] 5. Before running rebuildListeners(). ActiveUser ID:', activeUser?.id, 'Company ID:', companyId);
+  }
   clearActiveUnsubscribes();
 
   console.log(`Rebuilding Firestore listeners. Active user: ${activeUser?.email || 'Guest'}, Selected company: ${companyId}`);
@@ -767,7 +786,9 @@ function updateLocalAndNotify(key: string, data: any) {
       countBefore = Array.isArray(parsed) ? parsed.length : (parsed ? 1 : 0);
     } catch (e) {}
   }
-  console.log(`[DEBUG_LOG] 8. Elements in LocalStorage [${key}] before update:`, countBefore);
+  if (isDev) {
+    console.log(`[DEBUG_LOG] 8. Elements in LocalStorage [${key}] before update:`, countBefore);
+  }
 
   const nextStr = JSON.stringify(data);
   if (currentStr !== nextStr) {
@@ -808,7 +829,9 @@ function updateLocalAndNotify(key: string, data: any) {
       const parsed = JSON.parse(nextStr);
       countAfter = Array.isArray(parsed) ? parsed.length : (parsed ? 1 : 0);
     } catch (e) {}
-    console.log(`[DEBUG_LOG] 9. Elements in LocalStorage [${key}] after updateLocalAndNotify():`, countAfter);
+    if (isDev) {
+      console.log(`[DEBUG_LOG] 9. Elements in LocalStorage [${key}] after updateLocalAndNotify():`, countAfter);
+    }
 
     StorageEngine.cache[key] = data;
     window.dispatchEvent(
@@ -817,7 +840,9 @@ function updateLocalAndNotify(key: string, data: any) {
       })
     );
   } else {
-    console.log(`[DEBUG_LOG] 9. No change in LocalStorage [${key}]. Remained at:`, countBefore);
+    if (isDev) {
+      console.log(`[DEBUG_LOG] 9. No change in LocalStorage [${key}]. Remained at:`, countBefore);
+    }
   }
 }
 

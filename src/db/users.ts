@@ -566,7 +566,10 @@ export class UsersModule {
   }
 
   static getPermissions(): SystemPermission[] {
-    return StorageEngine.getStored<SystemPermission[]>('Permissions', DEFAULT_PERMISSIONS);
+    // Read-path compatibility: check 'Permissions' first, fallback to legacy 'permissions'
+    const perms = StorageEngine.getStored<SystemPermission[]>('Permissions', []);
+    if (perms && perms.length > 0) return perms;
+    return StorageEngine.getStored<SystemPermission[]>('permissions', DEFAULT_PERMISSIONS);
   }
 
   static async savePermission(permission: SystemPermission): Promise<void> {
@@ -585,7 +588,10 @@ export class UsersModule {
   }
 
   static getRoles(): SystemRole[] {
-    return StorageEngine.getStored<SystemRole[]>('Roles', DEFAULT_ROLES);
+    // Read-path compatibility: check 'Roles' first, fallback to legacy 'roles'
+    const roles = StorageEngine.getStored<SystemRole[]>('Roles', []);
+    if (roles && roles.length > 0) return roles;
+    return StorageEngine.getStored<SystemRole[]>('roles', DEFAULT_ROLES);
   }
 
   static async saveRole(role: SystemRole): Promise<void> {

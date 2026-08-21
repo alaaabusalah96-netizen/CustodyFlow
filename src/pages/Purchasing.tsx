@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { 
   Users, Plus, FileText, Check, X, ClipboardList, ShoppingCart, 
   Store, Phone, Mail, MapPin, Hash, ShieldAlert, ArrowLeftRight, Clock,
@@ -519,7 +520,8 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
     : null;
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto font-sans" dir={isRtl ? 'rtl' : 'ltr'}>
+    <ErrorBoundary>
+      <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto font-sans" dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 shadow-2xl relative overflow-hidden border border-indigo-500/20">
         <div className="absolute right-0 bottom-0 opacity-10">
@@ -1452,5 +1454,6 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
         </div>
       )}
     </div>
+    </ErrorBoundary>
   );
 }

@@ -164,7 +164,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
     const prefix = config.vendorPrefix || 'VND';
 
     const newVendor: Vendor = {
-      id: `vnd-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `vnd-${crypto.randomUUID()}`,
       company_id: companyId,
       nameAr,
       nameEn,
@@ -411,7 +411,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           const initialStatus: PRStatus = approvalEval.isAutoApproved ? 'APPROVED' : 'PENDING_APPROVAL';
 
           const pr: PurchaseRequest = {
-            id: `pr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            id: `pr-${crypto.randomUUID()}`,
             company_id: companyId,
             org_unit_id: targetOrgUnit,
             cost_center_id: targetCostCenter,
@@ -508,7 +508,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
               );
 
               createdPo = {
-                id: `po-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                id: `po-${crypto.randomUUID()}`,
                 company_id: companyId,
                 poNumber: poNum,
                 prId: allPRs[idx].id,
@@ -636,7 +636,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           }
 
           const po: PurchaseOrder = {
-            id: `po-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            id: `po-${crypto.randomUUID()}`,
             company_id: companyId,
             org_unit_id: targetOrgUnit,
             cost_center_id: targetCostCenter,
@@ -733,7 +733,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
             );
 
             const newInvDoc: InventoryDocument = {
-              id: `invdoc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              id: `invdoc-${crypto.randomUUID()}`,
               doc_no: receiptDocNo,
               doc_type: 'Receipt',
               date: new Date().toISOString().split('T')[0],
@@ -826,7 +826,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           }
 
           const rfq: RFQ = {
-            id: `rfq-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            id: `rfq-${crypto.randomUUID()}`,
             company_id: companyId,
             rfqNumber,
             prId,
@@ -869,7 +869,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           const totalAmount = items.reduce((sum: number, i: any) => sum + (i.qty * i.unitPrice), 0);
 
           const quote: VendorQuotation = {
-            id: `quote-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            id: `quote-${crypto.randomUUID()}`,
             company_id: companyId,
             rfqId,
             rfqNumber: rfq.rfqNumber,
@@ -929,7 +929,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           );
 
           const newPo: PurchaseOrder = {
-            id: `po-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            id: `po-${crypto.randomUUID()}`,
             company_id: companyId,
             poNumber,
             vendorId: quote.vendorId,

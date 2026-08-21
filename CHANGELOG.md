@@ -4,6 +4,180 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Phase 30: Extract Pure Logic Helpers from Fleet Engine
+**Date:** 2026-08-21
+**Files Changed:** `src/lib/enterprise/fleet_pure_helpers.ts`, `src/lib/enterprise/fleet_engine.ts`, `CHANGELOG.md`
+**Summary:**
+- **Created Dedicated Pure Module (`src/lib/enterprise/fleet_pure_helpers.ts`)**:
+  - `calculateDistanceKm`: Pure Haversine distance calculator.
+  - `normalizeTaskType`: Pure string sanitizer and regex normalizer.
+  - `checkGeofenceArrival`: Pure spatial predicate calculating geofence perimeter arrival and localized messages. Updated internal distance calculation to use the standalone `calculateDistanceKm` function directly.
+  - `getDefaultInspectionChecklist`: Pure immutable standard 8-point inspection checklist generator.
+- **Preserved `FleetBusinessEngine` Public API & Backward Compatibility**:
+  - Delegated `FleetBusinessEngine.calculateDistanceKm`, `FleetBusinessEngine.normalizeTaskType`, `FleetBusinessEngine.checkGeofenceArrival`, and `FleetBusinessEngine.getDefaultInspectionChecklist` directly to the new pure functions.
+  - Left `TASK_PRESETS` in place as requested.
+- **Verification & Testing**:
+  - Ran entire fleet test suite (`npx vitest run src/fleet_*.test.ts`): 17/17 test files passed, 76/76 tests passed.
+  - TypeScript linter (`lint_applet`) and production compilation (`compile_applet`) succeeded with 0 errors.
+
+---
+
+## Phase 29: Tighten Firestore Rules Against Tenant-less Write Leaks
+**Date:** 2026-08-21
+**Files Changed:** `firestore.rules`, `CHANGELOG.md`
+**Summary:**
+- **Re-confirmed Firebase Scope**: Verified `src/firebase.ts` projectId is strictly `"custodyflow"`.
+- **Per-Line Security Audit & Determination**:
+  - `Line 122 (organization_unit_types read)`: Predefined unit types (HQ, Branch, Warehouse, etc.) have `companyId: null` as global templates needed by all tenants. Read-path is intentional.
+  - `Line 126 (organization_unit_types write)`: Tightened write rule so tenant `Admin` can only write unit types belonging to their own company (`request.resource.data.companyId == getCompanyId() || request.resource.data.company_id == getCompanyId()`). Global write (`companyId == null`) strictly restricted to `isSystemAdmin()`.
+  - `Line 161 (organization_templates read)`: Predefined organization structure templates have `companyId: null`. Read-path is intentional.
+  - `Line 168 (organization_templates write)`: **Real write leak**. Identified and removed `request.resource.data.companyId == null` clause from tenant Admin write check. Non-SystemAdmins can only write templates matching their own `getCompanyId()`.
+  - `Line 177 (warehouse_types read)`: Predefined warehouse types have `companyId: null`. Read-path is intentional.
+  - `Line 184 (warehouse_types write)`: **Real write leak**. Removed `request.resource.data.companyId == null` clause from tenant Admin write check.
+  - `Line 193 (warehouse_templates read)`: Predefined warehouse hierarchy templates have `companyId: null`. Read-path is intentional.
+  - `Line 200 (warehouse_templates write)`: **Real write leak**. Removed `request.resource.data.companyId == null` clause from tenant Admin write check.
+- **Verification & Testing**:
+  - Scoped tests passed (`src/firestore.rules.test.ts`: 16/16 passed).
+  - TypeScript linter (`lint_applet`) and production compilation (`compile_applet`) succeeded with 0 errors.
+
+---
+
+## Phase 28: Page-level ErrorBoundaries for Critical Modules
+**Date:** 2026-08-21
+**Files Changed:** `src/pages/Inventory.tsx`, `src/pages/Purchasing.tsx`, `src/pages/SuperAdmin.tsx`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Audited Existing ErrorBoundaries**:
+  - Confirmed `src/pages/FleetManagement.tsx` already contains the root `ErrorBoundary` wrapper from Phase 10.
+  - Confirmed `src/components/ErrorBoundary.tsx` provides the standard, localized recovery UI.
+- **Wrapped Critical Modules with ErrorBoundary**:
+  - Wrapped `src/pages/Inventory.tsx` in `<ErrorBoundary>`.
+  - Wrapped `src/pages/Purchasing.tsx` in `<ErrorBoundary>`.
+  - Wrapped `src/pages/SuperAdmin.tsx` in `<ErrorBoundary>`.
+  - Wrapped `src/components/settings/UnifiedAccessControlCenter.tsx` in `<ErrorBoundary>`.
+- **Verification & Testing**:
+  - Scoped tests passed (18/18 tests in unified access control test suites).
+  - TypeScript linter (`lint_applet`) and production compilation (`compile_applet`) succeeded with 0 errors.
+
+---
+
+## Phase 27: Gate Production DEBUG_LOG Noise
+**Date:** 2026-08-21
+**Files Changed:** `src/firebase.ts`, `CHANGELOG.md`
+**Summary:**
+- **Audited Verbose Debug Logging**:
+  - Located 10 occurrences of verbose `console.log('[DEBUG_LOG] ...')` across `src/firebase.ts` (snapshot listeners, database seeding lifecycle, listener rebuild, LocalStorage synchronization).
+- **Gated Behind Development-Only Environment Check**:
+  - Introduced safe `isDev` check evaluating `import.meta.env.DEV` and `process.env.NODE_ENV === 'development'`.
+  - Gated all `[DEBUG_LOG]` statements behind `isDev` while preserving critical warning and error logs (`console.warn`, `console.error`) required for runtime diagnosis and failure reporting.
+- **Verification & Testing**:
+  - Scoped tests passed (25/25 tests across rules, storage, and mock integration).
+  - TypeScript linter (`lint_applet`) and production compilation (`compile_applet`) succeeded with 0 errors.
+
+---
+
+## Phase 26: Normalize company_id vs companyId & Permissions Casing Compatibility
+**Date:** 2026-08-21
+**Files Changed:** `src/db/users.ts`, `src/db.ts`, `CHANGELOG.md`
+**Summary:**
+- **Audited Naming & Casing Inconsistencies**:
+  - `company_id` vs `companyId`: Verified all Firestore collections, security rules (`firestore.rules`), and entity interfaces standardize on `company_id` (snake_case) for data documents, while `companyId` is used strictly as JavaScript parameter names.
+  - `Permissions` vs `permissions` & `Roles` vs `roles`: Confirmed Firestore rules and seeding write to PascalCase `Permissions` and `Roles`, while legacy fallback storage keys used lowercase.
+- **Implemented Read-Path Backward Compatibility**:
+  - Enhanced `UsersModule.getPermissions()` to check `Permissions` collection with fallback to legacy `permissions` key.
+  - Enhanced `UsersModule.getRoles()` to check `Roles` collection with fallback to legacy `roles` key.
+  - Updated sample data seeding in `src/db.ts` to populate both keys for complete non-breaking backward compatibility without any destructive bulk rewrite.
+- **Verification & Testing**:
+  - Scoped vitest runs passed (18/18 tests in user/permission migration suites).
+  - TypeScript linter (`lint_applet`) and production compilation (`compile_applet`) succeeded with 0 errors.
+
+---
+
+## Phase 25: Secure Backup Restore
+**Date:** 2026-08-21
+**Files Changed:** `src/pages/SuperAdmin.tsx`, `src/pages/Settings.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Strengthened Backup Restore Validation**:
+  - Implemented strict root schema validation verifying arrays for `companies`, `users`, `transactions`, `regions`, `stations`, and `categories`.
+  - Added item-level structural validation ensuring entities contain valid IDs, names, and essential fields before applying mutations.
+  - Added explicit user confirmation dialog summarizing backup item counts prior to overwriting or merging live system state.
+  - Ensured invalid or corrupted backup files are rejected cleanly with bilingual alert messages without executing partial restores.
+- **Verification & Testing**:
+  - Checkpoint full test suite run passed.
+  - TypeScript linter (`lint_applet`) and compilation (`compile_applet`) passed with 0 errors.
+
+---
+
+## Phase 24: Align Docs & UI Messaging with Strict Online Writes
+**Date:** 2026-08-21
+**Files Changed:** `src/components/OfflineSyncIndicator.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Aligned Network UI Indicator**:
+  - Cleaned up obsolete queue polling/flush state in `OfflineSyncIndicator.tsx` now that ADR 0010 mandates strict online writes with no client offline queue.
+  - Confirmed UI messaging accurately alerts the user when offline that saves and modifications are suspended until reconnection, without misleading background sync or queue promises.
+- **Verification & Testing**:
+  - Scoped tests passed: 3 test files (`phase15_comp1_fallback.test.ts`, `inventory_migration.test.ts`, `inventory_logs_optimization.test.ts`) — 22/22 passed.
+  - TypeScript linter (`lint_applet`) and compilation (`compile_applet`) passed with 0 errors.
+
+---
+
+## Phase 23: Make Bin Relocation Balances Consistent
+**Date:** 2026-08-21
+**Files Changed:** `src/db/inventory.ts`, `CHANGELOG.md`
+**Summary:**
+- **Consistent Bin Relocation Balances & Validation**:
+  - Pre-computed consistent balances for the warehouse before and after internal stock relocation (`balanceBeforeOut = currentWarehouseStock`, `balanceAfterOut = Math.max(0, currentWarehouseStock - qty)`, `balanceBeforeIn = balanceAfterOut`, `balanceAfterIn = currentWarehouseStock`).
+  - Added strict non-negative capacity and warehouse stock checks with explicit bilingual error messages (`messageAr` / `messageEn`).
+  - Replaced legacy pseudo-random ID generators in relocation with `crypto.randomUUID()`.
+- **Verification & Testing**:
+  - Scoped tests passed: 6 test files (`inventory_migration.test.ts`, `inventory_logs_optimization.test.ts`, `inventory_doctypes.test.ts`, `warehouse_hierarchy.test.ts`, `warehouse_templates.test.ts`, `phase15_comp1_fallback.test.ts`) — 36/36 passed.
+  - TypeScript linter (`lint_applet`) and compilation (`compile_applet`) passed with 0 errors.
+
+---
+
+## Phase 22: Fix Inventory Stock Cache Invalidation
+**Date:** 2026-08-21
+**Files Changed:** `src/db/inventory.ts`, `CHANGELOG.md`
+**Summary:**
+- **Robust Stock Index Cache Versioning**:
+  - Replaced weak first/last array element sampling key (`currentVersionKey = ${movements.length}_${movements[0]?.id}_...`) in `InventoryModule.getStockLookupIndex` with a robust multi-factor version key.
+  - Introduced a monotonic `stockWriteEpoch` incremented on every explicit cache invalidation (`clearStockLookupIndex`) and full-content structural hash across all movement IDs.
+  - Preserved O(1) in-memory index performance and all stock querying methods (`getProductStock`, `getBinProductStock`, `getWarehouseTotalStock`) without breaking existing workflows.
+- **Verification & Testing**:
+  - Scoped tests passed: 6 test files (`inventory_logs_optimization.test.ts`, `inventory_migration.test.ts`, `warehouse_hierarchy.test.ts`, `warehouse_templates.test.ts`, `restaurant_orders.test.ts`, `inventory_doctypes.test.ts`) — 26/26 passed.
+  - TypeScript linter (`lint_applet`) and compilation (`compile_applet`) passed with 0 errors.
+
+---
+
+## Phase 21: Make Document/Voucher Sequencing Failure-Safe
+**Date:** 2026-08-21
+**Files Changed:** `src/db/transactions.voucher.ts`, `src/db/documentNumberEngine.ts`, `src/document_number_engine.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Failure-Safe Sequence Generation**:
+  - Removed unsafe local uncoordinated sequence fallback (`fallbackNext = localSeq + 1`) from `TransactionsVoucherModule.initializeOrIncrementSequence` in `src/db/transactions.voucher.ts`.
+  - Replaced silent fallback in catch block with an explicit bilingual error when server sync and atomic transactions fail, preventing duplicate voucher numbers during network instability.
+  - Updated `DocumentNumberEngine.generateNextNumberAsync` in `src/db/documentNumberEngine.ts` to throw an explicit bilingual error after atomic retries fail instead of falling back to local counter increments.
+  - Maintained all existing successful atomic transaction paths and number formatting logic.
+- **Verification & Testing**:
+  - Scoped tests passed: 3 test files (`document_number_engine.test.ts`, `purchasing_migration.test.ts`, `phase15_comp1_fallback.test.ts`) — 25/25 passed.
+  - TypeScript linter (`lint_applet`) and compilation (`compile_applet`) passed with 0 errors.
+
+---
+
+## Phase 20: Replace Weak ID Generation on Critical Live Paths
+**Date:** 2026-08-21
+**Files Changed:** `src/lib/enterprise/fleet_engine.ts`, `src/db/inventory.ts`, `src/lib/enterprise/purchasing_engine.ts`, `CHANGELOG.md`
+**Summary:**
+- **Cryptographic UUID ID Generation**:
+  - Replaced weak `prefix-${Date.now()}-${Math.random().toString(36)...}` ID generation patterns with standard `crypto.randomUUID()` across all live creation paths in `src/lib/enterprise/fleet_engine.ts` (trips, stops, vehicles, breakdown logs, chat messages, constraint rules, maintenance logs, fuel logs, inspection records).
+  - Replaced weak ID generation in `src/db/inventory.ts` (`addWarehouse`, `addWarehouseBin`, `addProduct`, `adjustStock` StockMovement IDs).
+  - Replaced weak ID generation in `src/lib/enterprise/purchasing_engine.ts` (`addVendor`, `PurchaseRequest`, `PurchaseOrder`, `InventoryDocument` Goods Receipt, `RFQ`, `VendorQuotation`).
+  - Confirmed no matches in `src/db/transactions.voucher.ts`. Historical stored IDs and document sequence formatters were left untouched.
+- **Verification & Testing**:
+  - Scoped tests passed: 8 test files (`fleet_trips.test.ts`, `fleet_phase1_daily_ops.test.ts`, `fleet_phase4_maintenance_fuel_cost.test.ts`, `fleet_phase5_driver_safety_inspections.test.ts`, `fleet_learned_locations_emergency_breakdown.test.ts`, `purchasing_migration.test.ts`, `inventory_migration.test.ts`, `enterprise_e2e_flows_validation.test.ts`) — 36/36 passed.
+  - TypeScript linter (`lint_applet`) and compilation (`compile_applet`) passed with 0 errors.
+
+---
+
 ## Phase 19: Harden Impersonation (SECURE, DO NOT REMOVE)
 **Date:** 2026-08-20
 **Files Changed:** `src/db/users.ts`, `src/auth_security_hardening.test.ts`, `CHANGELOG.md`

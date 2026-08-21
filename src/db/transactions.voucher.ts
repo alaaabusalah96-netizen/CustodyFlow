@@ -145,9 +145,7 @@ export class TransactionsVoucherModule {
   static async initializeOrIncrementSequence(companyId: string, manualFirstNo?: number): Promise<number> {
     const seqDocRef = doc(db, 'company_sequences', companyId);
 
-    const localSeq = TransactionsVoucherModule.getCompanySequence(companyId);
     const defaultStart = manualFirstNo !== undefined ? manualFirstNo : 1001;
-    const fallbackNext = localSeq !== null ? localSeq + 1 : defaultStart;
 
     let finalNo: number;
 
@@ -198,19 +196,14 @@ export class TransactionsVoucherModule {
           last_cash_voucher_no: finalNo 
         });
         if (!syncRes1.success) {
-          throw new Error(syncRes1.error || 'يلزم وجود اتصال بالإنترنت لتوليد رقم السند. يرجى إعادة الاتصال والمحاولة مرة أخرى.');
+          throw new Error(syncRes1.error || 'فشل مزامنة تسلسل السندات مع الخادم / Failed to sync sequence with server');
         }
-      } catch (err) {
-        console.error("Simple get/set fallback failed too, using local fallback:", err);
-        finalNo = fallbackNext;
-        const syncRes2 = await syncWriteWithOfflineFallback('company_sequences', companyId, { 
-          id: companyId, 
-          company_id: companyId, 
-          last_cash_voucher_no: finalNo 
-        });
-        if (!syncRes2.success) {
-          throw new Error(syncRes2.error || 'يلزم وجود اتصال بالإنترنت لتوليد رقم السند. يرجى إعادة الاتصال والمحاولة مرة أخرى.');
-        }
+      } catch (err: any) {
+        console.error("Atomic sequence generation and server write failed:", err);
+        throw new Error(
+          err?.message || 
+          'فشل توليد رقم السند المالي بشكل آمن عبر الخادم. يلزم وجود اتصال مستقر بالإنترنت لمنع تكرار الأرقام. / Failed to generate secure voucher sequence via server transaction. Stable internet connection is required to prevent duplicate sequences.'
+        );
       }
     }
 

@@ -120,10 +120,16 @@ service cloud.firestore {
         isSystemAdmin() ||
         resource == null ||
         resource.data.companyId == null ||
+        resource.data.company_id == null ||
         resource.data.companyId == getCompanyId() ||
         resource.data.company_id == getCompanyId()
       );
-      allow write: if isSystemAdmin() || (isLoggedIn() && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin'));
+      allow write: if isSystemAdmin() || (
+        isLoggedIn() &&
+        (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
+        (request.resource == null || request.resource.data.companyId == getCompanyId() || request.resource.data.company_id == getCompanyId()) &&
+        (resource == null || resource.data.companyId == getCompanyId() || resource.data.company_id == getCompanyId())
+      );
     }
 
     match /organization_units/{id} {
@@ -159,13 +165,15 @@ service cloud.firestore {
         isSystemAdmin() ||
         resource == null ||
         resource.data.companyId == null ||
+        resource.data.company_id == null ||
         resource.data.companyId == getCompanyId() ||
         resource.data.company_id == getCompanyId()
       );
       allow write: if isSystemAdmin() || (
         isLoggedIn() &&
         (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
-        (request.resource == null || request.resource.data.companyId == null || request.resource.data.companyId == getCompanyId())
+        (request.resource == null || request.resource.data.companyId == getCompanyId() || request.resource.data.company_id == getCompanyId()) &&
+        (resource == null || resource.data.companyId == getCompanyId() || resource.data.company_id == getCompanyId())
       );
     }
 
@@ -175,13 +183,15 @@ service cloud.firestore {
         isSystemAdmin() ||
         resource == null ||
         resource.data.companyId == null ||
+        resource.data.company_id == null ||
         resource.data.companyId == getCompanyId() ||
         resource.data.company_id == getCompanyId()
       );
       allow write: if isSystemAdmin() || (
         isLoggedIn() &&
         (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
-        (request.resource == null || request.resource.data.companyId == null || request.resource.data.companyId == getCompanyId())
+        (request.resource == null || request.resource.data.companyId == getCompanyId() || request.resource.data.company_id == getCompanyId()) &&
+        (resource == null || resource.data.companyId == getCompanyId() || resource.data.company_id == getCompanyId())
       );
     }
 
@@ -191,13 +201,15 @@ service cloud.firestore {
         isSystemAdmin() ||
         resource == null ||
         resource.data.companyId == null ||
+        resource.data.company_id == null ||
         resource.data.companyId == getCompanyId() ||
         resource.data.company_id == getCompanyId()
       );
       allow write: if isSystemAdmin() || (
         isLoggedIn() &&
         (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin') &&
-        (request.resource == null || request.resource.data.companyId == null || request.resource.data.companyId == getCompanyId())
+        (request.resource == null || request.resource.data.companyId == getCompanyId() || request.resource.data.company_id == getCompanyId()) &&
+        (resource == null || resource.data.companyId == getCompanyId() || resource.data.company_id == getCompanyId())
       );
     }
 
