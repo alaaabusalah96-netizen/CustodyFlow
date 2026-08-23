@@ -189,20 +189,20 @@ export class CustodyDB {
     return CompaniesModule.getCompanies();
   }
 
-  static saveCompanies(companies: Company[]): void {
-    CompaniesModule.saveCompanies(companies);
+  static async saveCompanies(companies: Company[]): Promise<{ success: boolean; error?: string }> {
+    return CompaniesModule.saveCompanies(companies);
   }
 
-  static addCompany(name: string, custodyValue?: number): Company {
+  static async addCompany(name: string, custodyValue?: number): Promise<Company | null> {
     return CompaniesModule.addCompany(name, custodyValue);
   }
 
-  static updateCompany(id: string, updates: Partial<Company>): void {
-    CompaniesModule.updateCompany(id, updates);
+  static async updateCompany(id: string, updates: Partial<Company>): Promise<{ success: boolean; error?: string }> {
+    return CompaniesModule.updateCompany(id, updates);
   }
 
-  static deleteCompany(id: string): void {
-    CompaniesModule.deleteCompany(id);
+  static async deleteCompany(id: string): Promise<{ success: boolean; error?: string }> {
+    return CompaniesModule.deleteCompany(id);
   }
 
   static getSelectedCompanyId(): string {
@@ -213,17 +213,17 @@ export class CustodyDB {
     CompaniesModule.setSelectedCompanyId(id);
   }
 
-  static toggleCompanyStatus(companyId: string, isActive: boolean): void {
-    CompaniesModule.toggleCompanyStatus(companyId, isActive);
+  static async toggleCompanyStatus(companyId: string, isActive: boolean): Promise<void> {
+    return CompaniesModule.toggleCompanyStatus(companyId, isActive);
   }
 
-  static updateCompanySubscription(
+  static async updateCompanySubscription(
     companyId: string,
     plan: Company['subscription_plan'],
     status: Company['subscription_status'],
     expiry: string
-  ): void {
-    CompaniesModule.updateCompanySubscription(companyId, plan, status, expiry);
+  ): Promise<void> {
+    return CompaniesModule.updateCompanySubscription(companyId, plan, status, expiry);
   }
 
   // Users
@@ -348,20 +348,20 @@ export class CustodyDB {
     return StationsModule.getScopedRegions();
   }
 
-  static saveRegions(regions: Region[]): void {
-    StationsModule.saveRegions(regions);
+  static async saveRegions(regions: Region[]): Promise<{ success: boolean; error?: string }> {
+    return StationsModule.saveRegions(regions);
   }
 
-  static addRegion(name: string, code?: string, companyId?: string): Region {
+  static async addRegion(name: string, code?: string, companyId?: string): Promise<Region | null> {
     return StationsModule.addRegion(name, code, companyId);
   }
 
-  static updateRegion(id: string, updates: Partial<Region>): void {
-    StationsModule.updateRegion(id, updates);
+  static async updateRegion(id: string, updates: Partial<Region>): Promise<{ success: boolean; error?: string }> {
+    return StationsModule.updateRegion(id, updates);
   }
 
-  static deleteRegion(id: string): void {
-    StationsModule.deleteRegion(id);
+  static async deleteRegion(id: string): Promise<{ success: boolean; error?: string }> {
+    return StationsModule.deleteRegion(id);
   }
 
   // Stations
@@ -373,20 +373,20 @@ export class CustodyDB {
     return StationsModule.getScopedStations();
   }
 
-  static saveStations(stations: Station[]): void {
-    StationsModule.saveStations(stations);
+  static async saveStations(stations: Station[]): Promise<{ success: boolean; error?: string }> {
+    return StationsModule.saveStations(stations);
   }
 
-  static addStation(name: string, code: string, custodyAmount: number, regionId?: string, companyId?: string): Station {
+  static async addStation(name: string, code: string, custodyAmount: number, regionId?: string, companyId?: string): Promise<Station | null> {
     return StationsModule.addStation(name, code, custodyAmount, regionId, companyId);
   }
 
-  static updateStation(id: string, updates: Partial<Station>): void {
-    StationsModule.updateStation(id, updates);
+  static async updateStation(id: string, updates: Partial<Station>): Promise<{ success: boolean; error?: string }> {
+    return StationsModule.updateStation(id, updates);
   }
 
-  static deleteStation(id: string): void {
-    StationsModule.deleteStation(id);
+  static async deleteStation(id: string): Promise<{ success: boolean; error?: string }> {
+    return StationsModule.deleteStation(id);
   }
 
   // Notifications
@@ -517,8 +517,8 @@ export class CustodyDB {
     return TransactionsModule.getConfig();
   }
 
-  static saveConfig(config: CustodyConfig): void {
-    TransactionsModule.saveConfig(config);
+  static async saveConfig(config: CustodyConfig): Promise<{ success: boolean; error?: string }> {
+    return TransactionsModule.saveConfig(config);
   }
 
   // Categories
@@ -526,8 +526,8 @@ export class CustodyDB {
     return TransactionsModule.getCategories();
   }
 
-  static saveCategories(categories: ExpenseCategory[]): void {
-    TransactionsModule.saveCategories(categories);
+  static async saveCategories(categories: ExpenseCategory[]): Promise<{ success: boolean; error?: string }> {
+    return TransactionsModule.saveCategories(categories);
   }
 
   // Transactions

@@ -127,7 +127,7 @@ describe('Phase 16: Enterprise End-to-End Business Flow Validation', () => {
     expect(prSeq).toMatch(/^PR-\d{4}-0001$/);
 
     // 2. Setup workflow & engine
-    ApprovalEngine.createDefaultWorkflows(companyId);
+    await ApprovalEngine.createDefaultWorkflows(companyId);
     const purchasingEngine = new PurchasingBusinessEngine();
 
     // 3. Create PR via processEvent

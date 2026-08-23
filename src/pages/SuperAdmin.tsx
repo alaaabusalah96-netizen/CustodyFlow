@@ -137,19 +137,21 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
   };
 
   // Handlers for Company Structure Builder
-  const handleStructAddCompany = (e: React.FormEvent) => {
+  const handleStructAddCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!structCompName.trim()) return;
 
     if (structEditingCompany) {
-      CustodyDB.updateCompany(structEditingCompany.id, {
+      await CustodyDB.updateCompany(structEditingCompany.id, {
         name: structCompName.trim()
       });
       showStructToast(isRtl ? 'تم تحديث الشركة بنجاح' : 'Company updated successfully');
       setStructEditingCompany(null);
     } else {
-      const created = CustodyDB.addCompany(structCompName.trim(), newCompanyCustody);
-      CustodyDB.updateCompanySubscription(created.id, 'Basic', 'active', new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+      const created = await CustodyDB.addCompany(structCompName.trim(), newCompanyCustody);
+      if (created) {
+        await CustodyDB.updateCompanySubscription(created.id, 'Basic', 'active', new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+      }
       showStructToast(isRtl ? 'تم إضافة وتفعيل الشركة بنجاح' : 'Company added and activated successfully');
     }
     setStructCompName('');
@@ -592,14 +594,16 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
 
 
   // 1. Create New Company
-  const handleCreateCompany = (e: React.FormEvent) => {
+  const handleCreateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCompanyName.trim()) return;
     
-    const created = CustodyDB.addCompany(newCompanyName.trim(), newCompanyCustody);
+    const created = await CustodyDB.addCompany(newCompanyName.trim(), newCompanyCustody);
     
     // Automatically set default subscription properties
-    CustodyDB.updateCompanySubscription(created.id, 'Basic', 'active', new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    if (created) {
+      await CustodyDB.updateCompanySubscription(created.id, 'Basic', 'active', new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    }
     
     setNewCompanyName('');
     setNewCompanyCustody(0);

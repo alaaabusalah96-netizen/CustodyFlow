@@ -4,6 +4,111 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Phase C: Fix Write-Ordering Consistency in ApprovalEngine
+**Date:** 2026-08-23
+**Files Changed:** `src/db/approvalEngine.ts`, `src/components/ApprovalWorkflowManager.tsx`, `src/components/ApprovalInbox.tsx`, `src/lib/enterprise/purchasing_engine.ts`, `src/db/transactions.create.ts`, `src/approval_engine.test.ts`, `src/enterprise_e2e_flows_validation.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Refactored ApprovalEngine Mutations to Async with Write-Order Consistency**:
+  - `ApprovalEngine.saveWorkflow`: Refactored to `async`. Prepares workflow mutation, performs cloud sync first via `syncWriteWithOfflineFallback('approval_workflows', wf.id, wf, 'SET')`, and only persists to `StorageEngine.setStored` upon sync success. Returns `null` and leaves local storage untouched on sync failure.
+  - `ApprovalEngine.deleteWorkflow`: Refactored to `async`. Syncs deletion via `syncWriteWithOfflineFallback('approval_workflows', id, null, 'DELETE')` first, and only updates `StorageEngine` if sync succeeds. Returns `false` on failure.
+  - `ApprovalEngine.createDefaultWorkflows`: Refactored to `async`. Saves default workflows sequentially via `saveWorkflow`.
+  - `ApprovalEngine.evaluateAndStartWorkflow`: Refactored to `async`. Evaluates criteria, performs cloud write via `syncWriteWithOfflineFallback('approval_instances', instance.id, instance, 'SET')` before persisting to `StorageEngine`. Returns `{ instance: null, error }` if sync fails.
+  - `ApprovalEngine.approveStep`: Refactored to `async`. Computes step progression or final approval, performs cloud write via `syncWriteWithOfflineFallback('approval_instances', updated.id, updated, 'SET')`, and only updates `StorageEngine` if sync succeeds. Throws an error on sync failure.
+  - `ApprovalEngine.rejectStep`: Refactored to `async`. Computes rejection status, performs cloud write via `syncWriteWithOfflineFallback('approval_instances', updated.id, updated, 'SET')`, and only updates `StorageEngine` if sync succeeds. Throws an error on sync failure.
+- **Updated All ApprovalEngine Consumers to Await Mutations**:
+  - `ApprovalWorkflowManager.tsx`: Updated `loadData`, `handleToggleActive`, `handleDelete`, and `handleSaveWorkflow` to `async/await` and display user-friendly error alerts on cloud sync failure.
+  - `ApprovalInbox.tsx`: Updated `handleApprove` and `handleReject` to `async/await`.
+  - `purchasing_engine.ts`: Updated `PR_SUBMITTED` and `PR_APPROVED` event handlers to await `ApprovalEngine.evaluateAndStartWorkflow` and `ApprovalEngine.approveStep`.
+  - `transactions.create.ts`: Updated expense approval workflow trigger to await `ApprovalEngine.evaluateAndStartWorkflow`.
+- **Automated Regression & Write-Ordering Testing**:
+  - Updated `src/approval_engine.test.ts` and `src/enterprise_e2e_flows_validation.test.ts` to `async/await`.
+  - Added 5 write-ordering unit tests in `src/approval_engine.test.ts` verifying that `saveWorkflow`, `deleteWorkflow`, `evaluateAndStartWorkflow`, `approveStep`, and `rejectStep` leave `StorageEngine` completely untouched when offline/sync fails.
+- **Verification**:
+  - Tests: 17/17 passed in `src/approval_engine.test.ts` and `src/enterprise_e2e_flows_validation.test.ts`.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Build (`compile_applet`): Succeeded.
+
+---
+
+## Phase B: Fix Write-Ordering Consistency (Companies, Stations, Business Groups, Transactions)
+**Date:** 2026-08-23
+**Files Changed:** `src/db/companies.ts`, `src/db/stations.ts`, `src/db/businessGroups.ts`, `src/db/transactions.ts`, `src/db.ts`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/pages/SuperAdmin.tsx`, `src/phase_b_write_ordering.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Write-Ordering Synchronization Across Core DB Modules**:
+  - `CompaniesModule.saveCompanies`, `addCompany`, `updateCompany`, `deleteCompany`: Changed to await `syncWriteWithOfflineFallback` for all modified items before updating `StorageEngine.setStored`. If sync fails, returns `{ success: false, error }`, logs a warning, and leaves local storage untouched.
+  - `StationsModule.saveRegions`, `addRegion`, `updateRegion`, `deleteRegion`: Awaits cloud sync per item; only writes to `StorageEngine.setStored` if cloud sync succeeds.
+  - `StationsModule.saveStations`, `addStation`, `updateStation`, `deleteStation`: Awaits cloud sync per item before modifying local cache.
+  - `BusinessGroupsModule.saveGroups`, `addGroup`, `updateGroup`, `toggleGroupStatus`: Awaits cloud sync per item, surfaces errors to caller, and preserves local state on failure.
+  - `TransactionsModule.saveCategories`, `saveConfig`: Awaits cloud sync per item, returning `{ success: false, error }` without touching local storage on failure.
+- **CustodyDB Facade & UI Call Sites**:
+  - Updated `CustodyDB` wrappers in `src/db.ts` to return Promises.
+  - Updated `UnifiedAccessControlCenter.tsx` and `SuperAdmin.tsx` to await company creation and update operations.
+- **Automated Regression Test Suite**:
+  - Added `src/phase_b_write_ordering.test.ts` (10 tests) covering success and offline/failure scenarios across all 5 entities.
+- **Verification**:
+  - Tests: 10/10 passed in `phase_b_write_ordering.test.ts`, 21/21 passed in `optimistic_locking.test.ts` and `settings_user_migration.test.ts`.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Build (`compile_applet`): Succeeded.
+
+---
+
+## Phase A: Fix Settings.tsx Company Scope Resolution & Server Temporary Password Display
+**Date:** 2026-08-22
+**Files Changed:** `src/pages/Settings.tsx`, `src/settings_user_migration.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Fixed Company Scope Resolution (`src/pages/Settings.tsx`)**:
+  - In `handleAddUser`: Changed `companyId` resolution to `CustodyDB.getSelectedCompanyId() || ''` as sole source of truth so live scope / impersonation selected in UnifiedAccessControlCenter is accurately respected instead of stale parent props or currentUser company.
+  - In `handleSaveEditUser`: Removed `currentUser.company_id` fallback, enforcing `targetUser.company_id || CustodyDB.getSelectedCompanyId() || ''`.
+- **Fixed Temporary Password Display (`src/pages/Settings.tsx`)**:
+  - Replaced client-typed/generated password display in success alert with server's verified `data.temporaryPassword` from `/api/admin/users`.
+  - Removed client `finalPassword` generation and assignment in `payload`.
+- **Added Automated Regression Tests (`src/settings_user_migration.test.ts`)**:
+  - Added tests 7, 8, and 9 asserting strict `CustodyDB.getSelectedCompanyId()` usage, server `data.temporaryPassword` alert integration, and safe user-edit company binding.
+- **Verification**:
+  - Tests: 22 passed across `settings_user_migration.test.ts`, `user_provisioning_api.test.ts`, `unified_access_control_phase1.test.ts`.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Build (`compile_applet`): Succeeded.
+
+---
+
+## Phase 32: Final Regression Guard & Live-Path Multi-Tenant Audit
+**Date:** 2026-08-22
+**Files Changed:** `CHANGELOG.md`
+**Summary:**
+- **Zero Silent Fallbacks Confirmation**: Confirmed across all live operational paths that custody writes, vouchers, expenses, and transactions enforce explicit tenant resolution without silent fallback.
+- **Pure Helpers Verification**: Validated extracted helper modules across fleet and access control engines (`fleet_pure_helpers.ts`, `unifiedAccessHelpers.ts`).
+- **Full Scope Test Verification**:
+  - `auth_security_hardening.test.ts`, `phase6_password_lock.test.ts`, `legacy_hash_deprecation.test.ts`, `user_provisioning_api.test.ts`: Passed.
+  - `phase15_comp1_fallback.test.ts`, `settings_user_migration.test.ts`, `part2_account_correction.test.ts`: Passed.
+  - `unified_access_control_*.test.ts` (Phase 1-4 & Navigation): Passed.
+  - `fleet_phase*.test.ts` (Phase 1-5): Passed.
+  - Root test suite (73+ test files): Passed.
+- **Type Checking & Production Build**:
+  - TypeScript linter: 0 errors.
+  - Production build (`compile_applet`): Succeeded.
+
+---
+
+## Phase 31: Extract Pure Permission Matrix and Provisioning Helpers from UnifiedAccessControlCenter
+**Date:** 2026-08-22
+**Files Changed:** `src/components/settings/unifiedAccessHelpers.ts`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Created Dedicated Pure Module (`src/components/settings/unifiedAccessHelpers.ts`)**:
+  - `buildDynamicPermissionCategories`: Pure dynamic matrix compiler grouping `DEFAULT_PERMISSIONS` and arbitrary system permissions into category structures with visual themes and access flags.
+  - `generateRandomPassword`: Pure alphanumeric secure password generator with special characters.
+  - `getUserActiveModules`: Pure permission evaluator determining active business module badges for any user.
+  - `getCategoryPermissionStatus`: Pure toggle-state predicate calculating category-level enablement counts and statuses.
+  - `getUserBranchLabel`: Pure helper computing human-readable branch and scope labels across platform, company, multi-branch, station, and region hierarchies.
+- **Maintained Public API & Re-exports in `UnifiedAccessControlCenter.tsx`**:
+  - Maintained complete backward compatibility and re-exported `buildDynamicPermissionCategories`, `generateRandomPassword`, `getUserActiveModules`, `getCategoryPermissionStatus`, `getUserBranchLabel`, `CATEGORY_METADATA_MAP`, and `DynamicModuleCategory`.
+  - Zero changes to component UX or permission logic.
+- **Verification & Testing**:
+  - Scoped vitest test run (`src/unified_access_control_*.test.ts`): 5/5 test files passed, 26/26 tests passed.
+  - TypeScript linter (`lint_applet`): 0 errors.
+  - Production build (`compile_applet`): Build succeeded.
+
+---
+
 ## Phase 30: Extract Pure Logic Helpers from Fleet Engine
 **Date:** 2026-08-21
 **Files Changed:** `src/lib/enterprise/fleet_pure_helpers.ts`, `src/lib/enterprise/fleet_engine.ts`, `CHANGELOG.md`

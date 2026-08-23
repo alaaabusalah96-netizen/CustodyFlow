@@ -1,6 +1,7 @@
 import { Warehouse, Product, InventoryDocument, StockMovement, InventoryDocType, InventoryDocStatus, InventoryLedgerEntry, WarehouseBin, InventoryWorkflowConfig } from '../types/inventory';
 import { StorageEngine } from './storage';
-import { dbSetDoc, dbDeleteDoc, db } from '../firebase';
+import { db } from '../firebase';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
 import { SequenceEngine } from '../lib/enterprise/sequence';
@@ -306,16 +307,19 @@ export class InventoryModule {
       ];
       
       // Save them asynchronously to avoid side-effects during render
-      setTimeout(() => {
+      setTimeout(async () => {
         try {
           const currentAll = StorageEngine.getStored<Warehouse[]>('warehouses', DEFAULT_WAREHOUSES);
           const hasScrapNow = currentAll.some(w => w.company_id === companyId && (
             w.name.includes('خردة') || w.name.includes('كهنة') || w.name.toLowerCase().includes('scrap')
           ));
           if (!hasScrapNow) {
+            for (const w of seedScrap) {
+              const res = await syncWriteWithOfflineFallback('warehouses', w.id, w);
+              if (!res.success) return;
+            }
             const updatedList = [...currentAll, ...seedScrap];
             StorageEngine.setStored('warehouses', updatedList);
-            seedScrap.forEach(w => dbSetDoc('warehouses', w.id, w));
           }
         } catch (e) {
           console.error('Error seeding scrap warehouses:', e);
@@ -328,16 +332,31 @@ export class InventoryModule {
     return companyWarehouses;
   }
 
-  static saveWarehouses(list: Warehouse[], targetCompanyId?: string): void {
+  static async saveWarehouses(list: Warehouse[], targetCompanyId?: string): Promise<{ success: boolean; error?: string }> {
     const all = StorageEngine.getStored<Warehouse[]>('warehouses', DEFAULT_WAREHOUSES);
     const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(w => w.company_id !== companyId);
     const combined = !companyId ? list : [...filteredOut, ...list];
+
+    const changed = list.filter(w => {
+      const old = all.find(ex => ex.id === w.id);
+      if (!old) return true;
+      return JSON.stringify(old) !== JSON.stringify(w);
+    });
+
+    for (const w of changed) {
+      const res = await syncWriteWithOfflineFallback('warehouses', w.id, w);
+      if (!res.success) {
+        console.warn(`[saveWarehouses] Warning: ${res.error}`);
+        return { success: false, error: res.error };
+      }
+    }
+
     StorageEngine.setStored('warehouses', combined);
-    list.forEach(w => dbSetDoc('warehouses', w.id, w));
+    return { success: true };
   }
 
-  static addWarehouse(warehouse: Omit<Warehouse, 'id'> & { company_id?: string }): Warehouse {
+  static async addWarehouse(warehouse: Omit<Warehouse, 'id'> & { company_id?: string }): Promise<Warehouse> {
     const list = InventoryModule.getWarehouses();
     const companyId = warehouse.company_id || CompaniesModule.getSelectedCompanyId();
     const newW: Warehouse = {
@@ -346,7 +365,7 @@ export class InventoryModule {
       company_id: companyId
     };
     list.push(newW);
-    InventoryModule.saveWarehouses(list);
+    await InventoryModule.saveWarehouses(list);
     return newW;
   }
 
@@ -359,23 +378,38 @@ export class InventoryModule {
     return list;
   }
 
-  static saveWarehouseBins(bins: WarehouseBin[]): void {
+  static async saveWarehouseBins(bins: WarehouseBin[]): Promise<{ success: boolean; error?: string }> {
+    const existing = StorageEngine.getStored<WarehouseBin[]>('warehouse_bins', []);
+    const changed = bins.filter(b => {
+      const old = existing.find(ex => ex.id === b.id);
+      if (!old) return true;
+      return JSON.stringify(old) !== JSON.stringify(b);
+    });
+
+    for (const b of changed) {
+      const res = await syncWriteWithOfflineFallback('warehouse_bins', b.id, b);
+      if (!res.success) {
+        console.warn(`[saveWarehouseBins] Warning: ${res.error}`);
+        return { success: false, error: res.error };
+      }
+    }
+
     StorageEngine.setStored('warehouse_bins', bins);
-    bins.forEach(b => dbSetDoc('warehouse_bins', b.id, b));
+    return { success: true };
   }
 
-  static addWarehouseBin(bin: Omit<WarehouseBin, 'id'>): WarehouseBin {
+  static async addWarehouseBin(bin: Omit<WarehouseBin, 'id'>): Promise<WarehouseBin> {
     const list = StorageEngine.getStored<WarehouseBin[]>('warehouse_bins', []);
     const newBin: WarehouseBin = {
       ...bin,
       id: `bin-${crypto.randomUUID()}`
     };
     list.push(newBin);
-    InventoryModule.saveWarehouseBins(list);
+    await InventoryModule.saveWarehouseBins(list);
     return newBin;
   }
 
-  static updateWarehouseBin(binId: string, updates: Partial<WarehouseBin>): void {
+  static async updateWarehouseBin(binId: string, updates: Partial<WarehouseBin>): Promise<void> {
     const list = StorageEngine.getStored<WarehouseBin[]>('warehouse_bins', []);
     const idx = list.findIndex(b => b.id === binId);
     if (idx !== -1) {
@@ -383,15 +417,23 @@ export class InventoryModule {
         ...list[idx],
         ...updates
       };
-      InventoryModule.saveWarehouseBins(list);
+      await InventoryModule.saveWarehouseBins(list);
     }
   }
 
-  static deleteWarehouseBin(binId: string): void {
+  static async deleteWarehouseBin(binId: string): Promise<boolean> {
     const list = StorageEngine.getStored<WarehouseBin[]>('warehouse_bins', []);
     const filtered = list.filter(b => b.id !== binId);
-    InventoryModule.saveWarehouseBins(filtered);
-    dbDeleteDoc('warehouse_bins', binId);
+    if (filtered.length !== list.length) {
+      const res = await syncWriteWithOfflineFallback('warehouse_bins', binId, null);
+      if (!res.success) {
+        console.warn(`[deleteWarehouseBin] Warning: ${res.error}`);
+        return false;
+      }
+      StorageEngine.setStored('warehouse_bins', filtered);
+      return true;
+    }
+    return false;
   }
 
   // Stock tracking at Bin Level
@@ -414,14 +456,14 @@ export class InventoryModule {
   }
 
   // Relocation: Move stock internally between bins in the same warehouse
-  static relocateBinStock(
+  static async relocateBinStock(
     companyId: string,
     warehouseId: string,
     productId: string,
     fromBinId: string,
     toBinId: string,
     qty: number
-  ): { success: boolean; messageAr: string; messageEn: string } {
+  ): Promise<{ success: boolean; messageAr: string; messageEn: string }> {
     if (!companyId) {
       return {
         success: false,
@@ -583,8 +625,22 @@ export class InventoryModule {
 
     ledgerEntries.push(ledFrom, ledTo);
 
-    InventoryModule.saveStockMovements(movements);
-    InventoryModule.saveInventoryLedger(ledgerEntries);
+    const resMov = await InventoryModule.saveStockMovements(movements);
+    if (!resMov.success) {
+      return {
+        success: false,
+        messageAr: 'فشل مزامنة حركة المخزون مع الخادم السحابي',
+        messageEn: 'Failed to sync stock movement to cloud server'
+      };
+    }
+    const resLed = await InventoryModule.saveInventoryLedger(ledgerEntries);
+    if (!resLed.success) {
+      return {
+        success: false,
+        messageAr: 'فشل مزامنة سجل المخزون مع الخادم السحابي',
+        messageEn: 'Failed to sync inventory ledger to cloud server'
+      };
+    }
 
     LogsModule.addLog(
       operatorId,
@@ -641,16 +697,31 @@ export class InventoryModule {
     return list.filter(p => p.company_id === companyId || !p.company_id);
   }
 
-  static saveProducts(list: Product[], targetCompanyId?: string): void {
+  static async saveProducts(list: Product[], targetCompanyId?: string): Promise<{ success: boolean; error?: string }> {
     const all = StorageEngine.getStored<Product[]>('products', DEFAULT_PRODUCTS);
     const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(p => p.company_id !== companyId);
     const combined = !companyId ? list : [...filteredOut, ...list];
+
+    const changed = list.filter(p => {
+      const old = all.find(ex => ex.id === p.id);
+      if (!old) return true;
+      return JSON.stringify(old) !== JSON.stringify(p);
+    });
+
+    for (const p of changed) {
+      const res = await syncWriteWithOfflineFallback('products', p.id, p);
+      if (!res.success) {
+        console.warn(`[saveProducts] Warning: ${res.error}`);
+        return { success: false, error: res.error };
+      }
+    }
+
     StorageEngine.setStored('products', combined);
-    list.forEach(p => dbSetDoc('products', p.id, p));
+    return { success: true };
   }
 
-  static addProduct(product: Omit<Product, 'id'> & { company_id?: string }): Product {
+  static async addProduct(product: Omit<Product, 'id'> & { company_id?: string }): Promise<Product> {
     const companyId = product.company_id || CompaniesModule.getSelectedCompanyId();
     const list = InventoryModule.getProducts(companyId);
     const newP: Product = {
@@ -659,7 +730,7 @@ export class InventoryModule {
       company_id: companyId
     };
     list.push(newP);
-    InventoryModule.saveProducts(list, companyId);
+    await InventoryModule.saveProducts(list, companyId);
     return newP;
   }
 
@@ -698,13 +769,28 @@ export class InventoryModule {
     return StorageEngine.getPaginatedIDB<InventoryDocument>('inventory_documents', page, pageSize, scopedFilter, sortFn);
   }
 
-  static saveInventoryDocuments(list: InventoryDocument[]): void {
+  static async saveInventoryDocuments(list: InventoryDocument[]): Promise<{ success: boolean; error?: string }> {
     const all = StorageEngine.getStored<InventoryDocument[]>('inventory_documents', []);
     const companyId = CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(d => d.tenantId !== companyId);
     const combined = !companyId ? list : [...filteredOut, ...list];
+
+    const changed = list.filter(d => {
+      const old = all.find(ex => ex.id === d.id);
+      if (!old) return true;
+      return JSON.stringify(old) !== JSON.stringify(d);
+    });
+
+    for (const d of changed) {
+      const res = await syncWriteWithOfflineFallback('inventory_documents', d.id, d);
+      if (!res.success) {
+        console.warn(`[saveInventoryDocuments] Warning: ${res.error}`);
+        return { success: false, error: res.error };
+      }
+    }
+
     StorageEngine.setStored('inventory_documents', combined);
-    list.forEach(d => dbSetDoc('inventory_documents', d.id, d));
+    return { success: true };
   }
 
   // Stock Movements
@@ -743,14 +829,29 @@ export class InventoryModule {
     return StorageEngine.getPaginatedIDB<StockMovement>('stock_movements', page, pageSize, scopedFilter, sortFn);
   }
 
-  static saveStockMovements(list: StockMovement[]): void {
+  static async saveStockMovements(list: StockMovement[]): Promise<{ success: boolean; error?: string }> {
     InventoryModule.clearStockLookupIndex();
     const all = StorageEngine.getStored<StockMovement[]>('stock_movements', DEFAULT_MOVEMENTS);
     const companyId = CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(m => m.company_id !== companyId);
     const combined = !companyId ? list : [...filteredOut, ...list];
+
+    const changed = list.filter(m => {
+      const old = all.find(ex => ex.id === m.id);
+      if (!old) return true;
+      return JSON.stringify(old) !== JSON.stringify(m);
+    });
+
+    for (const m of changed) {
+      const res = await syncWriteWithOfflineFallback('stock_movements', m.id, m);
+      if (!res.success) {
+        console.warn(`[saveStockMovements] Warning: ${res.error}`);
+        return { success: false, error: res.error };
+      }
+    }
+
     StorageEngine.setStored('stock_movements', combined);
-    list.forEach(m => dbSetDoc('stock_movements', m.id, m));
+    return { success: true };
   }
 
   // Ledger Entries
@@ -839,7 +940,7 @@ export class InventoryModule {
     return list.filter(entry => entry.company_id === companyId);
   }
 
-  static saveInventoryLedger(list: InventoryLedgerEntry[]): void {
+  static async saveInventoryLedger(list: InventoryLedgerEntry[]): Promise<{ success: boolean; error?: string }> {
     const companyId = CompaniesModule.getSelectedCompanyId();
     const all = StorageEngine.getStored<InventoryLedgerEntry[]>('inventory_ledger', []);
     
@@ -925,8 +1026,23 @@ export class InventoryModule {
 
     const filteredOut = initialList.filter(entry => entry.company_id !== companyId);
     const combined = !companyId ? list : [...filteredOut, ...list];
+
+    const changed = list.filter(entry => {
+      const old = all.find(ex => ex.id === entry.id);
+      if (!old) return true;
+      return JSON.stringify(old) !== JSON.stringify(entry);
+    });
+
+    for (const entry of changed) {
+      const res = await syncWriteWithOfflineFallback('inventory_ledger', entry.id, entry);
+      if (!res.success) {
+        console.warn(`[saveInventoryLedger] Warning: ${res.error}`);
+        return { success: false, error: res.error };
+      }
+    }
+
     StorageEngine.setStored('inventory_ledger', combined);
-    list.forEach(entry => dbSetDoc('inventory_ledger', entry.id, entry));
+    return { success: true };
   }
 
   /**
@@ -993,14 +1109,14 @@ export class InventoryModule {
     return InventoryModule.getProductStock(productId, warehouseId);
   }
 
-  static adjustStock(
+  static async adjustStock(
     warehouseId: string,
     productId: string,
     qtyChange: number,
     docType: InventoryDocType,
     userId: string,
     binId?: string
-  ): void {
+  ): Promise<void> {
     const wh = StorageEngine.getStored<Warehouse[]>('warehouses', []).find(w => w.id === warehouseId);
     const companyId = wh?.company_id || CompaniesModule.getSelectedCompanyId();
     if (!companyId) {
@@ -1019,7 +1135,7 @@ export class InventoryModule {
     const movement: StockMovement = {
       id: `m-adj-${crypto.randomUUID()}`,
       doc_id: 'direct-adjust',
-      doc_no: `ADJ-${Date.now()}`,
+      doc_no: `ADJ-${crypto.randomUUID().slice(0, 8)}`,
       doc_type: docType,
       product_id: productId,
       warehouse_id: warehouseId,
@@ -1035,7 +1151,7 @@ export class InventoryModule {
     };
     const allMovements = InventoryModule.getStockMovements();
     allMovements.push(movement);
-    InventoryModule.saveStockMovements(allMovements);
+    await InventoryModule.saveStockMovements(allMovements);
   }
 
   /**

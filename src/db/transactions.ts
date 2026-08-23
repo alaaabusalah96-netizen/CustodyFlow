@@ -32,11 +32,27 @@ export class TransactionsModule {
     return StorageEngine.getStored<ExpenseCategory[]>('categories', DEFAULT_CATEGORIES);
   }
 
-  static saveCategories(categories: ExpenseCategory[]): void {
+  static async saveCategories(categories: ExpenseCategory[]): Promise<{ success: boolean; error?: string }> {
+    const existing = StorageEngine.getStored<ExpenseCategory[]>('categories', []);
+    const changedCategories = categories.filter(c => {
+      const old = existing.find(ex => ex.id === c.id);
+      if (!old) return true;
+      return JSON.stringify(old) !== JSON.stringify(c);
+    });
+
+    for (const c of changedCategories) {
+      const res = await syncWriteWithOfflineFallback('categories', c.id, c);
+      if (!res.success) {
+        const errorMsg = res.error || `فشل حفظ بيانات بند المصروفات ${c.name_ar || c.name_en || c.id} في قاعدة البيانات.`;
+        console.warn(`[saveCategories] Warning: ${errorMsg}`);
+        return { success: false, error: errorMsg };
+      }
+    }
+
     StorageEngine.setStored('categories', categories);
-    categories.forEach(c => syncWriteWithOfflineFallback('categories', c.id, c).catch(() => {}));
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Categories', 'Modified available expense category configurations.');
+    return { success: true };
   }
 
   // Custody Config
@@ -52,7 +68,7 @@ export class TransactionsModule {
     };
   }
 
-  static saveConfig(config: CustodyConfig): void {
+  static async saveConfig(config: CustodyConfig): Promise<{ success: boolean; error?: string }> {
     const targetCompanyId = CompaniesModule.getSelectedCompanyId();
     const companies = CompaniesModule.getCompanies();
     const updated = companies.map(c => {
@@ -67,7 +83,10 @@ export class TransactionsModule {
       }
       return c;
     });
-    CompaniesModule.saveCompanies(updated);
+    const res = await CompaniesModule.saveCompanies(updated);
+    if (!res.success) {
+      return res;
+    }
     
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(
@@ -76,6 +95,7 @@ export class TransactionsModule {
       'Update Custody', 
       `Adjusted company metadata for ${config.company_name}.`
     );
+    return { success: true };
   }
 
   // Transactions list

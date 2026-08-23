@@ -11,8 +11,8 @@ describe('Phase 8: Approval Engine Unit & Integration Tests', () => {
     StorageEngine.setStored('purchase_requests', []);
   });
 
-  it('should create default workflows for a company', () => {
-    const defaults = ApprovalEngine.createDefaultWorkflows(companyId);
+  it('should create default workflows for a company', async () => {
+    const defaults = await ApprovalEngine.createDefaultWorkflows(companyId);
     expect(defaults.length).toBeGreaterThanOrEqual(3);
     
     const prHighWf = defaults.find(w => w.documentType === 'PURCHASE_REQUEST' && w.steps.length === 3);
@@ -20,8 +20,8 @@ describe('Phase 8: Approval Engine Unit & Integration Tests', () => {
     expect(prHighWf?.steps.length).toBe(3); // Dept Manager -> Finance -> CEO
   });
 
-  it('should support creating and saving custom multi-step approval workflows', () => {
-    const workflow = ApprovalEngine.saveWorkflow({
+  it('should support creating and saving custom multi-step approval workflows', async () => {
+    const workflow = await ApprovalEngine.saveWorkflow({
       company_id: companyId,
       documentType: 'EXPENSE',
       name: 'Custom High Value Expense Approval',
@@ -56,18 +56,19 @@ describe('Phase 8: Approval Engine Unit & Integration Tests', () => {
       ]
     });
 
-    expect(workflow.id).toBeDefined();
-    expect(workflow.steps.length).toBe(3);
+    expect(workflow).not.toBeNull();
+    expect(workflow!.id).toBeDefined();
+    expect(workflow!.steps.length).toBe(3);
 
     const retrieved = ApprovalEngine.getWorkflows(companyId, 'EXPENSE');
     expect(retrieved.length).toBe(1);
     expect(retrieved[0].name).toBe('Custom High Value Expense Approval');
   });
 
-  it('should evaluate and start an approval workflow instance on document submission', () => {
-    ApprovalEngine.createDefaultWorkflows(companyId);
+  it('should evaluate and start an approval workflow instance on document submission', async () => {
+    await ApprovalEngine.createDefaultWorkflows(companyId);
 
-    const result = ApprovalEngine.evaluateAndStartWorkflow({
+    const result = await ApprovalEngine.evaluateAndStartWorkflow({
       companyId,
       documentType: 'PURCHASE_REQUEST',
       documentId: 'pr-doc-101',
@@ -83,10 +84,10 @@ describe('Phase 8: Approval Engine Unit & Integration Tests', () => {
     expect(result.instance?.totalSteps).toBe(3);
   });
 
-  it('should enforce sequential multi-stage approvals (Dept Manager -> Finance -> CEO)', () => {
-    ApprovalEngine.createDefaultWorkflows(companyId);
+  it('should enforce sequential multi-stage approvals (Dept Manager -> Finance -> CEO)', async () => {
+    await ApprovalEngine.createDefaultWorkflows(companyId);
 
-    const { instance } = ApprovalEngine.evaluateAndStartWorkflow({
+    const { instance } = await ApprovalEngine.evaluateAndStartWorkflow({
       companyId,
       documentType: 'PURCHASE_REQUEST',
       documentId: 'pr-doc-102',
@@ -101,18 +102,18 @@ describe('Phase 8: Approval Engine Unit & Integration Tests', () => {
     // Unauthorized user attempt
     const unauthorizedUser = { id: 'usr-clerk', role: 'Clerk', userRoles: ['Clerk'] };
     expect(ApprovalEngine.canUserApproveStep(instance!, unauthorizedUser)).toBe(false);
-    expect(() => {
+    await expect(
       ApprovalEngine.approveStep({
         instanceId: instId,
         actor: { id: 'usr-clerk', name: 'Clerk User', role: 'Clerk' }
-      });
-    }).toThrow();
+      })
+    ).rejects.toThrow();
 
     // Step 1: Department Manager Approves
     const deptMgr = { id: 'usr-dept-mgr', role: 'DepartmentManager', userRoles: ['DepartmentManager'] };
     expect(ApprovalEngine.canUserApproveStep(instance!, deptMgr)).toBe(true);
 
-    const step1Result = ApprovalEngine.approveStep({
+    const step1Result = await ApprovalEngine.approveStep({
       instanceId: instId,
       actor: { id: 'usr-dept-mgr', name: 'Department Manager', role: 'DepartmentManager' },
       comments: 'Step 1 Approved'
@@ -126,7 +127,7 @@ describe('Phase 8: Approval Engine Unit & Integration Tests', () => {
     const finUser = { id: 'usr-fin', role: 'FinanceManager', userRoles: ['FinanceManager'] };
     expect(ApprovalEngine.canUserApproveStep(step1Result.instance, finUser)).toBe(true);
 
-    const step2Result = ApprovalEngine.approveStep({
+    const step2Result = await ApprovalEngine.approveStep({
       instanceId: instId,
       actor: { id: 'usr-fin', name: 'Finance Lead', role: 'FinanceManager' },
       comments: 'Budget Verified'
@@ -139,7 +140,7 @@ describe('Phase 8: Approval Engine Unit & Integration Tests', () => {
     const ceoUser = { id: 'usr-ceo', role: 'CEO', userRoles: ['CEO'] };
     expect(ApprovalEngine.canUserApproveStep(step2Result.instance, ceoUser)).toBe(true);
 
-    const step3Result = ApprovalEngine.approveStep({
+    const step3Result = await ApprovalEngine.approveStep({
       instanceId: instId,
       actor: { id: 'usr-ceo', name: 'Chief Executive', role: 'CEO' },
       comments: 'Final CEO Signature'
@@ -150,10 +151,10 @@ describe('Phase 8: Approval Engine Unit & Integration Tests', () => {
     expect(step3Result.instance.history.length).toBe(3);
   });
 
-  it('should handle rejection at any stage of the workflow', () => {
-    ApprovalEngine.createDefaultWorkflows(companyId);
+  it('should handle rejection at any stage of the workflow', async () => {
+    await ApprovalEngine.createDefaultWorkflows(companyId);
 
-    const { instance } = ApprovalEngine.evaluateAndStartWorkflow({
+    const { instance } = await ApprovalEngine.evaluateAndStartWorkflow({
       companyId,
       documentType: 'PURCHASE_REQUEST',
       documentId: 'pr-doc-103',
@@ -162,13 +163,13 @@ describe('Phase 8: Approval Engine Unit & Integration Tests', () => {
     });
 
     // Step 1 Approved
-    ApprovalEngine.approveStep({
+    await ApprovalEngine.approveStep({
       instanceId: instance!.id,
       actor: { id: 'usr-dept-mgr', name: 'Department Manager', role: 'DepartmentManager' }
     });
 
     // Step 2 Rejected by Finance
-    const rejectedInstance = ApprovalEngine.rejectStep({
+    const rejectedInstance = await ApprovalEngine.rejectStep({
       instanceId: instance!.id,
       actor: { id: 'usr-fin', name: 'Finance Auditor', role: 'FinanceManager' },
       comments: 'Over budget limit'
@@ -178,11 +179,11 @@ describe('Phase 8: Approval Engine Unit & Integration Tests', () => {
     expect(rejectedInstance.history[1].action).toBe('REJECTED');
   });
 
-  it('should list pending approvals for authorized users', () => {
-    ApprovalEngine.createDefaultWorkflows(companyId);
+  it('should list pending approvals for authorized users', async () => {
+    await ApprovalEngine.createDefaultWorkflows(companyId);
 
     // Start 2 instances
-    ApprovalEngine.evaluateAndStartWorkflow({
+    await ApprovalEngine.evaluateAndStartWorkflow({
       companyId,
       documentType: 'PURCHASE_REQUEST',
       documentId: 'pr-doc-201',
@@ -190,7 +191,7 @@ describe('Phase 8: Approval Engine Unit & Integration Tests', () => {
       requesterId: 'usr-req1'
     });
 
-    ApprovalEngine.evaluateAndStartWorkflow({
+    await ApprovalEngine.evaluateAndStartWorkflow({
       companyId,
       documentType: 'PURCHASE_REQUEST',
       documentId: 'pr-doc-202',
@@ -208,7 +209,7 @@ describe('Phase 8: Approval Engine Unit & Integration Tests', () => {
   });
 
   it('should seamlessly integrate with PurchasingBusinessEngine events without breaking logic', async () => {
-    ApprovalEngine.createDefaultWorkflows(companyId);
+    await ApprovalEngine.createDefaultWorkflows(companyId);
     const engine = new PurchasingBusinessEngine();
 
     // Create PR
@@ -301,5 +302,171 @@ describe('Phase 8: Approval Engine Unit & Integration Tests', () => {
     // Now PR status should be APPROVED
     const prsAfterStep3 = StorageEngine.getStored<any[]>('purchase_requests', []);
     expect(prsAfterStep3[0].status).toBe('APPROVED');
+  });
+
+  describe('Write-ordering & Offline consistency tests (Phase C)', () => {
+    beforeEach(() => {
+      ApprovalEngine.resetState();
+    });
+
+    it('should fail saveWorkflow when offline without modifying StorageEngine', async () => {
+      const originalOnLine = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+
+      try {
+        const res = await ApprovalEngine.saveWorkflow({
+          company_id: companyId,
+          documentType: 'EXPENSE',
+          name: 'Offline Workflow',
+          isActive: true,
+          steps: []
+        });
+
+        expect(res).toBeNull();
+        const stored = StorageEngine.getStored<any[]>('approval_workflows', []);
+        expect(stored.length).toBe(0);
+      } finally {
+        if (originalOnLine) {
+          Object.defineProperty(navigator, 'onLine', originalOnLine);
+        } else {
+          Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+        }
+      }
+    });
+
+    it('should fail deleteWorkflow when offline without modifying StorageEngine', async () => {
+      // First save an item online
+      const wf = await ApprovalEngine.saveWorkflow({
+        company_id: companyId,
+        documentType: 'EXPENSE',
+        name: 'Online Workflow',
+        isActive: true,
+        steps: []
+      });
+      expect(wf).not.toBeNull();
+      expect(StorageEngine.getStored<any[]>('approval_workflows', []).length).toBe(1);
+
+      // Now set offline and attempt delete
+      const originalOnLine = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+
+      try {
+        const success = await ApprovalEngine.deleteWorkflow(wf!.id);
+        expect(success).toBe(false);
+
+        // Confirm still in StorageEngine
+        const stored = StorageEngine.getStored<any[]>('approval_workflows', []);
+        expect(stored.length).toBe(1);
+        expect(stored[0].id).toBe(wf!.id);
+      } finally {
+        if (originalOnLine) {
+          Object.defineProperty(navigator, 'onLine', originalOnLine);
+        } else {
+          Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+        }
+      }
+    });
+
+    it('should fail evaluateAndStartWorkflow when offline without creating instance in StorageEngine', async () => {
+      await ApprovalEngine.createDefaultWorkflows(companyId);
+
+      const originalOnLine = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+
+      try {
+        const result = await ApprovalEngine.evaluateAndStartWorkflow({
+          companyId,
+          documentType: 'PURCHASE_REQUEST',
+          documentId: 'pr-doc-offline',
+          amount: 75000,
+          requesterId: 'usr-requester',
+          requesterName: 'Employee User'
+        });
+
+        expect(result.instance).toBeNull();
+        expect(result.error).toBeDefined();
+
+        const storedInstances = StorageEngine.getStored<any[]>('approval_instances', []);
+        expect(storedInstances.length).toBe(0);
+      } finally {
+        if (originalOnLine) {
+          Object.defineProperty(navigator, 'onLine', originalOnLine);
+        } else {
+          Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+        }
+      }
+    });
+
+    it('should fail approveStep when offline without modifying instance state in StorageEngine', async () => {
+      await ApprovalEngine.createDefaultWorkflows(companyId);
+      const { instance } = await ApprovalEngine.evaluateAndStartWorkflow({
+        companyId,
+        documentType: 'PURCHASE_REQUEST',
+        documentId: 'pr-doc-online',
+        amount: 75000,
+        requesterId: 'usr-requester'
+      });
+      expect(instance).not.toBeNull();
+
+      const originalOnLine = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+
+      try {
+        await expect(
+          ApprovalEngine.approveStep({
+            instanceId: instance!.id,
+            actor: { id: 'usr-dept-mgr', name: 'Dept Mgr', role: 'DepartmentManager' }
+          })
+        ).rejects.toThrow();
+
+        // Check that StorageEngine still has currentStepNumber: 1, history empty
+        const storedInstances = StorageEngine.getStored<any[]>('approval_instances', []);
+        expect(storedInstances[0].currentStepNumber).toBe(1);
+        expect(storedInstances[0].history.length).toBe(0);
+        expect(storedInstances[0].status).toBe('PENDING');
+      } finally {
+        if (originalOnLine) {
+          Object.defineProperty(navigator, 'onLine', originalOnLine);
+        } else {
+          Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+        }
+      }
+    });
+
+    it('should fail rejectStep when offline without modifying instance state in StorageEngine', async () => {
+      await ApprovalEngine.createDefaultWorkflows(companyId);
+      const { instance } = await ApprovalEngine.evaluateAndStartWorkflow({
+        companyId,
+        documentType: 'PURCHASE_REQUEST',
+        documentId: 'pr-doc-online-2',
+        amount: 75000,
+        requesterId: 'usr-requester'
+      });
+      expect(instance).not.toBeNull();
+
+      const originalOnLine = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+
+      try {
+        await expect(
+          ApprovalEngine.rejectStep({
+            instanceId: instance!.id,
+            actor: { id: 'usr-dept-mgr', name: 'Dept Mgr', role: 'DepartmentManager' },
+            comments: 'Reject'
+          })
+        ).rejects.toThrow();
+
+        // Check that StorageEngine still has status: PENDING
+        const storedInstances = StorageEngine.getStored<any[]>('approval_instances', []);
+        expect(storedInstances[0].status).toBe('PENDING');
+        expect(storedInstances[0].history.length).toBe(0);
+      } finally {
+        if (originalOnLine) {
+          Object.defineProperty(navigator, 'onLine', originalOnLine);
+        } else {
+          Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+        }
+      }
+    });
   });
 });

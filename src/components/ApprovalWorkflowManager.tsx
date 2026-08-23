@@ -80,11 +80,11 @@ export default function ApprovalWorkflowManager({
     loadData();
   }, [companyId]);
 
-  const loadData = () => {
+  const loadData = async () => {
     if (!companyId) return;
     let wfs = ApprovalEngine.getWorkflows(companyId);
     if (wfs.length === 0) {
-      wfs = ApprovalEngine.createDefaultWorkflows(companyId);
+      wfs = await ApprovalEngine.createDefaultWorkflows(companyId);
     }
     setWorkflows(wfs);
 
@@ -144,23 +144,31 @@ export default function ApprovalWorkflowManager({
     setIsModalOpen(true);
   };
 
-  const handleToggleActive = (wf: ApprovalWorkflowDefinition) => {
-    ApprovalEngine.saveWorkflow({
+  const handleToggleActive = async (wf: ApprovalWorkflowDefinition) => {
+    const res = await ApprovalEngine.saveWorkflow({
       ...wf,
       isActive: !wf.isActive
     });
-    loadData();
+    if (!res) {
+      alert(isRtl ? 'فشل حفظ المسار في الخادم السحابي' : 'Failed to save workflow to cloud server');
+      return;
+    }
+    await loadData();
     if (onWorkflowsChange) onWorkflowsChange();
   };
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     const confirmMsg = isRtl 
       ? `هل أنت تأكد من حذف مسار الاعتماد "${name}"؟` 
       : `Are you sure you want to delete workflow "${name}"?`;
     if (!window.confirm(confirmMsg)) return;
 
-    ApprovalEngine.deleteWorkflow(id);
-    loadData();
+    const ok = await ApprovalEngine.deleteWorkflow(id);
+    if (!ok) {
+      alert(isRtl ? 'فشل حذف المسار من الخادم السحابي' : 'Failed to delete workflow from cloud server');
+      return;
+    }
+    await loadData();
     if (onWorkflowsChange) onWorkflowsChange();
   };
 
@@ -209,7 +217,7 @@ export default function ApprovalWorkflowManager({
     setFormSteps(updated);
   };
 
-  const handleSaveWorkflow = (e: React.FormEvent) => {
+  const handleSaveWorkflow = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
       alert(isRtl ? 'يرجى إدخال اسم مسار الاعتماد' : 'Please enter workflow name');
@@ -224,7 +232,7 @@ export default function ApprovalWorkflowManager({
     const minAmt = formMinAmount.trim() !== '' ? parseFloat(formMinAmount) : undefined;
     const maxAmt = formMaxAmount.trim() !== '' ? parseFloat(formMaxAmount) : undefined;
 
-    ApprovalEngine.saveWorkflow({
+    const res = await ApprovalEngine.saveWorkflow({
       id: editingWorkflowId || undefined,
       company_id: companyId,
       documentType: formDocType,
@@ -237,8 +245,13 @@ export default function ApprovalWorkflowManager({
       steps: formSteps
     });
 
+    if (!res) {
+      alert(isRtl ? 'فشل حفظ المسار في الخادم السحابي' : 'Failed to save workflow to cloud server');
+      return;
+    }
+
     setIsModalOpen(false);
-    loadData();
+    await loadData();
     if (onWorkflowsChange) onWorkflowsChange();
   };
 

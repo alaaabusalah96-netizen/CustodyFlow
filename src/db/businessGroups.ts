@@ -10,12 +10,28 @@ export class BusinessGroupsModule {
     return StorageEngine.getStored<BusinessGroup[]>('business_groups', []);
   }
 
-  static saveGroups(groups: BusinessGroup[]): void {
+  static async saveGroups(groups: BusinessGroup[]): Promise<{ success: boolean; error?: string }> {
+    const existing = StorageEngine.getStored<BusinessGroup[]>('business_groups', []);
+    const changedGroups = groups.filter(g => {
+      const old = existing.find(ex => ex.id === g.id);
+      if (!old) return true;
+      return JSON.stringify(old) !== JSON.stringify(g);
+    });
+
+    for (const g of changedGroups) {
+      const res = await syncWriteWithOfflineFallback('business_groups', g.id, g);
+      if (!res.success) {
+        const errorMsg = res.error || `فشل حفظ بيانات مجموعة الأعمال ${g.nameAr || g.nameEn || g.id} في قاعدة البيانات.`;
+        console.warn(`[saveGroups] Warning: ${errorMsg}`);
+        return { success: false, error: errorMsg };
+      }
+    }
+
     StorageEngine.setStored('business_groups', groups);
-    groups.forEach(g => syncWriteWithOfflineFallback('business_groups', g.id, g).catch(() => {}));
+    return { success: true };
   }
 
-  static addGroup(code: string, nameAr: string, nameEn: string): BusinessGroup {
+  static async addGroup(code: string, nameAr: string, nameEn: string): Promise<BusinessGroup | null> {
     const groups = BusinessGroupsModule.getGroups();
     const newGroup: BusinessGroup = {
       id: `bg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`, // FIX: avoid id collisions under concurrent creation
@@ -25,8 +41,11 @@ export class BusinessGroupsModule {
       status: 'ACTIVE',
       createdAt: new Date().toISOString()
     };
-    groups.push(newGroup);
-    BusinessGroupsModule.saveGroups(groups);
+    const updated = [...groups, newGroup];
+    const res = await BusinessGroupsModule.saveGroups(updated);
+    if (!res.success) {
+      return null;
+    }
     
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(
@@ -44,43 +63,51 @@ export class BusinessGroupsModule {
     return newGroup;
   }
 
-  static updateGroup(id: string, updates: Partial<BusinessGroup>): void {
+  static async updateGroup(id: string, updates: Partial<BusinessGroup>): Promise<{ success: boolean; error?: string }> {
     const groups = BusinessGroupsModule.getGroups();
     const idx = groups.findIndex(g => g.id === id);
     if (idx !== -1) {
       const original = groups[idx];
-      groups[idx] = { 
+      const updated = [...groups];
+      updated[idx] = { 
         ...original, 
         ...updates, 
         updatedAt: new Date().toISOString() 
       };
-      BusinessGroupsModule.saveGroups(groups);
+      const res = await BusinessGroupsModule.saveGroups(updated);
+      if (!res.success) {
+        return res;
+      }
       
       const user = UsersModule.getActiveUser();
       LogsModule.addLog(
         user?.id || 'system', 
         user?.full_name || 'System', 
         'Update Business Group', 
-        `Modified business group: ${groups[idx].nameEn}`
+        `Modified business group: ${updated[idx].nameEn}`
       );
-      LogsModule.logAudit('BUSINESS_GROUP_UPDATE', `User updated business group ${groups[idx].nameEn}`, {
+      LogsModule.logAudit('BUSINESS_GROUP_UPDATE', `User updated business group ${updated[idx].nameEn}`, {
         group_id: id,
         updates
       });
+      return { success: true };
     }
+    return { success: false, error: 'Business group not found' };
   }
 
-  static toggleGroupStatus(groupId: string, isActive: boolean): void {
+  static async toggleGroupStatus(groupId: string, isActive: boolean): Promise<void> {
     const groups = BusinessGroupsModule.getGroups();
     const idx = groups.findIndex(g => g.id === groupId);
     if (idx !== -1) {
       const newStatus: BusinessGroup['status'] = isActive ? 'ACTIVE' : 'INACTIVE';
-      groups[idx] = { 
+      const updated = [...groups];
+      updated[idx] = { 
         ...groups[idx], 
         status: newStatus,
         updatedAt: new Date().toISOString()
       };
-      BusinessGroupsModule.saveGroups(groups);
+      const res = await BusinessGroupsModule.saveGroups(updated);
+      if (!res.success) return;
       
       const activeUser = UsersModule.getActiveUser();
       const operator = activeUser?.impersonator || activeUser;
@@ -89,11 +116,11 @@ export class BusinessGroupsModule {
         operator?.id || 'system', 
         operator?.full_name || 'System', 
         'Toggle Business Group Status', 
-        `${statusStr} business group ${groups[idx].nameEn}`
+        `${statusStr} business group ${updated[idx].nameEn}`
       );
-      LogsModule.logAudit('BUSINESS_GROUP_STATUS_TOGGLE', `User changed business group ${groups[idx].nameEn} status to ${newStatus}`, {
+      LogsModule.logAudit('BUSINESS_GROUP_STATUS_TOGGLE', `User changed business group ${updated[idx].nameEn} status to ${newStatus}`, {
         group_id: groupId,
-        nameEn: groups[idx].nameEn,
+        nameEn: updated[idx].nameEn,
         status: newStatus
       });
     }

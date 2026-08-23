@@ -6,7 +6,7 @@ import {
   ApprovalDocumentType
 } from '../types/approval';
 import { StorageEngine } from './storage';
-import { dbSetDoc, dbDeleteDoc } from '../firebase';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { Firestore } from 'firebase/firestore';
 
 export class ApprovalEngine {
@@ -35,7 +35,9 @@ export class ApprovalEngine {
     return all.find(w => w.id === id) || null;
   }
 
-  public static saveWorkflow(workflowData: Omit<ApprovalWorkflowDefinition, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): ApprovalWorkflowDefinition {
+  public static async saveWorkflow(
+    workflowData: Omit<ApprovalWorkflowDefinition, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+  ): Promise<ApprovalWorkflowDefinition | null> {
     const all = StorageEngine.getStored<ApprovalWorkflowDefinition[]>(this.STORAGE_KEY_WORKFLOWS, []);
     const now = new Date().toISOString();
     
@@ -48,7 +50,6 @@ export class ApprovalEngine {
         ...workflowData,
         updatedAt: now
       };
-      all[existingIdx] = workflow;
     } else {
       const newId = workflowData.id || `wf-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
       workflow = {
@@ -59,29 +60,37 @@ export class ApprovalEngine {
         createdAt: now,
         updatedAt: now
       };
+    }
+
+    const res = await syncWriteWithOfflineFallback(this.STORAGE_KEY_WORKFLOWS, workflow.id, workflow);
+    if (!res.success) {
+      console.warn(`[saveWorkflow] Warning: ${res.error}`);
+      return null;
+    }
+
+    if (existingIdx >= 0) {
+      all[existingIdx] = workflow;
+    } else {
       all.push(workflow);
     }
-
     StorageEngine.setStored(this.STORAGE_KEY_WORKFLOWS, all);
-
-    if (this.dbInstance) {
-      dbSetDoc('approval_workflows', workflow.id, workflow);
-    }
 
     return workflow;
   }
 
-  public static deleteWorkflow(id: string): boolean {
+  public static async deleteWorkflow(id: string): Promise<boolean> {
     const all = StorageEngine.getStored<ApprovalWorkflowDefinition[]>(this.STORAGE_KEY_WORKFLOWS, []);
-    const updated = all.filter(w => w.id !== id);
-    if (updated.length === all.length) return false;
+    const existing = all.find(w => w.id === id);
+    if (!existing) return false;
 
-    StorageEngine.setStored(this.STORAGE_KEY_WORKFLOWS, updated);
-
-    if (this.dbInstance) {
-      dbDeleteDoc('approval_workflows', id);
+    const res = await syncWriteWithOfflineFallback(this.STORAGE_KEY_WORKFLOWS, id, null);
+    if (!res.success) {
+      console.warn(`[deleteWorkflow] Warning: ${res.error}`);
+      return false;
     }
 
+    const updated = all.filter(w => w.id !== id);
+    StorageEngine.setStored(this.STORAGE_KEY_WORKFLOWS, updated);
     return true;
   }
 
@@ -119,7 +128,7 @@ export class ApprovalEngine {
   }
 
   // Evaluate & Start Instance
-  public static evaluateAndStartWorkflow(params: {
+  public static async evaluateAndStartWorkflow(params: {
     companyId: string;
     documentType: string;
     documentId: string;
@@ -127,12 +136,12 @@ export class ApprovalEngine {
     org_unit_id?: string;
     requesterId: string;
     requesterName?: string;
-  }): { instance: ApprovalInstance | null; isAutoApproved: boolean } {
+  }): Promise<{ instance: ApprovalInstance | null; isAutoApproved: boolean; error?: string }> {
     const { companyId, documentType, documentId, amount, org_unit_id, requesterId, requesterName } = params;
 
     let matchingWf = this.findMatchingWorkflow(companyId, documentType, amount, org_unit_id);
     if (!matchingWf && this.getWorkflows(companyId, documentType).length === 0) {
-      this.createDefaultWorkflows(companyId);
+      await this.createDefaultWorkflows(companyId);
       matchingWf = this.findMatchingWorkflow(companyId, documentType, amount, org_unit_id);
     }
 
@@ -167,13 +176,16 @@ export class ApprovalEngine {
       updatedAt: now
     };
 
+    const res = await syncWriteWithOfflineFallback(this.STORAGE_KEY_INSTANCES, instance.id, instance);
+    if (!res.success) {
+      const errorMsg = res.error || 'Failed to save approval instance in cloud';
+      console.warn(`[evaluateAndStartWorkflow] Warning: ${errorMsg}`);
+      return { instance: null, isAutoApproved: false, error: errorMsg };
+    }
+
     const instances = StorageEngine.getStored<ApprovalInstance[]>(this.STORAGE_KEY_INSTANCES, []);
     instances.push(instance);
     StorageEngine.setStored(this.STORAGE_KEY_INSTANCES, instances);
-
-    if (this.dbInstance) {
-      dbSetDoc('approval_instances', instance.id, instance);
-    }
 
     return { instance, isAutoApproved: false };
   }
@@ -225,16 +237,16 @@ export class ApprovalEngine {
   }
 
   // Step Operations
-  public static approveStep(params: {
+  public static async approveStep(params: {
     instanceId: string;
-    actor: { id: string; name: string; role: string; userRoles?: string[] };
+    actor: { id: string; name: string; role: string; userRoles?: string[]; permissions?: Record<string, boolean>; org_unit_id?: string };
     comments?: string;
-  }): { instance: ApprovalInstance; isFinalApproval: boolean } {
+  }): Promise<{ instance: ApprovalInstance; isFinalApproval: boolean }> {
     const instances = StorageEngine.getStored<ApprovalInstance[]>(this.STORAGE_KEY_INSTANCES, []);
     const idx = instances.findIndex(i => i.id === params.instanceId);
     if (idx === -1) throw new Error('Approval instance not found');
 
-    const instance = instances[idx];
+    const instance: ApprovalInstance = JSON.parse(JSON.stringify(instances[idx]));
     if (instance.status !== 'PENDING') {
       throw new Error(`Cannot approve step. Current status is ${instance.status}`);
     }
@@ -270,26 +282,30 @@ export class ApprovalEngine {
     }
 
     instance.updatedAt = now;
+
+    const res = await syncWriteWithOfflineFallback(this.STORAGE_KEY_INSTANCES, instance.id, instance);
+    if (!res.success) {
+      const errorMsg = res.error || 'Failed to update approval instance in database';
+      console.warn(`[approveStep] Warning: ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+
     instances[idx] = instance;
     StorageEngine.setStored(this.STORAGE_KEY_INSTANCES, instances);
-
-    if (this.dbInstance) {
-      dbSetDoc('approval_instances', instance.id, instance);
-    }
 
     return { instance, isFinalApproval: isFinal };
   }
 
-  public static rejectStep(params: {
+  public static async rejectStep(params: {
     instanceId: string;
     actor: { id: string; name: string; role: string };
     comments?: string;
-  }): ApprovalInstance {
+  }): Promise<ApprovalInstance> {
     const instances = StorageEngine.getStored<ApprovalInstance[]>(this.STORAGE_KEY_INSTANCES, []);
     const idx = instances.findIndex(i => i.id === params.instanceId);
     if (idx === -1) throw new Error('Approval instance not found');
 
-    const instance = instances[idx];
+    const instance: ApprovalInstance = JSON.parse(JSON.stringify(instances[idx]));
     if (instance.status !== 'PENDING') {
       throw new Error(`Cannot reject step. Current status is ${instance.status}`);
     }
@@ -312,12 +328,16 @@ export class ApprovalEngine {
 
     instance.status = 'REJECTED';
     instance.updatedAt = now;
+
+    const res = await syncWriteWithOfflineFallback(this.STORAGE_KEY_INSTANCES, instance.id, instance);
+    if (!res.success) {
+      const errorMsg = res.error || 'Failed to update approval instance in database';
+      console.warn(`[rejectStep] Warning: ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+
     instances[idx] = instance;
     StorageEngine.setStored(this.STORAGE_KEY_INSTANCES, instances);
-
-    if (this.dbInstance) {
-      dbSetDoc('approval_instances', instance.id, instance);
-    }
 
     return instance;
   }
@@ -333,11 +353,11 @@ export class ApprovalEngine {
   }
 
   // Pre-seed default templates for enterprise readiness
-  public static createDefaultWorkflows(companyId: string): ApprovalWorkflowDefinition[] {
+  public static async createDefaultWorkflows(companyId: string): Promise<ApprovalWorkflowDefinition[]> {
     const existing = this.getWorkflows(companyId);
     if (existing.length > 0) return existing;
 
-    const prStandardWf = this.saveWorkflow({
+    const prStandardWf = await this.saveWorkflow({
       company_id: companyId,
       documentType: 'PURCHASE_REQUEST',
       name: 'Standard Purchase Request Approval Workflow',
@@ -356,7 +376,7 @@ export class ApprovalEngine {
       ]
     });
 
-    const prHighValueWf = this.saveWorkflow({
+    const prHighValueWf = await this.saveWorkflow({
       company_id: companyId,
       documentType: 'PURCHASE_REQUEST',
       name: 'High-Value Purchase Request Approval Workflow',
@@ -391,7 +411,7 @@ export class ApprovalEngine {
       ]
     });
 
-    const expenseWf = this.saveWorkflow({
+    const expenseWf = await this.saveWorkflow({
       company_id: companyId,
       documentType: 'EXPENSE',
       name: 'Standard Expense Claim Approval',
@@ -417,6 +437,6 @@ export class ApprovalEngine {
       ]
     });
 
-    return [prStandardWf, prHighValueWf, expenseWf];
+    return [prStandardWf, prHighValueWf, expenseWf].filter(Boolean) as ApprovalWorkflowDefinition[];
   }
 }

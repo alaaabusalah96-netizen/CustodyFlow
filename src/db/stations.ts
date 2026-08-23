@@ -56,14 +56,30 @@ export class StationsModule {
     return filtered;
   }
 
-  static saveRegions(regions: Region[]): void {
+  static async saveRegions(regions: Region[]): Promise<{ success: boolean; error?: string }> {
+    const existing = StorageEngine.getStored<Region[]>('regions', []);
+    const changedRegions = regions.filter(r => {
+      const old = existing.find(ex => ex.id === r.id);
+      if (!old) return true;
+      return JSON.stringify(old) !== JSON.stringify(r);
+    });
+
+    for (const r of changedRegions) {
+      const res = await syncWriteWithOfflineFallback('regions', r.id, r);
+      if (!res.success) {
+        const errorMsg = res.error || `فشل حفظ بيانات المنطقة ${r.name || r.id} في قاعدة البيانات.`;
+        console.warn(`[saveRegions] Warning: ${errorMsg}`);
+        return { success: false, error: errorMsg };
+      }
+    }
+
     StorageEngine.setStored('regions', regions);
-    regions.forEach(r => syncWriteWithOfflineFallback('regions', r.id, r).catch(() => {}));
+    return { success: true };
   }
 
-  static addRegion(name: string, code?: string, companyId?: string): Region {
-    const regions = StationsModule.getRegions();
+  static async addRegion(name: string, code?: string, companyId?: string): Promise<Region | null> {
     const compId = requireCompanyId(companyId || CompaniesModule.getSelectedCompanyId());
+    const regions = StationsModule.getRegions();
     const regId = `reg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const org_unit_id = `org-unit-region-${regId}`;
 
@@ -74,8 +90,11 @@ export class StationsModule {
       company_id: compId,
       org_unit_id
     };
-    regions.push(newReg);
-    StationsModule.saveRegions(regions);
+    const updated = [...regions, newReg];
+    const res = await StationsModule.saveRegions(updated);
+    if (!res.success) {
+      return null;
+    }
 
     // Compatibility sync: mirror creation into Organization Engine
     try {
@@ -102,12 +121,16 @@ export class StationsModule {
     return newReg;
   }
 
-  static updateRegion(id: string, updates: Partial<Region>): void {
+  static async updateRegion(id: string, updates: Partial<Region>): Promise<{ success: boolean; error?: string }> {
     const regions = StationsModule.getRegions();
     const idx = regions.findIndex(r => r.id === id);
     if (idx !== -1) {
-      regions[idx] = { ...regions[idx], ...updates };
-      StationsModule.saveRegions(regions);
+      const updated = [...regions];
+      updated[idx] = { ...updated[idx], ...updates };
+      const res = await StationsModule.saveRegions(updated);
+      if (!res.success) {
+        return res;
+      }
 
       // Compatibility sync: update corresponding OrganizationUnit
       try {
@@ -126,14 +149,20 @@ export class StationsModule {
       }
 
       const user = UsersModule.getActiveUser();
-      LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Region', `Modified region: ${regions[idx].name}`);
+      LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Region', `Modified region: ${updated[idx].name}`);
+      return { success: true };
     }
+    return { success: false, error: 'Region not found' };
   }
 
-  static deleteRegion(id: string): void {
+  static async deleteRegion(id: string): Promise<{ success: boolean; error?: string }> {
+    const res = await syncWriteWithOfflineFallback('regions', id, null);
+    if (!res.success) {
+      console.warn(`[deleteRegion] Warning: ${res.error}`);
+      return { success: false, error: res.error };
+    }
     const regions = StationsModule.getRegions().filter(r => r.id !== id);
-    StationsModule.saveRegions(regions);
-    syncWriteWithOfflineFallback('regions', id, null).catch(() => {});
+    StorageEngine.setStored('regions', regions);
 
     // Compatibility sync: delete corresponding OrganizationUnit
     try {
@@ -148,6 +177,7 @@ export class StationsModule {
 
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Delete Region', `Deleted region ID: ${id}`);
+    return { success: true };
   }
 
   // Stations
@@ -188,16 +218,32 @@ export class StationsModule {
     return filtered;
   }
 
-  static saveStations(stations: Station[]): void {
+  static async saveStations(stations: Station[]): Promise<{ success: boolean; error?: string }> {
+    const existing = StorageEngine.getStored<Station[]>('stations', []);
+    const changedStations = stations.filter(s => {
+      const old = existing.find(ex => ex.id === s.id);
+      if (!old) return true;
+      return JSON.stringify(old) !== JSON.stringify(s);
+    });
+
+    for (const s of changedStations) {
+      const res = await syncWriteWithOfflineFallback('stations', s.id, s);
+      if (!res.success) {
+        const errorMsg = res.error || `فشل حفظ بيانات المحطة ${s.station_name || s.id} في قاعدة البيانات.`;
+        console.warn(`[saveStations] Warning: ${errorMsg}`);
+        return { success: false, error: errorMsg };
+      }
+    }
+
     StorageEngine.setStored('stations', stations);
-    stations.forEach(s => syncWriteWithOfflineFallback('stations', s.id, s).catch(() => {}));
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Stations', 'Modified available cash custody stations configuration.');
+    return { success: true };
   }
 
-  static addStation(name: string, code: string, custodyAmount: number, regionId?: string, companyId?: string): Station {
-    const stations = StationsModule.getStations();
+  static async addStation(name: string, code: string, custodyAmount: number, regionId?: string, companyId?: string): Promise<Station | null> {
     const compId = requireCompanyId(companyId || CompaniesModule.getSelectedCompanyId());
+    const stations = StationsModule.getStations();
     const stnId = `stn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const org_unit_id = `org-unit-station-${stnId}`;
 
@@ -211,8 +257,11 @@ export class StationsModule {
       company_id: compId,
       org_unit_id
     };
-    stations.push(newStn);
-    StationsModule.saveStations(stations);
+    const updated = [...stations, newStn];
+    const res = await StationsModule.saveStations(updated);
+    if (!res.success) {
+      return null;
+    }
 
     // Compatibility sync: mirror creation into Organization Engine
     try {
@@ -246,14 +295,18 @@ export class StationsModule {
     return newStn;
   }
 
-  static updateStation(id: string, updates: Partial<Station>): void {
+  static async updateStation(id: string, updates: Partial<Station>): Promise<{ success: boolean; error?: string }> {
     const stations = StationsModule.getStations();
     const idx = stations.findIndex(s => s.id === id);
     if (idx !== -1) {
       const before = { ...stations[idx] };
       const after = { ...stations[idx], ...updates };
-      stations[idx] = after;
-      StationsModule.saveStations(stations);
+      const updated = [...stations];
+      updated[idx] = after;
+      const res = await StationsModule.saveStations(updated);
+      if (!res.success) {
+        return res;
+      }
 
       // Compatibility sync: update corresponding OrganizationUnit
       try {
@@ -286,25 +339,32 @@ export class StationsModule {
             ...companies[compIdx],
             custody_value: (companies[compIdx].custody_value || 0) + diff
           };
-          companies[compIdx] = updatedCompany;
-          CompaniesModule.saveCompanies(companies);
+          const compList = [...companies];
+          compList[compIdx] = updatedCompany;
+          await CompaniesModule.saveCompanies(compList);
         }
       }
 
       const user = UsersModule.getActiveUser();
-      LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Station', `Modified station: ${stations[idx].station_name}`);
+      LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Station', `Modified station: ${updated[idx].station_name}`);
       LogsModule.logAudit('UPDATE_STATION', `Updated station ${before.station_name} (${before.station_code}).`, {
         before,
         after
       });
+      return { success: true };
     }
+    return { success: false, error: 'Station not found' };
   }
 
-  static deleteStation(id: string): void {
+  static async deleteStation(id: string): Promise<{ success: boolean; error?: string }> {
+    const res = await syncWriteWithOfflineFallback('stations', id, null);
+    if (!res.success) {
+      console.warn(`[deleteStation] Warning: ${res.error}`);
+      return { success: false, error: res.error };
+    }
     const before = StationsModule.getStations().find(s => s.id === id);
     const stations = StationsModule.getStations().filter(s => s.id !== id);
-    StationsModule.saveStations(stations);
-    syncWriteWithOfflineFallback('stations', id, null).catch(() => {});
+    StorageEngine.setStored('stations', stations);
 
     // Compatibility sync: delete corresponding OrganizationUnit
     try {
@@ -324,5 +384,6 @@ export class StationsModule {
         before
       });
     }
+    return { success: true };
   }
 }

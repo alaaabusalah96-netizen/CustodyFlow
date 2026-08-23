@@ -80,7 +80,7 @@ export class TransactionsCreateModule {
 
       // Evaluate and start Approval Workflow for EXPENSE if configured
       try {
-        ApprovalEngine.evaluateAndStartWorkflow({
+        await ApprovalEngine.evaluateAndStartWorkflow({
           companyId: company_id,
           documentType: 'EXPENSE',
           documentId: newTx.id,

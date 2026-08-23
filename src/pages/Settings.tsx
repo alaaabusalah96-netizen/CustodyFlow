@@ -626,13 +626,10 @@ export default function Settings({
       view_reports: true
     };
 
-    const companyId = selectedCompanyId || currentUser.company_id || CustodyDB.getSelectedCompanyId() || '';
-    const tempPassword = `TempPass${Math.floor(100000 + Math.random() * 900000)}!`;
-    const finalPassword = newUserPassword.trim() || tempPassword;
+    const companyId = CustodyDB.getSelectedCompanyId() || '';
 
     const payload = {
       email: newUserEmail.trim().toLowerCase(),
-      password: finalPassword,
       full_name: newUserName.trim(),
       role: newUserRole,
       company_id: companyId,
@@ -682,9 +679,10 @@ export default function Settings({
       setNewUserStationId('');
       setNewUserRegionId('');
 
+      const tempPass = data.temporaryPassword || '';
       alert(isRtl
-        ? `✅ تم إنشاء وتوثيق حساب الموظف بنجاح!\n\nالشركة: ${companyId}\nالبريد: ${payload.email}\nكلمة المرور المؤقتة هي: ${finalPassword}\n\nيرجى تسليمها للموظف لاستخدامها عند تسجيل الدخول لأول مرة.`
-        : `✅ User account created and provisioned successfully!\n\nCompany: ${companyId}\nEmail: ${payload.email}\nTemporary Password: ${finalPassword}\n\nPlease share this temporary password with the user.`
+        ? `✅ تم إنشاء وتوثيق حساب الموظف بنجاح!\n\nالشركة: ${companyId}\nالبريد: ${payload.email}${tempPass ? `\nكلمة المرور المؤقتة هي: ${tempPass}` : ''}\n\nيرجى تسليمها للموظف لاستخدامها عند تسجيل الدخول لأول مرة.`
+        : `✅ User account created and provisioned successfully!\n\nCompany: ${companyId}\nEmail: ${payload.email}${tempPass ? `\nTemporary Password: ${tempPass}` : ''}\n\nPlease share this temporary password with the user.`
       );
 
       triggerToast(isRtl ? 'تم إضافة وتوثيق حساب المستخدم بنجاح.' : 'New user created successfully.');
@@ -735,7 +733,7 @@ export default function Settings({
     }
     if (!editUserFullName.trim()) return;
 
-    const companyId = targetUser.company_id || currentUser.company_id || CustodyDB.getSelectedCompanyId() || '';
+    const companyId = targetUser.company_id || CustodyDB.getSelectedCompanyId() || '';
 
     const payload = {
       full_name: editUserFullName.trim(),

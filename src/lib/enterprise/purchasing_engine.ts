@@ -399,7 +399,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           const totalAmount = items.reduce((sum: number, it: any) => sum + (it.qty * it.estimatedPrice), 0);
           
           // Evaluate & Start dynamic Approval Engine Workflow
-          const approvalEval = ApprovalEngine.evaluateAndStartWorkflow({
+          const approvalEval = await ApprovalEngine.evaluateAndStartWorkflow({
             companyId,
             documentType: 'PURCHASE_REQUEST',
             documentId: '',
@@ -463,7 +463,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           let isFinalApproval = true;
 
           if (activeApprovalInstance) {
-            const stepResult = ApprovalEngine.approveStep({
+            const stepResult = await ApprovalEngine.approveStep({
               instanceId: activeApprovalInstance.id,
               actor: { id: event.user_id, name: event.user_role, role: event.user_role },
               comments

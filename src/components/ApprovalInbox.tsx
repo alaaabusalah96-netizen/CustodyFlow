@@ -189,10 +189,10 @@ export default function ApprovalInbox({
     }
   };
 
-  const handleApprove = (instance: ApprovalInstance) => {
+  const handleApprove = async (instance: ApprovalInstance) => {
     try {
       setIsSubmitting(true);
-      const res = ApprovalEngine.approveStep({
+      const res = await ApprovalEngine.approveStep({
         instanceId: instance.id,
         actor: {
           id: activeUser.id,
@@ -221,7 +221,7 @@ export default function ApprovalInbox({
     }
   };
 
-  const handleReject = (instance: ApprovalInstance) => {
+  const handleReject = async (instance: ApprovalInstance) => {
     if (!commentText.trim()) {
       alert(isRtl ? 'يرجى كتابة سبب الرفض في خانة الملاحظات' : 'Please provide a rejection reason in comments');
       return;
@@ -229,7 +229,7 @@ export default function ApprovalInbox({
 
     try {
       setIsSubmitting(true);
-      const updated = ApprovalEngine.rejectStep({
+      const updated = await ApprovalEngine.rejectStep({
         instanceId: instance.id,
         actor: {
           id: activeUser.id,
