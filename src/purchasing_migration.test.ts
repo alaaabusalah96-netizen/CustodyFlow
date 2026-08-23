@@ -45,7 +45,7 @@ describe('Phase 13: Purchasing Module Organization Unit Migration & Integration'
     AccountingBusinessEngine.getAccounts(companyId);
 
     // 2. Setup Organization Tree: HQ -> Cairo Branch
-    hqUnit = OrganizationEngine.addUnit({
+    hqUnit = await OrganizationEngine.addUnit({
       companyId,
       code: 'HQ',
       name: 'المقر الرئيسي',
@@ -55,7 +55,7 @@ describe('Phase 13: Purchasing Module Organization Unit Migration & Integration'
       isActive: true
     });
 
-    cairoUnit = OrganizationEngine.addUnit({
+    cairoUnit = await OrganizationEngine.addUnit({
       companyId,
       code: 'CAI',
       name: 'فرع القاهرة',
@@ -71,7 +71,7 @@ describe('Phase 13: Purchasing Module Organization Unit Migration & Integration'
     await CostCenterEngine.autoCreateOrLinkCostCenterForOrgUnit(cairoUnit);
 
     // 3. Setup Warehouse linked to Cairo Branch
-    testWarehouse = InventoryModule.addWarehouse({
+    testWarehouse = await InventoryModule.addWarehouse({
       code: 'WH-CAI-01',
       name: 'مستودع القاهرة المركزية',
       type_id: 'wt-central',
@@ -82,7 +82,7 @@ describe('Phase 13: Purchasing Module Organization Unit Migration & Integration'
     });
 
     // 4. Setup Product
-    testProduct = InventoryModule.addProduct({
+    testProduct = await InventoryModule.addProduct({
       company_id: companyId,
       code: 'PRD-RAW-01',
       name: 'مواد خام بلاستيك',

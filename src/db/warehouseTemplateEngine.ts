@@ -332,7 +332,7 @@ export class WarehouseTemplateEngine {
   /**
    * Instantiates a warehouse template into concrete hierarchical Warehouse records.
    */
-  static instantiateWarehouseTemplate(params: InstantiateWarehouseTemplateParams): Warehouse[] {
+  static async instantiateWarehouseTemplate(params: InstantiateWarehouseTemplateParams): Promise<Warehouse[]> {
     const templates = WarehouseTemplateEngine.getWarehouseTemplates(params.companyId);
     const template = templates.find(t => t.id === params.templateId || t.code === params.templateId);
     if (!template) {
@@ -345,14 +345,14 @@ export class WarehouseTemplateEngine {
     const namePrefixEn = params.namePrefixEn ? `${params.namePrefixEn} - ` : '';
     const codePrefix = params.codePrefix ? `${params.codePrefix}-` : '';
 
-    function instantiateNode(
+    async function instantiateNode(
       node: WarehouseTemplateNode,
       parentId: string | null
-    ): void {
+    ): Promise<void> {
       const name = `${namePrefixAr}${node.nameAr}`;
       const code = `${codePrefix}${node.codeSuffix}`;
 
-      const created = WarehouseHierarchyEngine.addWarehouse({
+      const created = await WarehouseHierarchyEngine.addWarehouse({
         name,
         code,
         is_active: true,
@@ -368,13 +368,13 @@ export class WarehouseTemplateEngine {
 
       if (node.children && node.children.length > 0) {
         for (const childNode of node.children) {
-          instantiateNode(childNode, created.id);
+          await instantiateNode(childNode, created.id);
         }
       }
     }
 
     for (const rootNode of template.nodes) {
-      instantiateNode(rootNode, params.parentWarehouseId || null);
+      await instantiateNode(rootNode, params.parentWarehouseId || null);
     }
 
     const activeUser = UsersModule.getActiveUser();

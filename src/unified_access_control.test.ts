@@ -184,12 +184,12 @@ describe('Unified Access Control & Scope Engine (شخص × فرع × موديو�
     }
   ];
 
-  beforeEach(() => {
+  beforeEach(async () => {
     StorageEngine.cache = {};
     if (typeof localStorage !== 'undefined') {
       localStorage.clear();
     }
-    OrganizationEngine.saveUnits(testOrgUnitsA);
+    await OrganizationEngine.saveUnits(testOrgUnitsA);
     StorageEngine.setStored('users', [
       systemAdminUser,
       companyAdminA,

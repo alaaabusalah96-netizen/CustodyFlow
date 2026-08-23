@@ -51,7 +51,7 @@ describe('Phase 10: Accounting Integration Unit & Integration Tests', () => {
 
   it('should auto-derive org_unit_id from warehouse if warehouse is provided but org_unit_id is missing', async () => {
     // Set up a warehouse linked to an org unit
-    WarehouseHierarchyEngine.addWarehouse({
+    await WarehouseHierarchyEngine.addWarehouse({
       id: 'wh-auto-derive',
       code: 'WH-AUTO',
       name: 'Auto Wh',

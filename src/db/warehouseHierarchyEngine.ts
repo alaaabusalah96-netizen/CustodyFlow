@@ -1,7 +1,7 @@
 import { Warehouse, WarehouseType, WarehouseTreeNode, WarehouseHierarchyValidationResult } from '../types/inventory';
 import { StorageEngine } from './storage';
 import { InventoryModule } from './inventory';
-import { dbSetDoc } from '../firebase';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
 
@@ -118,21 +118,36 @@ export class WarehouseHierarchyEngine {
     return effectiveList.filter(t => t.companyId === null || t.companyId === companyId);
   }
 
-  static saveWarehouseTypes(types: WarehouseType[]): void {
+  static async saveWarehouseTypes(types: WarehouseType[]): Promise<{ success: boolean; error?: string }> {
+    const existing = StorageEngine.getStored<WarehouseType[]>('warehouse_types', DEFAULT_WAREHOUSE_TYPES);
+    const changed = types.filter(t => {
+      const old = existing.find(ex => ex.id === t.id);
+      if (!old) return true;
+      return JSON.stringify(old) !== JSON.stringify(t);
+    });
+
+    for (const t of changed) {
+      const res = await syncWriteWithOfflineFallback('warehouse_types', t.id, t);
+      if (!res.success) {
+        console.warn(`[saveWarehouseTypes] Warning: ${res.error}`);
+        return { success: false, error: res.error };
+      }
+    }
+
     StorageEngine.setStored('warehouse_types', types);
-    types.forEach(t => dbSetDoc('warehouse_types', t.id, t));
+    return { success: true };
   }
 
-  static addWarehouseType(typeData: Omit<WarehouseType, 'id' | 'isPredefined'>): WarehouseType {
+  static async addWarehouseType(typeData: Omit<WarehouseType, 'id' | 'isPredefined'>): Promise<WarehouseType> {
     const types = StorageEngine.getStored<WarehouseType[]>('warehouse_types', DEFAULT_WAREHOUSE_TYPES);
     const newType: WarehouseType = {
       ...typeData,
-      id: `wh-type-custom-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `wh-type-custom-${crypto.randomUUID()}`,
       isPredefined: false,
     };
 
     types.push(newType);
-    WarehouseHierarchyEngine.saveWarehouseTypes(types);
+    await WarehouseHierarchyEngine.saveWarehouseTypes(types);
 
     const activeUser = UsersModule.getActiveUser();
     LogsModule.addLog(
@@ -167,10 +182,10 @@ export class WarehouseHierarchyEngine {
 
   // --- Add / Update Warehouse with Hierarchy Links ---
 
-  static addWarehouse(warehouseData: Omit<Warehouse, 'id'> & { id?: string }): Warehouse {
+  static async addWarehouse(warehouseData: Omit<Warehouse, 'id'> & { id?: string }): Promise<Warehouse> {
     const companyId = warehouseData.company_id;
     const warehouses = InventoryModule.getWarehouses(companyId);
-    const id = warehouseData.id || `wh-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const id = warehouseData.id || `wh-${crypto.randomUUID()}`;
     const parentId = warehouseData.parent_id || null;
 
     const { path, level } = WarehouseHierarchyEngine.computePathAndLevel(id, parentId, warehouses);
@@ -186,7 +201,7 @@ export class WarehouseHierarchyEngine {
     };
 
     warehouses.push(newWarehouse);
-    InventoryModule.saveWarehouses(warehouses, companyId);
+    await InventoryModule.saveWarehouses(warehouses, companyId);
 
     const activeUser = UsersModule.getActiveUser();
     LogsModule.addLog(
@@ -199,7 +214,7 @@ export class WarehouseHierarchyEngine {
     return newWarehouse;
   }
 
-  static updateWarehouse(id: string, updates: Partial<Warehouse>): Warehouse {
+  static async updateWarehouse(id: string, updates: Partial<Warehouse>): Promise<Warehouse> {
     const warehouses = InventoryModule.getWarehouses(updates.company_id);
     const index = warehouses.findIndex(w => w.id === id);
     if (index === -1) {
@@ -233,7 +248,7 @@ export class WarehouseHierarchyEngine {
       WarehouseHierarchyEngine.recalculateSubtreePaths(id, warehouses);
     }
 
-    InventoryModule.saveWarehouses(warehouses, current.company_id);
+    await InventoryModule.saveWarehouses(warehouses, current.company_id);
     return updatedWarehouse;
   }
 
@@ -254,7 +269,7 @@ export class WarehouseHierarchyEngine {
 
   // --- Move Warehouse (Reparenting) ---
 
-  static moveWarehouse(warehouseId: string, newParentId: string | null, companyId?: string): Warehouse {
+  static async moveWarehouse(warehouseId: string, newParentId: string | null, companyId?: string): Promise<Warehouse> {
     if (warehouseId === newParentId) {
       throw new Error(`Cannot set parent of warehouse ${warehouseId} to itself.`);
     }
@@ -280,7 +295,7 @@ export class WarehouseHierarchyEngine {
       }
     }
 
-    return WarehouseHierarchyEngine.updateWarehouse(warehouseId, { parent_id: newParentId, company_id: effectiveCompanyId });
+    return await WarehouseHierarchyEngine.updateWarehouse(warehouseId, { parent_id: newParentId, company_id: effectiveCompanyId });
   }
 
   // --- Hierarchy Query Navigation ---

@@ -14,7 +14,7 @@ describe('Phase 4: Inventory Stock Balance O(1) Lookup Index & Paginated Queries
     }
   });
 
-  it('computes exact stock balances using StockLookupIndex O(1) maps', () => {
+  it('computes exact stock balances using StockLookupIndex O(1) maps', async () => {
     const mockMovements: StockMovement[] = [
       {
         id: 'mov-101',
@@ -66,7 +66,7 @@ describe('Phase 4: Inventory Stock Balance O(1) Lookup Index & Paginated Queries
       },
     ];
 
-    InventoryModule.saveStockMovements(mockMovements);
+    await InventoryModule.saveStockMovements(mockMovements);
 
     // Verify O(1) index directly
     const index = CustodyDB.getStockLookupIndex();
@@ -84,7 +84,7 @@ describe('Phase 4: Inventory Stock Balance O(1) Lookup Index & Paginated Queries
     expect(InventoryModule.getWarehouseTotalStock('wh-test-1')).toBe(120);
   });
 
-  it('automatically invalidates StockLookupIndex when stock movements change or cache is cleared', () => {
+  it('automatically invalidates StockLookupIndex when stock movements change or cache is cleared', async () => {
     const mov1: StockMovement = {
       id: 'mov-201',
       doc_id: 'doc-201',
@@ -101,7 +101,7 @@ describe('Phase 4: Inventory Stock Balance O(1) Lookup Index & Paginated Queries
       created_by: 'system',
     };
 
-    InventoryModule.saveStockMovements([mov1]);
+    await InventoryModule.saveStockMovements([mov1]);
     expect(InventoryModule.getProductStock('prod-inv-1', 'wh-inv-1')).toBe(25);
 
     const mov2: StockMovement = {
@@ -120,7 +120,7 @@ describe('Phase 4: Inventory Stock Balance O(1) Lookup Index & Paginated Queries
       created_by: 'system',
     };
 
-    InventoryModule.saveStockMovements([mov1, mov2]);
+    await InventoryModule.saveStockMovements([mov1, mov2]);
     // Should automatically invalidate and recompute to 65
     expect(InventoryModule.getProductStock('prod-inv-1', 'wh-inv-1')).toBe(65);
 
@@ -164,7 +164,7 @@ describe('Phase 4: Inventory Stock Balance O(1) Lookup Index & Paginated Queries
     expect(paginatedAudit.data[0].id).toBe('audit-test-1');
   });
 
-  it('supports paginated and tenant-scoped queries for inventory documents and stock movements', () => {
+  it('supports paginated and tenant-scoped queries for inventory documents and stock movements', async () => {
     const mockDocs: InventoryDocument[] = [
       {
         id: 'inv-doc-1',
@@ -213,7 +213,7 @@ describe('Phase 4: Inventory Stock Balance O(1) Lookup Index & Paginated Queries
       },
     ];
 
-    InventoryModule.saveInventoryDocuments(mockDocs);
+    await InventoryModule.saveInventoryDocuments(mockDocs);
 
     // With comp-1 selected explicitly
     CompaniesModule.setSelectedCompanyId('comp-1');

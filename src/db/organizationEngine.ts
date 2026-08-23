@@ -1,6 +1,6 @@
 import { OrganizationUnit, OrganizationUnitType, OrganizationPath, OrganizationTemplate, OrganizationTreeNode, OrganizationHierarchyValidationResult } from '../types/organization';
 import { StorageEngine } from './storage';
-import { dbSetDoc, dbDeleteDoc } from '../firebase';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
 import { CompaniesModule } from './companies';
@@ -254,25 +254,39 @@ export class OrganizationEngine {
     return effectiveTypes.filter(t => t.companyId === null || t.companyId === companyId);
   }
 
-  static saveUnitTypes(types: OrganizationUnitType[]): void {
+  static async saveUnitTypes(types: OrganizationUnitType[]): Promise<{ success: boolean; error?: string }> {
+    const existing = StorageEngine.getStored<OrganizationUnitType[]>('organization_unit_types', DEFAULT_ORGANIZATION_UNIT_TYPES);
+    const changed = types.filter(t => {
+      const old = existing.find(ex => ex.id === t.id);
+      return !old || JSON.stringify(old) !== JSON.stringify(t);
+    });
+
+    for (const t of changed) {
+      const res = await syncWriteWithOfflineFallback('organization_unit_types', t.id, t);
+      if (!res.success) {
+        console.warn(`[saveUnitTypes] Warning: ${res.error}`);
+        return { success: false, error: res.error };
+      }
+    }
+
     StorageEngine.setStored('organization_unit_types', types);
-    types.forEach(t => dbSetDoc('organization_unit_types', t.id, t));
+    return { success: true };
   }
 
-  static addUnitType(typeData: Omit<OrganizationUnitType, 'id'>): OrganizationUnitType {
+  static async addUnitType(typeData: Omit<OrganizationUnitType, 'id'>): Promise<OrganizationUnitType> {
     const types = StorageEngine.getStored<OrganizationUnitType[]>('organization_unit_types', DEFAULT_ORGANIZATION_UNIT_TYPES);
     const newType: OrganizationUnitType = {
       ...typeData,
-      id: `out-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `out-${crypto.randomUUID()}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     types.push(newType);
-    OrganizationEngine.saveUnitTypes(types);
+    await OrganizationEngine.saveUnitTypes(types);
     return newType;
   }
 
-  static updateUnitType(id: string, updates: Partial<OrganizationUnitType>): OrganizationUnitType | null {
+  static async updateUnitType(id: string, updates: Partial<OrganizationUnitType>): Promise<OrganizationUnitType | null> {
     const types = StorageEngine.getStored<OrganizationUnitType[]>('organization_unit_types', DEFAULT_ORGANIZATION_UNIT_TYPES);
     const idx = types.findIndex(t => t.id === id);
     if (idx === -1) return null;
@@ -283,7 +297,7 @@ export class OrganizationEngine {
       updatedAt: new Date().toISOString(),
     };
     types[idx] = updated;
-    OrganizationEngine.saveUnitTypes(types);
+    await OrganizationEngine.saveUnitTypes(types);
     return updated;
   }
 
@@ -293,7 +307,7 @@ export class OrganizationEngine {
     return OrganizationEngine.getUnits(companyId);
   }
 
-  static addOrganizationUnit(params: {
+  static async addOrganizationUnit(params: {
     companyId: string;
     parentId?: string | null;
     typeId?: string;
@@ -304,7 +318,7 @@ export class OrganizationEngine {
     nameEn: string;
     metadata?: Record<string, any>;
     isActive?: boolean;
-  }): OrganizationUnit {
+  }): Promise<OrganizationUnit> {
     const unitTypes = OrganizationEngine.getUnitTypes(params.companyId);
     let effectiveTypeId = params.typeId;
 
@@ -313,7 +327,7 @@ export class OrganizationEngine {
       effectiveTypeId = matched ? matched.id : 'out-unit';
     }
 
-    return OrganizationEngine.addUnit({
+    return await OrganizationEngine.addUnit({
       companyId: params.companyId,
       parentId: params.parentId,
       typeId: effectiveTypeId || 'out-unit',
@@ -522,15 +536,43 @@ export class OrganizationEngine {
     };
   }
 
-  static saveUnits(units: OrganizationUnit[]): void {
+  static async saveUnits(units: OrganizationUnit[]): Promise<{ success: boolean; error?: string }> {
+    const existing = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+    const changed = units.filter(u => {
+      const old = existing.find(ex => ex.id === u.id);
+      return !old || JSON.stringify(old) !== JSON.stringify(u);
+    });
+
+    for (const u of changed) {
+      const res = await syncWriteWithOfflineFallback('organization_units', u.id, u);
+      if (!res.success) {
+        console.warn(`[saveUnits] Warning: ${res.error}`);
+        return { success: false, error: res.error };
+      }
+    }
+
     OrganizationEngine.invalidateLookupIndex();
     StorageEngine.setStored('organization_units', units);
-    units.forEach(u => dbSetDoc('organization_units', u.id, u));
+    return { success: true };
   }
 
-  static savePaths(paths: OrganizationPath[]): void {
+  static async savePaths(paths: OrganizationPath[]): Promise<{ success: boolean; error?: string }> {
+    const existing = StorageEngine.getStored<OrganizationPath[]>('organization_paths', []);
+    const changed = paths.filter(p => {
+      const old = existing.find(ex => ex.id === p.id);
+      return !old || JSON.stringify(old) !== JSON.stringify(p);
+    });
+
+    for (const p of changed) {
+      const res = await syncWriteWithOfflineFallback('organization_paths', p.id, p);
+      if (!res.success) {
+        console.warn(`[savePaths] Warning: ${res.error}`);
+        return { success: false, error: res.error };
+      }
+    }
+
     StorageEngine.setStored('organization_paths', paths);
-    paths.forEach(p => dbSetDoc('organization_paths', p.id, p));
+    return { success: true };
   }
 
   static getPaths(companyId?: string): OrganizationPath[] {
@@ -591,7 +633,7 @@ export class OrganizationEngine {
     return ancestors;
   }
 
-  static addUnit(params: {
+  static async addUnit(params: {
     companyId: string;
     parentId?: string | null;
     typeId: string;
@@ -602,11 +644,11 @@ export class OrganizationEngine {
     metadata?: Record<string, any>;
     isActive?: boolean;
     max_accounts_allowed?: number;
-  }): OrganizationUnit {
+  }): Promise<OrganizationUnit> {
     const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
     const paths = StorageEngine.getStored<OrganizationPath[]>('organization_paths', []);
 
-    const unitId = `orgunit-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const unitId = `orgunit-${crypto.randomUUID()}`;
     const parentId = params.parentId || null;
 
     const { path, level, ancestorIds } = OrganizationEngine.computePathAndLevel(unitId, parentId, units);
@@ -636,7 +678,7 @@ export class OrganizationEngine {
     };
 
     units.push(newUnit);
-    OrganizationEngine.saveUnits(units);
+    await OrganizationEngine.saveUnits(units);
 
     // Save corresponding OrganizationPath
     const newPathObj: OrganizationPath = {
@@ -650,7 +692,7 @@ export class OrganizationEngine {
     };
 
     paths.push(newPathObj);
-    OrganizationEngine.savePaths(paths);
+    await OrganizationEngine.savePaths(paths);
 
     // Reverse compatibility sync: if type is region or station, ensure legacy record exists
     try {
@@ -665,7 +707,7 @@ export class OrganizationEngine {
             company_id: params.companyId,
             org_unit_id: unitId
           });
-          StationsModule.saveRegions(regions);
+          await StationsModule.saveRegions(regions);
         }
       } else if (params.typeId === 'out-station' || (params.metadata && params.metadata.legacyStationId)) {
         const stnId = (params.metadata && params.metadata.legacyStationId) || unitId.replace('org-unit-station-', '');
@@ -688,7 +730,7 @@ export class OrganizationEngine {
             company_id: params.companyId,
             org_unit_id: unitId
           });
-          StationsModule.saveStations(stations);
+          await StationsModule.saveStations(stations);
         }
       }
     } catch (err) {
@@ -706,7 +748,7 @@ export class OrganizationEngine {
     return newUnit;
   }
 
-  static updateUnit(id: string, updates: Partial<Omit<OrganizationUnit, 'id'>>): OrganizationUnit | null {
+  static async updateUnit(id: string, updates: Partial<Omit<OrganizationUnit, 'id'>>): Promise<OrganizationUnit | null> {
     let units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
     let paths = StorageEngine.getStored<OrganizationPath[]>('organization_paths', []);
 
@@ -747,7 +789,7 @@ export class OrganizationEngine {
       units = OrganizationEngine.recalculateSubtreePaths(id, units, paths);
     }
 
-    OrganizationEngine.saveUnits(units);
+    await OrganizationEngine.saveUnits(units);
 
     // Sync path object for updated unit
     const unitPathObj = OrganizationEngine.getPaths().find(p => p.unitId === id);
@@ -767,7 +809,7 @@ export class OrganizationEngine {
       } else {
         paths.push(updatedPathObj);
       }
-      OrganizationEngine.savePaths(paths);
+      await OrganizationEngine.savePaths(paths);
     }
 
     // Reverse compatibility sync
@@ -783,7 +825,7 @@ export class OrganizationEngine {
             code: updatedUnit.code || regions[rIdx].code,
             company_id: updatedUnit.companyId || regions[rIdx].company_id
           };
-          StationsModule.saveRegions(regions);
+          await StationsModule.saveRegions(regions);
         }
       } else if (updatedUnit.typeId === 'out-station' || updatedUnit.metadata?.legacyStationId) {
         const stnId = updatedUnit.metadata?.legacyStationId || updatedUnit.id.replace('org-unit-station-', '');
@@ -798,7 +840,7 @@ export class OrganizationEngine {
             custody_amount: updatedUnit.metadata?.custodyAmount !== undefined ? updatedUnit.metadata.custodyAmount : stations[sIdx].custody_amount,
             company_id: updatedUnit.companyId || stations[sIdx].company_id
           };
-          StationsModule.saveStations(stations);
+          await StationsModule.saveStations(stations);
         }
       }
     } catch (err) {
@@ -851,7 +893,7 @@ export class OrganizationEngine {
     return units;
   }
 
-  static deleteUnit(id: string): boolean {
+  static async deleteUnit(id: string): Promise<boolean> {
     let units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
     let paths = StorageEngine.getStored<OrganizationPath[]>('organization_paths', []);
 
@@ -864,27 +906,32 @@ export class OrganizationEngine {
       throw new Error(`Cannot delete organization unit ${id} because it has child units.`);
     }
 
+    const unitSync = await syncWriteWithOfflineFallback('organization_units', id, null);
+    if (!unitSync.success) {
+      console.warn(`[deleteUnit] Failed to delete unit: ${unitSync.error}`);
+      return false;
+    }
+    await syncWriteWithOfflineFallback('organization_paths', id, null);
+
     units = units.filter(u => u.id !== id);
     paths = paths.filter(p => p.unitId !== id);
 
-    OrganizationEngine.saveUnits(units);
-    OrganizationEngine.savePaths(paths);
-
-    dbDeleteDoc('organization_units', id);
-    dbDeleteDoc('organization_paths', id);
+    OrganizationEngine.invalidateLookupIndex();
+    StorageEngine.setStored('organization_units', units);
+    StorageEngine.setStored('organization_paths', paths);
 
     // Reverse compatibility sync
     try {
       if (target.typeId === 'out-region' || target.metadata?.legacyRegionId) {
         const regId = target.metadata?.legacyRegionId || target.id.replace('org-unit-region-', '');
         const regions = StationsModule.getRegions().filter(r => r.id !== regId);
-        StationsModule.saveRegions(regions);
-        dbDeleteDoc('regions', regId);
+        await StationsModule.saveRegions(regions);
+        await syncWriteWithOfflineFallback('regions', regId, null);
       } else if (target.typeId === 'out-station' || target.metadata?.legacyStationId) {
         const stnId = target.metadata?.legacyStationId || target.id.replace('org-unit-station-', '');
         const stations = StationsModule.getStations().filter(s => s.id !== stnId);
-        StationsModule.saveStations(stations);
-        dbDeleteDoc('stations', stnId);
+        await StationsModule.saveStations(stations);
+        await syncWriteWithOfflineFallback('stations', stnId, null);
       }
     } catch (err) {
       console.warn('Reverse compatibility sync failed in deleteUnit:', err);
@@ -959,23 +1006,37 @@ export class OrganizationEngine {
     return templates.find(t => t.id === id) || null;
   }
 
-  static saveTemplates(templates: OrganizationTemplate[]): void {
+  static async saveTemplates(templates: OrganizationTemplate[]): Promise<{ success: boolean; error?: string }> {
+    const existing = StorageEngine.getStored<OrganizationTemplate[]>('organization_templates', DEFAULT_ORGANIZATION_TEMPLATES);
+    const changed = templates.filter(t => {
+      const old = existing.find(ex => ex.id === t.id);
+      return !old || JSON.stringify(old) !== JSON.stringify(t);
+    });
+
+    for (const t of changed) {
+      const res = await syncWriteWithOfflineFallback('organization_templates', t.id, t);
+      if (!res.success) {
+        console.warn(`[saveTemplates] Warning: ${res.error}`);
+        return { success: false, error: res.error };
+      }
+    }
+
     StorageEngine.setStored('organization_templates', templates);
-    templates.forEach(t => dbSetDoc('organization_templates', t.id, t));
+    return { success: true };
   }
 
-  static addCustomTemplate(templateData: Omit<OrganizationTemplate, 'id' | 'isPredefined'>): OrganizationTemplate {
+  static async addCustomTemplate(templateData: Omit<OrganizationTemplate, 'id' | 'isPredefined'>): Promise<OrganizationTemplate> {
     const templates = StorageEngine.getStored<OrganizationTemplate[]>('organization_templates', DEFAULT_ORGANIZATION_TEMPLATES);
     const newTemplate: OrganizationTemplate = {
       ...templateData,
-      id: `tpl-custom-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `tpl-custom-${crypto.randomUUID()}`,
       isPredefined: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
     templates.push(newTemplate);
-    OrganizationEngine.saveTemplates(templates);
+    await OrganizationEngine.saveTemplates(templates);
 
     const activeUser = UsersModule.getActiveUser();
     LogsModule.addLog(
@@ -991,11 +1052,11 @@ export class OrganizationEngine {
   /**
    * Instantiates an Organization Template for a target company, generating all organization units and materialized paths.
    */
-  static applyTemplateToCompany(
+  static async applyTemplateToCompany(
     companyId: string,
     templateId: string,
     customRootName?: string
-  ): OrganizationUnit[] {
+  ): Promise<OrganizationUnit[]> {
     const template = OrganizationEngine.getTemplateById(templateId);
     if (!template) {
       throw new Error(`Organization template ${templateId} not found.`);
@@ -1015,11 +1076,11 @@ export class OrganizationEngine {
       const isRootSpec = spec.parentTempKey === null;
       const unitName = (isRootSpec && customRootName) ? customRootName : spec.nameAr;
 
-      const createdUnit = OrganizationEngine.addUnit({
+      const createdUnit = await OrganizationEngine.addUnit({
         companyId,
         parentId: parentUnitId,
         typeId,
-        code: `${spec.codePrefix}-${Math.floor(100 + Math.random() * 900)}`,
+        code: `${spec.codePrefix}-${crypto.randomUUID().substring(0, 4).toUpperCase()}`,
         name: unitName,
         nameAr: unitName,
         nameEn: spec.nameEn,
@@ -1134,7 +1195,7 @@ export class OrganizationEngine {
   /**
    * Reparents an organization unit dynamically, validating against cycle creation and re-calculating paths/levels across subtrees.
    */
-  static moveUnit(unitId: string, newParentId: string | null): OrganizationUnit {
+  static async moveUnit(unitId: string, newParentId: string | null): Promise<OrganizationUnit> {
     if (unitId === newParentId) {
       throw new Error(`Cannot set parent of unit ${unitId} to itself.`);
     }
@@ -1157,7 +1218,11 @@ export class OrganizationEngine {
       }
     }
 
-    return OrganizationEngine.updateUnit(unitId, { parentId: newParentId });
+    const updated = await OrganizationEngine.updateUnit(unitId, { parentId: newParentId });
+    if (!updated) {
+      throw new Error(`Failed to move unit ${unitId}.`);
+    }
+    return updated;
   }
 
   /**
@@ -1357,12 +1422,12 @@ export class OrganizationEngine {
   /**
    * Raises max_accounts_allowed by 1 increment (up to hard ceiling of 5).
    */
-  static raiseMaxAccountsAllowed(unitId: string, activeUser?: any | null): {
+  static async raiseMaxAccountsAllowed(unitId: string, activeUser?: any | null): Promise<{
     success: boolean;
     errorAr?: string;
     errorEn?: string;
     unit?: OrganizationUnit;
-  } {
+  }> {
     const unit = OrganizationEngine.getUnitById(unitId);
     if (!unit) {
       return {
@@ -1391,7 +1456,7 @@ export class OrganizationEngine {
     }
 
     const nextMax = currentMax + 1;
-    const updated = OrganizationEngine.updateUnit(unitId, {
+    const updated = await OrganizationEngine.updateUnit(unitId, {
       max_accounts_allowed: nextMax
     });
 

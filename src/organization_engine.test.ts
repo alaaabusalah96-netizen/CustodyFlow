@@ -10,11 +10,11 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
     StorageEngine.setStored('organization_paths', []);
   });
 
-  it('should load default organization unit types and allow adding custom unit types', () => {
+  it('should load default organization unit types and allow adding custom unit types', async () => {
     const defaultTypes = OrganizationEngine.getUnitTypes();
     expect(defaultTypes.length).toBeGreaterThanOrEqual(10);
 
-    const customType = OrganizationEngine.addUnitType({
+    const customType = await OrganizationEngine.addUnitType({
       companyId: 'comp-1',
       code: 'LAB',
       nameAr: 'مختبر جودة',
@@ -30,11 +30,11 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
     expect(companyTypes.some(t => t.code === 'LAB')).toBe(true);
   });
 
-  it('should create root and nested organization units with correct materialized path and level', () => {
+  it('should create root and nested organization units with correct materialized path and level', async () => {
     const compId = 'comp-1';
 
     // 1. Create Root Holding Unit
-    const holding = OrganizationEngine.addUnit({
+    const holding = await OrganizationEngine.addUnit({
       companyId: compId,
       typeId: 'out-holding',
       code: 'HOLD-01',
@@ -48,7 +48,7 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
     expect(holding.parentId).toBeNull();
 
     // 2. Create Company under Holding
-    const company = OrganizationEngine.addUnit({
+    const company = await OrganizationEngine.addUnit({
       companyId: compId,
       parentId: holding.id,
       typeId: 'out-company',
@@ -61,7 +61,7 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
     expect(company.parentId).toBe(holding.id);
 
     // 3. Create Region under Company
-    const region = OrganizationEngine.addUnit({
+    const region = await OrganizationEngine.addUnit({
       companyId: compId,
       parentId: company.id,
       typeId: 'out-region',
@@ -73,7 +73,7 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
     expect(region.path).toBe(`/${holding.id}/${company.id}/${region.id}`);
 
     // 4. Create Station under Region
-    const station = OrganizationEngine.addUnit({
+    const station = await OrganizationEngine.addUnit({
       companyId: compId,
       parentId: region.id,
       typeId: 'out-station',
@@ -93,13 +93,13 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
     expect(pathObj?.ancestorIds).toEqual([holding.id, company.id, region.id]);
   });
 
-  it('should query children, subtrees, and ancestors correctly', () => {
+  it('should query children, subtrees, and ancestors correctly', async () => {
     const compId = 'comp-1';
 
-    const root = OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT', name: 'Root Corp' });
-    const sectorA = OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'SEC-A', name: 'Sector A' });
-    const sectorB = OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'SEC-B', name: 'Sector B' });
-    const branchA1 = OrganizationEngine.addUnit({ companyId: compId, parentId: sectorA.id, typeId: 'out-branch', code: 'BR-A1', name: 'Branch A1' });
+    const root = await OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT', name: 'Root Corp' });
+    const sectorA = await OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'SEC-A', name: 'Sector A' });
+    const sectorB = await OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'SEC-B', name: 'Sector B' });
+    const branchA1 = await OrganizationEngine.addUnit({ companyId: compId, parentId: sectorA.id, typeId: 'out-branch', code: 'BR-A1', name: 'Branch A1' });
 
     // Children of Root
     const rootChildren = OrganizationEngine.getUnitChildren(root.id, compId);
@@ -116,19 +116,19 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
     expect(ancestors.map(a => a.id)).toEqual([root.id, sectorA.id]);
   });
 
-  it('should dynamically update subtree paths when a unit is reparented', () => {
+  it('should dynamically update subtree paths when a unit is reparented', async () => {
     const compId = 'comp-1';
 
-    const root1 = OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT-1', name: 'Root 1' });
-    const root2 = OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT-2', name: 'Root 2' });
+    const root1 = await OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT-1', name: 'Root 1' });
+    const root2 = await OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT-2', name: 'Root 2' });
 
-    const sector = OrganizationEngine.addUnit({ companyId: compId, parentId: root1.id, typeId: 'out-sector', code: 'SEC-1', name: 'Sector 1' });
-    const branch = OrganizationEngine.addUnit({ companyId: compId, parentId: sector.id, typeId: 'out-branch', code: 'BR-1', name: 'Branch 1' });
+    const sector = await OrganizationEngine.addUnit({ companyId: compId, parentId: root1.id, typeId: 'out-sector', code: 'SEC-1', name: 'Sector 1' });
+    const branch = await OrganizationEngine.addUnit({ companyId: compId, parentId: sector.id, typeId: 'out-branch', code: 'BR-1', name: 'Branch 1' });
 
     expect(branch.path).toBe(`/${root1.id}/${sector.id}/${branch.id}`);
 
     // Reparent sector from Root 1 to Root 2
-    OrganizationEngine.updateUnit(sector.id, { parentId: root2.id });
+    await OrganizationEngine.updateUnit(sector.id, { parentId: root2.id });
 
     const updatedSector = OrganizationEngine.getUnitById(sector.id);
     const updatedBranch = OrganizationEngine.getUnitById(branch.id);
@@ -141,19 +141,19 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
     expect(updatedBranchPath?.ancestorIds).toEqual([root2.id, sector.id]);
   });
 
-  it('should enforce deletion constraints on units with active children', () => {
+  it('should enforce deletion constraints on units with active children', async () => {
     const compId = 'comp-1';
 
-    const root = OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT', name: 'Root Corp' });
-    const child = OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'CHILD', name: 'Child Unit' });
+    const root = await OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT', name: 'Root Corp' });
+    const child = await OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'CHILD', name: 'Child Unit' });
 
-    expect(() => OrganizationEngine.deleteUnit(root.id)).toThrowError(/Cannot delete organization unit/);
+    await expect(OrganizationEngine.deleteUnit(root.id)).rejects.toThrowError(/Cannot delete organization unit/);
 
     // Delete child first, then root
-    const deletedChild = OrganizationEngine.deleteUnit(child.id);
+    const deletedChild = await OrganizationEngine.deleteUnit(child.id);
     expect(deletedChild).toBe(true);
 
-    const deletedRoot = OrganizationEngine.deleteUnit(root.id);
+    const deletedRoot = await OrganizationEngine.deleteUnit(root.id);
     expect(deletedRoot).toBe(true);
   });
 
@@ -178,8 +178,8 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
       expect(categories).toContain('Educational');
     });
 
-    it('should allow administrators to build custom templates', () => {
-      const customTpl = OrganizationEngine.addCustomTemplate({
+    it('should allow administrators to build custom templates', async () => {
+      const customTpl = await OrganizationEngine.addCustomTemplate({
         code: 'CUSTOM_LOGISTICS',
         nameAr: 'هيكل شركة شحن ولوجستيات مخصص',
         nameEn: 'Custom Logistics Template',
@@ -201,11 +201,11 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
       expect(fetched?.code).toBe('CUSTOM_LOGISTICS');
     });
 
-    it('should apply an industry template to a company and correctly instantiate all hierarchy units & paths', () => {
+    it('should apply an industry template to a company and correctly instantiate all hierarchy units & paths', async () => {
       const compId = 'comp-poultry-100';
 
       // Apply Poultry Template to Poultry Company
-      const createdUnits = OrganizationEngine.applyTemplateToCompany(compId, 'tpl-poultry', 'شركة الوطنية للإنتاج الداجني');
+      const createdUnits = await OrganizationEngine.applyTemplateToCompany(compId, 'tpl-poultry', 'شركة الوطنية للإنتاج الداجني');
 
       expect(createdUnits.length).toBe(6); // 1 HQ + 2 Sectors + 1 Station + 2 Farms
 
@@ -233,21 +233,21 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
       StorageEngine.setStored('organization_paths', []);
     });
 
-    it('should support creating arbitrary deep structures without depth limits (6+ levels deep)', () => {
+    it('should support creating arbitrary deep structures without depth limits (6+ levels deep)', async () => {
       // Level 0: Holding
-      const holding = OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-holding', code: 'HOLDING-01', name: 'Global Group' });
+      const holding = await OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-holding', code: 'HOLDING-01', name: 'Global Group' });
       // Level 1: Company
-      const company = OrganizationEngine.addUnit({ companyId: compId, parentId: holding.id, typeId: 'out-company', code: 'COMP-01', name: 'Industrial Corp' });
+      const company = await OrganizationEngine.addUnit({ companyId: compId, parentId: holding.id, typeId: 'out-company', code: 'COMP-01', name: 'Industrial Corp' });
       // Level 2: Sector
-      const sector = OrganizationEngine.addUnit({ companyId: compId, parentId: company.id, typeId: 'out-sector', code: 'SEC-01', name: 'Agri Sector' });
+      const sector = await OrganizationEngine.addUnit({ companyId: compId, parentId: company.id, typeId: 'out-sector', code: 'SEC-01', name: 'Agri Sector' });
       // Level 3: Region
-      const region = OrganizationEngine.addUnit({ companyId: compId, parentId: sector.id, typeId: 'out-region', code: 'REG-01', name: 'Delta Region' });
+      const region = await OrganizationEngine.addUnit({ companyId: compId, parentId: sector.id, typeId: 'out-region', code: 'REG-01', name: 'Delta Region' });
       // Level 4: Station
-      const station = OrganizationEngine.addUnit({ companyId: compId, parentId: region.id, typeId: 'out-station', code: 'STN-01', name: 'Tanta Station' });
+      const station = await OrganizationEngine.addUnit({ companyId: compId, parentId: region.id, typeId: 'out-station', code: 'STN-01', name: 'Tanta Station' });
       // Level 5: Farm
-      const farm = OrganizationEngine.addUnit({ companyId: compId, parentId: station.id, typeId: 'out-farm', code: 'FRM-01', name: 'Farm Alpha' });
+      const farm = await OrganizationEngine.addUnit({ companyId: compId, parentId: station.id, typeId: 'out-farm', code: 'FRM-01', name: 'Farm Alpha' });
       // Level 6: Shift Unit
-      const unitShift = OrganizationEngine.addUnit({ companyId: compId, parentId: farm.id, typeId: 'out-unit', code: 'SFT-01', name: 'Morning Shift' });
+      const unitShift = await OrganizationEngine.addUnit({ companyId: compId, parentId: farm.id, typeId: 'out-unit', code: 'SFT-01', name: 'Morning Shift' });
 
       expect(holding.level).toBe(0);
       expect(company.level).toBe(1);
@@ -262,11 +262,11 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
       expect(OrganizationEngine.getUnitsAtLevel(compId, 6)[0].id).toBe(unitShift.id);
     });
 
-    it('should correctly build a nested tree structure (buildTree) and flat indented view (getTreeFlatView)', () => {
-      const root = OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT', name: 'Root Corp' });
-      const secA = OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'SEC-A', name: 'Sector A' });
-      const secB = OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'SEC-B', name: 'Sector B' });
-      const brA1 = OrganizationEngine.addUnit({ companyId: compId, parentId: secA.id, typeId: 'out-branch', code: 'BR-A1', name: 'Branch A1' });
+    it('should correctly build a nested tree structure (buildTree) and flat indented view (getTreeFlatView)', async () => {
+      const root = await OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT', name: 'Root Corp' });
+      const secA = await OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'SEC-A', name: 'Sector A' });
+      const secB = await OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'SEC-B', name: 'Sector B' });
+      const brA1 = await OrganizationEngine.addUnit({ companyId: compId, parentId: secA.id, typeId: 'out-branch', code: 'BR-A1', name: 'Branch A1' });
 
       const tree = OrganizationEngine.buildTree(compId);
       expect(tree.length).toBe(1); // 1 root node
@@ -285,14 +285,14 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
       expect(flatView[1].depthIndent).toBe(1);
     });
 
-    it('should support dynamic reparenting (moveUnit) and prevent cycle creation', () => {
-      const root = OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT', name: 'Root Corp' });
-      const sec1 = OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'SEC-1', name: 'Sector 1' });
-      const sec2 = OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'SEC-2', name: 'Sector 2' });
-      const br1 = OrganizationEngine.addUnit({ companyId: compId, parentId: sec1.id, typeId: 'out-branch', code: 'BR-1', name: 'Branch 1' });
+    it('should support dynamic reparenting (moveUnit) and prevent cycle creation', async () => {
+      const root = await OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT', name: 'Root Corp' });
+      const sec1 = await OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'SEC-1', name: 'Sector 1' });
+      const sec2 = await OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'SEC-2', name: 'Sector 2' });
+      const br1 = await OrganizationEngine.addUnit({ companyId: compId, parentId: sec1.id, typeId: 'out-branch', code: 'BR-1', name: 'Branch 1' });
 
       // Move br1 from sec1 to sec2
-      const movedBr1 = OrganizationEngine.moveUnit(br1.id, sec2.id);
+      const movedBr1 = await OrganizationEngine.moveUnit(br1.id, sec2.id);
       expect(movedBr1.parentId).toBe(sec2.id);
       expect(movedBr1.level).toBe(2);
 
@@ -300,12 +300,12 @@ describe('Phase 2: Enterprise Organization Engine Unit Tests', () => {
       expect(br1Ancestors.some(a => a.id === sec2.id)).toBe(true);
 
       // Attempt invalid move: moving root under sec2 (would create a cycle)
-      expect(() => OrganizationEngine.moveUnit(root.id, sec2.id)).toThrowError(/Cannot move unit/);
+      await expect(OrganizationEngine.moveUnit(root.id, sec2.id)).rejects.toThrowError(/Cannot move unit/);
     });
 
-    it('should validate hierarchy integrity (validateHierarchyTree) and report errors', () => {
-      const root = OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT', name: 'Root Corp' });
-      const child = OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'CHILD', name: 'Child Unit' });
+    it('should validate hierarchy integrity (validateHierarchyTree) and report errors', async () => {
+      const root = await OrganizationEngine.addUnit({ companyId: compId, typeId: 'out-company', code: 'ROOT', name: 'Root Corp' });
+      const child = await OrganizationEngine.addUnit({ companyId: compId, parentId: root.id, typeId: 'out-sector', code: 'CHILD', name: 'Child Unit' });
 
       const auditResult = OrganizationEngine.validateHierarchyTree(compId);
       expect(auditResult.isValid).toBe(true);

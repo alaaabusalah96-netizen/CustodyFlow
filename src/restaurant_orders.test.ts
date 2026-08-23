@@ -23,11 +23,11 @@ describe('Restaurant Orders & Stock Deduction Engine', () => {
     expect(tables[0].status).toBe('available');
   });
 
-  it('creates an order and updates table status to occupied', () => {
+  it('creates an order and updates table status to occupied', async () => {
     const tables = RestaurantEngine.getTables(companyId);
     const tableToOccupied = tables[0];
 
-    const order = RestaurantEngine.createOrder({
+    const order = await RestaurantEngine.createOrder({
       company_id: companyId,
       order_type: 'dine_in',
       table_id: tableToOccupied.id,
@@ -61,7 +61,7 @@ describe('Restaurant Orders & Stock Deduction Engine', () => {
     expect(tableAfter?.current_order_id).toBe(order.id);
   });
 
-  it('deducts inventory raw materials when order is served and frees table when paid', () => {
+  it('deducts inventory raw materials when order is served and frees table when paid', async () => {
     // Setup recipe and product
     const dish = RestaurantEngine.addMenuItem({
       company_id: companyId,
@@ -83,7 +83,7 @@ describe('Restaurant Orders & Stock Deduction Engine', () => {
     const tables = RestaurantEngine.getTables(companyId);
     const table = tables[0];
 
-    const order = RestaurantEngine.createOrder({
+    const order = await RestaurantEngine.createOrder({
       company_id: companyId,
       order_type: 'dine_in',
       table_id: table.id,
@@ -107,7 +107,7 @@ describe('Restaurant Orders & Stock Deduction Engine', () => {
     });
 
     // Advance status to served
-    RestaurantEngine.updateOrderStatus(order.id, 'served', 'wh-1');
+    await RestaurantEngine.updateOrderStatus(order.id, 'served', 'wh-1');
 
     // Verify stock movements created
     const movements = InventoryModule.getStockMovements();
@@ -121,13 +121,13 @@ describe('Restaurant Orders & Stock Deduction Engine', () => {
     expect(fetchedOrder?.is_stock_deducted).toBe(true);
 
     // Advance status to paid -> table should become available again
-    RestaurantEngine.updateOrderStatus(order.id, 'paid');
+    await RestaurantEngine.updateOrderStatus(order.id, 'paid');
     const tableAfterPaid = RestaurantEngine.getTables(companyId).find(t => t.id === table.id);
     expect(tableAfterPaid?.status).toBe('available');
     expect(tableAfterPaid?.current_order_id).toBeUndefined();
   });
 
-  it('prevents duplicate inventory deductions on the same order', () => {
+  it('prevents duplicate inventory deductions on the same order', async () => {
     const dish = RestaurantEngine.addMenuItem({
       company_id: companyId,
       category_id: 'cat-1',
@@ -145,7 +145,7 @@ describe('Restaurant Orders & Stock Deduction Engine', () => {
       ]
     });
 
-    const order = RestaurantEngine.createOrder({
+    const order = await RestaurantEngine.createOrder({
       company_id: companyId,
       order_type: 'takeaway',
       items: [
@@ -169,7 +169,7 @@ describe('Restaurant Orders & Stock Deduction Engine', () => {
     const movementsCountFirst = InventoryModule.getStockMovements().length;
 
     // Call deductStockForOrder a second time manually
-    const secondDeductionResult = RestaurantEngine.deductStockForOrder(order.id);
+    const secondDeductionResult = await RestaurantEngine.deductStockForOrder(order.id);
     expect(secondDeductionResult).toBe(false);
 
     // Movements count should remain unchanged

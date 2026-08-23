@@ -535,7 +535,7 @@ export class InventoryModule {
 
     // 1. Negative movement from source bin
     const relocDocId = `reloc-${crypto.randomUUID()}`;
-    const relocDocNo = `RELOC-${Date.now()}`;
+    const relocDocNo = `RELOC-${crypto.randomUUID().slice(0, 8)}`;
 
     const movFromId = `mov-${crypto.randomUUID()}`;
     const movFrom: StockMovement = {
@@ -1260,7 +1260,7 @@ export class InventoryModule {
       );
     } catch {
       // Fallback in case of database sync error
-      docNo = `${prefix}-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      docNo = `${prefix}-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 8)}`;
     }
 
     // 2. Resolve Organization Units
@@ -1283,14 +1283,14 @@ export class InventoryModule {
       org_unit_id: sourceOrgUnit,
       dest_org_unit_id: destOrgUnit,
       ...metadata,
-      id: `inv-doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: `inv-doc-${crypto.randomUUID()}`,
       doc_no: docNo,
       status: 'Draft'
     };
 
     const documents = InventoryModule.getInventoryDocuments();
     documents.unshift(newDoc);
-    InventoryModule.saveInventoryDocuments(documents);
+    await InventoryModule.saveInventoryDocuments(documents);
 
     // Logs
     LogsModule.addLog(
@@ -1313,7 +1313,7 @@ export class InventoryModule {
   /**
    * Update an existing draft document
    */
-  static updateInventoryDocument(docId: string, updates: Partial<InventoryDocument>, expectedVersion?: number): void {
+  static async updateInventoryDocument(docId: string, updates: Partial<InventoryDocument>, expectedVersion?: number): Promise<void> {
     const documents = InventoryModule.getInventoryDocuments();
     const idx = documents.findIndex(d => d.id === docId);
     if (idx !== -1) {
@@ -1339,7 +1339,7 @@ export class InventoryModule {
         ...updatedMetadata,
         version: newVer
       };
-      InventoryModule.saveInventoryDocuments(documents);
+      await InventoryModule.saveInventoryDocuments(documents);
 
       LogsModule.addLog(
         user?.id || 'system',
@@ -1353,7 +1353,7 @@ export class InventoryModule {
   /**
    * Deletes a Draft document
    */
-  static deleteInventoryDocument(docId: string): { success: boolean; errors?: string[] } {
+  static async deleteInventoryDocument(docId: string): Promise<{ success: boolean; errors?: string[] }> {
     try {
       const documents = InventoryModule.getInventoryDocuments();
       const doc = documents.find(d => d.id === docId);
@@ -1364,8 +1364,11 @@ export class InventoryModule {
         return { success: false, errors: ['Only Draft documents can be deleted.'] };
       }
       const filtered = documents.filter(d => d.id !== docId);
-      InventoryModule.saveInventoryDocuments(filtered);
-      dbDeleteDoc('inventory_documents', docId);
+      const res = await syncWriteWithOfflineFallback('inventory_documents', docId, null);
+      if (!res.success) {
+        return { success: false, errors: [res.error || 'Failed to sync deletion to server.'] };
+      }
+      StorageEngine.setStored('inventory_documents', filtered);
 
       const user = UsersModule.getActiveUser();
       LogsModule.addLog(
@@ -1387,7 +1390,7 @@ export class InventoryModule {
     if (!doc) return;
 
     doc.status = stage;
-    InventoryModule.saveInventoryDocuments(documents);
+    await InventoryModule.saveInventoryDocuments(documents);
     await InventoryModule.generateStockMovementsForDoc(doc, userId, stage === 'Dispatched' ? 'Dispatched' : 'Posted');
     await InventoryModule.postAccountingEntryForDoc(doc, userId);
   }
@@ -1572,7 +1575,7 @@ export class InventoryModule {
     }
 
     documents[docIndex] = updatedDoc;
-    InventoryModule.saveInventoryDocuments(documents);
+    await InventoryModule.saveInventoryDocuments(documents);
 
     // Audit Log & Event Log
     LogsModule.addLog(
@@ -1708,7 +1711,7 @@ export class InventoryModule {
             const newBalanceAfter = runningStock + signedAllocQty;
             
             const movSource: StockMovement = {
-              id: `mov-${Date.now()}-${item.product_id}-source-bin-${alloc.bin_id}-${Math.floor(Math.random() * 1000)}`,
+              id: `mov-${crypto.randomUUID()}`,
               doc_id: doc.id,
               doc_no: doc.doc_no,
               doc_type: doc.doc_type,
@@ -1730,7 +1733,7 @@ export class InventoryModule {
             movements.push(movSource);
 
             const ledgerSource: InventoryLedgerEntry = {
-              id: `led-${Date.now()}-${item.product_id}-source-bin-${alloc.bin_id}-${Math.floor(Math.random() * 1000)}`,
+              id: `led-${crypto.randomUUID()}`,
               company_id: doc.tenantId,
               warehouse_id: doc.source_warehouse_id,
               org_unit_id: sourceOrgUnitId,
@@ -1761,7 +1764,7 @@ export class InventoryModule {
           // Standard warehouse overall transaction
           const newBalanceAfter = currentStock + sourceQtyChange;
           const movSource: StockMovement = {
-            id: `mov-${Date.now()}-${item.product_id}-source-${Math.floor(Math.random() * 1000)}`,
+            id: `mov-${crypto.randomUUID()}`,
             doc_id: doc.id,
             doc_no: doc.doc_no,
             doc_type: doc.doc_type,
@@ -1782,7 +1785,7 @@ export class InventoryModule {
 
           // CREATE SOURCE LEDGER ENTRY
           const ledgerSource: InventoryLedgerEntry = {
-            id: `led-${Date.now()}-${item.product_id}-source-${Math.floor(Math.random() * 1000)}`,
+            id: `led-${crypto.randomUUID()}`,
             company_id: doc.tenantId,
             warehouse_id: doc.source_warehouse_id,
             org_unit_id: sourceOrgUnitId,
@@ -1821,7 +1824,7 @@ export class InventoryModule {
           allocations.forEach((alloc, allocIdx) => {
             const newBalanceAfter = runningStock + alloc.qty;
             const movTarget: StockMovement = {
-              id: `mov-${Date.now()}-${item.product_id}-target-bin-${alloc.bin_id}-${Math.floor(Math.random() * 1000)}`,
+              id: `mov-${crypto.randomUUID()}`,
               doc_id: doc.id,
               doc_no: doc.doc_no,
               doc_type: doc.doc_type,
@@ -1844,7 +1847,7 @@ export class InventoryModule {
 
             // CREATE TARGET LEDGER ENTRY
             const ledgerTarget: InventoryLedgerEntry = {
-              id: `led-${Date.now()}-${item.product_id}-target-bin-${alloc.bin_id}-${Math.floor(Math.random() * 1000)}`,
+              id: `led-${crypto.randomUUID()}`,
               company_id: doc.tenantId,
               warehouse_id: doc.dest_entity_id,
               org_unit_id: destOrgUnitId,
@@ -1873,7 +1876,7 @@ export class InventoryModule {
           });
         } else {
           const movTarget: StockMovement = {
-            id: `mov-${Date.now()}-${item.product_id}-target-${Math.floor(Math.random() * 1000)}`,
+            id: `mov-${crypto.randomUUID()}`,
             doc_id: doc.id,
             doc_no: doc.doc_no,
             doc_type: doc.doc_type,
@@ -1894,7 +1897,7 @@ export class InventoryModule {
 
           // CREATE TARGET LEDGER ENTRY
           const ledgerTarget: InventoryLedgerEntry = {
-            id: `led-${Date.now()}-${item.product_id}-target-${Math.floor(Math.random() * 1000)}`,
+            id: `led-${crypto.randomUUID()}`,
             company_id: doc.tenantId,
             warehouse_id: doc.dest_entity_id,
             org_unit_id: destOrgUnitId,
@@ -1922,9 +1925,9 @@ export class InventoryModule {
     }
 
     // Save everything in transaction-like batch
-    InventoryModule.saveStockMovements(movements);
-    InventoryModule.saveInventoryLedger(ledgerEntries);
-    InventoryModule.saveProducts(updatedProductsList);
+    await InventoryModule.saveStockMovements(movements);
+    await InventoryModule.saveInventoryLedger(ledgerEntries);
+    await InventoryModule.saveProducts(updatedProductsList);
   }
 
   /**
@@ -2249,7 +2252,7 @@ export class InventoryModule {
       ...document,
       ...updatedMetadata
     };
-    InventoryModule.saveInventoryDocuments(documents);
+    await InventoryModule.saveInventoryDocuments(documents);
 
     // Now trigger the transition to 'Posted'
     return await InventoryModule.triggerLifecycleTransition(docId, 'Receive');

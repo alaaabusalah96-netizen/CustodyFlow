@@ -247,7 +247,7 @@ export default function InventoryWarehousesTab({
                       setRelocError(isRtl ? 'يرجى ملء جميع الحقول أولاً' : 'Please fill all inputs first');
                       return;
                     }
-                    const res = InventoryModule.relocateBinStock(
+                    const res = await InventoryModule.relocateBinStock(
                       activeUser?.company_id || CustodyDB.getSelectedCompanyId() || '',
                       relocWhId,
                       relocProdId,
@@ -496,7 +496,7 @@ export default function InventoryWarehousesTab({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     if (!binFormName || !binFormCode) {
                       alert(isRtl ? 'يرجى إدخال اسم وكود الحاوية' : 'Please input bin name and code');
                       return;
@@ -506,7 +506,7 @@ export default function InventoryWarehousesTab({
 
                     if (binEditingId) {
                       // Edit
-                      InventoryModule.updateWarehouseBin(binEditingId, {
+                      await InventoryModule.updateWarehouseBin(binEditingId, {
                         name: binFormName,
                         code: binFormCode,
                         zone: binFormZone || undefined,
@@ -514,7 +514,7 @@ export default function InventoryWarehousesTab({
                       });
                     } else {
                       // Add
-                      InventoryModule.addWarehouseBin({
+                      await InventoryModule.addWarehouseBin({
                         warehouse_id: selectedWhForBins,
                         name: binFormName,
                         code: binFormCode,
@@ -601,9 +601,9 @@ export default function InventoryWarehousesTab({
                             </button>
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={async () => {
                                 if (confirm(isRtl ? 'هل أنت متأكد من حذف هذه الحاوية؟' : 'Are you sure you want to delete this bin?')) {
-                                  InventoryModule.deleteWarehouseBin(b.id);
+                                  await InventoryModule.deleteWarehouseBin(b.id);
                                   setRefreshKey(prev => prev + 1);
                                 }
                               }}

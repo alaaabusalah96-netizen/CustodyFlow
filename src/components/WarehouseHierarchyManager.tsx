@@ -120,7 +120,7 @@ export const WarehouseHierarchyManager: React.FC<WarehouseHierarchyManagerProps>
     setIsModalOpen(true);
   };
 
-  const handleSaveWarehouse = (e: React.FormEvent) => {
+  const handleSaveWarehouse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim() || !formData.code.trim()) {
       setMsg({ type: 'error', text: isRtl ? 'يرجى إدخال اسم وكود المستودع' : 'Please provide warehouse name and code' });
@@ -131,7 +131,7 @@ export const WarehouseHierarchyManager: React.FC<WarehouseHierarchyManagerProps>
       const selectedType = warehouseTypes.find(t => t.id === formData.typeId);
 
       if (editingWhId) {
-        WarehouseHierarchyEngine.updateWarehouse(editingWhId, {
+        await WarehouseHierarchyEngine.updateWarehouse(editingWhId, {
           name: formData.name,
           code: formData.code,
           parent_id: formData.parentId || null,
@@ -144,7 +144,7 @@ export const WarehouseHierarchyManager: React.FC<WarehouseHierarchyManagerProps>
         });
         setMsg({ type: 'success', text: isRtl ? 'تم تحديث المستودع بنجاح' : 'Warehouse updated successfully' });
       } else {
-        WarehouseHierarchyEngine.addWarehouse({
+        await WarehouseHierarchyEngine.addWarehouse({
           name: formData.name,
           code: formData.code,
           parent_id: formData.parentId || null,
@@ -166,14 +166,14 @@ export const WarehouseHierarchyManager: React.FC<WarehouseHierarchyManagerProps>
     }
   };
 
-  const handleInstantiateTemplate = () => {
+  const handleInstantiateTemplate = async () => {
     if (!selectedTemplateId) {
       setMsg({ type: 'error', text: isRtl ? 'يرجى اختيار قالب الهيكل المخزني' : 'Please select a warehouse template' });
       return;
     }
 
     try {
-      const createdWhs = WarehouseTemplateEngine.instantiateWarehouseTemplate({
+      const createdWhs = await WarehouseTemplateEngine.instantiateWarehouseTemplate({
         templateId: selectedTemplateId,
         companyId,
         namePrefixAr: templatePrefixAr.trim() || undefined,

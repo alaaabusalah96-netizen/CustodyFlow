@@ -260,7 +260,7 @@ export class RestaurantEngine {
     return list.find(o => o.id === orderId) || null;
   }
 
-  static createOrder(orderData: Omit<RestaurantOrder, 'id' | 'order_number' | 'created_at' | 'updated_at'>): RestaurantOrder {
+  static async createOrder(orderData: Omit<RestaurantOrder, 'id' | 'order_number' | 'created_at' | 'updated_at'>): Promise<RestaurantOrder> {
     const list = StorageEngine.getStored<RestaurantOrder[]>('restaurant_orders', []);
     const companyOrders = list.filter(o => o.company_id === orderData.company_id);
     const orderSeq = companyOrders.length + 1001;
@@ -286,13 +286,13 @@ export class RestaurantEngine {
 
     // Auto-deduct stock if created directly in served or paid state
     if (newOrder.status === 'served' || newOrder.status === 'paid') {
-      this.deductStockForOrder(newOrder.id, newOrder.warehouse_id, newOrder.created_by);
+      await this.deductStockForOrder(newOrder.id, newOrder.warehouse_id, newOrder.created_by);
     }
 
     return newOrder;
   }
 
-  static updateOrderStatus(orderId: string, status: OrderStatus, warehouseId?: string, userId?: string): RestaurantOrder | null {
+  static async updateOrderStatus(orderId: string, status: OrderStatus, warehouseId?: string, userId?: string): Promise<RestaurantOrder | null> {
     const list = StorageEngine.getStored<RestaurantOrder[]>('restaurant_orders', []);
     const idx = list.findIndex(o => o.id === orderId);
     if (idx === -1) return null;
@@ -307,7 +307,7 @@ export class RestaurantEngine {
 
     // If order moves to 'served' or 'paid', trigger stock deduction if not already done
     if ((status === 'served' || status === 'paid') && !list[idx].is_stock_deducted) {
-      this.deductStockForOrder(orderId, warehouseId || list[idx].warehouse_id, userId);
+      await this.deductStockForOrder(orderId, warehouseId || list[idx].warehouse_id, userId);
     }
 
     // If order is marked as 'paid' or 'cancelled', free up the table if linked
@@ -325,7 +325,7 @@ export class RestaurantEngine {
   }
 
   // Auto-deduct raw materials inventory based on menu item recipes
-  static deductStockForOrder(orderId: string, warehouseId?: string, userId?: string): boolean {
+  static async deductStockForOrder(orderId: string, warehouseId?: string, userId?: string): Promise<boolean> {
     const orders = StorageEngine.getStored<RestaurantOrder[]>('restaurant_orders', []);
     const orderIndex = orders.findIndex(o => o.id === orderId);
     if (orderIndex === -1) return false;
@@ -370,7 +370,7 @@ export class RestaurantEngine {
     }
 
     if (movementsCreated > 0) {
-      InventoryModule.saveStockMovements(stockMovements);
+      await InventoryModule.saveStockMovements(stockMovements);
       InventoryModule.clearStockLookupIndex();
     }
 

@@ -36,9 +36,9 @@ describe('Restaurant Module & Dish Costing Engine (Phase 1)', () => {
     expect(RestaurantEngine.getCategories(companyId).length).toBe(0);
   });
 
-  it('2. manages menu items and calculates dish cost dynamically from inventory raw materials (BOM)', () => {
+  it('2. manages menu items and calculates dish cost dynamically from inventory raw materials (BOM)', async () => {
     // 1) Seed raw material products in inventory
-    const meatProd = InventoryModule.addProduct({
+    const meatProd = await InventoryModule.addProduct({
       name: 'Fresh Beef Kebab Meat (لحم كباب بلدي)',
       code: 'RAW-MEAT-01',
       unit: 'كجم (Kg)',
@@ -48,7 +48,7 @@ describe('Restaurant Module & Dish Costing Engine (Phase 1)', () => {
       company_id: companyId
     });
 
-    const riceProd = InventoryModule.addProduct({
+    const riceProd = await InventoryModule.addProduct({
       name: 'Basmati Rice (أرز بسمتي)',
       code: 'RAW-RICE-01',
       unit: 'كجم (Kg)',
@@ -58,7 +58,7 @@ describe('Restaurant Module & Dish Costing Engine (Phase 1)', () => {
       company_id: companyId
     });
 
-    const oilProd = InventoryModule.addProduct({
+    const oilProd = await InventoryModule.addProduct({
       name: 'Cooking Oil (زيت طهي)',
       code: 'RAW-OIL-01',
       unit: 'لتر (Litre)',
@@ -115,9 +115,9 @@ describe('Restaurant Module & Dish Costing Engine (Phase 1)', () => {
     expect(itemWithCost.margin_percentage).toBe(46.8); // (117 / 250) * 100 = 46.8%
   });
 
-  it('3. dynamically updates dish cost when raw material purchase price changes in inventory', () => {
+  it('3. dynamically updates dish cost when raw material purchase price changes in inventory', async () => {
     // 1) Seed product
-    const meatProd = InventoryModule.addProduct({
+    const meatProd = await InventoryModule.addProduct({
       name: 'Fresh Lamb (لحم ضاني)',
       code: 'RAW-LAMB',
       unit: 'كجم (Kg)',
@@ -151,7 +151,7 @@ describe('Restaurant Module & Dish Costing Engine (Phase 1)', () => {
     const products = InventoryModule.getProducts(companyId);
     const idx = products.findIndex(p => p.id === meatProd.id);
     products[idx].last_purchase_price = 400;
-    InventoryModule.saveProducts(products);
+    await InventoryModule.saveProducts(products);
 
     // Cost auto-updates: 400 * 0.40 = 160 EGP
     expect(RestaurantEngine.calculateMenuItemCost(menuItem.id, companyId)).toBe(160);

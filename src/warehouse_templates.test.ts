@@ -66,8 +66,8 @@ describe('Phase 6: Dynamic Warehouse Templates Unit Tests', () => {
     expect(companyTemplates.some(t => t.code === 'PHARMA')).toBe(true);
   });
 
-  it('should instantiate Factory Warehouse Template into concrete hierarchical warehouses', () => {
-    const createdWarehouses = WarehouseTemplateEngine.instantiateWarehouseTemplate({
+  it('should instantiate Factory Warehouse Template into concrete hierarchical warehouses', async () => {
+    const createdWarehouses = await WarehouseTemplateEngine.instantiateWarehouseTemplate({
       templateId: 'wh-tpl-factory',
       companyId,
       org_unit_id: 'org-unit-factory-10',
@@ -105,8 +105,8 @@ describe('Phase 6: Dynamic Warehouse Templates Unit Tests', () => {
     expect(rootNode?.children.length).toBe(6);
   });
 
-  it('should instantiate Retail Warehouse Template with showroom and backroom stores', () => {
-    const createdWarehouses = WarehouseTemplateEngine.instantiateWarehouseTemplate({
+  it('should instantiate Retail Warehouse Template with showroom and backroom stores', async () => {
+    const createdWarehouses = await WarehouseTemplateEngine.instantiateWarehouseTemplate({
       templateId: 'wh-tpl-retail',
       companyId,
       namePrefixAr: 'فرع المعادي',
@@ -125,8 +125,8 @@ describe('Phase 6: Dynamic Warehouse Templates Unit Tests', () => {
     expect(showroomWh?.parent_id).toBe(mainWh?.id);
   });
 
-  it('should instantiate Restaurant Warehouse Template with cold storage and prep kitchen', () => {
-    const createdWarehouses = WarehouseTemplateEngine.instantiateWarehouseTemplate({
+  it('should instantiate Restaurant Warehouse Template with cold storage and prep kitchen', async () => {
+    const createdWarehouses = await WarehouseTemplateEngine.instantiateWarehouseTemplate({
       templateId: 'wh-tpl-restaurant',
       companyId,
       namePrefixAr: 'فرع نصر سيتي',

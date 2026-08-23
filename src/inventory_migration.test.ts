@@ -178,7 +178,7 @@ describe('Phase 12: Inventory Organization Unit Migration & Integration Tests', 
 
     // Approve & Post document
     doc.status = 'Posted';
-    InventoryModule.saveInventoryDocuments([doc]);
+    await InventoryModule.saveInventoryDocuments([doc]);
 
     // Force stock movement and ledger generation
     await InventoryModule.processDocumentStage(doc.id, 'Posted', 'user-admin');
@@ -195,8 +195,8 @@ describe('Phase 12: Inventory Organization Unit Migration & Integration Tests', 
 
   it('should calculate stock levels grouped by Organization Unit subtree', async () => {
     // Stock 50 at HQ, 30 at Alex
-    InventoryModule.adjustStock('wh-hq', 'prod-item-1', 50, 'Receipt', 'user-1');
-    InventoryModule.adjustStock('wh-alex', 'prod-item-1', 30, 'Receipt', 'user-1');
+    await InventoryModule.adjustStock('wh-hq', 'prod-item-1', 50, 'Receipt', 'user-1');
+    await InventoryModule.adjustStock('wh-alex', 'prod-item-1', 30, 'Receipt', 'user-1');
 
     // Check stock for Alex Org Unit (30)
     const alexStock = InventoryModule.getOrgUnitStock(companyId, 'org-alex', 'prod-item-1', true);

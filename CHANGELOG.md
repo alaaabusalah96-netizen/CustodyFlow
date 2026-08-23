@@ -4,6 +4,46 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Phase E: Fix Write-Ordering Consistency & Weak ID Generation in Organization & Warehouse Hierarchy Engines
+**Date:** 2026-08-23
+**Files Changed:** `src/db/organizationEngine.ts`, `src/db/warehouseHierarchyEngine.ts`, `src/db/restaurant.ts`, `src/permission_scope.test.ts`, `src/purchasing_migration.test.ts`, `src/cost_center_engine.test.ts`, `src/organization_scope_engine.test.ts`, `src/part1_headcount_governance.test.ts`, `src/dashboard_reports_scope.test.ts`, `src/module_screens_migration.test.ts`, `src/unified_access_control.test.ts`, `src/inventory_logs_optimization.test.ts`, `src/restaurant_orders.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Refactored OrganizationEngine & WarehouseHierarchyEngine to Cloud-First Write-Order Consistency**:
+  - `OrganizationEngine.saveUnitTypes`, `saveUnits`, `addUnitType`, `addUnit`, `updateUnit`, `deleteUnit`, `saveHeadcountRules`, `savePositions`, `addPosition`, `updatePosition`, `deletePosition`, `assignEmployeeToPosition`, `unassignEmployeeFromPosition`, `addHeadcountRule`, `updateHeadcountRule`, `deleteHeadcountRule`: Fully converted to `async`. Uses `syncWriteWithOfflineFallback` before updating `StorageEngine.setStored`. If sync fails, leaves local storage untouched and reports failure.
+  - `WarehouseHierarchyEngine.saveWarehouseTypes`, `addWarehouseType`, `addWarehouse`, `updateWarehouse`, `moveWarehouse`: Converted to `async` and awaited by consumers.
+  - `RestaurantEngine.createOrder`, `updateOrderStatus`, `deductStockForOrder`: Refactored to `async` to properly await `InventoryModule.saveStockMovements`.
+- **Replaced Weak Timestamp/Random IDs with `crypto.randomUUID()`**:
+  - Replaced legacy string ID generation across `OrganizationEngine` and `WarehouseHierarchyEngine` with `crypto.randomUUID()`.
+- **Updated All Test Suites**:
+  - All test call sites updated to `async/await` and passing with 100% green: `src/permission_scope.test.ts`, `src/purchasing_migration.test.ts`, `src/cost_center_engine.test.ts`, `src/organization_scope_engine.test.ts`, `src/part1_headcount_governance.test.ts`, `src/dashboard_reports_scope.test.ts`, `src/module_screens_migration.test.ts`, `src/unified_access_control.test.ts`, `src/inventory_logs_optimization.test.ts`, `src/restaurant_orders.test.ts`.
+- **Verification**:
+  - Tests: All scoped test suites passing.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Build (`compile_applet`): Succeeded.
+
+---
+
+## Phase D: Fix Write-Ordering Consistency & Weak ID Generation in Inventory & Warehouse Modules
+**Date:** 2026-08-23
+**Files Changed:** `src/db/inventory.ts`, `src/db/warehouseHierarchyEngine.ts`, `src/db/warehouseTemplateEngine.ts`, `src/components/WarehouseHierarchyManager.tsx`, `src/warehouse_hierarchy.test.ts`, `src/warehouse_templates.test.ts`, `src/inventory_migration.test.ts`, `src/optimistic_locking.test.ts`, `src/accounting_integration.test.ts`, `src/phase15_comp1_fallback.test.ts`, `src/purchasing_migration.test.ts`, `src/restaurant_engine.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Refactored Inventory & Warehouse Modules to Cloud-First Write-Order Consistency**:
+  - `InventoryModule.saveProducts`, `saveWarehouses`, `saveStockMovements`, `saveInventoryLedger`, `saveWarehouseBins`, `saveInventoryDocuments`: Awaits cloud sync per item via `syncWriteWithOfflineFallback` before updating `StorageEngine.setStored`. If sync fails, returns `{ success: false, error }`, logs a warning, and leaves local storage untouched.
+  - `WarehouseHierarchyEngine.saveWarehouseTypes`: Converted to `async`, using `syncWriteWithOfflineFallback` before `StorageEngine.setStored`.
+  - `WarehouseHierarchyEngine.addWarehouseType`, `addWarehouse`, `updateWarehouse`, `moveWarehouse`: Converted to `async` and awaited by consumers.
+  - `WarehouseTemplateEngine.instantiateWarehouseTemplate`: Converted to `async` and awaits `WarehouseHierarchyEngine.addWarehouse`.
+- **Replaced Weak Timestamp/Random IDs with `crypto.randomUUID()`**:
+  - Replaced all legacy `Date.now() + Math.random()` string generators in `addProduct`, `addWarehouse`, `adjustStock`, `relocateBinStock`, `addWarehouseBin`, `addInventoryDocument`, `generateStockMovementsForDoc`, `addWarehouseType`, and `WarehouseHierarchyEngine.addWarehouse` with standard `crypto.randomUUID()`.
+- **Updated UI & Test Call Sites**:
+  - `WarehouseHierarchyManager.tsx`: Updated `handleSaveWarehouse` and `handleInstantiateTemplate` to `async/await`.
+  - Scoped tests updated to `async/await` and passing with 100% green: `src/warehouse_hierarchy.test.ts`, `src/warehouse_templates.test.ts`, `src/inventory_migration.test.ts`, `src/optimistic_locking.test.ts`, `src/accounting_integration.test.ts`, `src/phase15_comp1_fallback.test.ts`, `src/purchasing_migration.test.ts`, `src/restaurant_engine.test.ts`.
+- **Verification**:
+  - Tests: 27/27 passed across the 5 primary scoped test suites.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Build (`compile_applet`): Succeeded.
+
+---
+
 ## Phase C: Fix Write-Ordering Consistency in ApprovalEngine
 **Date:** 2026-08-23
 **Files Changed:** `src/db/approvalEngine.ts`, `src/components/ApprovalWorkflowManager.tsx`, `src/components/ApprovalInbox.tsx`, `src/lib/enterprise/purchasing_engine.ts`, `src/db/transactions.create.ts`, `src/approval_engine.test.ts`, `src/enterprise_e2e_flows_validation.test.ts`, `CHANGELOG.md`

@@ -2,7 +2,6 @@ import { CostCenter } from '../types/accounting';
 import { OrganizationUnit } from '../types/organization';
 import { StorageEngine } from './storage';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
-import { dbSetDoc, dbDeleteDoc } from '../firebase';
 import { OrganizationEngine } from './organizationEngine';
 
 export interface CostCenterTreeNode extends CostCenter {
@@ -41,7 +40,7 @@ export class CostCenterEngine {
 
   static async addCostCenter(data: Omit<CostCenter, 'id'> & { id?: string }): Promise<CostCenter> {
     const centers = CostCenterEngine.getCostCenters();
-    const id = data.id || `cc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const id = data.id || `cc-${crypto.randomUUID()}`;
     const org_unit_id = data.org_unit_id;
     const parentId = data.parent_id || data.parentId;
 

@@ -135,8 +135,8 @@ describe('Phase 15: Stop Silent comp-1 Write Fallback (Custody Paths Only)', () 
     expect(newCount).toBe(initialCount);
   });
 
-  it('10. InventoryModule.relocateBinStock returns failure without falling back to comp-1 when companyId is empty', () => {
-    const res = InventoryModule.relocateBinStock('', 'wh-1', 'prod-1', 'bin-from', 'bin-to', 10);
+  it('10. InventoryModule.relocateBinStock returns failure without falling back to comp-1 when companyId is empty', async () => {
+    const res = await InventoryModule.relocateBinStock('', 'wh-1', 'prod-1', 'bin-from', 'bin-to', 10);
     expect(res.success).toBe(false);
     expect(res.messageAr).toContain('يجب اختيار شركة');
   });

@@ -194,9 +194,9 @@ export default function Inventory({ language, theme }: InventoryProps) {
     }
   };
 
-  const handleDelete = (docId: string) => {
+  const handleDelete = async (docId: string) => {
     if (confirm(isRtl ? 'هل أنت متأكد من حذف هذه المسودة نهائياً؟' : 'Are you sure you want to delete this draft?')) {
-      const res = InventoryModule.deleteInventoryDocument(docId);
+      const res = await InventoryModule.deleteInventoryDocument(docId);
       if (!res.success) {
         alert(res.errors?.join('\n') || 'Failed to delete document');
         return;

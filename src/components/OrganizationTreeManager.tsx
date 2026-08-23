@@ -111,13 +111,13 @@ export default function OrganizationTreeManager({
     setExpandedNodeIds({});
   };
 
-  const handleApplyTemplate = () => {
+  const handleApplyTemplate = async () => {
     if (!selectedTemplateId) return;
     try {
       const selectedTpl = templates.find(t => t.id === selectedTemplateId);
       if (!selectedTpl) return;
 
-      OrganizationEngine.applyTemplateToCompany(companyId, selectedTemplateId);
+      await OrganizationEngine.applyTemplateToCompany(companyId, selectedTemplateId);
       setIsTemplateModalOpen(false);
       setSelectedTemplateId(null);
       loadData();
@@ -138,7 +138,7 @@ export default function OrganizationTreeManager({
     setIsAddModalOpen(true);
   };
 
-  const handleSaveNewUnit = (e: React.FormEvent) => {
+  const handleSaveNewUnit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formNameAr.trim()) {
       alert(isRtl ? 'يرجى إدخال اسم الوحدة التنظيمية' : 'Please enter unit name');
@@ -146,7 +146,7 @@ export default function OrganizationTreeManager({
     }
 
     try {
-      OrganizationEngine.addUnit({
+      await OrganizationEngine.addUnit({
         companyId,
         parentId: targetParentId,
         typeId: formCustomType,
@@ -178,12 +178,12 @@ export default function OrganizationTreeManager({
     setIsEditModalOpen(true);
   };
 
-  const handleSaveEditUnit = (e: React.FormEvent) => {
+  const handleSaveEditUnit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUnit || !formNameAr.trim()) return;
 
     try {
-      OrganizationEngine.updateUnit(editingUnit.id, {
+      await OrganizationEngine.updateUnit(editingUnit.id, {
         code: formCode.trim(),
         name: formNameAr.trim(),
         nameAr: formNameAr.trim(),
@@ -205,14 +205,14 @@ export default function OrganizationTreeManager({
     }
   };
 
-  const handleDeleteUnit = (unitId: string, unitName: string) => {
+  const handleDeleteUnit = async (unitId: string, unitName: string) => {
     const confirmMsg = isRtl 
       ? `هل أنت تأكد من حذف الوحدة التنظيمية "${unitName}"؟` 
       : `Are you sure you want to delete organization unit "${unitName}"?`;
     if (!window.confirm(confirmMsg)) return;
 
     try {
-      OrganizationEngine.deleteUnit(unitId);
+      await OrganizationEngine.deleteUnit(unitId);
       loadData();
       if (onStructureChange) onStructureChange();
     } catch (err: any) {
@@ -220,9 +220,9 @@ export default function OrganizationTreeManager({
     }
   };
 
-  const handleRaiseHeadcount = (unitId: string) => {
+  const handleRaiseHeadcount = async (unitId: string) => {
     const activeUser = CustodyDB.getActiveUser();
-    const res = OrganizationEngine.raiseMaxAccountsAllowed(unitId, activeUser);
+    const res = await OrganizationEngine.raiseMaxAccountsAllowed(unitId, activeUser);
     if (!res.success) {
       alert(isRtl ? res.errorAr : res.errorEn);
       return;

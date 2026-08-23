@@ -10,11 +10,11 @@ describe('Part 1: Per-Organization-Unit Account Headcount Governance Acceptance 
   let parentUnit: OrganizationUnit;
   let childUnit: OrganizationUnit;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     StorageEngine.clearCache();
     if (typeof localStorage !== 'undefined') localStorage.clear();
     // Initialize units
-    parentUnit = OrganizationEngine.addUnit({
+    parentUnit = await OrganizationEngine.addUnit({
       companyId,
       code: 'REG-01',
       name: 'Northern Region',
@@ -24,7 +24,7 @@ describe('Part 1: Per-Organization-Unit Account Headcount Governance Acceptance 
       parentId: null
     });
 
-    childUnit = OrganizationEngine.addUnit({
+    childUnit = await OrganizationEngine.addUnit({
       companyId,
       code: 'STN-01',
       name: 'Alexandria Branch',
@@ -96,7 +96,7 @@ describe('Part 1: Per-Organization-Unit Account Headcount Governance Acceptance 
     await expect(UsersModule.saveSignupRequest(req2)).rejects.toThrow(/maximum allowed number of accounts/i);
   });
 
-  it('4. should allow the administrator at the organizational level directly above to raise limit by +1', () => {
+  it('4. should allow the administrator at the organizational level directly above to raise limit by +1', async () => {
     // Region admin user (level directly above childUnit)
     const regionAdmin: AppUser = {
       id: 'adm-reg',
@@ -112,7 +112,7 @@ describe('Part 1: Per-Organization-Unit Account Headcount Governance Acceptance 
     const clearance = OrganizationEngine.canRaiseMaxAccountsAllowed(childUnit, regionAdmin);
     expect(clearance.canRaise).toBe(true);
 
-    const res = OrganizationEngine.raiseMaxAccountsAllowed(childUnit.id, regionAdmin);
+    const res = await OrganizationEngine.raiseMaxAccountsAllowed(childUnit.id, regionAdmin);
     expect(res.success).toBe(true);
     expect(res.unit?.max_accounts_allowed).toBe(2);
 
@@ -146,7 +146,7 @@ describe('Part 1: Per-Organization-Unit Account Headcount Governance Acceptance 
     expect(validation.maxAllowed).toBe(2);
   });
 
-  it('5. should enforce hard ceiling of 5 accounts per unit, rejecting attempts to raise beyond 5', () => {
+  it('5. should enforce hard ceiling of 5 accounts per unit, rejecting attempts to raise beyond 5', async () => {
     const sysAdmin: AppUser = {
       id: 'sys-adm',
       email: 'sys@admin.com',
@@ -158,16 +158,16 @@ describe('Part 1: Per-Organization-Unit Account Headcount Governance Acceptance 
     };
 
     // Raise from 1 to 5
-    OrganizationEngine.raiseMaxAccountsAllowed(childUnit.id, sysAdmin); // -> 2
-    OrganizationEngine.raiseMaxAccountsAllowed(childUnit.id, sysAdmin); // -> 3
-    OrganizationEngine.raiseMaxAccountsAllowed(childUnit.id, sysAdmin); // -> 4
-    OrganizationEngine.raiseMaxAccountsAllowed(childUnit.id, sysAdmin); // -> 5
+    await OrganizationEngine.raiseMaxAccountsAllowed(childUnit.id, sysAdmin); // -> 2
+    await OrganizationEngine.raiseMaxAccountsAllowed(childUnit.id, sysAdmin); // -> 3
+    await OrganizationEngine.raiseMaxAccountsAllowed(childUnit.id, sysAdmin); // -> 4
+    await OrganizationEngine.raiseMaxAccountsAllowed(childUnit.id, sysAdmin); // -> 5
 
     const unitAt5 = OrganizationEngine.getUnitById(childUnit.id);
     expect(unitAt5?.max_accounts_allowed).toBe(5);
 
     // Attempting to raise a 6th time should be rejected
-    const attempt6 = OrganizationEngine.raiseMaxAccountsAllowed(childUnit.id, sysAdmin);
+    const attempt6 = await OrganizationEngine.raiseMaxAccountsAllowed(childUnit.id, sysAdmin);
     expect(attempt6.success).toBe(false);
     expect(attempt6.errorEn).toContain('absolute maximum headcount ceiling for any organization unit is 5');
 

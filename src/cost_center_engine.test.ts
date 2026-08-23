@@ -45,7 +45,7 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
 
   it('should automatically create and link a Cost Center when an Organization Unit is resolved', async () => {
     // 1. Create an Organization Unit
-    const orgUnit = OrganizationEngine.addUnit({
+    const orgUnit = await OrganizationEngine.addUnit({
       companyId: companyId,
       typeId: 'out-branch',
       code: 'BR-ALEX',
@@ -71,7 +71,7 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
 
   it('should automatically populate costCenterId in Journal Entries when only org_unit_id is provided', async () => {
     // Create Org Unit
-    const orgUnit = OrganizationEngine.addUnit({
+    const orgUnit = await OrganizationEngine.addUnit({
       companyId: companyId,
       typeId: 'out-branch',
       code: 'BR-CAIRO',
@@ -106,7 +106,7 @@ describe('Phase 11: Dynamic Cost Center Engine Unit & Integration Tests', () => 
 
   it('should automatically populate org_unit_id in Journal Entries when only costCenterId is provided', async () => {
     // Create Org Unit and Cost Center linked to it
-    const orgUnit = OrganizationEngine.addUnit({
+    const orgUnit = await OrganizationEngine.addUnit({
       companyId: companyId,
       typeId: 'out-factory',
       code: 'FAC-01',

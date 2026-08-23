@@ -145,7 +145,7 @@ describe('Phase 6: Optimistic Locking Enforcement Unit Tests', () => {
   });
 
   describe('2. Inventory Document Concurrency Control', () => {
-    it('should reject updateInventoryDocument if expected version does not match', () => {
+    it('should reject updateInventoryDocument if expected version does not match', async () => {
       const doc: InventoryDocument = {
         id: 'inv-doc-occ-1',
         company_id: 'comp-1',
@@ -166,14 +166,14 @@ describe('Phase 6: Optimistic Locking Enforcement Unit Tests', () => {
       StorageEngine.setStored('inventory_documents', [doc]);
 
       // Normal update with expectedVersion 1
-      InventoryModule.updateInventoryDocument('inv-doc-occ-1', { notes: 'Updated notes' }, 1);
+      await InventoryModule.updateInventoryDocument('inv-doc-occ-1', { notes: 'Updated notes' }, 1);
       const docsAfter = StorageEngine.getStored<InventoryDocument[]>('inventory_documents', []);
       expect(docsAfter[0].version).toBe(2);
 
       // Stale update attempt with version 1 (now current version is 2)
-      expect(() => {
-        InventoryModule.updateInventoryDocument('inv-doc-occ-1', { notes: 'Stale update' }, 1);
-      }).toThrow('modified by another user');
+      await expect(async () => {
+        await InventoryModule.updateInventoryDocument('inv-doc-occ-1', { notes: 'Stale update' }, 1);
+      }).rejects.toThrow('modified by another user');
     });
 
     it('should reject triggerLifecycleTransition if expected version is stale', async () => {

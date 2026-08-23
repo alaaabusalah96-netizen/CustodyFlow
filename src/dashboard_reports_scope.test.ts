@@ -14,9 +14,9 @@ describe('Phase 5: Reports & Dashboard Dynamic Filtering and Scope Test', () => 
     CustodyDB.setSelectedCompanyId(companyId);
   });
 
-  it('Acceptance Criterion 1: Two test users scoped to different Organization Units see non-overlapping data by default without extra clicks', () => {
+  it('Acceptance Criterion 1: Two test users scoped to different Organization Units see non-overlapping data by default without extra clicks', async () => {
     // 1. Setup Company and 2 distinct Org Units
-    const rootCompany = OrganizationEngine.addOrganizationUnit({
+    const rootCompany = await OrganizationEngine.addOrganizationUnit({
       nameAr: 'شركة الاختبار',
       nameEn: 'Test Company',
       code: 'TC-ROOT',
@@ -24,7 +24,7 @@ describe('Phase 5: Reports & Dashboard Dynamic Filtering and Scope Test', () => 
       companyId
     });
 
-    const unitA = OrganizationEngine.addOrganizationUnit({
+    const unitA = await OrganizationEngine.addOrganizationUnit({
       nameAr: 'مصنع القاهرة',
       nameEn: 'Cairo Factory',
       code: 'UNIT-A',
@@ -33,7 +33,7 @@ describe('Phase 5: Reports & Dashboard Dynamic Filtering and Scope Test', () => 
       companyId
     });
 
-    const unitB = OrganizationEngine.addOrganizationUnit({
+    const unitB = await OrganizationEngine.addOrganizationUnit({
       nameAr: 'فرع الإسكندرية',
       nameEn: 'Alex Branch',
       code: 'UNIT-B',

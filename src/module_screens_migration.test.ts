@@ -19,7 +19,7 @@ describe('Phase 6: Module Screen Migration Test Suite', () => {
   });
 
   it('1. Purchasing: PR created with org_unit_id processes successfully and retains org_unit_id', async () => {
-    const orgUnit = OrganizationEngine.addOrganizationUnit({
+    const orgUnit = await OrganizationEngine.addOrganizationUnit({
       nameAr: 'إدارة المشتريات المركزية',
       nameEn: 'Central Procurement Dept',
       code: 'PROC-01',
@@ -56,8 +56,8 @@ describe('Phase 6: Module Screen Migration Test Suite', () => {
     expect(createdPR?.org_unit_id).toBe(orgUnit.id);
   });
 
-  it('2. Sales & AR: Invoice created with org_unit_id processes successfully', () => {
-    const orgUnit = OrganizationEngine.addOrganizationUnit({
+  it('2. Sales & AR: Invoice created with org_unit_id processes successfully', async () => {
+    const orgUnit = await OrganizationEngine.addOrganizationUnit({
       nameAr: 'فرع مبيعات القاهرة',
       nameEn: 'Cairo Sales Branch',
       code: 'SALES-CAI',
@@ -103,8 +103,8 @@ describe('Phase 6: Module Screen Migration Test Suite', () => {
     expect(savedInv?.org_unit_id).toBe(orgUnit.id);
   });
 
-  it('3. HR & Payroll: Employee onboarded with org_unit_id persists correctly', () => {
-    const orgUnit = OrganizationEngine.addOrganizationUnit({
+  it('3. HR & Payroll: Employee onboarded with org_unit_id persists correctly', async () => {
+    const orgUnit = await OrganizationEngine.addOrganizationUnit({
       nameAr: 'مصنع الشرقية',
       nameEn: 'Sharkia Factory',
       code: 'FAC-SHK',
@@ -138,8 +138,8 @@ describe('Phase 6: Module Screen Migration Test Suite', () => {
     expect(savedEmp?.org_unit_id).toBe(orgUnit.id);
   });
 
-  it('4. Fixed Assets: Asset registered with org_unit_id stores unit scope', () => {
-    const orgUnit = OrganizationEngine.addOrganizationUnit({
+  it('4. Fixed Assets: Asset registered with org_unit_id stores unit scope', async () => {
+    const orgUnit = await OrganizationEngine.addOrganizationUnit({
       nameAr: 'قطاع اللوجستيات',
       nameEn: 'Logistics Sector',
       code: 'LOG-SEC',
@@ -174,8 +174,8 @@ describe('Phase 6: Module Screen Migration Test Suite', () => {
     expect(savedAsset?.org_unit_id).toBe(orgUnit.id);
   });
 
-  it('5. Fleet Management: Vehicle registered with org_unit_id preserves unit scope', () => {
-    const orgUnit = OrganizationEngine.addOrganizationUnit({
+  it('5. Fleet Management: Vehicle registered with org_unit_id preserves unit scope', async () => {
+    const orgUnit = await OrganizationEngine.addOrganizationUnit({
       nameAr: 'أسطول النقل الجيزة',
       nameEn: 'Giza Fleet Dept',
       code: 'FLEET-GZA',
@@ -208,7 +208,7 @@ describe('Phase 6: Module Screen Migration Test Suite', () => {
   });
 
   it('6. Inventory: Document created with source/dest including org_unit_id saves cleanly', async () => {
-    const orgUnit = OrganizationEngine.addOrganizationUnit({
+    const orgUnit = await OrganizationEngine.addOrganizationUnit({
       nameAr: 'مخزن العبور الفرعي',
       nameEn: 'Obour Branch Store',
       code: 'STR-OBR',
