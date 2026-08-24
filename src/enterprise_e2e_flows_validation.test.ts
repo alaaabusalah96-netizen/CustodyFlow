@@ -29,7 +29,18 @@ vi.mock('firebase/firestore', () => ({
   where: () => ({}),
   startAfter: () => ({}),
   orderBy: () => ({}),
-  runTransaction: () => Promise.resolve(),
+  runTransaction: (_db: any, cb: (tx: any) => Promise<any>) => {
+    if (typeof cb === 'function') {
+      const mockTx = {
+        get: () => Promise.resolve({ exists: () => false, data: () => ({}) }),
+        set: () => {},
+        update: () => {},
+        delete: () => {}
+      };
+      return cb(mockTx);
+    }
+    return Promise.resolve();
+  },
 }));
 
 if (typeof window === 'undefined') {
@@ -381,7 +392,7 @@ describe('Phase 16: Enterprise End-to-End Business Flow Validation', () => {
     StorageEngine.setStored('products', [prod]);
 
     // Initial stock: 500 in Main Warehouse
-    InventoryModule.adjustStock(mainWh.id, prod.id, 500, 'Addition', 'usr-admin-e2e');
+    await InventoryModule.adjustStock(mainWh.id, prod.id, 500, 'Addition', 'usr-admin-e2e');
 
     // Create transfer document from Main -> Sub
     const transferDoc = await InventoryModule.addInventoryDocument({
@@ -443,7 +454,7 @@ describe('Phase 16: Enterprise End-to-End Business Flow Validation', () => {
 
     StorageEngine.setStored('warehouses', [wh]);
     StorageEngine.setStored('products', [prod]);
-    InventoryModule.adjustStock(wh.id, prod.id, 300, 'Addition', 'usr-admin-e2e');
+    await InventoryModule.adjustStock(wh.id, prod.id, 300, 'Addition', 'usr-admin-e2e');
 
     // Issue/Sale of 50 boxes
     const issueDoc = await InventoryModule.addInventoryDocument({

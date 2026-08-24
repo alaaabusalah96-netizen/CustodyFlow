@@ -19,7 +19,7 @@ export class RestaurantEngine {
     const list = StorageEngine.getStored<MenuCategory[]>('restaurant_menu_categories', []);
     const newCategory: MenuCategory = {
       ...category,
-      id: `cat-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: crypto.randomUUID(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -60,7 +60,7 @@ export class RestaurantEngine {
     const list = StorageEngine.getStored<MenuItem[]>('restaurant_menu_items', []);
     const newItem: MenuItem = {
       ...item,
-      id: `dish-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: crypto.randomUUID(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -118,7 +118,7 @@ export class RestaurantEngine {
     } else {
       const newRecipe: Recipe = {
         ...recipe,
-        id: recipe.id || `rec-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        id: recipe.id || crypto.randomUUID(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -218,7 +218,7 @@ export class RestaurantEngine {
     const list = StorageEngine.getStored<RestaurantTable[]>('restaurant_tables', []);
     const newTable: RestaurantTable = {
       ...table,
-      id: `tbl-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: crypto.randomUUID(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -260,14 +260,14 @@ export class RestaurantEngine {
     return list.find(o => o.id === orderId) || null;
   }
 
-  static async createOrder(orderData: Omit<RestaurantOrder, 'id' | 'order_number' | 'created_at' | 'updated_at'>): Promise<RestaurantOrder> {
+  static createOrder(orderData: Omit<RestaurantOrder, 'id' | 'order_number' | 'created_at' | 'updated_at'>): RestaurantOrder {
     const list = StorageEngine.getStored<RestaurantOrder[]>('restaurant_orders', []);
     const companyOrders = list.filter(o => o.company_id === orderData.company_id);
     const orderSeq = companyOrders.length + 1001;
 
     const newOrder: RestaurantOrder = {
       ...orderData,
-      id: `ord-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: crypto.randomUUID(),
       order_number: `ORD-${orderSeq}`,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -286,7 +286,7 @@ export class RestaurantEngine {
 
     // Auto-deduct stock if created directly in served or paid state
     if (newOrder.status === 'served' || newOrder.status === 'paid') {
-      await this.deductStockForOrder(newOrder.id, newOrder.warehouse_id, newOrder.created_by);
+      void this.deductStockForOrder(newOrder.id, newOrder.warehouse_id, newOrder.created_by);
     }
 
     return newOrder;
@@ -348,7 +348,7 @@ export class RestaurantEngine {
           if (totalQtyUsed <= 0) continue;
 
           const mov: StockMovement = {
-            id: `mov-rest-${Date.now()}-${ing.inventory_item_id}-${Math.floor(Math.random() * 10000)}`,
+            id: crypto.randomUUID(),
             doc_id: order.id,
             doc_no: order.order_number,
             doc_type: 'Issue',

@@ -51,7 +51,7 @@ export class ApprovalEngine {
         updatedAt: now
       };
     } else {
-      const newId = workflowData.id || `wf-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const newId = workflowData.id || crypto.randomUUID();
       workflow = {
         ...workflowData,
         id: newId,
@@ -156,7 +156,7 @@ export class ApprovalEngine {
     }
 
     const now = new Date().toISOString();
-    const instanceId = `appr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const instanceId = crypto.randomUUID();
     const instance: ApprovalInstance = {
       id: instanceId,
       workflowId: matchingWf.id,

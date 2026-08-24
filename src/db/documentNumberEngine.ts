@@ -117,7 +117,7 @@ export class DocumentNumberEngine {
       all[existingIdx] = saved;
     } else {
       saved = {
-        id: configData.id || `doc-num-cfg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id: configData.id || crypto.randomUUID(),
         ...configData,
         updatedAt: now
       };

@@ -203,7 +203,7 @@ export class TransactionsUpdateModule {
           }
 
           TransactionsHistoryModule.addTransactionHistory({
-            id: `txh-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            id: crypto.randomUUID(),
             transaction_id: id,
             action,
             performed_by: user?.id || 'unknown',

@@ -10,7 +10,7 @@ import { OrganizationUnit } from './types/organization';
 describe('Phase 12: Inventory Organization Unit Migration & Integration Tests', () => {
   const companyId = 'comp-phase12-test';
 
-  beforeEach(() => {
+  beforeEach(async () => {
     const store: Record<string, string> = {};
     globalThis.localStorage = {
       getItem: (key: string) => store[key] || null,
@@ -88,7 +88,7 @@ describe('Phase 12: Inventory Organization Unit Migration & Integration Tests', 
         updatedAt: new Date().toISOString()
       } as any
     ];
-    OrganizationEngine.saveUnits(units);
+    await OrganizationEngine.saveUnits(units);
 
     // 3. Setup Cost Center linked to Org Unit
     CostCenterEngine.saveCostCenters([
@@ -123,7 +123,7 @@ describe('Phase 12: Inventory Organization Unit Migration & Integration Tests', 
         receiving_approval_workflow: false
       }
     ];
-    InventoryModule.saveWarehouses(warehouses);
+    await InventoryModule.saveWarehouses(warehouses);
 
     // 5. Setup Product
     const products: Product[] = [

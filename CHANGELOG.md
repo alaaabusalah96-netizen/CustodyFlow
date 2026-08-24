@@ -4,6 +4,31 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Phase F: Extend Weak-ID Replacement to Remaining Live Creates
+**Date:** 2026-08-24
+**Files Changed:** `src/db/companies.ts`, `src/db/stations.ts`, `src/db/approvalEngine.ts`, `src/db/transactions.create.ts`, `src/db/transactions.update.ts`, `src/db/transactions.delete.ts`, `src/db/transactions.restore.ts`, `src/db/businessGroups.ts`, `src/db/warehouseTemplateEngine.ts`, `src/db/documentNumberEngine.ts`, `src/db/restaurant.ts`, `CHANGELOG.md`
+**Summary:**
+- **Replaced Weak Timestamp/Random IDs with `crypto.randomUUID()` Across All Live Creation Paths**:
+  - `src/db/companies.ts`: `addCompany` now generates company ID via `crypto.randomUUID()`.
+  - `src/db/stations.ts`: `addRegion` and `addStation` now generate `regId` and `stnId` via `crypto.randomUUID()`.
+  - `src/db/approvalEngine.ts`: `saveWorkflow` and `evaluateAndStartWorkflow` generate workflow and instance IDs via `crypto.randomUUID()`.
+  - `src/db/transactions.create.ts`: `addTransaction` transaction ID (`newTx.id`) and transaction history ID (`txh.id`) generated via `crypto.randomUUID()`.
+  - `src/db/transactions.update.ts`: Transaction history ID generated via `crypto.randomUUID()`.
+  - `src/db/transactions.delete.ts`: `deletedRecordId`, `ntf.id`, `logId`, and `auditLogId` generated via `crypto.randomUUID()`.
+  - `src/db/transactions.restore.ts`: `vch.id`, `logId`, `auditLogId`, and `ntf.id` generated via `crypto.randomUUID()`.
+  - `src/db/businessGroups.ts`: `addGroup` now generates group ID via `crypto.randomUUID()`.
+  - `src/db/warehouseTemplateEngine.ts`: `addWarehouseTemplate` custom template ID generated via `crypto.randomUUID()`.
+  - `src/db/documentNumberEngine.ts`: `saveConfig` generated config ID via `crypto.randomUUID()`.
+  - `src/db/restaurant.ts`: `addCategory`, `addMenuItem`, `addOrUpdateRecipe`, `addTable`, `createOrder`, and `deductStockForOrder` StockMovement IDs generated via `crypto.randomUUID()`.
+- **Historical Integrity**:
+  - Historical stored IDs and document sequence formatters were left untouched.
+- **Verification**:
+  - Tests: All scoped test suites (`approval_engine.test.ts`, `restaurant_engine.test.ts`, `document_number_engine.test.ts`, `phase_b_write_ordering.test.ts`) passing 33/33 tests green.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Build (`compile_applet`): Succeeded.
+
+---
+
 ## Phase E: Fix Write-Ordering Consistency & Weak ID Generation in Organization & Warehouse Hierarchy Engines
 **Date:** 2026-08-23
 **Files Changed:** `src/db/organizationEngine.ts`, `src/db/warehouseHierarchyEngine.ts`, `src/db/restaurant.ts`, `src/permission_scope.test.ts`, `src/purchasing_migration.test.ts`, `src/cost_center_engine.test.ts`, `src/organization_scope_engine.test.ts`, `src/part1_headcount_governance.test.ts`, `src/dashboard_reports_scope.test.ts`, `src/module_screens_migration.test.ts`, `src/unified_access_control.test.ts`, `src/inventory_logs_optimization.test.ts`, `src/restaurant_orders.test.ts`, `CHANGELOG.md`
@@ -4351,6 +4376,39 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   - Confirmed that module-level navigation filtering is already wired to `ModulesModule.isScreenEnabledForCompany(companyId, screenId)` in `Layout.tsx`.
   - Verified that automatic industry-based module filtering (`company.industry` -> module preset enforcement) is absent in current codebase.
   - Documented findings, architectural state, and recommendations in `docs/adr/0012-company-industry-module-filtering-gap.md` without making intrusive runtime changes (documentation only per plan).
+
+---
+
+## Phase G: Small Leftover Items (OrgUnitTreeSelect companyId & Changelog Append Policy)
+**Date:** 2026-08-24
+**Files Changed:** `src/components/OrgUnitTreeSelect.tsx`, `CHANGELOG.md`
+**Summary:**
+- **OrgUnitTreeSelect Component Cleanup**:
+  - Removed default fallback `companyId = 'comp-1'` from `OrgUnitTreeSelect` and updated `OrgUnitTreeSelectProps.companyId` to be required (`companyId: string`).
+  - Verified all call sites in `src/components/inventory/WarehouseHierarchyManager.tsx` pass `companyId={companyId}` properly.
+- **Changelog Append Policy**:
+  - Standardized changelog maintenance to strictly append new entries to the bottom of `CHANGELOG.md` without reordering or altering historical records.
+- **Verification**:
+  - TypeScript Linter (`tsc --noEmit`): 0 errors.
+  - Build (`compile_applet`): Succeeded.
+
+---
+
+## Phase H: Atomic adjustStock Race-Condition Prevention
+**Date:** 2026-08-24
+**Files Changed:** `src/db/inventory.ts`, `src/adjust_stock_atomic.test.ts`, `src/inventory_migration.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Atomic Stock Read-and-Write in InventoryModule.adjustStock**:
+  - Refactored `InventoryModule.adjustStock` to atomic execution using Firestore `runTransaction` when database is available, while preserving exact public signature, overdraft rule checks (`STRICT`), and offline memory fallback.
+  - Atomic balance updating prevents lost updates and race condition data corruption on concurrent adjustments for the same warehouse, product, and bin.
+- **Verification & Test Coverage**:
+  - Created `src/adjust_stock_atomic.test.ts` verifying concurrent adjustment serialization and strict overdraft enforcement.
+  - Scoped tests (`src/adjust_stock_atomic.test.ts`, `src/inventory_logs_optimization.test.ts`, `src/inventory_migration.test.ts`, `src/inventory_doctypes.test.ts`): 4/4 passed (12/12 tests green).
+  - TypeScript Linter (`tsc --noEmit`): 0 errors.
+  - Applet Build (`compile_applet`): Succeeded.
+
+---
+
 
 
 

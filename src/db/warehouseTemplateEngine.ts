@@ -311,7 +311,7 @@ export class WarehouseTemplateEngine {
     const templates = StorageEngine.getStored<WarehouseTemplate[]>('warehouse_templates', DEFAULT_WAREHOUSE_TEMPLATES);
     const newTemplate: WarehouseTemplate = {
       ...templateData,
-      id: `wh-tpl-custom-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: crypto.randomUUID(),
       isPredefined: false,
     };
 

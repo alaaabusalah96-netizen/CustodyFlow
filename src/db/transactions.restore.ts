@@ -112,7 +112,7 @@ export class TransactionsRestoreModule {
       } else {
         isRecreatingVoucher = true;
         voucherToUpdateOrRecreate = {
-          id: `vch-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          id: crypto.randomUUID(),
           voucher_no: tx.voucher_no,
           date: tx.voucher_date || tx.date || new Date().toISOString().split('T')[0],
           station_id: tx.station_id || '',
@@ -137,7 +137,7 @@ export class TransactionsRestoreModule {
       }
     }
 
-    const logId = `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const logId = crypto.randomUUID();
     const logDetails = `Restored transaction ${tx.transaction_no} worth ${tx.amount.toLocaleString()} EGP back to status: ${originalStatus}.`;
     const resolvedCompanyId = tx.company_id || user.company_id || '';
     const newLog: ActivityLog = {
@@ -150,7 +150,7 @@ export class TransactionsRestoreModule {
       company_id: resolvedCompanyId
     };
 
-    const auditLogId = `aud-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const auditLogId = crypto.randomUUID();
     const newAuditLog: AuditLog = {
       id: auditLogId,
       user_id: user.id,
@@ -185,7 +185,7 @@ export class TransactionsRestoreModule {
 
       regionalManagers.concat(companyAdmins).forEach(recipient => {
         notificationsToSend.push({
-          id: `ntf-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          id: crypto.randomUUID(),
           user_id: recipient.id,
           title_ar: notificationTitleAr,
           title_en: notificationTitleEn,
@@ -201,7 +201,7 @@ export class TransactionsRestoreModule {
       const companyAdmins = allUsers.filter(u => u.role === 'Admin' && u.company_id === tx.company_id);
       companyAdmins.forEach(ca => {
         notificationsToSend.push({
-          id: `ntf-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          id: crypto.randomUUID(),
           user_id: ca.id,
           title_ar: notificationTitleAr,
           title_en: notificationTitleEn,

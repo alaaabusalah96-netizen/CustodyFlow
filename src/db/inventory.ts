@@ -1,6 +1,7 @@
 import { Warehouse, Product, InventoryDocument, StockMovement, InventoryDocType, InventoryDocStatus, InventoryLedgerEntry, WarehouseBin, InventoryWorkflowConfig } from '../types/inventory';
 import { StorageEngine } from './storage';
 import { db } from '../firebase';
+import { doc, runTransaction } from 'firebase/firestore';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
@@ -735,10 +736,11 @@ export class InventoryModule {
   }
 
   // Documents
-  static getInventoryDocuments(): InventoryDocument[] {
-    const companyId = CompaniesModule.getSelectedCompanyId();
+  static getInventoryDocuments(targetCompanyId?: string): InventoryDocument[] {
+    const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
     const list = StorageEngine.getStored<InventoryDocument[]>('inventory_documents', []);
-    return list.filter(d => d.tenantId === companyId);
+    if (!companyId) return list;
+    return list.filter(d => (d.tenantId === companyId) || ((d as any).company_id === companyId));
   }
 
   static getPaginatedInventoryDocuments(
@@ -769,10 +771,10 @@ export class InventoryModule {
     return StorageEngine.getPaginatedIDB<InventoryDocument>('inventory_documents', page, pageSize, scopedFilter, sortFn);
   }
 
-  static async saveInventoryDocuments(list: InventoryDocument[]): Promise<{ success: boolean; error?: string }> {
+  static async saveInventoryDocuments(list: InventoryDocument[], targetCompanyId?: string): Promise<{ success: boolean; error?: string }> {
     const all = StorageEngine.getStored<InventoryDocument[]>('inventory_documents', []);
-    const companyId = CompaniesModule.getSelectedCompanyId();
-    const filteredOut = all.filter(d => d.tenantId !== companyId);
+    const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
+    const filteredOut = all.filter(d => (d.tenantId !== companyId) && ((d as any).company_id !== companyId));
     const combined = !companyId ? list : [...filteredOut, ...list];
 
     const changed = list.filter(d => {
@@ -1122,6 +1124,77 @@ export class InventoryModule {
     if (!companyId) {
       throw new Error('لا يمكن تسجيل حركة مخزون بدون شركة محددة / Cannot record stock movement without a company context.');
     }
+
+    const org_unit_id = InventoryModule.resolveWarehouseOrgUnit(warehouseId, companyId);
+    const balanceKey = `${productId}___${warehouseId}___${binId || 'nobin'}`;
+
+    if (db && typeof db === 'object') {
+      try {
+        const balanceDocRef = doc(db, `inventory_balances_${companyId}`, balanceKey);
+        await runTransaction(db, async (transaction) => {
+          const balanceDoc = await transaction.get(balanceDocRef);
+          let currentStock = 0;
+          if (balanceDoc.exists()) {
+            currentStock = balanceDoc.data().balance ?? 0;
+          } else {
+            currentStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
+          }
+
+          const current_balance_after = currentStock + qtyChange;
+          if (qtyChange < 0 && current_balance_after < 0) {
+            const config = InventoryModule.getInventoryConfig();
+            if (config.allow_overdraft === 'STRICT') {
+              throw new Error(`رصيد غير كافٍ للمنتج (${productId}) في المستودع/الحاوية. الرصيد الحالي: ${currentStock}، الكمية المطلوبة: ${Math.abs(qtyChange)}. / Insufficient stock for product (${productId}). Available: ${currentStock}, Requested: ${Math.abs(qtyChange)}.`);
+            }
+          }
+
+          const movementId = `m-adj-${crypto.randomUUID()}`;
+          const movementDocRef = doc(db, 'stock_movements', movementId);
+          const movement: StockMovement = {
+            id: movementId,
+            doc_id: 'direct-adjust',
+            doc_no: `ADJ-${crypto.randomUUID().slice(0, 8)}`,
+            doc_type: docType,
+            product_id: productId,
+            warehouse_id: warehouseId,
+            org_unit_id,
+            bin_id: binId,
+            qty_change: qtyChange,
+            type: qtyChange >= 0 ? 'IN' : 'OUT',
+            current_balance_after,
+            date: new Date().toISOString().split('T')[0],
+            company_id: companyId,
+            created_at: new Date().toISOString(),
+            created_by: userId
+          };
+
+          transaction.set(balanceDocRef, {
+            balance: current_balance_after,
+            productId,
+            warehouseId,
+            binId: binId || null,
+            updatedAt: new Date().toISOString(),
+            company_id: companyId
+          }, { merge: true });
+
+          transaction.set(movementDocRef, movement);
+
+          // Update local memory / StorageEngine
+          const allMovements = InventoryModule.getStockMovements();
+          allMovements.push(movement);
+          StorageEngine.setStored('stock_movements', allMovements);
+        });
+        return;
+      } catch (err: any) {
+        // If it was a strict validation error, rethrow
+        if (err.message && (err.message.includes('رصيد غير كافٍ') || err.message.includes('Insufficient stock'))) {
+          throw err;
+        }
+        console.warn('Firestore transaction in adjustStock failed, falling back to local memory:', err);
+      }
+    }
+
+    // Offline / Memory fallback
     const currentStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
     const current_balance_after = currentStock + qtyChange;
     
@@ -1131,7 +1204,7 @@ export class InventoryModule {
         throw new Error(`رصيد غير كافٍ للمنتج (${productId}) في المستودع/الحاوية. الرصيد الحالي: ${currentStock}، الكمية المطلوبة: ${Math.abs(qtyChange)}. / Insufficient stock for product (${productId}). Available: ${currentStock}, Requested: ${Math.abs(qtyChange)}.`);
       }
     }
-    const org_unit_id = InventoryModule.resolveWarehouseOrgUnit(warehouseId, companyId);
+
     const movement: StockMovement = {
       id: `m-adj-${crypto.randomUUID()}`,
       doc_id: 'direct-adjust',
@@ -1404,10 +1477,16 @@ export class InventoryModule {
     event: 'Submit' | 'Approve' | 'Reject' | 'Cancel' | 'Receive',
     expectedVersion?: number
   ): Promise<{ success: boolean; messageAr: string; messageEn: string }> {
-    const documents = InventoryModule.getInventoryDocuments();
-    const docIndex = documents.findIndex(d => d.id === docId);
+    let documents = InventoryModule.getInventoryDocuments();
+    let docIndex = documents.findIndex(d => d.id === docId);
     if (docIndex === -1) {
-      return { success: false, messageAr: 'المستند غير موجود', messageEn: 'Document not found' };
+      // Fallback: check all stored inventory documents
+      const allDocs = StorageEngine.getStored<InventoryDocument[]>('inventory_documents', []);
+      docIndex = allDocs.findIndex(d => d.id === docId);
+      if (docIndex === -1) {
+        return { success: false, messageAr: 'المستند غير موجود', messageEn: 'Document not found' };
+      }
+      documents = allDocs;
     }
 
     const document = documents[docIndex];

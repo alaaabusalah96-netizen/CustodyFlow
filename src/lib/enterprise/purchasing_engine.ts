@@ -711,8 +711,8 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           }
 
           // Inject products directly into inventory via InventoryModule
-          allPOs[idx].items.forEach(item => {
-            InventoryModule.adjustStock(
+          for (const item of allPOs[idx].items) {
+            await InventoryModule.adjustStock(
               warehouseId,
               item.productId,
               item.qty,
@@ -720,7 +720,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
               event.user_id,
               undefined
             );
-          });
+          }
 
           // 3. Save a formal Goods Receipt Document in Inventory Documents for unified ledger & history tracking!
           try {

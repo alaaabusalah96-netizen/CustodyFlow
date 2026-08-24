@@ -104,7 +104,7 @@ export class TransactionsDeleteModule {
       return v;
     });
 
-    const deletedRecordId = `del-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+    const deletedRecordId = crypto.randomUUID();
     const deletedRecord: DeletedTransaction = {
       id: deletedRecordId,
       transaction_id: tx.id,
@@ -151,7 +151,7 @@ export class TransactionsDeleteModule {
 
       regionalManagers.forEach(rm => {
         notificationsToSend.push({
-          id: `ntf-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          id: crypto.randomUUID(),
           user_id: rm.id,
           title_ar: notificationTitleAr,
           title_en: notificationTitleEn,
@@ -166,7 +166,7 @@ export class TransactionsDeleteModule {
 
       companyAdmins.forEach(ca => {
         notificationsToSend.push({
-          id: `ntf-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          id: crypto.randomUUID(),
           user_id: ca.id,
           title_ar: notificationTitleAr,
           title_en: notificationTitleEn,
@@ -187,7 +187,7 @@ export class TransactionsDeleteModule {
 
       companyAdmins.forEach(ca => {
         notificationsToSend.push({
-          id: `ntf-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          id: crypto.randomUUID(),
           user_id: ca.id,
           title_ar: notificationTitleAr,
           title_en: notificationTitleEn,
@@ -201,7 +201,7 @@ export class TransactionsDeleteModule {
       });
     }
 
-    const logId = `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const logId = crypto.randomUUID();
     const logDetails = `Deleted transaction ${tx.transaction_no} worth ${tx.amount.toLocaleString()} EGP. Reason: ${reason}`;
     const resolvedCompanyId = tx.company_id || user.company_id || '';
     const newLog: ActivityLog = {
@@ -214,7 +214,7 @@ export class TransactionsDeleteModule {
       company_id: resolvedCompanyId
     };
 
-    const auditLogId = `aud-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const auditLogId = crypto.randomUUID();
     const newAuditLog: AuditLog = {
       id: auditLogId,
       user_id: user.id,

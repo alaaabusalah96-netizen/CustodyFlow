@@ -158,14 +158,15 @@ describe('Restaurant Orders & Stock Deduction Engine', () => {
           total_price: 400
         }
       ],
-      status: 'served',
+      status: 'pending',
       subtotal: 400,
       tax: 0,
       discount: 0,
       total: 400
     });
 
-    // First deduction should succeed
+    // First deduction via transition
+    await RestaurantEngine.updateOrderStatus(order.id, 'served', 'wh-1');
     const movementsCountFirst = InventoryModule.getStockMovements().length;
 
     // Call deductStockForOrder a second time manually

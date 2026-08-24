@@ -141,16 +141,16 @@ describe('Phase 15: Stop Silent comp-1 Write Fallback (Custody Paths Only)', () 
     expect(res.messageAr).toContain('يجب اختيار شركة');
   });
 
-  it('11. StationsModule.addRegion throws bilingual error when company_id is empty', () => {
-    expect(() => {
-      StationsModule.addRegion('Region Test', 'REG-T', '');
-    }).toThrow('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
+  it('11. StationsModule.addRegion throws bilingual error when company_id is empty', async () => {
+    await expect(
+      StationsModule.addRegion('Region Test', 'REG-T', '')
+    ).rejects.toThrow('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
   });
 
-  it('12. StationsModule.addStation throws bilingual error when company_id is empty', () => {
-    expect(() => {
-      StationsModule.addStation('Station Test', 'STN-T', 500, undefined, '');
-    }).toThrow('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
+  it('12. StationsModule.addStation throws bilingual error when company_id is empty', async () => {
+    await expect(
+      StationsModule.addStation('Station Test', 'STN-T', 500, undefined, '')
+    ).rejects.toThrow('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
   });
 
   it('13. isValidCompanyId and requireCompanyId guard behavior', async () => {

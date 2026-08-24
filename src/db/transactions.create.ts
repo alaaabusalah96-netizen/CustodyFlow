@@ -43,13 +43,11 @@ export class TransactionsCreateModule {
         return { success: false, errors: validation.errors };
       }
 
-      // FIX: append a random suffix to avoid duplicate ids when multiple
-      // transactions are created within the same millisecond under load
-      // (same pattern already used in transactions.delete.ts / restore.ts).
+      // FIX: use crypto.randomUUID() for collision-proof transaction ID
       const newTx: Transaction = {
         ...data,
         category_id,
-        id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id: crypto.randomUUID(),
         transaction_no: '',
         status,
         created_by: user?.id || 'unknown',
@@ -94,7 +92,7 @@ export class TransactionsCreateModule {
       }
 
       TransactionsHistoryModule.addTransactionHistory({
-        id: `txh-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id: crypto.randomUUID(),
         transaction_id: newTx.id,
         action: 'Created',
         performed_by: user?.id || 'unknown',

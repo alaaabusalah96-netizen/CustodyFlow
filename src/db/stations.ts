@@ -80,7 +80,7 @@ export class StationsModule {
   static async addRegion(name: string, code?: string, companyId?: string): Promise<Region | null> {
     const compId = requireCompanyId(companyId || CompaniesModule.getSelectedCompanyId());
     const regions = StationsModule.getRegions();
-    const regId = `reg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const regId = crypto.randomUUID();
     const org_unit_id = `org-unit-region-${regId}`;
 
     const newReg: Region = {
@@ -244,7 +244,7 @@ export class StationsModule {
   static async addStation(name: string, code: string, custodyAmount: number, regionId?: string, companyId?: string): Promise<Station | null> {
     const compId = requireCompanyId(companyId || CompaniesModule.getSelectedCompanyId());
     const stations = StationsModule.getStations();
-    const stnId = `stn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const stnId = crypto.randomUUID();
     const org_unit_id = `org-unit-station-${stnId}`;
 
     const newStn: Station = {
