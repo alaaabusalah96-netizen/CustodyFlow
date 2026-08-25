@@ -536,11 +536,25 @@ async function startServer() {
         station_id,
         org_unit_id,
         assigned_org_unit_ids,
-        permissions
+        permissions,
+        password,
+        must_change_password
       } = req.body || {};
 
-      // ALWAYS generate temporary password on server
-      const autoPassword = generateSecureTemporaryPassword();
+      // Determine effective password (manual if provided >= 8 chars, otherwise auto-generate >= 8 chars)
+      let effectivePassword = "";
+      if (password !== undefined && password !== null && typeof password === 'string' && password.trim() !== '') {
+        const trimmed = password.trim();
+        if (trimmed.length < 8) {
+          return res.status(400).json({
+            success: false,
+            message: "كلمة المرور يجب أن لا تقل عن 8 أحرف / Password must be at least 8 characters."
+          });
+        }
+        effectivePassword = trimmed;
+      } else {
+        effectivePassword = generateSecureTemporaryPassword();
+      }
 
       // 3. Validation: Prevent creating SystemAdmin or setting is_platform_owner
       if (role === 'SystemAdmin' || role === 'super_admin' || req.body.is_platform_owner === true) {
@@ -613,17 +627,17 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "البريد الإلكتروني مسجل بالفعل في نظام المصادقة / Email already exists in Auth system." });
       }
 
-      // Create Firebase Auth user with server-generated temporary password
+      // Create Firebase Auth user with effective password
       const authUser = await getAdminAuth(adminApp).createUser({
         email: emailLower,
-        password: autoPassword,
+        password: effectivePassword,
         displayName: full_name.trim()
       });
       const userId = authUser.uid;
 
-      // Vault temporary password in 'user_credentials' with PBKDF2 210,000 iterations
+      // Vault password in 'user_credentials' with PBKDF2 210,000 iterations
       const salt = crypto.randomUUID();
-      const pbkdf2Hash = hashPasswordPBKDF2_210k(autoPassword, salt, 2);
+      const pbkdf2Hash = hashPasswordPBKDF2_210k(effectivePassword, salt, 2);
       await adminDb.collection("user_credentials").doc(userId).set({
         id: userId,
         company_id: company_id,
@@ -647,7 +661,7 @@ async function startServer() {
         org_unit_id: org_unit_id || null,
         assigned_org_unit_ids: Array.isArray(assigned_org_unit_ids) ? assigned_org_unit_ids : [],
         permissions: permissions && typeof permissions === 'object' ? permissions : {},
-        must_change_password: true,
+        must_change_password: typeof must_change_password === 'boolean' ? must_change_password : true,
         is_active: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -673,7 +687,7 @@ async function startServer() {
 
       return res.status(201).json({
         success: true,
-        temporaryPassword: autoPassword,
+        temporaryPassword: effectivePassword,
         user: userDocData
       });
     } catch (err: any) {

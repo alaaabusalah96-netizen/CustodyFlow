@@ -27,7 +27,8 @@ import {
   Sliders,
   CheckCircle,
   AlertTriangle,
-  Inbox
+  Inbox,
+  Copy
 } from 'lucide-react';
 
 interface SettingsProps {
@@ -204,6 +205,13 @@ export default function Settings({
   const [newUserRegionId, setNewUserRegionId] = useState('');
   const [newUserOrgUnitId, setNewUserOrgUnitId] = useState('');
   const [newUserAssignedOrgUnitIds, setNewUserAssignedOrgUnitIds] = useState<string[]>([]);
+  const [createdUserSuccess, setCreatedUserSuccess] = useState<{
+    fullName: string;
+    email: string;
+    companyId: string;
+    temporaryPassword: string;
+  } | null>(null);
+  const [copiedPassword, setCopiedPassword] = useState(false);
 
   // Edit User State
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -614,6 +622,12 @@ export default function Settings({
     }
     if (!newUserName.trim() || !newUserEmail.trim()) return;
 
+    const trimmedPassword = newUserPassword ? newUserPassword.trim() : '';
+    if (trimmedPassword && trimmedPassword.length < 8) {
+      alert(isRtl ? '⚠️ كلمة المرور يجب أن لا تقل عن 8 أحرف.' : '⚠️ Password must be at least 8 characters.');
+      return;
+    }
+
     const isUserAdmin = newUserRole === 'Admin' || newUserRole === 'SystemAdmin';
     const isRegional = newUserRole === 'RegionalManager';
     const isStationAdmin = newUserRole === 'StationAdmin';
@@ -628,7 +642,7 @@ export default function Settings({
 
     const companyId = CustodyDB.getSelectedCompanyId() || '';
 
-    const payload = {
+    const payload: any = {
       email: newUserEmail.trim().toLowerCase(),
       full_name: newUserName.trim(),
       role: newUserRole,
@@ -640,6 +654,10 @@ export default function Settings({
       permissions: permissions,
       must_change_password: newUserMustChangePassword !== undefined ? newUserMustChangePassword : true
     };
+
+    if (trimmedPassword) {
+      payload.password = trimmedPassword;
+    }
 
     try {
       const res = await fetch('/api/admin/users', {
@@ -680,6 +698,16 @@ export default function Settings({
       setNewUserRegionId('');
 
       const tempPass = data.temporaryPassword || '';
+      if (tempPass) {
+        setCreatedUserSuccess({
+          fullName: newUserName.trim(),
+          email: payload.email,
+          companyId: companyId,
+          temporaryPassword: tempPass
+        });
+        setCopiedPassword(false);
+      }
+
       alert(isRtl
         ? `✅ تم إنشاء وتوثيق حساب الموظف بنجاح!\n\nالشركة: ${companyId}\nالبريد: ${payload.email}${tempPass ? `\nكلمة المرور المؤقتة هي: ${tempPass}` : ''}\n\nيرجى تسليمها للموظف لاستخدامها عند تسجيل الدخول لأول مرة.`
         : `✅ User account created and provisioned successfully!\n\nCompany: ${companyId}\nEmail: ${payload.email}${tempPass ? `\nTemporary Password: ${tempPass}` : ''}\n\nPlease share this temporary password with the user.`
@@ -953,6 +981,84 @@ export default function Settings({
           isRtl={isRtl}
           theme={theme}
         />
+      )}
+
+      {/* User Provisioning Success Modal with One-Click Copy */}
+      {createdUserSuccess && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl border p-6 space-y-4 ${
+            theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
+                <CheckCircle size={22} />
+              </div>
+              <div>
+                <h3 className="font-bold text-base">
+                  {isRtl ? 'تم إنشاء وتوثيق الحساب بنجاح' : 'User Account Created Successfully'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {createdUserSuccess.fullName} ({createdUserSuccess.email})
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                  {isRtl ? 'كلمة المرور المؤقتة:' : 'Temporary password:'}
+                </span>
+                <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                  {isRtl ? 'لأول تسجيل دخول' : 'First-time login'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-mono text-sm font-bold text-indigo-600 dark:text-indigo-400 select-all">
+                <span className="break-all">{createdUserSuccess.temporaryPassword}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(createdUserSuccess.temporaryPassword);
+                    setCopiedPassword(true);
+                    triggerToast(isRtl ? 'تم النسخ' : 'Copied');
+                    setTimeout(() => setCopiedPassword(false), 3000);
+                  }}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-sans font-bold transition-colors cursor-pointer ${
+                    copiedPassword
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'
+                  }`}
+                >
+                  {copiedPassword ? (
+                    <>
+                      <Check size={13} />
+                      <span>{isRtl ? 'تم النسخ' : 'Copied'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={13} />
+                      <span>{isRtl ? 'نسخ' : 'Copy'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {isRtl
+                  ? 'يرجى تسليم كلمة المرور للموظف لاستخدامها عند تسجيل الدخول لأول مرة.'
+                  : 'Please share this temporary password with the user for their first login.'}
+              </p>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setCreatedUserSuccess(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 cursor-pointer"
+              >
+                {isRtl ? 'إغلاق' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

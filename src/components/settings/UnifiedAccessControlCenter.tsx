@@ -2508,6 +2508,20 @@ export default function UnifiedAccessControlCenter({
                   </div>
                 </div>
 
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {isRtl
+                    ? 'اختياري — اترك الحقل فارغاً للتوليد التلقائي؛ بحد أدنى 8 أحرف في حال الإدخال اليدوي'
+                    : 'Optional — leave blank to auto-generate; minimum 8 characters if typed.'}
+                </p>
+
+                {activeNewUserPassword.trim().length > 0 && activeNewUserPassword.trim().length < 8 && (
+                  <p className="text-[11px] text-rose-500 font-bold">
+                    {isRtl
+                      ? '⚠️ كلمة المرور يجب أن لا تقل عن 8 أحرف'
+                      : '⚠️ Password must be at least 8 characters'}
+                  </p>
+                )}
+
                 <label className="flex items-center gap-2 pt-1 cursor-pointer">
                   <input
                     type="checkbox"

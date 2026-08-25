@@ -4,6 +4,26 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Path B: Optional Admin-Provided Password on User Creation
+**Date:** 2026-08-25
+**Files Changed:** `server.ts`, `src/pages/Settings.tsx`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/path_b_user_password.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Server-Side Support for Admin Password or Auto-Generation (`server.ts`)**:
+  - `POST /api/admin/users`: Extracts optional `password` and `must_change_password` from `req.body`.
+  - If password is provided and non-empty: validates minimum length 8 (returns 400 with bilingual error message if < 8 characters), trims, creates Auth user with it, and vaults its PBKDF2 hash (210,000 iterations) in `user_credentials`.
+  - If password is omitted or empty: auto-generates secure temporary password using `generateSecureTemporaryPassword()`.
+  - Never persists plaintext passwords in `users` collection.
+  - Returns `temporaryPassword` with the plaintext password used (provided or generated) in the 201 response.
+- **Client-Side Form & Validation (`src/pages/Settings.tsx`, `src/components/settings/UnifiedAccessControlCenter.tsx`)**:
+  - `handleAddUser`: Validates client-side minimum length 8 if non-empty; includes `password` in payload when non-empty.
+  - Success UI: Renders a dedicated modal displaying `data.temporaryPassword` with a one-click copy button, visual copied feedback, and toast notification.
+  - Added bilingual field helper text: `Optional — leave blank to auto-generate; minimum 8 characters if typed.`
+- **Verification**:
+  - Tests: All scoped test suites (`path_b_user_password.test.ts`, `phase7_temp_passwords.test.ts`, `settings_user_migration.test.ts`, `user_provisioning_api.test.ts`) passing 29/29 tests green.
+  - Build (`compile_applet`): Succeeded.
+
+---
+
 ## Phase F: Extend Weak-ID Replacement to Remaining Live Creates
 **Date:** 2026-08-24
 **Files Changed:** `src/db/companies.ts`, `src/db/stations.ts`, `src/db/approvalEngine.ts`, `src/db/transactions.create.ts`, `src/db/transactions.update.ts`, `src/db/transactions.delete.ts`, `src/db/transactions.restore.ts`, `src/db/businessGroups.ts`, `src/db/warehouseTemplateEngine.ts`, `src/db/documentNumberEngine.ts`, `src/db/restaurant.ts`, `CHANGELOG.md`
