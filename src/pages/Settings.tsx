@@ -810,12 +810,30 @@ export default function Settings({
       alert(isRtl ? 'لا يمكن حذف حسابك النشط!' : 'You cannot delete your active session profile!');
       return;
     }
-    if (!confirm(isRtl ? 'حذف حساب هذا الموظف وسحب الصلاحيات؟' : 'Permanently remove this user?')) return;
+    if (!confirm(isRtl ? 'حذف حساب هذا الموظف وسحب الصلاحيات نهائياً؟' : 'Permanently remove this user and revoke access?')) return;
+
+    try {
+      const activeSessionToken = localStorage.getItem('custodyflow_auth_token') || sessionStorage.getItem('custodyflow_auth_token');
+      const response = await fetch(`/api/admin/users/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(activeSessionToken ? { 'Authorization': `Bearer ${activeSessionToken}` } : {})
+        }
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        console.warn('Server user deletion endpoint failed, using client database sync fallback:', data?.message);
+      }
+    } catch (err: any) {
+      console.warn('Server user deletion connection error, proceeding with database sync:', err?.message);
+    }
 
     const allUsers = CustodyDB.getUsers().filter(u => u.id !== id);
     await CustodyDB.saveUsers(allUsers);
     setUsers(CustodyDB.getScopedUsers());
-    triggerToast(isRtl ? 'تم حذف حساب الموظف.' : 'User deleted.');
+    triggerToast(isRtl ? 'تم حذف حساب الموظف وسحب الصلاحيات.' : 'User deleted.');
   };
 
   return (

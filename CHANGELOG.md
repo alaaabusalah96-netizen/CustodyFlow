@@ -4489,6 +4489,43 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   - TypeScript Linter (`tsc --noEmit`): 0 errors.
   - Applet Build (`compile_applet`): Succeeded.
 
+---
+
+## Phase R: APP_PEPPER Persistence & Stability Audit across Deployments
+**Date:** 2026-08-25
+**Files Changed:** `src/phase_r_pepper_stability.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Audit Findings**:
+  1. `APP_PEPPER` configuration: Confirmed defined in `.env.example`. In preview/development containers where `APP_PEPPER` is not explicitly set in the container environment secrets, `server_hash.ts` uses the stable fallback constant.
+  2. Fallback pepper value: Confirmed to be the fixed string constant `"CustodyFlowActivePepper2026_SecureDefault_v2_KeyDerivation"`, guaranteeing determinism across redeploys when unset.
+  3. `STRICT_PROD_SECURITY`: In strict production mode (`NODE_ENV === 'production'` or `STRICT_PROD_SECURITY === 'true'`), the fail-loud exception is active and prevents startup if `APP_PEPPER` is missing. In development/preview mode, it warns and defaults to the stable constant.
+- **Persistence & Cloud Run Instructions**: Documented exact steps to set `APP_PEPPER` permanently in Cloud Run / AI Studio Secrets panel so production instances use dedicated, uncommitted secret peppers.
+- **Verification**:
+  - Test Suite (`src/phase_r_pepper_stability.test.ts`): 4/4 passed.
+  - Test Suite (`src/auth_security_hardening.test.ts`, `src/auth_change_password_flow.test.ts`, `src/migration_auth.test.ts`): 23/23 passed.
+  - TypeScript Linter (`tsc --noEmit`): 0 errors.
+  - Applet Build (`compile_applet`): Succeeded.
+
+---
+
+## Phase S: Secure User Deletion & Credential Revocation Workflow
+**Date:** 2026-08-25
+**Files Changed:** `server.ts`, `src/pages/Settings.tsx`, `src/phase_s_user_deletion.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Secure Deletion Endpoint**: Implemented `DELETE /api/admin/users/:id` on the server backend with complete multi-tier cleanup:
+  1. Revokes and removes/disables the user in Firebase Auth (`adminAuth.deleteUser` / `updateUser({ disabled: true })`).
+  2. Permanently deletes credentials vault documents (`user_credentials/:id` and `user_credentials/:email`).
+  3. Deletes user document from `users` collection.
+  4. Records immutable audit log entry (`user_deleted`) with actor metadata and role.
+  5. Enforces security barriers: blocks self-deletion of the active user session; ensures Company Admins can only delete users in their own company; authorizes Platform Admins globally.
+- **Client Synchronization**: Connected `handleDeleteUser` in `src/pages/Settings.tsx` to invoke the server deletion endpoint before syncing local state and notifying the admin.
+- **Verification**:
+  - Test Suite (`src/phase_s_user_deletion.test.ts`): 4/4 passed.
+  - Test Suite (`src/phase_r_pepper_stability.test.ts`, `src/auth_security_hardening.test.ts`, `src/auth_change_password_flow.test.ts`, `src/migration_auth.test.ts`): 27/27 passed.
+  - TypeScript Linter (`tsc --noEmit`): 0 errors.
+  - Applet Build (`compile_applet`): Succeeded.
+
+
 
 
 

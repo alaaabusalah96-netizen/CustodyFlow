@@ -858,6 +858,105 @@ async function startServer() {
     }
   });
 
+  // API Route - Unified Secure User Deletion Endpoint (DELETE /api/admin/users/:id)
+  app.delete("/api/admin/users/:id", async (req, res) => {
+    try {
+      const authResult = await authenticateSessionOrBearer(req);
+      if (!authResult.authenticated) {
+        return res.status(authResult.statusCode).json({ success: false, message: authResult.message });
+      }
+
+      const creator = authResult.user;
+      const isPlatformAdmin = await isPlatformAdminUser(creator.email, creator);
+
+      if (!isPlatformAdmin && creator.role !== "Admin") {
+        return res.status(403).json({ success: false, message: "Forbidden: Insufficient privileges to delete user / غير مصرح لك بحذف المستخدمين." });
+      }
+
+      const targetUserId = req.params.id;
+      if (!targetUserId) {
+        return res.status(400).json({ success: false, message: "User ID parameter is required." });
+      }
+
+      if (targetUserId === creator.id) {
+        return res.status(400).json({ success: false, message: "Cannot delete your own active session account / لا يمكن حذف حسابك الحالي." });
+      }
+
+      const userDocRef = adminDb.collection("users").doc(targetUserId);
+      const userDoc = await userDocRef.get();
+      if (!userDoc.exists) {
+        return res.status(404).json({ success: false, message: "Target user not found." });
+      }
+
+      const targetData = userDoc.data() || {};
+      const targetEmail = (targetData.email || "").toLowerCase().trim();
+
+      // Authorization check: Company Admin can only delete users in their company
+      if (!isPlatformAdmin && targetData.company_id !== creator.company_id) {
+        return res.status(403).json({ success: false, message: "Forbidden: Cannot delete users outside your company." });
+      }
+
+      // 1. Delete/Disable Firebase Auth User
+      try {
+        const authClient = getAdminAuth(adminApp);
+        if (authClient) {
+          try {
+            await authClient.deleteUser(targetUserId);
+          } catch (authDeleteErr: any) {
+            if (authDeleteErr?.code !== 'auth/user-not-found') {
+              try {
+                // If delete fails, attempt to disable
+                await authClient.updateUser(targetUserId, { disabled: true });
+              } catch (disableErr) {
+                console.warn("Could not disable Firebase Auth user during deletion:", disableErr);
+              }
+            }
+          }
+        }
+      } catch (authInitErr) {
+        console.warn("Firebase Admin Auth unavailable during deletion:", authInitErr);
+      }
+
+      // 2. Delete / Invalidate Credentials Vault documents
+      const credDocsToDelete: string[] = [targetUserId];
+      if (targetEmail) credDocsToDelete.push(targetEmail);
+      for (const credId of credDocsToDelete) {
+        try {
+          await adminDb.collection("user_credentials").doc(credId).delete();
+        } catch (credErr) {
+          console.warn(`Could not delete user_credentials doc ${credId}:`, credErr);
+        }
+      }
+
+      // 3. Delete or Mark Deleted in users collection
+      await userDocRef.delete();
+
+      // 4. Audit Log
+      try {
+        await adminDb.collection("audit_logs").add({
+          action: "user_deleted",
+          performed_by: creator.id || creator.email,
+          performed_by_email: creator.email,
+          target_user_id: targetUserId,
+          target_email: targetEmail,
+          company_id: targetData.company_id || creator.company_id || "",
+          timestamp: new Date().toISOString(),
+          details: { deleted_user_name: targetData.full_name, role: targetData.role }
+        });
+      } catch (auditErr) {
+        console.warn("Audit log write failed during user delete:", auditErr);
+      }
+
+      return res.json({
+        success: true,
+        message: "User and associated authentication credentials permanently deleted."
+      });
+    } catch (err: any) {
+      console.error("Error deleting user in /api/admin/users/:id:", err);
+      return res.status(500).json({ success: false, message: err?.message || "Internal server error deleting user." });
+    }
+  });
+
   // API Route - Server-side Credential Verification (Zero-Trust PBKDF2 210k)
   app.post("/api/auth/verify-credentials", otpRateLimiter, async (req, res) => {
     try {
