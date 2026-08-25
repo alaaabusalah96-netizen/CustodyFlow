@@ -18,7 +18,8 @@ describe('Phase I: Regression Protection — Write-Order Guard', () => {
     // Default mock: fail cloud sync
     vi.spyOn(offlineQueue, 'syncWriteWithOfflineFallback').mockResolvedValue({
       success: false,
-      isOffline: false,
+      syncedToFirestore: false,
+      queuedOffline: false,
       error: 'Simulated network or permission failure'
     });
   });

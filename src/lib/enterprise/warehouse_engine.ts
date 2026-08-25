@@ -67,9 +67,9 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
           }
 
           // Apply stock increase
-          items.forEach((item: any) => {
-            InventoryModule.adjustStock(warehouseId, item.product_id, item.qty, 'Receipt', event.user_id, item.bin_id);
-          });
+          for (const item of items) {
+            await InventoryModule.adjustStock(warehouseId, item.product_id, item.qty, 'Receipt', event.user_id, item.bin_id);
+          }
 
           return {
             success: true,
@@ -102,9 +102,9 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
           }
 
           // Apply stock decrease
-          items.forEach((item: any) => {
-            InventoryModule.adjustStock(warehouseId, item.product_id, -item.qty, 'Issue', event.user_id, item.bin_id);
-          });
+          for (const item of items) {
+            await InventoryModule.adjustStock(warehouseId, item.product_id, -item.qty, 'Issue', event.user_id, item.bin_id);
+          }
 
           return {
             success: true,
@@ -160,12 +160,12 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
           }
 
           // Process the transfer
-          items.forEach((item: any) => {
+          for (const item of items) {
             // Deduct from source
-            InventoryModule.adjustStock(srcWarehouseId, item.product_id, -item.qty, 'Transfer', event.user_id, item.src_bin_id);
+            await InventoryModule.adjustStock(srcWarehouseId, item.product_id, -item.qty, 'Transfer', event.user_id, item.src_bin_id);
             // Add to destination
-            InventoryModule.adjustStock(destWarehouseId, item.product_id, item.qty, 'Transfer', event.user_id, item.dest_bin_id);
-          });
+            await InventoryModule.adjustStock(destWarehouseId, item.product_id, item.qty, 'Transfer', event.user_id, item.dest_bin_id);
+          }
 
           return {
             success: true,
@@ -194,7 +194,7 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
             };
           }
 
-          InventoryModule.adjustStock(warehouseId, productId, diff, 'Adjustment', event.user_id, binId);
+          await InventoryModule.adjustStock(warehouseId, productId, diff, 'Adjustment', event.user_id, binId);
 
           return {
             success: true,

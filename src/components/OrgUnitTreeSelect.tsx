@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 interface OrgUnitTreeSelectProps {
-  companyId?: string;
+  companyId: string;
   value?: string; // single selection (org_unit_id)
   selectedIds?: string[]; // multi selection (assigned_org_unit_ids)
   onChange?: (unitId: string, unit?: OrganizationUnit) => void;
@@ -33,7 +33,7 @@ interface OrgUnitTreeSelectProps {
 }
 
 export const OrgUnitTreeSelect: React.FC<OrgUnitTreeSelectProps> = ({
-  companyId = 'comp-1',
+  companyId,
   value = '',
   selectedIds = [],
   onChange,

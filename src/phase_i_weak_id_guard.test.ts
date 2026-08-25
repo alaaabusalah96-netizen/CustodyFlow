@@ -33,7 +33,7 @@ describe('Phase I: Regression Protection — Weak-ID Guard', () => {
   });
 
   it('generates UUIDs without weak timestamp prefixes for Companies, Stations, and Business Groups', async () => {
-    const comp = await CompaniesModule.addCompany('Test Comp', 'TC01', 5, 10);
+    const comp = await CompaniesModule.addCompany('Test Comp', 5);
     expect(comp).not.toBeNull();
     expect(comp!.id).toMatch(UUID_REGEX);
     expect(comp!.id).not.toMatch(WEAK_ID_REGEX);
@@ -65,10 +65,12 @@ describe('Phase I: Regression Protection — Weak-ID Guard', () => {
     expect(wf.id).toMatch(UUID_REGEX);
     expect(wf.id).not.toMatch(WEAK_ID_REGEX);
 
-    const res = await ApprovalEngine.evaluateAndStartWorkflow('expenses', 500, {
+    const res = await ApprovalEngine.evaluateAndStartWorkflow({
       companyId: 'comp-test-guard',
+      documentType: 'expenses',
       documentId: 'doc-1',
-      submittedBy: 'user-1'
+      amount: 500,
+      requesterId: 'user-1'
     });
     if (res.instance) {
       expect(res.instance.id).toMatch(UUID_REGEX);

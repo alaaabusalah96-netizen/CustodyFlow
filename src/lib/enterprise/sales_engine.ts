@@ -249,9 +249,9 @@ export class SalesBusinessEngine {
     const warehouses = InventoryModule.getWarehouses();
     const activeWh = data.warehouseId || warehouses[0]?.id;
     if (activeWh) {
-      data.items.forEach(item => {
-        InventoryModule.adjustStock(activeWh, item.productId, -item.qty, 'Issue', operatorId);
-      });
+      for (const item of data.items) {
+        await InventoryModule.adjustStock(activeWh, item.productId, -item.qty, 'Issue', operatorId);
+      }
     }
 
     // Post GL Double Entry
@@ -339,9 +339,9 @@ export class SalesBusinessEngine {
     const warehouses = InventoryModule.getWarehouses();
     const activeWh = data.warehouseId || warehouses[0]?.id;
     if (activeWh) {
-      data.items.forEach(item => {
-        InventoryModule.adjustStock(activeWh, item.productId, -item.qty, 'Issue', operatorId);
-      });
+      for (const item of data.items) {
+        await InventoryModule.adjustStock(activeWh, item.productId, -item.qty, 'Issue', operatorId);
+      }
     }
 
     // Save POS Sale

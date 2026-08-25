@@ -4409,6 +4409,36 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 
 ---
 
+## Phase G-Fix & Phase H-Fix: OrgUnitTreeSelect companyId Constraint and adjustStock Loop Await Correction
+**Date:** 2026-08-25
+**Files Changed:** `src/components/OrgUnitTreeSelect.tsx`, `src/lib/enterprise/warehouse_engine.ts`, `src/lib/enterprise/sales_engine.ts`, `CHANGELOG.md`
+**Summary:**
+- **Phase G-Fix (OrgUnitTreeSelect companyId default removal)**:
+  - Removed `'comp-1'` default parameter and made `companyId: string` required in `OrgUnitTreeSelectProps`.
+  - Confirmed all 10 render call sites across `UnifiedAccessControlCenter`, `HRPayroll`, `SalesAR`, `Purchasing`, `FleetManagement`, `FixedAssets`, and `Reports` explicitly supply `companyId`.
+- **Phase H-Fix (adjustStock forEach -> for...of and await synchronization)**:
+  - Converted `.forEach` callbacks to `for...of` loops with `await` on `InventoryModule.adjustStock` across `WarehouseEngine` (`STOCK_RECEIVED`, `STOCK_ISSUED`, `STOCK_TRANSFERRED`, `INVENTORY_COUNT_ADJUSTED`) and `SalesBusinessEngine` (`createSalesInvoice`, `processPOSCheckout`).
+  - Ensured synchronous completion of inventory adjustments before subsequent GL double-entry posting and result dispatch.
+- **Verification & Testing**:
+  - Scoped vitest test runs (`src/enterprise_e2e_flows_validation.test.ts`, `src/adjust_stock_atomic.test.ts`): 2 passed (7/7 tests green).
+  - Production applet compilation (`compile_applet`): Build succeeded.
+
+---
+
+## Phase I: Regression Protection & Guard Test Suites
+**Date:** 2026-08-25
+**Files Changed:** `src/phase_i_weak_id_guard.test.ts`, `src/phase_i_write_order_guard.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Comprehensive Regression Protection Suites Verified**:
+  - `src/phase_i_weak_id_guard.test.ts`: Guards against weak timestamp and legacy string ID regressions across Companies, Stations, Approval Workflows, Transactions, Restaurant Orders, and Document Numbers, enforcing RFC 4122 UUID v4 formatting.
+  - `src/phase_i_write_order_guard.test.ts`: Verifies write-ordering safety across all storage engines (`CompaniesModule`, `StationsModule`, `BusinessGroupsModule`, `TransactionsModule`, `ApprovalEngine`, `OrganizationEngine`, `WarehouseHierarchyEngine`, `InventoryModule`), ensuring zero dirty local cache writes when cloud sync encounters network or permission errors.
+- **Verification & Testing**:
+  - Vitest test suites (`src/phase_i_weak_id_guard.test.ts`, `src/phase_i_write_order_guard.test.ts`): 2 passed (13/13 tests green).
+  - TypeScript Linter (`tsc --noEmit`): 0 errors.
+  - Applet Build (`compile_applet`): Succeeded.
+
+
+
 
 
 
