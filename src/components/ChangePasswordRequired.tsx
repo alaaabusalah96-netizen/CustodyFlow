@@ -27,12 +27,16 @@ export default function ChangePasswordRequired({
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!currentPassword) {
+    const trimmedCurrent = currentPassword.trim();
+    const trimmedNew = newPassword.trim();
+    const trimmedConfirm = confirmPassword.trim();
+
+    if (!trimmedCurrent) {
       setErrorMsg(isRtl ? 'يرجى إدخال كلمة المرور الحالية' : 'Current password is required.');
       return;
     }
 
-    if (!newPassword || newPassword.length < 12 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+    if (!trimmedNew || trimmedNew.length < 12 || !/[a-zA-Z]/.test(trimmedNew) || !/[0-9]/.test(trimmedNew)) {
       setErrorMsg(
         isRtl
           ? 'كلمة المرور الجديدة يجب أن تتكون من 12 حرف على الأقل وتحتوي على حروف وأرقام'
@@ -41,7 +45,7 @@ export default function ChangePasswordRequired({
       return;
     }
 
-    if (newPassword !== confirmPassword) {
+    if (trimmedNew !== trimmedConfirm) {
       setErrorMsg(isRtl ? 'كلمة المرور الجديدة وتأكيدها غير متطابقين' : 'New password and confirmation do not match.');
       return;
     }
@@ -59,8 +63,8 @@ export default function ChangePasswordRequired({
         headers,
         credentials: 'include',
         body: JSON.stringify({
-          currentPassword,
-          newPassword
+          currentPassword: trimmedCurrent,
+          newPassword: trimmedNew
         })
       });
 

@@ -503,7 +503,7 @@ async function startServer() {
         return { authenticated: false, statusCode: 403, message: "Forbidden: User account is inactive." };
       }
 
-      return { authenticated: true, statusCode: 200, message: "Authorized", user: userData };
+      return { authenticated: true, statusCode: 200, message: "Authorized", user: { ...userData, id: uid } };
     } catch (err: any) {
       console.error("Auth check error in authenticateSessionOrBearer:", err);
       return { authenticated: false, statusCode: 500, message: "Server error during authentication check." };
@@ -1058,7 +1058,17 @@ async function startServer() {
       }
 
       const user = authResult.user;
-      const { currentPassword, newPassword } = req.body || {};
+      const uid = String(user.id || "").trim();
+      if (!uid) {
+        return res.status(403).json({ success: false, message: "Forbidden: Authenticated user ID could not be resolved." });
+      }
+
+      let { currentPassword, newPassword } = req.body || {};
+
+      currentPassword = String(currentPassword ?? "").trim();
+      if (typeof newPassword === 'string') {
+        newPassword = newPassword.trim();
+      }
 
       if (!currentPassword || !newPassword) {
         return res.status(400).json({ success: false, message: "يرجى إدخال كلمة المرور الحالية وكلمة المرور الجديدة / Both current and new password are required." });
@@ -1072,18 +1082,41 @@ async function startServer() {
       }
 
       // Verify current password against vault
-      const credDoc = await adminDb.collection("user_credentials").doc(user.id).get();
-      let isMatch = false;
+      const credDoc = await adminDb.collection("user_credentials").doc(uid).get();
+      const emailLower = String(user.email || '').toLowerCase().trim();
+
+      let storedPasswordHash = '';
+      let salt = user.salt || emailLower;
+      let kdf = 'legacy';
+      let pepperVersion = 2;
+
       if (credDoc.exists) {
         const credData = credDoc.data() || {};
-        const storedHash = credData.passwordHash || '';
-        const salt = credData.salt || '';
-        const pepperVer = credData.pepper_version || 2;
-        const computedHash = hashPasswordPBKDF2_210k(currentPassword, salt, pepperVer);
-        if (storedHash === computedHash) {
-          isMatch = true;
-        }
+        storedPasswordHash = credData.passwordHash || credData.password || '';
+        salt = credData.salt || salt;
+        kdf = credData.kdf || 'legacy';
+        pepperVersion = typeof credData.pepper_version === 'number' ? credData.pepper_version : 2;
+      } else {
+        storedPasswordHash = user.password || '';
+        pepperVersion = typeof user.pepper_version === 'number' ? user.pepper_version : 1;
       }
+
+      // Perform Password Comparisons across KDF iterations using stored pepper_version
+      const pbkdf2Hash = hashPasswordPBKDF2_210k(currentPassword, salt, pepperVersion);
+      const hash10k = hashPassword(currentPassword, salt, pepperVersion);
+      const hash1k = legacyStretchedHashPassword1000(currentPassword, salt, pepperVersion);
+      const hashSinglePass = legacySinglePassHashPassword(currentPassword, salt, pepperVersion);
+      const hashOldEmailSalt = legacyHashPassword(currentPassword, emailLower);
+      const hashLegacyUnsalted = legacyHashPassword(currentPassword);
+
+      const isPBKDF2Match = storedPasswordHash !== '' && storedPasswordHash === pbkdf2Hash;
+      const is10kMatch = storedPasswordHash !== '' && storedPasswordHash === hash10k;
+      const is1kMatch = storedPasswordHash !== '' && storedPasswordHash === hash1k;
+      const isSinglePassMatch = storedPasswordHash !== '' && storedPasswordHash === hashSinglePass;
+      const isOldEmailSaltMatch = storedPasswordHash !== '' && storedPasswordHash === hashOldEmailSalt;
+      const isLegacyUnsaltedMatch = storedPasswordHash !== '' && storedPasswordHash === hashLegacyUnsalted;
+
+      const isMatch = isPBKDF2Match || is10kMatch || is1kMatch || isSinglePassMatch || isOldEmailSaltMatch || isLegacyUnsaltedMatch;
 
       if (!isMatch) {
         return res.status(400).json({ success: false, message: "كلمة المرور الحالية غير صحيحة / Incorrect current password." });
@@ -1091,7 +1124,7 @@ async function startServer() {
 
       // Update Firebase Auth user password
       try {
-        await getAdminAuth(adminApp).updateUser(user.id, { password: newPassword });
+        await getAdminAuth(adminApp).updateUser(uid, { password: newPassword });
       } catch (authErr: any) {
         console.warn("Firebase Auth password update failed (non-blocking if local user):", authErr?.message);
       }
@@ -1099,10 +1132,10 @@ async function startServer() {
       // Re-hash new password with PBKDF2 210,000 iterations & vault it
       const newSalt = crypto.randomUUID();
       const newPbkdf2Hash = hashPasswordPBKDF2_210k(newPassword, newSalt, 2);
-      await adminDb.collection("user_credentials").doc(user.id).set({
-        id: user.id,
+      await adminDb.collection("user_credentials").doc(uid).set({
+        id: uid,
         company_id: user.company_id || 'platform',
-        email: (user.email || '').toLowerCase().trim(),
+        email: emailLower,
         passwordHash: newPbkdf2Hash,
         salt: newSalt,
         kdf: 'sha256_pbkdf2_210k',
@@ -1111,17 +1144,17 @@ async function startServer() {
       }, { merge: true });
 
       // Update users collection document: set must_change_password = false & strip plaintext password/salt
-      await adminDb.collection("users").doc(user.id).update({
+      await adminDb.collection("users").doc(uid).update({
         must_change_password: false,
         password: FieldValue.delete(),
         salt: FieldValue.delete(),
         updated_at: new Date().toISOString()
       });
 
-      const updatedDoc = await adminDb.collection("users").doc(user.id).get();
+      const updatedDoc = await adminDb.collection("users").doc(uid).get();
       const updatedUserData = updatedDoc.data() || {};
       const { password: _, salt: __, ...publicUser } = updatedUserData;
-      publicUser.id = user.id;
+      publicUser.id = uid;
 
       return res.json({
         success: true,

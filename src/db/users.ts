@@ -408,13 +408,35 @@ export class UsersModule {
     const activeUser = UsersModule.getActiveUser();
     if (!activeUser) return [];
     
-    const savedCompanyId = typeof localStorage !== 'undefined' ? localStorage.getItem('custody_selected_company_id') : null;
+    let savedCompanyId = '';
+    const stored = StorageEngine.getStored<string>('selected_company_id', '');
+    if (stored && stored !== 'undefined' && stored !== 'null') {
+      savedCompanyId = stored;
+    } else if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('custody_selected_company_id');
+      if (saved && saved !== 'undefined' && saved !== 'null') {
+        try {
+          const parsed = JSON.parse(saved);
+          savedCompanyId = typeof parsed === 'string' ? parsed : saved;
+        } catch {
+          savedCompanyId = saved;
+        }
+      }
+    }
+
     const targetCompanyId = activeUser.role === 'SystemAdmin' 
       ? (savedCompanyId || activeUser.company_id || '')
       : activeUser.company_id;
 
     if (activeUser.role === 'SystemAdmin') {
-      return users.filter(u => u.role === 'SystemAdmin' || (targetCompanyId ? u.company_id === targetCompanyId : true));
+      if (!targetCompanyId) {
+        return users.filter(u => u.is_active !== false);
+      }
+      return users.filter(u => {
+        if (u.is_active === false) return false;
+        const uCompId = u.company_id || (u as any).companyId;
+        return u.role === 'SystemAdmin' || uCompId === targetCompanyId;
+      });
     }
     
     let filtered = users.filter(u => u.company_id === activeUser.company_id);

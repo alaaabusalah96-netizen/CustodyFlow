@@ -394,6 +394,11 @@ export default function UnifiedAccessControlCenter({
   const handleCompanyChange = (newCompanyId: string) => {
     setSelectedCompanyId(newCompanyId);
     CustodyDB.setSelectedCompanyId(newCompanyId);
+    setUsers(CustodyDB.getUsers());
+    setCompaniesRefreshTrigger(prev => prev + 1);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('custody_db_updated'));
+    }
     triggerToast?.(isRtl ? `🏢 تم تحويل نطاق الإشراف إلى: ${newCompanyId}` : `🏢 Active scope switched to: ${newCompanyId}`);
   };
 
@@ -674,8 +679,18 @@ export default function UnifiedAccessControlCenter({
     return users.filter(u => {
       if (u.is_active === false) return false;
 
-      // Scoped by company if not SystemAdmin viewing all
-      if (effectiveCompanyId && u.company_id && u.company_id !== effectiveCompanyId && u.role !== 'SystemAdmin') {
+      const userCompanyId = u.company_id || (u as any).companyId || '';
+
+      // For SystemAdmin: if effectiveCompanyId is selected, show SystemAdmins + employees of effectiveCompanyId
+      if (isSystemAdmin) {
+        if (effectiveCompanyId) {
+          return u.role === 'SystemAdmin' || userCompanyId === effectiveCompanyId;
+        }
+        return true;
+      }
+
+      // Scoped by company for other roles
+      if (effectiveCompanyId && userCompanyId && userCompanyId !== effectiveCompanyId && u.role !== 'SystemAdmin') {
         return false;
       }
 
@@ -689,7 +704,7 @@ export default function UnifiedAccessControlCenter({
 
       return true;
     });
-  }, [users, effectiveCompanyId, currentUser]);
+  }, [users, effectiveCompanyId, currentUser, isSystemAdmin]);
 
   const filteredUsers = useMemo(() => {
     return scopedUsers.filter(u => {
@@ -959,20 +974,20 @@ export default function UnifiedAccessControlCenter({
       {/* Top Banner / Scope Summary Header */}
       <div className={`p-5 rounded-2xl border ${
         theme === 'dark' 
-          ? 'bg-slate-900/90 border-slate-800 shadow-xl' 
-          : 'bg-gradient-to-r from-indigo-50/70 via-white to-sky-50/70 border-indigo-100 shadow-sm'
+          ? 'bg-slate-900/95 border-slate-800 shadow-xl' 
+          : 'bg-gradient-to-r from-indigo-50/90 via-white to-sky-50/90 border-indigo-200/80 shadow-sm'
       }`}>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-xl bg-indigo-600 text-white shadow-sm shadow-indigo-500/30">
                 <ShieldCheck size={20} />
               </div>
-              <h2 className="text-base font-black text-slate-800 dark:text-slate-100 tracking-tight">
+              <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
                 {isRtl ? 'مركز التحكم وإدارة الصلاحيات الموحد (الشركات × الهيكل × المستخدمون)' : 'Unified Access Control & Governance Center'}
               </h2>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl leading-relaxed">
+            <p className="text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-200 max-w-2xl leading-relaxed">
               {isRtl 
                 ? 'لوحة موحدة لضبط نطاق الفروع والمحطات، تخصيص الصلاحيات الفردية، وتفعيل موديولات النظام بدقة لكل موظف وشركة.' 
                 : 'Centralized governance hub to assign branch scopes, customize fine-grained authority, and toggle ERP modules per employee.'}
@@ -1001,23 +1016,30 @@ export default function UnifiedAccessControlCenter({
           <div className="mt-4 pt-3.5 border-t border-slate-200/60 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Building2 size={16} className="text-indigo-600 shrink-0" />
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+              <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
                 {isRtl ? 'تحديد الشركة المستهدفة للإدارة:' : 'Select Target Company to Manage:'}
               </span>
-              <select
-                value={effectiveCompanyId}
-                onChange={(e) => handleCompanyChange(e.target.value)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold border focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer ${
-                  theme === 'dark' ? 'bg-slate-800 border-slate-700 text-indigo-300' : 'bg-white border-indigo-200 text-indigo-700 shadow-xs'
-                }`}
-                id="select-target-company-dropdown"
-              >
-                {allCompanies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.subscription_plan || 'Enterprise'})
-                  </option>
-                ))}
-              </select>
+              {allCompanies.length === 0 ? (
+                <span className="text-xs text-amber-600 dark:text-amber-400 font-bold px-2.5 py-1 bg-amber-500/10 rounded-lg">
+                  {isRtl ? 'لا توجد شركات متاحة' : 'No companies available'}
+                </span>
+              ) : (
+                <select
+                  value={effectiveCompanyId}
+                  onChange={(e) => handleCompanyChange(e.target.value)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer ${
+                    theme === 'dark' ? 'bg-slate-800 border-slate-700 text-indigo-300' : 'bg-white border-indigo-200 text-indigo-700 shadow-xs'
+                  }`}
+                  id="select-target-company-dropdown"
+                >
+                  <option value="">{isRtl ? '-- اختر شركة --' : '-- Select company --'}</option>
+                  {allCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.id}) {c.subscription_plan ? `• ${c.subscription_plan}` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {activeCompany && (
@@ -1331,11 +1353,16 @@ export default function UnifiedAccessControlCenter({
                   theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'
                 }`}>
                   <AlertTriangle size={24} className="mx-auto text-amber-500 mb-2" />
-                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
-                    {isRtl ? 'لم يتم العثور على موظفين يطابقون خيارات البحث أو التصفية.' : 'No employees matching your search or filters.'}
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {effectiveCompanyId && activeCompany
+                      ? (isRtl 
+                          ? `لا يوجد موظفون مسجلون حالياً في شركة "${activeCompany.name}" أو يطابقون شروط البحث.`
+                          : `No employees currently registered in "${activeCompany.name}" or matching search filters.`)
+                      : (isRtl ? 'لم يتم العثور على موظفين يطابقون خيارات البحث أو التصفية.' : 'No employees matching your search or filters.')
+                    }
                   </p>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    {isRtl ? 'جرب تغيير شروط البحث أو مسح التصفيات.' : 'Try changing search terms or clearing active filters.'}
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
+                    {isRtl ? 'يمكنك إضافة موظف جديد لهذه الشركة بالضغط على زر "تسجيل موظف جديد" بالأعلى.' : 'You can register a new employee for this company using the "+ Register Employee" button above.'}
                   </p>
                 </div>
               ) : (

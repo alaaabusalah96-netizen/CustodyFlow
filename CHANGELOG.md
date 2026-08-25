@@ -4,6 +4,25 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Auth Session Identity Resolution & Change-Password Fix
+**Date:** 2026-08-25
+**Files Changed:** `server.ts`, `src/components/ChangePasswordRequired.tsx`, `src/auth_change_password_flow.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Identity Binding in Auth Helper (`server.ts`)**:
+  - `authenticateSessionOrBearer`: Returns `user: { ...userData, id: uid }` ensuring the authenticated Firebase Auth `uid` is always bound as `user.id`.
+- **Hardened `/api/auth/change-password` Endpoint (`server.ts`)**:
+  - Resolves authenticated principal UID (`authResult.user.id`) directly and verifies against `user_credentials` vault doc with key `uid`.
+  - Normalizes input with `currentPassword = String(currentPassword ?? "").trim()` and `newPassword = newPassword.trim()`.
+  - Performs primary PBKDF2 210,000 iteration check with stored salt and `pepper_version` (default 2), with fallback comparison across hashing tiers aligned with `verify-credentials`.
+  - Updates Firebase Auth user password (`updateUser(uid, { password: newPassword })`), vaults new PBKDF2 hash, and updates `users` doc (`must_change_password: false`, deletes plaintext password/salt).
+- **Client Normalization (`src/components/ChangePasswordRequired.tsx`)**:
+  - Trims current, new, and confirm password inputs before validation and API submission.
+- **Verification**:
+  - Tests: 43/43 tests passed across 6 test files (`src/auth_change_password_flow.test.ts`, `src/path_b_user_password.test.ts`, `src/phase7_temp_passwords.test.ts`, `src/settings_user_migration.test.ts`, `src/user_provisioning_api.test.ts`, `src/auth_security_hardening.test.ts`).
+  - Build: Succeeded.
+
+---
+
 ## Path B: Optional Admin-Provided Password on User Creation
 **Date:** 2026-08-25
 **Files Changed:** `server.ts`, `src/pages/Settings.tsx`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/path_b_user_password.test.ts`, `CHANGELOG.md`
@@ -4456,6 +4475,20 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   - Vitest test suites (`src/phase_i_weak_id_guard.test.ts`, `src/phase_i_write_order_guard.test.ts`): 2 passed (13/13 tests green).
   - TypeScript Linter (`tsc --noEmit`): 0 errors.
   - Applet Build (`compile_applet`): Succeeded.
+
+---
+
+## Unified Access Control Center (UACC) Contrast, Company Selection & User Directory Scoping Fix
+**Date:** 2026-08-25
+**Files Changed:** `src/db/users.ts`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Header Contrast**: Enhanced text contrast of the UACC header banner title (`text-slate-900 dark:text-white`) and description (`text-slate-700 dark:text-slate-200`) across light and dark themes.
+- **Target Company Selection**: Connected target company selection directly to `CustodyDB.setSelectedCompanyId`, updated users list state and dispatched `custody_db_updated` events, and added clear empty state feedback if no companies exist.
+- **User Directory Scoping**: Updated `getScopedUsers` in `src/db/users.ts` and `scopedUsers` in `UnifiedAccessControlCenter.tsx` so that SystemAdmin views employees belonging to the target company alongside SystemAdmins, with clear empty messages if no users match.
+- **Verification**:
+  - TypeScript Linter (`tsc --noEmit`): 0 errors.
+  - Applet Build (`compile_applet`): Succeeded.
+
 
 
 
