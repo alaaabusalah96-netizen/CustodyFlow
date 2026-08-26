@@ -4,6 +4,59 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fleet Busy Vehicle Assignment Warning & Explicit Override Workflow
+**Date:** 2026-08-26
+**Files Changed:** `src/lib/enterprise/fleet_engine.ts`, `src/components/EmergencyTripModal.tsx`, `src/components/BreakdownReassignmentModal.tsx`, `CHANGELOG.md`
+**Summary:**
+- Replaced hard-blocking on busy vehicles with an explicit warning, mandatory reason input, and double-confirmation workflow.
+- Updated `createEmergencyTrip` in `fleet_engine.ts` to accept `confirmDespiteConflict` and `conflictOverrideReason`, appending the pull reason to trip notes for full auditability.
+- Updated `executeBreakdownDecision` in `fleet_engine.ts` to support `confirmDespiteConflict` when reassigning a whole trip to an already busy vehicle.
+- Updated `EmergencyTripModal.tsx` and `BreakdownReassignmentModal.tsx` to detect open trip conflicts, surface a clear non-blocking warning banner, capture the justification reason, and execute with confirmation.
+- **Verification**: `compile_applet` succeeded.
+
+---
+
+## Fleet Module Firestore Security Rules Addition
+**Date:** 2026-08-26
+**Files Changed:** `firestore.rules`, `CHANGELOG.md`
+**Summary:**
+- Added security rule blocks for the 9 active Fleet module collections (`fleet_vehicles_items`, `fleet_trips_items`, `fleet_fuel_logs`, `fleet_maintenance_logs`, `fleet_inspections_records`, `fleet_learned_locations_items`, `fleet_trip_chat_messages`, `fleet_trip_tracks`, `fleet_vehicle_constraints`) directly following `match /trips/{id}`.
+- Reused existing helper functions (`isSameCompanyRead`, `isSameCompanyWrite`, `getUserRole`, `getUserData`, `userDocExists`) without modifying or removing any existing match blocks.
+- **Verification**: Syntax checked and validated against Firestore rules schema.
+
+---
+
+## Fleet Management Navigation Tabs Horizontal Scrolling
+**Date:** 2026-08-25
+**Files Changed:** `src/pages/FleetManagement.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Issue**: On mobile screens and narrow viewports, the Fleet Management tab navigation bar ("لوحة تشغيل اليوم", "المركبات والأسطول", "المشاوير", "🗺️ التتبع المباشر والخريطة", "بوابة السائق الميدانية (الموبايل)", "قيود المركبات", "📊 تكاليف التشغيل وصحة الصيانة", "⭐ تقييم السائقين وفحص السلامة") was cut off and not scrollable horizontally.
+- **Fix**:
+  - Added `overflow-x-auto scrollbar-none pb-0.5 w-full scroll-smooth touch-pan-x` to the tabs wrapper.
+  - Added `whitespace-nowrap flex-shrink-0` to all tab buttons and their internal indicator badges/icons.
+- **Verification**: `compile_applet` succeeded.
+
+---
+
+## Change-Password Forced Reset Token & Auth Resolution Fix
+**Date:** 2026-08-25
+**Files Changed:** `server.ts`, `src/components/ChangePasswordRequired.tsx`, `src/reproduce_change_password_bug.test.ts`, `src/password_lifecycle_audit.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Audit Findings & Root Cause**:
+  - Traced password lifecycle end to end across Account Creation (`POST /api/admin/users`), Credential Verification (`POST /api/auth/verify-credentials`), and Forced Password Change (`POST /api/auth/change-password`).
+  - Hashing algorithm, iterations (PBKDF2 210k), `salt`, and `pepper_version` (2) are identical across all three endpoints.
+  - Root cause was client-side token acquisition and server auth resolution order: `ChangePasswordRequired.tsx` attempted to read a non-existent `custody_auth_token` from `localStorage` instead of calling `auth.currentUser?.getIdToken()`. As a result, requests relied on ambient session cookies.
+  - Additionally, `authenticateSessionOrBearer` in `server.ts` checked ambient `sessionCookie` before checking `Authorization: Bearer <token>`, causing stale cookies from previous user sessions (such as the admin who just created the account) to shadow the active user's credentials and attempt to verify against the wrong user's password hash.
+- **Implementation**:
+  - `src/components/ChangePasswordRequired.tsx`: Imports `auth` from `../firebase` and acquires fresh ID token via `await auth.currentUser?.getIdToken()`, attaching `Authorization: Bearer ${token}` to the request.
+  - `server.ts` (`authenticateSessionOrBearer`): Prioritizes explicit `Authorization: Bearer <idToken>` header from the active client session before falling back to ambient cookies.
+  - `server.ts` (`/api/auth/verify-credentials`): Trims email and password consistently (`String(rawPassword).trim()`).
+- **Verification**:
+  - Tests: All scoped tests passing 5/5 (`src/reproduce_change_password_bug.test.ts` and `src/password_lifecycle_audit.test.ts`).
+  - Build: `compile_applet` succeeded.
+
+---
+
 ## Auth Session Identity Resolution & Change-Password Fix
 **Date:** 2026-08-25
 **Files Changed:** `server.ts`, `src/components/ChangePasswordRequired.tsx`, `src/auth_change_password_flow.test.ts`, `CHANGELOG.md`
@@ -4518,10 +4571,10 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   3. Deletes user document from `users` collection.
   4. Records immutable audit log entry (`user_deleted`) with actor metadata and role.
   5. Enforces security barriers: blocks self-deletion of the active user session; ensures Company Admins can only delete users in their own company; authorizes Platform Admins globally.
-- **Client Synchronization**: Connected `handleDeleteUser` in `src/pages/Settings.tsx` to invoke the server deletion endpoint before syncing local state and notifying the admin.
+- **Client Synchronization & Strict Error Blocking**: Connected `handleDeleteUser` in `src/pages/Settings.tsx` to invoke the server deletion endpoint. On HTTP failure (`!response.ok`) or network error, it halts immediately, displays the server's error message in an alert, and avoids modifying local storage or `CustodyDB` state.
 - **Verification**:
-  - Test Suite (`src/phase_s_user_deletion.test.ts`): 4/4 passed.
-  - Test Suite (`src/phase_r_pepper_stability.test.ts`, `src/auth_security_hardening.test.ts`, `src/auth_change_password_flow.test.ts`, `src/migration_auth.test.ts`): 27/27 passed.
+  - Test Suite (`src/phase_s_user_deletion.test.ts`): 5/5 passed.
+  - Test Suite (`src/phase_r_pepper_stability.test.ts`, `src/auth_security_hardening.test.ts`, `src/auth_change_password_flow.test.ts`, `src/migration_auth.test.ts`): 28/28 passed.
   - TypeScript Linter (`tsc --noEmit`): 0 errors.
   - Applet Build (`compile_applet`): Succeeded.
 

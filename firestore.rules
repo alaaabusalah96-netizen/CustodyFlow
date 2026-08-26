@@ -537,6 +537,63 @@ service cloud.firestore {
       allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || (userDocExists() && ("permissions" in getUserData()) && getUserData().permissions.manage_fleet == true));
     }
 
+    // --- Fleet Module Collections (fleet_*) ---
+    match /fleet_vehicles_items/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || (userDocExists() && ("permissions" in getUserData()) && getUserData().permissions.manage_fleet == true));
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || (userDocExists() && ("permissions" in getUserData()) && getUserData().permissions.manage_fleet == true));
+    }
+
+    match /fleet_trips_items/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || (userDocExists() && ("permissions" in getUserData()) && (getUserData().permissions.create_trip == true || getUserData().permissions.manage_fleet == true)));
+      allow update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || (userDocExists() && ("permissions" in getUserData()) && (getUserData().permissions.approve_trip == true || getUserData().permissions.dispatch_trip == true || getUserData().permissions.manage_fleet == true || getUserData().permissions.execute_breakdown_decision == true || getUserData().permissions.create_emergency_trip == true || getUserData().permissions.execute_trip_tasks == true)));
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || (userDocExists() && ("permissions" in getUserData()) && getUserData().permissions.manage_fleet == true));
+    }
+
+    match /fleet_fuel_logs/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || (userDocExists() && ("permissions" in getUserData()) && getUserData().permissions.manage_fleet == true));
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /fleet_maintenance_logs/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || (userDocExists() && ("permissions" in getUserData()) && getUserData().permissions.manage_fleet == true));
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /fleet_inspections_records/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || (userDocExists() && ("permissions" in getUserData()) && (getUserData().permissions.execute_trip_tasks == true || getUserData().permissions.manage_fleet == true)));
+      allow update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || (userDocExists() && ("permissions" in getUserData()) && getUserData().permissions.manage_fleet == true));
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /fleet_learned_locations_items/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || (userDocExists() && ("permissions" in getUserData()) && (getUserData().permissions.execute_trip_tasks == true || getUserData().permissions.manage_fleet == true)));
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || (userDocExists() && ("permissions" in getUserData()) && getUserData().permissions.manage_fleet == true));
+    }
+
+    match /fleet_trip_chat_messages/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || (userDocExists() && ("permissions" in getUserData()) && (getUserData().permissions.execute_trip_tasks == true || getUserData().permissions.manage_fleet == true || getUserData().permissions.approve_trip == true || getUserData().permissions.dispatch_trip == true)));
+      allow update, delete: if false;
+    }
+
+    match /fleet_trip_tracks/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || (userDocExists() && ("permissions" in getUserData()) && (getUserData().permissions.execute_trip_tasks == true || getUserData().permissions.manage_fleet == true)));
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /fleet_vehicle_constraints/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || (userDocExists() && ("permissions" in getUserData()) && (getUserData().permissions.manage_vehicle_constraints == true || getUserData().permissions.manage_fleet == true)));
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || (userDocExists() && ("permissions" in getUserData()) && (getUserData().permissions.manage_vehicle_constraints == true || getUserData().permissions.manage_fleet == true)));
+    }
+
     // --- Fuel, Maintenance & Expenses ---
     match /fuel_logs/{id} {
       allow read: if isSameCompanyRead(resource.data);

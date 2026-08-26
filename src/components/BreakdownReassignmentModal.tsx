@@ -51,6 +51,7 @@ export default function BreakdownReassignmentModal({
   const [customReason, setCustomReason] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [busyVehicleWarning, setBusyVehicleWarning] = useState<string | null>(null);
 
   // Manual map picker state (no silent fallback)
   const [manualCoords, setManualCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -94,10 +95,23 @@ export default function BreakdownReassignmentModal({
     }
   };
 
-  const handleExecuteDecision = async () => {
+  const handleExecuteDecision = async (confirmed: boolean = false) => {
     if (!selectedTripId) return;
     if (mode === 'INDIVIDUAL_TASK' && !selectedStopId) return;
     if (decisionType === 'REASSIGN' && !selectedVehicleId) return;
+
+    if (!confirmed && mode === 'WHOLE_TRIP' && decisionType === 'REASSIGN') {
+      const conflictingTrips = FleetBusinessEngine.getOpenTripsForVehicle(companyId, selectedVehicleId)
+        .filter(t => t.id !== selectedTripId);
+      if (conflictingTrips.length > 0) {
+        setBusyVehicleWarning(
+          isRtl
+            ? `تنبيه: المركبة البديلة مسندة بالفعل لمشوار مفتوح آخر (${conflictingTrips[0].id}). تأكيد السحب يتطلب توضيح السبب في حقل السبب أدناه ثم الضغط على تأكيد مرة أخرى.`
+            : `Warning: the replacement vehicle is already on another open trip (${conflictingTrips[0].id}). Confirming requires a reason below, then press Confirm again.`
+        );
+        return;
+      }
+    }
 
     try {
       setSubmitting(true);
@@ -150,7 +164,8 @@ export default function BreakdownReassignmentModal({
             toVehicleId: decisionType === 'REASSIGN' ? selectedVehicleId : undefined,
             toDriverId: decisionType === 'REASSIGN' ? (selectedDriverName || selectedTargetVehicle?.driverName || activeTrip?.driver_id) : undefined,
             reason: customReason.trim() || defaultReason,
-            postponedUntil: decisionType === 'POSTPONE' ? postponeUntil : undefined
+            postponedUntil: decisionType === 'POSTPONE' ? postponeUntil : undefined,
+            confirmDespiteConflict: confirmed
           }
         );
 
@@ -592,6 +607,15 @@ export default function BreakdownReassignmentModal({
           </div>
         )}
 
+        {busyVehicleWarning && (
+          <div className="mx-4 mb-3 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl">
+            <p className="text-xs font-bold text-amber-900 dark:text-amber-300">{busyVehicleWarning}</p>
+            <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-1">
+              {isRtl ? 'اكتب السبب في حقل "السبب" أعلاه، ثم اضغط تأكيد وحفظ القرار التشغيلي مرة أخرى للمتابعة.' : 'Fill the Reason field above, then press Confirm Decision again to proceed.'}
+            </p>
+          </div>
+        )}
+
         {/* Footer Actions */}
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex items-center justify-end gap-2">
           <button
@@ -605,14 +629,16 @@ export default function BreakdownReassignmentModal({
           {affectedTrips.length > 0 && (
             <button
               type="button"
-              disabled={submitting || (decisionType === 'REASSIGN' && (!selectedVehicleId || !targetCoords)) || (mode === 'INDIVIDUAL_TASK' && !selectedStopId)}
-              onClick={handleExecuteDecision}
+              disabled={submitting || (decisionType === 'REASSIGN' && (!selectedVehicleId || !targetCoords)) || (mode === 'INDIVIDUAL_TASK' && !selectedStopId) || (!!busyVehicleWarning && !customReason.trim())}
+              onClick={() => handleExecuteDecision(!!busyVehicleWarning)}
               className="px-5 py-2.5 text-xs font-black bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl shadow-md transition-all flex items-center gap-2"
             >
               <CheckCircle2 className="h-4 w-4" />
               <span>
                 {submitting
                   ? (isRtl ? 'جارٍ التنفيذ...' : 'Executing...')
+                  : busyVehicleWarning
+                  ? (isRtl ? 'تأكيد السحب رغم الانشغال' : 'Confirm anyway')
                   : (isRtl ? 'تأكيد وحفظ القرار التشغيلي' : 'Confirm Decision')}
               </span>
             </button>

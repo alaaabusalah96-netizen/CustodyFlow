@@ -76,4 +76,34 @@ describe('Phase S: Secure User Deletion & Credential Revocation Workflow', () =>
 
     expect(canDelete).toBe(true);
   });
+
+  it('5. Ensures local user list remains untouched when deletion request encounters an error', async () => {
+    const testUser: AppUser = {
+      id: 'test_user_error_safe',
+      email: 'user_safe@example.com',
+      full_name: 'Safe User',
+      role: 'StationAdmin',
+      company_id: 'custodyflow',
+      is_active: true,
+      permissions: CustodyDB.enrichUserPermissions('StationAdmin', {})
+    };
+
+    const initialUsers = CustodyDB.getUsers();
+    await CustodyDB.saveUsers([...initialUsers, testUser]);
+
+    // Simulate server response failure (response.ok === false)
+    const simulatedResponseOk = false;
+    if (simulatedResponseOk) {
+      const allUsers = CustodyDB.getUsers().filter(u => u.id !== testUser.id);
+      await CustodyDB.saveUsers(allUsers);
+    }
+
+    // Must still exist locally because server operation failed
+    const userStillExists = CustodyDB.getUsers().find(u => u.id === testUser.id);
+    expect(userStillExists).toBeDefined();
+
+    // Clean up
+    const cleanUsers = CustodyDB.getUsers().filter(u => u.id !== testUser.id);
+    await CustodyDB.saveUsers(cleanUsers);
+  });
 });

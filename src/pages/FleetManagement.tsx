@@ -964,20 +964,20 @@ export default function FleetManagement({ language }: FleetManagementProps) {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800">
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-none pb-0.5 w-full scroll-smooth touch-pan-x">
         {canViewDailyOps && (
           <button
             onClick={() => setActiveTab('daily_ops')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'daily_ops'
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
-            <Activity className="h-4 w-4 text-indigo-600" />
+            <Activity className="h-4 w-4 text-indigo-600 flex-shrink-0" />
             <span>{isRtl ? 'لوحة تشغيل اليوم' : 'Daily Operations'}</span>
             {trips.filter(t => t.scheduledAt?.split('T')[0] === new Date().toISOString().split('T')[0] && t.status !== 'CANCELLED').length > 0 && (
-              <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 rounded-full">
+              <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 rounded-full flex-shrink-0">
                 {trips.filter(t => t.scheduledAt?.split('T')[0] === new Date().toISOString().split('T')[0] && t.status !== 'CANCELLED').length}
               </span>
             )}
@@ -987,13 +987,13 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         {canViewVehicles && (
           <button
             onClick={() => setActiveTab('vehicles')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'vehicles'
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
-            <Truck className="h-4 w-4" />
+            <Truck className="h-4 w-4 flex-shrink-0" />
             <span>{isRtl ? 'المركبات والأسطول' : 'Vehicles'}</span>
           </button>
         )}
@@ -1001,13 +1001,13 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         {canViewTrips && (
           <button
             onClick={() => setActiveTab('trips')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'trips'
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
-            <Navigation className="h-4 w-4" />
+            <Navigation className="h-4 w-4 flex-shrink-0" />
             <span>{isRtl ? 'المشاوير' : 'Trips'}</span>
           </button>
         )}
@@ -1015,16 +1015,16 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         {(canViewTrips || canViewVehicles) && (
           <button
             onClick={() => setActiveTab('live_map')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'live_map'
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
-            <Radio className="h-4 w-4 text-indigo-600 animate-pulse" />
+            <Radio className="h-4 w-4 text-indigo-600 animate-pulse flex-shrink-0" />
             <span>{isRtl ? '🗺️ التتبع المباشر والخريطة' : '🗺️ Live Tracking Map'}</span>
             {trips.filter(t => t.status === 'DISPATCHED' || t.status === 'IN_PROGRESS').length > 0 && (
-              <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded-full">
+              <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded-full flex-shrink-0">
                 {trips.filter(t => t.status === 'DISPATCHED' || t.status === 'IN_PROGRESS').length}
               </span>
             )}
@@ -1034,13 +1034,13 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         {canViewDriverPortal && (
           <button
             onClick={() => setActiveTab('driver_portal')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'driver_portal'
                 ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
-            <Compass className="h-4 w-4 text-emerald-600" />
+            <Compass className="h-4 w-4 text-emerald-600 flex-shrink-0" />
             <span>{isRtl ? 'بوابة السائق الميدانية (الموبايل)' : 'Driver Field Portal'}</span>
           </button>
         )}
@@ -1048,16 +1048,16 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         {canManageConstraints && (
           <button
             onClick={() => setActiveTab('vehicle_constraints')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'vehicle_constraints'
                 ? 'border-rose-600 text-rose-600 dark:text-rose-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
-            <Ban className="h-4 w-4 text-rose-600" />
+            <Ban className="h-4 w-4 text-rose-600 flex-shrink-0" />
             <span>{isRtl ? 'قيود المركبات' : 'Vehicle Constraints'}</span>
             {constraints.filter(c => c.is_active).length > 0 && (
-              <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 rounded-full">
+              <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 rounded-full flex-shrink-0">
                 {constraints.filter(c => c.is_active).length}
               </span>
             )}
@@ -1067,20 +1067,20 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         {canViewVehicles && (
           <button
             onClick={() => setActiveTab('costs_and_maintenance')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'costs_and_maintenance'
                 ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
-            <Gauge className="h-4 w-4 text-emerald-600" />
+            <Gauge className="h-4 w-4 text-emerald-600 flex-shrink-0" />
             <span>{isRtl ? '📊 تكاليف التشغيل وصحة الصيانة' : '📊 Costs & Maintenance'}</span>
             {(() => {
               const alerts = FleetBusinessEngine.evaluateVehicleMaintenanceAlerts(companyId);
               if (alerts.length === 0) return null;
               const hasOverdue = alerts.some(a => a.urgency === 'OVERDUE');
               return (
-                <span className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-full ${
+                <span className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-full flex-shrink-0 ${
                   hasOverdue 
                     ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200 animate-pulse' 
                     : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200'
@@ -1095,19 +1095,19 @@ export default function FleetManagement({ language }: FleetManagementProps) {
         {canViewVehicles && (
           <button
             onClick={() => setActiveTab('driver_safety')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'driver_safety'
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
-            <Award className="h-4 w-4 text-indigo-600" />
+            <Award className="h-4 w-4 text-indigo-600 flex-shrink-0" />
             <span>{isRtl ? '⭐ تقييم السائقين وفحص السلامة' : '⭐ Driver Scorecards & Safety'}</span>
             {(() => {
               const pendingCount = FleetBusinessEngine.getFleetDriverPerformanceSummary(companyId).criticalDefectIncidents;
               if (pendingCount === 0) return null;
               return (
-                <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200 animate-pulse">
+                <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200 animate-pulse flex-shrink-0">
                   {pendingCount}
                 </span>
               );

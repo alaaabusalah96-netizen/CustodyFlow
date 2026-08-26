@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AppUser } from '../types';
 import { KeyRound, Lock, LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
 import { CustodyDB } from '../db';
+import { auth } from '../firebase';
 
 interface ChangePasswordRequiredProps {
   activeUser: AppUser;
@@ -55,8 +56,10 @@ export default function ChangePasswordRequired({
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
       };
-      const token = localStorage.getItem('custody_auth_token') || sessionStorage.getItem('custody_auth_token');
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const token = await auth.currentUser?.getIdToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
 
       const res = await fetch('/api/auth/change-password', {
         method: 'POST',

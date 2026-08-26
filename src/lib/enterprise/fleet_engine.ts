@@ -1673,6 +1673,8 @@ export class FleetBusinessEngine {
       destinationLabel?: string;
       destLat?: number;
       destLng?: number;
+      confirmDespiteConflict?: boolean;
+      conflictOverrideReason?: string;
     }
   ): Promise<Trip> {
     const now = new Date().toISOString();
@@ -1706,6 +1708,13 @@ export class FleetBusinessEngine {
     };
 
     const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+
+    // Guard: warn + require explicit confirmation before double-booking a busy vehicle
+    const conflictingTrips = this.getOpenTripsForVehicle(companyId, data.vehicle_id);
+    if (conflictingTrips.length > 0 && !data.confirmDespiteConflict) {
+      throw new Error(`VEHICLE_BUSY:${data.vehicle_id}:${conflictingTrips[0].id}`);
+    }
+
     const emergencyTrip: Trip = {
       id: `trip-emg-${crypto.randomUUID()}`,
       company_id: companyId,
@@ -1719,7 +1728,9 @@ export class FleetBusinessEngine {
       scheduledAt: now,
       startedAt: now,
       dispatchedAt: now,
-      notes: data.notes || 'مشوار طارئ داخلي',
+      notes: conflictingTrips.length > 0 && data.confirmDespiteConflict
+        ? `${data.notes || 'مشوار طارئ داخلي'} | تم سحب المركبة رغم انشغالها بمشوار آخر - السبب: ${data.conflictOverrideReason || 'غير محدد'}`
+        : (data.notes || 'مشوار طارئ داخلي'),
       createdBy: creatorId,
       createdAt: now
     };
@@ -1748,6 +1759,7 @@ export class FleetBusinessEngine {
       toDriverId?: string;
       reason: string;
       postponedUntil?: string;
+      confirmDespiteConflict?: boolean;
     }
   ): Promise<Trip> {
     const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
@@ -1777,6 +1789,13 @@ export class FleetBusinessEngine {
     if (data.decision === 'REASSIGN') {
       if (!data.toVehicleId) {
         throw new Error('Target vehicle is required for REASSIGN decision');
+      }
+
+      // Guard: warn + require explicit confirmation before double-booking the replacement vehicle
+      const conflictingTrips = this.getOpenTripsForVehicle(companyId, data.toVehicleId)
+        .filter(t => t.id !== data.tripId);
+      if (conflictingTrips.length > 0 && !data.confirmDespiteConflict) {
+        throw new Error(`VEHICLE_BUSY:${data.toVehicleId}:${conflictingTrips[0].id}`);
       }
 
       // Check if target vehicle has a driver if toDriverId not explicitly passed

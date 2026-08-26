@@ -46,6 +46,8 @@ export default function EmergencyTripModal({
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>(activeVehicles[0]?.id || '');
   const [selectedDriverName, setSelectedDriverName] = useState<string>(activeVehicles[0]?.driverName || '');
   const [submitting, setSubmitting] = useState(false);
+  const [busyVehicleWarning, setBusyVehicleWarning] = useState<string | null>(null);
+  const [overrideReason, setOverrideReason] = useState<string>('');
   const [suggestedLocations, setSuggestedLocations] = useState<LearnedLocationHistoryEntry[]>([]);
 
   // Update suggested locations strictly when org_unit and task_type change
@@ -90,8 +92,20 @@ export default function EmergencyTripModal({
     }
   };
 
-  const handleCreate = async () => {
+  const handleCreate = async (confirmed: boolean = false) => {
     if (!taskType.trim() || !selectedVehicleId || !selectedOrgUnitId) return;
+
+    if (!confirmed) {
+      const openTrips = FleetBusinessEngine.getOpenTripsForVehicle(companyId, selectedVehicleId);
+      if (openTrips.length > 0) {
+        setBusyVehicleWarning(
+          isRtl
+            ? `تنبيه: المركبة المختارة مسندة بالفعل لمشوار مفتوح (${openTrips[0].tripType}). هل تريد سحبها للمشوار الطارئ رغم ذلك؟`
+            : `Warning: the selected vehicle is already assigned to an open trip (${openTrips[0].tripType}). Reassign it to this emergency trip anyway?`
+        );
+        return;
+      }
+    }
 
     try {
       setSubmitting(true);
@@ -107,7 +121,9 @@ export default function EmergencyTripModal({
           startLocationLabel: startLocationLabel.trim() || 'نقطة الانطلاق',
           destinationLabel: destinationLabel.trim() || taskType.trim(),
           destLat,
-          destLng
+          destLng,
+          confirmDespiteConflict: confirmed,
+          conflictOverrideReason: overrideReason.trim()
         }
       );
 
@@ -305,6 +321,36 @@ export default function EmergencyTripModal({
           </div>
         </div>
 
+        {busyVehicleWarning && (
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl space-y-2">
+            <p className="text-xs font-bold text-amber-900 dark:text-amber-300">{busyVehicleWarning}</p>
+            <input
+              type="text"
+              value={overrideReason}
+              onChange={e => setOverrideReason(e.target.value)}
+              placeholder={isRtl ? 'سبب السحب من المشوار الآخر (إجباري)' : 'Reason for pulling this vehicle (required)'}
+              className="w-full text-xs px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBusyVehicleWarning(null)}
+                className="flex-1 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl"
+              >
+                {isRtl ? 'رجوع واختيار مركبة أخرى' : 'Back / choose another vehicle'}
+              </button>
+              <button
+                type="button"
+                disabled={!overrideReason.trim() || submitting}
+                onClick={() => handleCreate(true)}
+                className="flex-1 py-2 text-xs font-black bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl"
+              >
+                {isRtl ? 'تأكيد السحب رغم الانشغال' : 'Confirm anyway'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
           <button
             type="button"
@@ -316,7 +362,7 @@ export default function EmergencyTripModal({
           <button
             type="button"
             disabled={!taskType.trim() || !selectedVehicleId || submitting}
-            onClick={handleCreate}
+            onClick={() => handleCreate(false)}
             className="flex-1 py-2.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl shadow-md flex items-center justify-center gap-1.5"
           >
             <Siren className="h-4 w-4" />

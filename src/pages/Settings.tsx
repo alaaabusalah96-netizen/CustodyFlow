@@ -824,16 +824,20 @@ export default function Settings({
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        console.warn('Server user deletion endpoint failed, using client database sync fallback:', data?.message);
+        const errorMsg = data?.message || (isRtl ? 'فشل حذف المستخدم من الخادم.' : 'Server failed to delete user.');
+        alert(isRtl ? `⚠️ خطأ أثناء حذف الحساب: ${errorMsg}` : `⚠️ Error deleting user: ${errorMsg}`);
+        return;
       }
-    } catch (err: any) {
-      console.warn('Server user deletion connection error, proceeding with database sync:', err?.message);
-    }
 
-    const allUsers = CustodyDB.getUsers().filter(u => u.id !== id);
-    await CustodyDB.saveUsers(allUsers);
-    setUsers(CustodyDB.getScopedUsers());
-    triggerToast(isRtl ? 'تم حذف حساب الموظف وسحب الصلاحيات.' : 'User deleted.');
+      // Successful server deletion: update local cache and UI
+      const allUsers = CustodyDB.getUsers().filter(u => u.id !== id);
+      await CustodyDB.saveUsers(allUsers);
+      setUsers(CustodyDB.getScopedUsers());
+      triggerToast(isRtl ? 'تم حذف حساب الموظف وسحب الصلاحيات.' : 'User deleted.');
+    } catch (err: any) {
+      const connErrorMsg = err?.message || (isRtl ? 'فشل الاتصال بالخادم.' : 'Could not connect to server.');
+      alert(isRtl ? `⚠️ تعذر الاتصال بالخادم لحذف المستخدم: ${connErrorMsg}` : `⚠️ Server connection error while deleting user: ${connErrorMsg}`);
+    }
   };
 
   return (

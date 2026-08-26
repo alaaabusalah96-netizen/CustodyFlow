@@ -457,33 +457,33 @@ async function startServer() {
     }
   });
 
-  // Helper for Authenticating requests via Session Cookie or Bearer Token
+  // Helper for Authenticating requests via Bearer Token or Session Cookie
   async function authenticateSessionOrBearer(req: express.Request): Promise<{ authenticated: boolean; statusCode: number; message: string; user?: any }> {
     let uid: string | null = null;
 
-    // 1. Check Session Cookie
-    const sessionCookie = req.cookies?.session;
-    if (sessionCookie) {
-      try {
-        const decoded = await getAdminAuth(adminApp).verifySessionCookie(sessionCookie, true);
-        uid = decoded.uid;
-      } catch (_) {
-        // Invalid or expired session cookie
+    // 1. Check Bearer Token from Authorization Header first (explicit active client token)
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const idToken = authHeader.substring(7).trim();
+      if (idToken) {
+        try {
+          const decoded = await getAdminAuth(adminApp).verifyIdToken(idToken);
+          uid = decoded.uid;
+        } catch (_) {
+          // Invalid Bearer token, fall back to session cookie
+        }
       }
     }
 
-    // 2. Check Bearer Token if session cookie is missing/invalid
+    // 2. Check Session Cookie if Bearer Token is missing/invalid
     if (!uid) {
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const idToken = authHeader.substring(7).trim();
-        if (idToken) {
-          try {
-            const decoded = await getAdminAuth(adminApp).verifyIdToken(idToken);
-            uid = decoded.uid;
-          } catch (_) {
-            // Invalid Bearer token
-          }
+      const sessionCookie = req.cookies?.session;
+      if (sessionCookie) {
+        try {
+          const decoded = await getAdminAuth(adminApp).verifySessionCookie(sessionCookie, true);
+          uid = decoded.uid;
+        } catch (_) {
+          // Invalid or expired session cookie
         }
       }
     }
@@ -961,12 +961,17 @@ async function startServer() {
   app.post("/api/auth/verify-credentials", otpRateLimiter, async (req, res) => {
     try {
 
-      const { email, password } = req.body;
-      if (!email || !password) {
+      const rawEmail = req.body?.email;
+      const rawPassword = req.body?.password;
+      if (!rawEmail || !rawPassword) {
         return res.status(400).json({ success: false, message: "يرجى إدخال البريد الإلكتروني وكلمة المرور." });
       }
 
-      const emailLower = email.toLowerCase().trim();
+      const emailLower = String(rawEmail).toLowerCase().trim();
+      const password = String(rawPassword).trim();
+      if (!emailLower || !password) {
+        return res.status(400).json({ success: false, message: "يرجى إدخال البريد الإلكتروني وكلمة المرور." });
+      }
 
       // 1. Fetch user document from 'users' collection using Admin SDK
       const usersSnapshot = await adminDb.collection("users").where("email", "==", emailLower).get();
