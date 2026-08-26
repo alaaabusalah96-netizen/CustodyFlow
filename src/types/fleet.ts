@@ -224,6 +224,14 @@ export interface Trip {
   postponeReason?: string;
   breakdownDecisions?: BreakdownDecisionLog[];
   conflictOverride?: SupervisorConflictOverride;
+  telemetry?: {
+    totalDistanceKm: number;
+    totalDurationMinutes: number;
+    movingDurationMinutes: number;
+    idleDurationMinutes: number;
+    maxSpeedKmh: number;
+    avgMovingSpeedKmh: number;
+  };
   createdBy: string;
   createdAt: string;
 }

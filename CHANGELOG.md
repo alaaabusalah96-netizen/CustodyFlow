@@ -4,6 +4,18 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fleet Trip Telemetry Persistence, GPS Accuracy Guard, and Track Point Trimming
+**Date:** 2026-08-26
+**Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `CHANGELOG.md`
+**Summary:**
+- Formally defined the `telemetry` property interface on `Trip` in `src/types/fleet.ts` (`totalDistanceKm`, `totalDurationMinutes`, `movingDurationMinutes`, `idleDurationMinutes`, `maxSpeedKmh`, `avgMovingSpeedKmh`).
+- In `completeTrip` (`fleet_engine.ts`), computed and persisted telemetry metrics onto the finished trip document in Firestore and storage so downstream scorecards and analytics consume actual tracked values.
+- In `recordTripBreadcrumbPoint` (`fleet_engine.ts`), added an accuracy threshold check rejecting fixes with accuracy > 100m to eliminate GPS jumps from skewing mileage calculations.
+- In `recordTripBreadcrumbPoint` (`fleet_engine.ts`), capped stored track points to 2,000 to prevent document bloat while retaining cumulative distance computation.
+- **Verification**: `compile_applet` passed.
+
+---
+
 ## Fleet Map Default Center, Cost Analytics Distance Delta, and Maintenance Filter
 **Date:** 2026-08-26
 **Files Changed:** `src/components/LiveFleetMapDashboard.tsx`, `src/lib/enterprise/fleet_engine.ts`, `src/components/EmergencyTripModal.tsx`, `CHANGELOG.md`

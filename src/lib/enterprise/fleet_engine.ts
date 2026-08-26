@@ -716,6 +716,34 @@ export class FleetBusinessEngine {
       console.warn('Failed to end trip tracking log on completeTrip:', err);
     }
 
+    // Persist computed telemetry (distance, duration, speed) onto the trip record
+    // so downstream analytics (e.g. driver scorecards) read real values instead of undefined.
+    try {
+      const telemetry = this.analyzeTripTelemetry(companyId, tripId);
+      if (telemetry) {
+        const allTripsAfter = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
+        const idxAfter = allTripsAfter.findIndex(t => t.id === tripId && t.company_id === companyId);
+        if (idxAfter !== -1) {
+          const tripWithTelemetry: Trip = {
+            ...allTripsAfter[idxAfter],
+            telemetry: {
+              totalDistanceKm: telemetry.totalDistanceKm,
+              totalDurationMinutes: telemetry.totalDurationMinutes,
+              movingDurationMinutes: telemetry.movingDurationMinutes,
+              idleDurationMinutes: telemetry.idleDurationMinutes,
+              maxSpeedKmh: telemetry.maxSpeedKmh,
+              avgMovingSpeedKmh: telemetry.avgMovingSpeedKmh
+            }
+          };
+          allTripsAfter[idxAfter] = tripWithTelemetry;
+          StorageEngine.setStored('fleet_trips_items', allTripsAfter);
+          await dbSetDoc('fleet_trips_items', tripId, tripWithTelemetry);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to persist trip telemetry on completeTrip:', err);
+    }
+
     return updatedTrip;
   }
 
@@ -2231,6 +2259,12 @@ export class FleetBusinessEngine {
       return { recorded: false, reason: 'Invalid tracking payload' };
     }
 
+    // Reject GPS fixes with poor accuracy to avoid poisoning distance calculations with signal jumps
+    const MAX_ACCEPTABLE_ACCURACY_METERS = 100;
+    if (typeof point.accuracy === 'number' && point.accuracy > MAX_ACCEPTABLE_ACCURACY_METERS) {
+      return { recorded: false, reason: `GPS accuracy too low (${Math.round(point.accuracy)}m), point discarded` };
+    }
+
     // Verify trip exists and is strictly active
     const allTrips = StorageEngine.getStored<Trip[]>('fleet_trips_items', []);
     const trip = allTrips.find(t => t.id === tripId && t.company_id === companyId);
@@ -2307,7 +2341,11 @@ export class FleetBusinessEngine {
       );
     }
 
-    const updatedPoints = [...track.points, newPoint];
+    const MAX_TRACK_POINTS = 2000;
+    const updatedPointsFull = [...track.points, newPoint];
+    const updatedPoints = updatedPointsFull.length > MAX_TRACK_POINTS
+      ? updatedPointsFull.slice(updatedPointsFull.length - MAX_TRACK_POINTS)
+      : updatedPointsFull;
     const updatedTotalKm = Math.round(((track.total_distance_km || 0) + distanceDeltaKm) * 100) / 100;
 
     const updatedTrack: TripBreadcrumbTrack = {
