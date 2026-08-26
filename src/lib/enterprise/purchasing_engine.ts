@@ -7,7 +7,8 @@ import { AuditLogEngine } from './audit';
 import { createBaseMetadata, updateBaseMetadata } from './metadata';
 import { PurchaseRequest, PurchaseOrder, Vendor, PRStatus, POStatus, RFQ, VendorQuotation, PurchasingWorkflowConfig, VendorAPStatementItem } from '../../types/purchasing';
 import { StorageEngine } from '../../db/storage';
-import { dbSetDoc, db } from '../../firebase';
+import { db } from '../../firebase';
+import { syncWriteWithOfflineFallback } from '../../db/offlineQueue';
 import { InventoryModule } from '../../db/inventory';
 import { AccountingBusinessEngine } from './accounting_engine';
 import { InventoryDocument } from '../../types/inventory';
@@ -16,6 +17,16 @@ import { ApprovalEngine } from '../../db/approvalEngine';
 import { DocumentNumberEngine } from '../../db/documentNumberEngine';
 import { CostCenterEngine } from '../../db/costCenterEngine';
 import { OrganizationEngine } from '../../db/organizationEngine';
+
+export const PURCHASING_COLLECTIONS = {
+  WORKFLOW_CONFIGS: 'purchasing_workflow_configs',
+  VENDORS: 'vendors',
+  PURCHASE_REQUESTS: 'purchase_requests',
+  PURCHASE_ORDERS: 'purchase_orders',
+  RFQS: 'rfqs',
+  VENDOR_QUOTATIONS: 'vendor_quotations',
+  INVENTORY_DOCUMENTS: 'inventory_documents',
+};
 
 const DEFAULT_WORKFLOW_TEMPLATE: Omit<PurchasingWorkflowConfig, 'companyId'> = {
   prPrefix: 'PR',
@@ -141,7 +152,11 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
     return { ...DEFAULT_WORKFLOW_TEMPLATE, companyId };
   }
 
-  static saveWorkflowConfig(config: PurchasingWorkflowConfig): void {
+  static async saveWorkflowConfig(config: PurchasingWorkflowConfig): Promise<{ success: boolean; error?: string }> {
+    const res = await syncWriteWithOfflineFallback(PURCHASING_COLLECTIONS.WORKFLOW_CONFIGS, config.companyId, config);
+    if (!res.success) {
+      return { success: false, error: res.error || 'فشل مزامنة إعدادات المشتريات مع السحابة' };
+    }
     const list = StorageEngine.getStored<PurchasingWorkflowConfig[]>('purchasing_workflow_configs', []);
     const idx = list.findIndex(c => c.companyId === config.companyId);
     if (idx !== -1) {
@@ -150,7 +165,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
       list.push(config);
     }
     StorageEngine.setStored('purchasing_workflow_configs', list);
-    dbSetDoc('purchasing_workflow_configs', config.companyId, config);
+    return { success: true };
   }
 
   static getVendors(companyId: string): Vendor[] {
@@ -158,7 +173,7 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
     return list.filter(v => v.company_id === companyId);
   }
 
-  static addVendor(companyId: string, nameAr: string, nameEn: string, phone?: string, email?: string, taxNo?: string, address?: string): Vendor {
+  static async addVendor(companyId: string, nameAr: string, nameEn: string, phone?: string, email?: string, taxNo?: string, address?: string): Promise<{ success: boolean; vendor?: Vendor; error?: string }> {
     const list = StorageEngine.getStored<Vendor[]>('vendors', []);
     const config = PurchasingBusinessEngine.getWorkflowConfig(companyId);
     const prefix = config.vendorPrefix || 'VND';
@@ -176,10 +191,15 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
       status: 'ACTIVE',
       createdAt: new Date().toISOString()
     };
+
+    const res = await syncWriteWithOfflineFallback(PURCHASING_COLLECTIONS.VENDORS, newVendor.id, newVendor);
+    if (!res.success) {
+      return { success: false, error: res.error || 'فشل مزامنة المورد مع السحابة' };
+    }
+
     list.push(newVendor);
     StorageEngine.setStored('vendors', list);
-    dbSetDoc('vendors', newVendor.id, newVendor);
-    return newVendor;
+    return { success: true, vendor: newVendor };
   }
 
   static getPurchaseRequests(companyId: string): PurchaseRequest[] {
@@ -218,14 +238,26 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
     return all.filter(po => po.org_unit_id && validUnitIds.has(po.org_unit_id));
   }
 
-  static savePurchaseRequests(list: PurchaseRequest[]): void {
+  static async savePurchaseRequests(list: PurchaseRequest[]): Promise<{ success: boolean; error?: string }> {
+    for (const pr of list) {
+      const res = await syncWriteWithOfflineFallback(PURCHASING_COLLECTIONS.PURCHASE_REQUESTS, pr.id, pr);
+      if (!res.success) {
+        return { success: false, error: res.error || `فشل مزامنة طلب الشراء ${pr.id} مع السحابة` };
+      }
+    }
     StorageEngine.setStored('purchase_requests', list);
-    list.forEach(pr => dbSetDoc('purchase_requests', pr.id, pr));
+    return { success: true };
   }
 
-  static savePurchaseOrders(list: PurchaseOrder[]): void {
+  static async savePurchaseOrders(list: PurchaseOrder[]): Promise<{ success: boolean; error?: string }> {
+    for (const po of list) {
+      const res = await syncWriteWithOfflineFallback(PURCHASING_COLLECTIONS.PURCHASE_ORDERS, po.id, po);
+      if (!res.success) {
+        return { success: false, error: res.error || `فشل مزامنة أمر الشراء ${po.id} مع السحابة` };
+      }
+    }
     StorageEngine.setStored('purchase_orders', list);
-    list.forEach(po => dbSetDoc('purchase_orders', po.id, po));
+    return { success: true };
   }
 
   static getRFQs(companyId: string): RFQ[] {
@@ -233,9 +265,15 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
     return list.filter(r => r.company_id === companyId);
   }
 
-  static saveRFQs(list: RFQ[]): void {
+  static async saveRFQs(list: RFQ[]): Promise<{ success: boolean; error?: string }> {
+    for (const r of list) {
+      const res = await syncWriteWithOfflineFallback(PURCHASING_COLLECTIONS.RFQS, r.id, r);
+      if (!res.success) {
+        return { success: false, error: res.error || `فشل مزامنة طلب عرض السعر ${r.id} مع السحابة` };
+      }
+    }
     StorageEngine.setStored('rfqs', list);
-    list.forEach(r => dbSetDoc('rfqs', r.id, r));
+    return { success: true };
   }
 
   static getQuotations(companyId: string): VendorQuotation[] {
@@ -243,9 +281,15 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
     return list.filter(q => q.company_id === companyId);
   }
 
-  static saveQuotations(list: VendorQuotation[]): void {
+  static async saveQuotations(list: VendorQuotation[]): Promise<{ success: boolean; error?: string }> {
+    for (const q of list) {
+      const res = await syncWriteWithOfflineFallback(PURCHASING_COLLECTIONS.VENDOR_QUOTATIONS, q.id, q);
+      if (!res.success) {
+        return { success: false, error: res.error || `فشل مزامنة عرض السعر ${q.id} مع السحابة` };
+      }
+    }
     StorageEngine.setStored('vendor_quotations', list);
-    list.forEach(q => dbSetDoc('vendor_quotations', q.id, q));
+    return { success: true };
   }
 
   /**
@@ -433,7 +477,10 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
           const allPRs = StorageEngine.getStored<PurchaseRequest[]>('purchase_requests', []);
           allPRs.push(pr);
-          PurchasingBusinessEngine.savePurchaseRequests(allPRs);
+          const savePrRes = await PurchasingBusinessEngine.savePurchaseRequests(allPRs);
+          if (!savePrRes.success) {
+            throw new Error(savePrRes.error || 'فشل حفظ طلب الشراء في السحابة');
+          }
 
           return {
             success: true,
@@ -492,7 +539,10 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           }
 
           allPRs[idx].metadata = updateBaseMetadata(allPRs[idx].metadata, event.user_id);
-          PurchasingBusinessEngine.savePurchaseRequests(allPRs);
+          const saveApproveRes = await PurchasingBusinessEngine.savePurchaseRequests(allPRs);
+          if (!saveApproveRes.success) {
+            throw new Error(saveApproveRes.error || 'فشل اعتماد طلب الشراء في السحابة');
+          }
 
           // Auto PO Creation if configured
           let createdPo: PurchaseOrder | null = null;
@@ -533,7 +583,10 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
               const allPOs = StorageEngine.getStored<PurchaseOrder[]>('purchase_orders', []);
               allPOs.push(createdPo);
-              PurchasingBusinessEngine.savePurchaseOrders(allPOs);
+              const savePoRes = await PurchasingBusinessEngine.savePurchaseOrders(allPOs);
+              if (!savePoRes.success) {
+                console.error('Failed to auto-save generated Purchase Order:', savePoRes.error);
+              }
             }
           }
 
@@ -568,7 +621,10 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
           allPRs[idx].status = 'REJECTED';
           allPRs[idx].metadata = updateBaseMetadata(allPRs[idx].metadata, event.user_id);
-          PurchasingBusinessEngine.savePurchaseRequests(allPRs);
+          const saveRejectRes = await PurchasingBusinessEngine.savePurchaseRequests(allPRs);
+          if (!saveRejectRes.success) {
+            throw new Error(saveRejectRes.error || 'فشل رفض طلب الشراء في السحابة');
+          }
 
           return {
             success: true,
@@ -659,7 +715,10 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
           const allPOs = StorageEngine.getStored<PurchaseOrder[]>('purchase_orders', []);
           allPOs.push(po);
-          PurchasingBusinessEngine.savePurchaseOrders(allPOs);
+          const saveIssueRes = await PurchasingBusinessEngine.savePurchaseOrders(allPOs);
+          if (!saveIssueRes.success) {
+            throw new Error(saveIssueRes.error || 'فشل حفظ أمر الشراء في السحابة');
+          }
 
           return {
             success: true,
@@ -695,7 +754,10 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           allPOs[idx].status = 'RECEIVED';
           allPOs[idx].deliveryWarehouseId = warehouseId;
           allPOs[idx].metadata = updateBaseMetadata(allPOs[idx].metadata, event.user_id);
-          PurchasingBusinessEngine.savePurchaseOrders(allPOs);
+          const savePoRecRes = await PurchasingBusinessEngine.savePurchaseOrders(allPOs);
+          if (!savePoRecRes.success) {
+            throw new Error(savePoRecRes.error || 'فشل تحديث أمر الشراء في السحابة');
+          }
 
           // 2. Automate stock receiving in specified Warehouse!
           const whs = InventoryModule.getWarehouses(companyId);
@@ -724,7 +786,6 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
           // 3. Save a formal Goods Receipt Document in Inventory Documents for unified ledger & history tracking!
           try {
-            const allInvDocs = StorageEngine.getStored<InventoryDocument[]>('inventory_documents', []);
             const receiptDocNo = await SequenceEngine.generateNextSequence(
               dbInstance,
               companyId,
@@ -763,9 +824,12 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
               }))
             };
 
-            allInvDocs.push(newInvDoc);
-            StorageEngine.setStored('inventory_documents', allInvDocs);
-            dbSetDoc('inventory_documents', newInvDoc.id, newInvDoc);
+            const invDocRes = await syncWriteWithOfflineFallback(PURCHASING_COLLECTIONS.INVENTORY_DOCUMENTS, newInvDoc.id, newInvDoc);
+            if (invDocRes.success) {
+              const allInvDocs = StorageEngine.getStored<InventoryDocument[]>('inventory_documents', []);
+              allInvDocs.push(newInvDoc);
+              StorageEngine.setStored('inventory_documents', allInvDocs);
+            }
           } catch (err) {
             console.error('Failed to create linked Inventory Goods Receipt document:', err);
           }
@@ -842,7 +906,10 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
           const allRFQs = StorageEngine.getStored<RFQ[]>('rfqs', []);
           allRFQs.push(rfq);
-          PurchasingBusinessEngine.saveRFQs(allRFQs);
+          const saveRfqRes = await PurchasingBusinessEngine.saveRFQs(allRFQs);
+          if (!saveRfqRes.success) {
+            throw new Error(saveRfqRes.error || 'فشل حفظ طلب عرض الأسعار في السحابة');
+          }
 
           return {
             success: true,
@@ -888,7 +955,10 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
           const quotes = StorageEngine.getStored<VendorQuotation[]>('vendor_quotations', []);
           quotes.push(quote);
-          PurchasingBusinessEngine.saveQuotations(quotes);
+          const saveQuoteRes = await PurchasingBusinessEngine.saveQuotations(quotes);
+          if (!saveQuoteRes.success) {
+            throw new Error(saveQuoteRes.error || 'فشل حفظ عرض السعر في السحابة');
+          }
 
           return {
             success: true,
@@ -910,14 +980,20 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
           const quote = quotes[idx];
           quote.status = 'ACCEPTED';
-          PurchasingBusinessEngine.saveQuotations(quotes);
+          const saveAcceptRes = await PurchasingBusinessEngine.saveQuotations(quotes);
+          if (!saveAcceptRes.success) {
+            throw new Error(saveAcceptRes.error || 'فشل تحديث حالة عرض السعر في السحابة');
+          }
 
           // Update RFQ status to completed
           const rfqs = StorageEngine.getStored<RFQ[]>('rfqs', []);
           const rfqIdx = rfqs.findIndex(r => r.id === quote.rfqId);
           if (rfqIdx !== -1) {
             rfqs[rfqIdx].status = 'COMPLETED';
-            PurchasingBusinessEngine.saveRFQs(rfqs);
+            const saveRfqRes = await PurchasingBusinessEngine.saveRFQs(rfqs);
+            if (!saveRfqRes.success) {
+              console.error('Failed to update RFQ status in cloud:', saveRfqRes.error);
+            }
           }
 
           // Automatically issue PO from the winning quote!
@@ -944,7 +1020,10 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
 
           const allPOs = StorageEngine.getStored<PurchaseOrder[]>('purchase_orders', []);
           allPOs.push(newPo);
-          PurchasingBusinessEngine.savePurchaseOrders(allPOs);
+          const savePoRes = await PurchasingBusinessEngine.savePurchaseOrders(allPOs);
+          if (!savePoRes.success) {
+            throw new Error(savePoRes.error || 'فشل حفظ أمر الشراء المنشأ تلقائياً في السحابة');
+          }
 
           return {
             success: true,

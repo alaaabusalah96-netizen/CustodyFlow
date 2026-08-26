@@ -5,8 +5,20 @@ import {
   getDefaultInspectionChecklist as getDefaultInspectionChecklistHelper
 } from './fleet_pure_helpers';
 import { StorageEngine } from '../../db/storage';
-import { dbSetDoc } from '../../firebase';
+import { syncWriteWithOfflineFallback } from '../../db/offlineQueue';
 import { DocumentNumberEngine } from '../../db/documentNumberEngine';
+
+export const FLEET_COLLECTIONS = {
+  VEHICLES: 'fleet_vehicles_items',
+  TRIPS: 'fleet_trips_items',
+  FUEL_LOGS: 'fleet_fuel_logs',
+  MAINTENANCE_LOGS: 'fleet_maintenance_logs',
+  INSPECTIONS: 'fleet_inspections_records',
+  LEARNED_LOCATIONS: 'fleet_learned_locations_items',
+  CHAT_MESSAGES: 'fleet_trip_chat_messages',
+  TRIP_TRACKS: 'fleet_trip_tracks',
+  CONSTRAINTS: 'fleet_vehicle_constraints'
+} as const;
 import { CostCenterEngine } from '../../db/costCenterEngine';
 import { OrganizationEngine } from '../../db/organizationEngine';
 import { UsersModule } from '../../db/users';
@@ -159,9 +171,13 @@ export class FleetBusinessEngine {
       createdAt: new Date().toISOString(),
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, newTrip.id, newTrip);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync trip with cloud database');
+    }
+
     const updated = [...allTrips, newTrip];
     StorageEngine.setStored('fleet_trips_items', updated);
-    await dbSetDoc('fleet_trips_items', newTrip.id, newTrip);
 
     return newTrip;
   }
@@ -468,9 +484,13 @@ export class FleetBusinessEngine {
       conflictOverride: override
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, updatedTrip.id, updatedTrip);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync trip conflict override with cloud database');
+    }
+
     allTrips[tripIndex] = updatedTrip;
     StorageEngine.setStored('fleet_trips_items', allTrips);
-    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
 
     return updatedTrip;
   }
@@ -529,9 +549,13 @@ export class FleetBusinessEngine {
       stops: updatedStops
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, updatedTrip.id, updatedTrip);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync trip dispatch with cloud database');
+    }
+
     allTrips[tripIndex] = updatedTrip;
     StorageEngine.setStored('fleet_trips_items', allTrips);
-    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
 
     // Update vehicle's last known location and status to DISPATCHED
     await this.updateVehicleLocationAndStatus(
@@ -616,9 +640,13 @@ export class FleetBusinessEngine {
       stops: updatedStops
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, updatedTrip.id, updatedTrip);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync stop arrival with cloud database');
+    }
+
     allTrips[tripIndex] = updatedTrip;
     StorageEngine.setStored('fleet_trips_items', allTrips);
-    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
 
     // Update vehicle's last known location
     const stopObj = targetStop as TripStop;
@@ -689,9 +717,13 @@ export class FleetBusinessEngine {
       completedAt: now
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, updatedTrip.id, updatedTrip);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync trip completion with cloud database');
+    }
+
     allTrips[tripIndex] = updatedTrip;
     StorageEngine.setStored('fleet_trips_items', allTrips);
-    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
 
     // Reset vehicle status to ACTIVE
     const locUpdate: VehicleLocation | undefined = coords ? {
@@ -735,9 +767,11 @@ export class FleetBusinessEngine {
               avgMovingSpeedKmh: telemetry.avgMovingSpeedKmh
             }
           };
-          allTripsAfter[idxAfter] = tripWithTelemetry;
-          StorageEngine.setStored('fleet_trips_items', allTripsAfter);
-          await dbSetDoc('fleet_trips_items', tripId, tripWithTelemetry);
+          const telSyncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, tripId, tripWithTelemetry);
+          if (telSyncRes.success) {
+            allTripsAfter[idxAfter] = tripWithTelemetry;
+            StorageEngine.setStored('fleet_trips_items', allTripsAfter);
+          }
         }
       }
     } catch (err) {
@@ -812,9 +846,13 @@ export class FleetBusinessEngine {
       stops: [...trip.stops, newStop]
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, updatedTrip.id, updatedTrip);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync added stop with cloud database');
+    }
+
     allTrips[tripIndex] = updatedTrip;
     StorageEngine.setStored('fleet_trips_items', allTrips);
-    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
 
     return updatedTrip;
   }
@@ -866,9 +904,13 @@ export class FleetBusinessEngine {
       stops: reorderedStops
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, updatedTrip.id, updatedTrip);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync stop reordering with cloud database');
+    }
+
     allTrips[tripIndex] = updatedTrip;
     StorageEngine.setStored('fleet_trips_items', allTrips);
-    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
 
     return updatedTrip;
   }
@@ -913,9 +955,13 @@ export class FleetBusinessEngine {
       stops: updatedStops
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, updatedTrip.id, updatedTrip);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync skipped stop with cloud database');
+    }
+
     allTrips[tripIndex] = updatedTrip;
     StorageEngine.setStored('fleet_trips_items', allTrips);
-    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
 
     return updatedTrip;
   }
@@ -980,11 +1026,15 @@ export class FleetBusinessEngine {
       stops: [...targetTrip.stops, newTargetStop]
     };
 
+    const sourceSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, updatedSourceTrip.id, updatedSourceTrip);
+    const targetSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, updatedTargetTrip.id, updatedTargetTrip);
+    if (!sourceSync.success || !targetSync.success) {
+      throw new Error(sourceSync.error || targetSync.error || 'Failed to sync stop reassignment with cloud database');
+    }
+
     allTrips[sourceIndex] = updatedSourceTrip;
     allTrips[targetIndex] = updatedTargetTrip;
     StorageEngine.setStored('fleet_trips_items', allTrips);
-    await dbSetDoc('fleet_trips_items', updatedSourceTrip.id, updatedSourceTrip);
-    await dbSetDoc('fleet_trips_items', updatedTargetTrip.id, updatedTargetTrip);
 
     return { sourceTrip: updatedSourceTrip, targetTrip: updatedTargetTrip };
   }
@@ -1058,9 +1108,12 @@ export class FleetBusinessEngine {
         return s;
       });
       const finalSource: Trip = { ...curSource, stops: updatedStops };
+      const splitSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, finalSource.id, finalSource);
+      if (!splitSync.success) {
+        throw new Error(splitSync.error || 'Failed to sync source trip split with cloud database');
+      }
       refreshedTrips[refreshedSourceIndex] = finalSource;
       StorageEngine.setStored('fleet_trips_items', refreshedTrips);
-      await dbSetDoc('fleet_trips_items', finalSource.id, finalSource);
       return { sourceTrip: finalSource, newTrip };
     }
 
@@ -1087,9 +1140,13 @@ export class FleetBusinessEngine {
       last_known_location: location || current.last_known_location
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.VEHICLES, updated.id, updated);
+    if (!syncRes.success) {
+      console.warn(`Failed to sync vehicle status/location for ${vehicleId}:`, syncRes.error);
+    }
+
     allVehicles[vIndex] = updated;
     StorageEngine.setStored('fleet_vehicles_items', allVehicles);
-    await dbSetDoc('fleet_vehicles_items', updated.id, updated);
 
     return updated;
   }
@@ -1137,9 +1194,13 @@ export class FleetBusinessEngine {
       reassignReason: reason || 'إعادة توزيع بسبب تعطل المركبة الأصلية'
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, updatedTrip.id, updatedTrip);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync trip vehicle reassignment with cloud database');
+    }
+
     allTrips[tripIndex] = updatedTrip;
     StorageEngine.setStored('fleet_trips_items', allTrips);
-    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
 
     return updatedTrip;
   }
@@ -1223,9 +1284,13 @@ export class FleetBusinessEngine {
       status
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.VEHICLES, updated.id, updated);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync vehicle status with cloud database');
+    }
+
     allVehicles[vIndex] = updated;
     StorageEngine.setStored('fleet_vehicles_items', allVehicles);
-    await dbSetDoc('fleet_vehicles_items', updated.id, updated);
 
     const isOutOfService = ['BREAKDOWN', 'OUT_OF_SERVICE', 'MAINTENANCE', 'INACTIVE'].includes(status);
     const affectedTrips = isOutOfService ? this.getOpenTripsForVehicle(companyId, vehicleId) : [];
@@ -1321,9 +1386,13 @@ export class FleetBusinessEngine {
       createdAt: new Date().toISOString()
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.VEHICLES, newVehicle.id, newVehicle);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync vehicle with cloud database');
+    }
+
     const updated = [...allVehicles, newVehicle];
     StorageEngine.setStored('fleet_vehicles_items', updated);
-    await dbSetDoc('fleet_vehicles_items', newVehicle.id, newVehicle);
 
     return newVehicle;
   }
@@ -1372,9 +1441,13 @@ export class FleetBusinessEngine {
       createdAt: new Date().toISOString()
     };
 
+    const logSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.MAINTENANCE_LOGS, log.id, log);
+    if (!logSync.success) {
+      throw new Error(logSync.error || 'Failed to sync maintenance log with cloud database');
+    }
+
     const logs = StorageEngine.getStored<MaintenanceLog[]>('fleet_maintenance_logs', []);
     StorageEngine.setStored('fleet_maintenance_logs', [...logs, log]);
-    await dbSetDoc('fleet_maintenance_logs', log.id, log);
 
     // Update vehicle odometer and maintenance thresholds
     if (vehicle) {
@@ -1398,9 +1471,11 @@ export class FleetBusinessEngine {
         maintenanceThresholds: updatedThresholds
       };
 
-      const updatedVehicles = allVehicles.map(v => v.id === vehicle.id ? updatedVehicle : v);
-      StorageEngine.setStored('fleet_vehicles_items', updatedVehicles);
-      await dbSetDoc('fleet_vehicles_items', vehicle.id, updatedVehicle);
+      const vehSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.VEHICLES, vehicle.id, updatedVehicle);
+      if (vehSync.success) {
+        const updatedVehicles = allVehicles.map(v => v.id === vehicle.id ? updatedVehicle : v);
+        StorageEngine.setStored('fleet_vehicles_items', updatedVehicles);
+      }
     }
 
     // Post GL Double-Entry for Maintenance Expense (510301)
@@ -1472,15 +1547,22 @@ export class FleetBusinessEngine {
       createdAt: new Date().toISOString()
     };
 
+    const fuelSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.FUEL_LOGS, log.id, log);
+    if (!fuelSync.success) {
+      throw new Error(fuelSync.error || 'Failed to sync fuel log with cloud database');
+    }
+
     const logs = StorageEngine.getStored<FuelLog[]>('fleet_fuel_logs', []);
     StorageEngine.setStored('fleet_fuel_logs', [...logs, log]);
-    await dbSetDoc('fleet_fuel_logs', log.id, log);
 
     // Update vehicle odometer
     if (vehicle && Number(data.odometerReading) > vehicle.odometerReading) {
-      const updatedVehicles = allVehicles.map(v => v.id === vehicle.id ? { ...v, odometerReading: Number(data.odometerReading) } : v);
-      StorageEngine.setStored('fleet_vehicles_items', updatedVehicles);
-      await dbSetDoc('fleet_vehicles_items', vehicle.id, { ...vehicle, odometerReading: Number(data.odometerReading) });
+      const updatedVehicle = { ...vehicle, odometerReading: Number(data.odometerReading) };
+      const vehSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.VEHICLES, vehicle.id, updatedVehicle);
+      if (vehSync.success) {
+        const updatedVehicles = allVehicles.map(v => v.id === vehicle.id ? updatedVehicle : v);
+        StorageEngine.setStored('fleet_vehicles_items', updatedVehicles);
+      }
     }
 
     // Post GL Double-Entry for Fuel Expense (510302)
@@ -1676,8 +1758,12 @@ export class FleetBusinessEngine {
       all.push(resultEntry);
     }
 
+    const locSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.LEARNED_LOCATIONS, resultEntry.id, resultEntry);
+    if (!locSync.success) {
+      console.warn('Failed to sync learned location to cloud:', locSync.error);
+    }
+
     StorageEngine.setStored('fleet_learned_locations_items', all);
-    await dbSetDoc('fleet_learned_locations_items', resultEntry.id, resultEntry);
 
     return resultEntry;
   }
@@ -1763,9 +1849,13 @@ export class FleetBusinessEngine {
       createdAt: now
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, emergencyTrip.id, emergencyTrip);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync emergency trip with cloud database');
+    }
+
     const updated = [...allTrips, emergencyTrip];
     StorageEngine.setStored('fleet_trips_items', updated);
-    await dbSetDoc('fleet_trips_items', emergencyTrip.id, emergencyTrip);
 
     return emergencyTrip;
   }
@@ -1857,9 +1947,13 @@ export class FleetBusinessEngine {
       };
     }
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, updatedTrip.id, updatedTrip);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync breakdown decision with cloud database');
+    }
+
     allTrips[tripIndex] = updatedTrip;
     StorageEngine.setStored('fleet_trips_items', allTrips);
-    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
 
     if (data.decision === 'POSTPONE' || data.decision === 'SUSPEND') {
       try {
@@ -2042,12 +2136,19 @@ export class FleetBusinessEngine {
       sourceTrip.breakdownDecisions = [...(sourceTrip.breakdownDecisions || []), decisionLog];
     }
 
+    const sourceSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, sourceTrip.id, sourceTrip);
+    if (!sourceSync.success) {
+      throw new Error(sourceSync.error || 'Failed to sync source trip decision with cloud database');
+    }
+    if (targetTrip) {
+      const targetSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, targetTrip.id, targetTrip);
+      if (!targetSync.success) {
+        throw new Error(targetSync.error || 'Failed to sync target trip decision with cloud database');
+      }
+    }
+
     allTrips[sourceIndex] = sourceTrip;
     StorageEngine.setStored('fleet_trips_items', allTrips);
-    await dbSetDoc('fleet_trips_items', sourceTrip.id, sourceTrip);
-    if (targetTrip) {
-      await dbSetDoc('fleet_trips_items', targetTrip.id, targetTrip);
-    }
 
     return { sourceTrip, targetTrip };
   }
@@ -2101,9 +2202,13 @@ export class FleetBusinessEngine {
       created_at: new Date().toISOString()
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.CHAT_MESSAGES, newMsg.id, newMsg);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync chat message with cloud database');
+    }
+
     const updated = [...all, newMsg];
     StorageEngine.setStored('fleet_trip_chat_messages', updated);
-    await dbSetDoc('fleet_trip_chat_messages', newMsg.id, newMsg);
 
     return newMsg;
   }
@@ -2160,9 +2265,14 @@ export class FleetBusinessEngine {
           reason: data.reason || '',
           is_active: data.is_active !== undefined ? data.is_active : all[idx].is_active,
         };
+
+        const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.CONSTRAINTS, updatedRule.id, updatedRule);
+        if (!syncRes.success) {
+          throw new Error(syncRes.error || 'Failed to sync constraint rule with cloud database');
+        }
+
         all[idx] = updatedRule;
         StorageEngine.setStored('fleet_vehicle_constraints', all);
-        await dbSetDoc('fleet_vehicle_constraints', updatedRule.id, updatedRule);
         return updatedRule;
       }
     }
@@ -2179,9 +2289,13 @@ export class FleetBusinessEngine {
       created_at: now
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.CONSTRAINTS, newRule.id, newRule);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync constraint rule with cloud database');
+    }
+
     const updated = [...all, newRule];
     StorageEngine.setStored('fleet_vehicle_constraints', updated);
-    await dbSetDoc('fleet_vehicle_constraints', newRule.id, newRule);
     return newRule;
   }
 
@@ -2204,9 +2318,13 @@ export class FleetBusinessEngine {
       is_active: isActive
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.CONSTRAINTS, updatedRule.id, updatedRule);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync constraint toggle with cloud database');
+    }
+
     all[idx] = updatedRule;
     StorageEngine.setStored('fleet_vehicle_constraints', all);
-    await dbSetDoc('fleet_vehicle_constraints', updatedRule.id, updatedRule);
     return updatedRule;
   }
 
@@ -2214,6 +2332,10 @@ export class FleetBusinessEngine {
    * Deletes a vehicle constraint rule
    */
   public static async deleteVehicleConstraint(companyId: string, constraintId: string): Promise<void> {
+    const delSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.CONSTRAINTS, constraintId, null);
+    if (!delSync.success) {
+      throw new Error(delSync.error || 'Failed to delete constraint rule from cloud database');
+    }
     const all = StorageEngine.getStored<VehicleConstraintRule[]>('fleet_vehicle_constraints', []);
     const filtered = all.filter(c => !(c.id === constraintId && c.company_id === companyId));
     StorageEngine.setStored('fleet_vehicle_constraints', filtered);
@@ -2358,9 +2480,13 @@ export class FleetBusinessEngine {
       total_distance_km: updatedTotalKm
     };
 
+    const trackSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIP_TRACKS, updatedTrack.id, updatedTrack);
+    if (!trackSync.success) {
+      console.warn('Failed to sync breadcrumb track to cloud:', trackSync.error);
+    }
+
     allTracks[trackIndex] = updatedTrack;
     StorageEngine.setStored('fleet_trip_tracks', allTracks);
-    await dbSetDoc('fleet_trip_tracks', updatedTrack.id, updatedTrack);
 
     // Update vehicle's last known location for quick list display
     try {
@@ -2404,9 +2530,13 @@ export class FleetBusinessEngine {
       updated_at: nowIso
     };
 
+    const trackSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIP_TRACKS, updated.id, updated);
+    if (!trackSync.success) {
+      console.warn('Failed to sync ended track to cloud:', trackSync.error);
+    }
+
     allTracks[trackIndex] = updated;
     StorageEngine.setStored('fleet_trip_tracks', allTracks);
-    await dbSetDoc('fleet_trip_tracks', updated.id, updated);
     return updated;
   }
 
@@ -2434,9 +2564,13 @@ export class FleetBusinessEngine {
       postponeReason: reason || 'إلغاء المشوار'
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, updatedTrip.id, updatedTrip);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync cancelled trip with cloud database');
+    }
+
     allTrips[tripIndex] = updatedTrip;
     StorageEngine.setStored('fleet_trips_items', allTrips);
-    await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
 
     // Reset vehicle status to ACTIVE if it was dispatched
     await this.updateVehicleLocationAndStatus(
@@ -2537,9 +2671,13 @@ export class FleetBusinessEngine {
         stops: updatedStops
       };
 
+      const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.TRIPS, updatedTrip.id, updatedTrip);
+      if (!syncRes.success) {
+        throw new Error(syncRes.error || 'Failed to sync auto-processed trip arrivals with cloud database');
+      }
+
       allTrips[tripIndex] = updatedTrip;
       StorageEngine.setStored('fleet_trips_items', allTrips);
-      await dbSetDoc('fleet_trips_items', updatedTrip.id, updatedTrip);
 
       return { trip: updatedTrip, newlyArrivedStops };
     }
@@ -2881,10 +3019,14 @@ export class FleetBusinessEngine {
     };
 
     // Save Maintenance Log
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.MAINTENANCE_LOGS, log.id, log);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync maintenance log with cloud database');
+    }
+
     const allLogs = StorageEngine.getStored<MaintenanceLog[]>('fleet_maintenance_logs', []);
     allLogs.push(log);
     StorageEngine.setStored('fleet_maintenance_logs', allLogs);
-    await dbSetDoc('fleet_maintenance_logs', log.id, log);
 
     // Update vehicle thresholds & odometer
     const updatedThresholds: VehicleMaintenanceThresholds = {
@@ -2906,9 +3048,13 @@ export class FleetBusinessEngine {
       maintenanceThresholds: updatedThresholds
     };
 
+    const vehSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.VEHICLES, updatedVehicle.id, updatedVehicle);
+    if (!vehSync.success) {
+      throw new Error(vehSync.error || 'Failed to sync updated vehicle thresholds with cloud database');
+    }
+
     allVehicles[vIndex] = updatedVehicle;
     StorageEngine.setStored('fleet_vehicles_items', allVehicles);
-    await dbSetDoc('fleet_vehicles_items', updatedVehicle.id, updatedVehicle);
 
     return log;
   }
@@ -2957,10 +3103,14 @@ export class FleetBusinessEngine {
     };
 
     // Save Fuel Log
+    const syncRes = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.FUEL_LOGS, log.id, log);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync fuel log with cloud database');
+    }
+
     const allLogs = StorageEngine.getStored<FuelLog[]>('fleet_fuel_logs', []);
     allLogs.push(log);
     StorageEngine.setStored('fleet_fuel_logs', allLogs);
-    await dbSetDoc('fleet_fuel_logs', log.id, log);
 
     // Update vehicle odometer if higher
     if (odo > (vehicle.odometerReading || 0)) {
@@ -2968,9 +3118,13 @@ export class FleetBusinessEngine {
         ...vehicle,
         odometerReading: odo
       };
+      const vehSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.VEHICLES, updatedVehicle.id, updatedVehicle);
+      if (!vehSync.success) {
+        throw new Error(vehSync.error || 'Failed to sync updated vehicle odometer with cloud database');
+      }
+
       allVehicles[vIndex] = updatedVehicle;
       StorageEngine.setStored('fleet_vehicles_items', allVehicles);
-      await dbSetDoc('fleet_vehicles_items', updatedVehicle.id, updatedVehicle);
     }
 
     return log;
@@ -2998,9 +3152,13 @@ export class FleetBusinessEngine {
       odometerReading: finalOdo
     };
 
+    const vehSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.VEHICLES, updatedVehicle.id, updatedVehicle);
+    if (!vehSync.success) {
+      throw new Error(vehSync.error || 'Failed to sync vehicle odometer with cloud database');
+    }
+
     allVehicles[vIndex] = updatedVehicle;
     StorageEngine.setStored('fleet_vehicles_items', allVehicles);
-    await dbSetDoc('fleet_vehicles_items', updatedVehicle.id, updatedVehicle);
 
     return updatedVehicle;
   }
@@ -3081,10 +3239,14 @@ export class FleetBusinessEngine {
     };
 
     // Save record
+    const inspSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.INSPECTIONS, record.id, record);
+    if (!inspSync.success) {
+      throw new Error(inspSync.error || 'Failed to sync vehicle inspection record with cloud database');
+    }
+
     const allRecords = StorageEngine.getStored<VehicleInspectionRecord[]>('fleet_inspections_records', []);
     allRecords.push(record);
     StorageEngine.setStored('fleet_inspections_records', allRecords);
-    await dbSetDoc('fleet_inspections_records', record.id, record);
 
     // Update vehicle status if critical defect found
     let updatedVehicle: Vehicle = { ...vehicle };
@@ -3097,9 +3259,13 @@ export class FleetBusinessEngine {
       updatedVehicle.odometerReading = record.odometerReading;
     }
 
+    const vehSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.VEHICLES, updatedVehicle.id, updatedVehicle);
+    if (!vehSync.success) {
+      throw new Error(vehSync.error || 'Failed to sync vehicle state after inspection with cloud database');
+    }
+
     allVehicles[vIndex] = updatedVehicle;
     StorageEngine.setStored('fleet_vehicles_items', allVehicles);
-    await dbSetDoc('fleet_vehicles_items', updatedVehicle.id, updatedVehicle);
 
     return record;
   }
@@ -3132,20 +3298,29 @@ export class FleetBusinessEngine {
       reviewedAt: now
     };
 
+    const inspSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.INSPECTIONS, updatedRecord.id, updatedRecord);
+    if (!inspSync.success) {
+      throw new Error(inspSync.error || 'Failed to sync reviewed inspection record with cloud database');
+    }
+
     allRecords[rIndex] = updatedRecord;
     StorageEngine.setStored('fleet_inspections_records', allRecords);
-    await dbSetDoc('fleet_inspections_records', updatedRecord.id, updatedRecord);
 
     if (restoreVehicleToActive) {
       const allVehicles = StorageEngine.getStored<Vehicle[]>('fleet_vehicles_items', []);
       const vIndex = allVehicles.findIndex(v => v.id === record.vehicle_id && v.company_id === companyId);
       if (vIndex !== -1) {
-        allVehicles[vIndex] = {
+        const restoredVehicle: Vehicle = {
           ...allVehicles[vIndex],
           status: 'ACTIVE'
         };
+        const vehSync = await syncWriteWithOfflineFallback(FLEET_COLLECTIONS.VEHICLES, restoredVehicle.id, restoredVehicle);
+        if (!vehSync.success) {
+          throw new Error(vehSync.error || 'Failed to sync restored vehicle state with cloud database');
+        }
+
+        allVehicles[vIndex] = restoredVehicle;
         StorageEngine.setStored('fleet_vehicles_items', allVehicles);
-        await dbSetDoc('fleet_vehicles_items', record.vehicle_id, allVehicles[vIndex]);
       }
     }
 

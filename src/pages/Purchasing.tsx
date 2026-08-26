@@ -146,14 +146,14 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
   };
 
   // 1. Add Vendor
-  const handleAddVendor = (e: React.FormEvent) => {
+  const handleAddVendor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vendorForm.nameAr || !vendorForm.nameEn) {
       triggerFeedback('error', isRtl ? 'يرجى إدخال اسم المورد باللغتين' : 'Please input vendor name in both languages');
       return;
     }
 
-    PurchasingBusinessEngine.addVendor(
+    const res = await PurchasingBusinessEngine.addVendor(
       companyId,
       vendorForm.nameAr,
       vendorForm.nameEn,
@@ -162,6 +162,11 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
       vendorForm.taxNo,
       vendorForm.address
     );
+
+    if (!res.success) {
+      triggerFeedback('error', isRtl ? (res.error || 'فشل حفظ المورد') : (res.error || 'Failed to save vendor'));
+      return;
+    }
 
     triggerFeedback('success', isRtl ? 'تم تسجيل المورد بنجاح' : 'Vendor registered successfully');
     setVendorForm({ nameAr: '', nameEn: '', phone: '', email: '', taxNo: '', address: '' });
@@ -508,9 +513,13 @@ export default function Purchasing({ language, theme }: PurchasingProps) {
   };
 
   // 11. Save Workflow Config
-  const handleSaveWorkflowConfig = (e: React.FormEvent) => {
+  const handleSaveWorkflowConfig = async (e: React.FormEvent) => {
     e.preventDefault();
-    PurchasingBusinessEngine.saveWorkflowConfig(workflowConfig);
+    const res = await PurchasingBusinessEngine.saveWorkflowConfig(workflowConfig);
+    if (!res.success) {
+      triggerFeedback('error', isRtl ? (res.error || 'فشل حفظ إعدادات المشتريات') : (res.error || 'Failed to save purchasing policies'));
+      return;
+    }
     triggerFeedback('success', isRtl ? 'تم حفظ إعدادات وسياسات المشتريات بنجاح' : 'Purchasing policies saved successfully');
   };
 

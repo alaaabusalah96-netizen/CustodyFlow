@@ -9,12 +9,12 @@ import { InventoryModule } from '../db/inventory';
 import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
 import { LogsModule } from '../db/logs';
-import { dbSetDoc } from '../firebase';
+import { syncWriteWithOfflineFallback } from '../db/offlineQueue';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 import { createEventEnvelope } from '../lib/enterprise/metadata';
 import { OrganizationEngine } from '../db/organizationEngine';
 import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
-import { SalesBusinessEngine } from '../lib/enterprise/sales_engine';
+import { SalesBusinessEngine, SALES_COLLECTIONS } from '../lib/enterprise/sales_engine';
 import { Customer, SalesInvoice, SalesInvoiceItem } from '../types/sales';
 
 export type { Customer, SalesInvoice, SalesInvoiceItem };
@@ -288,7 +288,7 @@ export default function SalesAR({ language, theme }: SalesARProps) {
   };
 
   // 4. Record Customer Payment Collection
-  const handleRecordPayment = (e: React.FormEvent) => {
+  const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId) {
       showToast('error', isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
@@ -308,30 +308,39 @@ export default function SalesAR({ language, theme }: SalesARProps) {
 
     // Update Customer Balance
     const allCustomers = StorageEngine.getStored<Customer[]>('customers', []);
-    const updatedCustomers = allCustomers.map(c => {
-      if (c.id === customerObj.id) {
-        return { ...c, balance: Math.max(0, c.balance - paymentAmount) };
-      }
-      return c;
-    });
+    const updatedCustomerObj = { ...customerObj, balance: Math.max(0, customerObj.balance - paymentAmount) };
+    const custRes = await syncWriteWithOfflineFallback(SALES_COLLECTIONS.CUSTOMERS, customerObj.id, updatedCustomerObj);
+    if (!custRes.success) {
+      showToast('error', custRes.error || 'فشل تحديث رصيد العميل ومزامنته مع السحابة');
+      return;
+    }
+    const updatedCustomers = allCustomers.map(c => c.id === customerObj.id ? updatedCustomerObj : c);
     StorageEngine.setStored('customers', updatedCustomers);
-    dbSetDoc('customers', customerObj.id, { ...customerObj, balance: Math.max(0, customerObj.balance - paymentAmount) });
 
     // Mark outstanding invoices as PAID or PARTIALLY_PAID
     const allInvoices = StorageEngine.getStored<SalesInvoice[]>('sales_invoices', []);
     let remainingPayment = paymentAmount;
+    const modifiedInvoices: SalesInvoice[] = [];
     const updatedInvoices = allInvoices.map(inv => {
       if (inv.company_id === companyId && inv.customerId === customerObj.id && inv.status !== 'PAID') {
         if (remainingPayment >= inv.netAmount) {
           remainingPayment -= inv.netAmount;
-          return { ...inv, status: 'PAID' as const };
+          const updatedInv = { ...inv, status: 'PAID' as const };
+          modifiedInvoices.push(updatedInv);
+          return updatedInv;
         } else if (remainingPayment > 0) {
           remainingPayment = 0;
-          return { ...inv, status: 'PARTIALLY_PAID' as const };
+          const updatedInv = { ...inv, status: 'PARTIALLY_PAID' as const };
+          modifiedInvoices.push(updatedInv);
+          return updatedInv;
         }
       }
       return inv;
     });
+
+    for (const modInv of modifiedInvoices) {
+      await syncWriteWithOfflineFallback(SALES_COLLECTIONS.SALES_INVOICES, modInv.id, modInv);
+    }
     StorageEngine.setStored('sales_invoices', updatedInvoices);
 
     // Post Accounting Double-Entry (General Ledger Integration)
@@ -375,7 +384,7 @@ export default function SalesAR({ language, theme }: SalesARProps) {
   };
 
   // 5. Submit Tax Invoice to Egyptian Tax Authority (ETA) Portal
-  const handleEtaSubmit = (invoiceId: string) => {
+  const handleEtaSubmit = async (invoiceId: string) => {
     const allInvoices = StorageEngine.getStored<SalesInvoice[]>('sales_invoices', []);
     const updatedInvoices = allInvoices.map(inv => {
       if (inv.id === invoiceId) {
@@ -440,12 +449,12 @@ export default function SalesAR({ language, theme }: SalesARProps) {
       return inv;
     });
 
-    StorageEngine.setStored('sales_invoices', updatedInvoices);
     const targetInv = updatedInvoices.find(i => i.id === invoiceId);
     if (targetInv) {
-      dbSetDoc('sales_invoices', targetInv.id, targetInv);
+      await syncWriteWithOfflineFallback(SALES_COLLECTIONS.SALES_INVOICES, targetInv.id, targetInv);
       setViewInvoice(targetInv);
     }
+    StorageEngine.setStored('sales_invoices', updatedInvoices);
     
     // Add activity log
     LogsModule.addLog(

@@ -178,7 +178,7 @@ export default function Contracting({ activeUser, language, theme }: Contracting
   };
 
   // Create Project Submit
-  const handleSaveProject = (e: React.FormEvent) => {
+  const handleSaveProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProject.name || !newProject.contract_value) return;
 
@@ -198,14 +198,18 @@ export default function Contracting({ activeUser, language, theme }: Contracting
       created_at: new Date().toISOString()
     };
 
-    ContractingEngine.saveProject(prj);
+    const res = await ContractingEngine.saveProject(prj);
+    if (!res.success) {
+      alert(res.error || (isRtl ? 'فشل حفظ المشروع في السحابة' : 'Failed to save project'));
+      return;
+    }
     setSelectedProjectId(prj.id);
     setShowProjectModal(false);
     loadData();
   };
 
   // Create Voucher Submit
-  const handleSaveVoucher = () => {
+  const handleSaveVoucher = async () => {
     const currentPrj = projects.find(p => p.id === selectedProjectId);
     if (!currentPrj) return;
 
@@ -241,13 +245,17 @@ export default function Contracting({ activeUser, language, theme }: Contracting
       lines: breakdown.lines
     };
 
-    ContractingEngine.savePaymentVoucher(voucher);
+    const res = await ContractingEngine.savePaymentVoucher(voucher);
+    if (!res.success) {
+      alert(res.error || (isRtl ? 'فشل حفظ المستخلص في السحابة' : 'Failed to save voucher'));
+      return;
+    }
     setShowVoucherModal(false);
     loadData();
   };
 
   // Save Worker
-  const handleSaveWorker = (e: React.FormEvent) => {
+  const handleSaveWorker = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWorker.name) return;
 
@@ -263,13 +271,17 @@ export default function Contracting({ activeUser, language, theme }: Contracting
       created_at: new Date().toISOString()
     };
 
-    ContractingEngine.saveDailyWorker(wrk);
+    const res = await ContractingEngine.saveDailyWorker(wrk);
+    if (!res.success) {
+      alert(res.error || (isRtl ? 'فشل حفظ بيانات العامل في السحابة' : 'Failed to save worker'));
+      return;
+    }
     setShowWorkerModal(false);
     loadData();
   };
 
   // Attendance Log Row Save
-  const handleLogAttendance = (worker: DailyWorker, daysWorked: number, otHours: number) => {
+  const handleLogAttendance = async (worker: DailyWorker, daysWorked: number, otHours: number) => {
     if (!selectedProjectId) return;
     const log: DailyAttendanceLog = {
       id: `ATT-${selectedProjectId}-${worker.id}-${selectedDate}`,
@@ -290,21 +302,29 @@ export default function Contracting({ activeUser, language, theme }: Contracting
       created_at: new Date().toISOString()
     };
 
-    ContractingEngine.saveAttendanceLog(log);
+    const res = await ContractingEngine.saveAttendanceLog(log);
+    if (!res.success) {
+      alert(res.error || (isRtl ? 'فشل حفظ اليومية في السحابة' : 'Failed to log attendance'));
+      return;
+    }
     loadData();
   };
 
   // Process Payout Batch
-  const handleProcessBatchPayout = () => {
+  const handleProcessBatchPayout = async () => {
     if (!selectedProjectId) return;
-    const batch = ContractingEngine.processDailyLaborPayoutBatch(
+    const res = await ContractingEngine.processDailyLaborPayoutBatch(
       activeUser.company_id,
       selectedProjectId,
       selectedDate,
       selectedDate,
       `صرف يوميات الموقع بتاريخ ${selectedDate}`
     );
-    alert(`تم إصدار سند صرف يوميات الموقع بنجاح برقم ${batch.id} بمبلغ إجمالي ${batch.total_amount.toLocaleString()} ج.م لعدد ${batch.worker_count} عمال.`);
+    if (!res.success || !res.batch) {
+      alert(res.error || (isRtl ? 'فشل إصدار سند صرف يوميات الموقع' : 'Failed to process labor payout'));
+      return;
+    }
+    alert(`تم إصدار سند صرف يوميات الموقع بنجاح برقم ${res.batch.id} بمبلغ إجمالي ${res.batch.total_amount.toLocaleString()} ج.م لعدد ${res.batch.worker_count} عمال.`);
     loadData();
   };
 
@@ -813,7 +833,7 @@ export default function Contracting({ activeUser, language, theme }: Contracting
               <h3 className="text-base font-bold text-slate-900 dark:text-white">{isRtl ? 'إضافة مقاول باطن جديد' : 'Register Subcontractor'}</h3>
               <button onClick={() => setShowSubcontractorModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
             </div>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               if (!newSubcontractor.name) return;
               const sub: Subcontractor = {
@@ -826,7 +846,11 @@ export default function Contracting({ activeUser, language, theme }: Contracting
                 status: 'ACTIVE',
                 created_at: new Date().toISOString()
               };
-              ContractingEngine.saveSubcontractor(sub);
+              const res = await ContractingEngine.saveSubcontractor(sub);
+              if (!res.success) {
+                alert(res.error || (isRtl ? 'فشل حفظ مقاول الباطن في السحابة' : 'Failed to save subcontractor'));
+                return;
+              }
               setShowSubcontractorModal(false);
               loadData();
             }} className="space-y-4 text-xs">

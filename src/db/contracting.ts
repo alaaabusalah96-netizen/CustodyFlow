@@ -1,4 +1,5 @@
 import { StorageEngine } from './storage';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { 
   ContractingProject, 
   BOQItem, 
@@ -10,6 +11,17 @@ import {
   DailyAttendanceLog, 
   DailyLaborPayoutBatch 
 } from '../types/contracting';
+
+export const CONTRACTING_COLLECTIONS = {
+  PROJECTS: 'contracting_projects',
+  BOQ_ITEMS: 'contracting_boq_items',
+  SUBCONTRACTORS: 'contracting_subcontractors',
+  SUB_CONTRACTS: 'contracting_subcontracts',
+  VOUCHERS: 'contracting_vouchers',
+  WORKERS: 'contracting_workers',
+  ATTENDANCE: 'contracting_attendance',
+  PAYOUTS: 'contracting_payouts',
+};
 
 const STORAGE_KEYS = {
   PROJECTS: 'custody_contracting_projects',
@@ -316,8 +328,12 @@ export class ContractingEngine {
     return list;
   }
 
-  static saveProject(project: ContractingProject): void {
+  static async saveProject(project: ContractingProject): Promise<{ success: boolean; error?: string }> {
     ContractingEngine.ensureInitialized();
+    const res = await syncWriteWithOfflineFallback(CONTRACTING_COLLECTIONS.PROJECTS, project.id, project);
+    if (!res.success) {
+      return { success: false, error: res.error || 'فشل مزامنة المشروع مع السحابة' };
+    }
     const list = StorageEngine.getStored<ContractingProject[]>(STORAGE_KEYS.PROJECTS, []);
     const index = list.findIndex(p => p.id === project.id);
     if (index >= 0) {
@@ -326,6 +342,7 @@ export class ContractingEngine {
       list.unshift(project);
     }
     StorageEngine.setStored(STORAGE_KEYS.PROJECTS, list);
+    return { success: true };
   }
 
   // --- BOQ ITEMS ---
@@ -335,8 +352,18 @@ export class ContractingEngine {
     return list.filter(b => b.project_id === projectId);
   }
 
-  static saveBOQItem(item: BOQItem): void {
+  static async saveBOQItem(item: BOQItem): Promise<{ success: boolean; error?: string }> {
     ContractingEngine.ensureInitialized();
+    if (!item.company_id) {
+      const prj = ContractingEngine.getProjects().find(p => p.id === item.project_id);
+      if (prj?.company_id) {
+        item.company_id = prj.company_id;
+      }
+    }
+    const res = await syncWriteWithOfflineFallback(CONTRACTING_COLLECTIONS.BOQ_ITEMS, item.id, item);
+    if (!res.success) {
+      return { success: false, error: res.error || 'فشل مزامنة بند المقايسة مع السحابة' };
+    }
     const list = StorageEngine.getStored<BOQItem[]>(STORAGE_KEYS.BOQ_ITEMS, []);
     const index = list.findIndex(b => b.id === item.id);
     if (index >= 0) {
@@ -345,6 +372,7 @@ export class ContractingEngine {
       list.push(item);
     }
     StorageEngine.setStored(STORAGE_KEYS.BOQ_ITEMS, list);
+    return { success: true };
   }
 
   // --- SUBCONTRACTORS & CONTRACTS ---
@@ -357,12 +385,17 @@ export class ContractingEngine {
     return list;
   }
 
-  static saveSubcontractor(sub: Subcontractor): void {
+  static async saveSubcontractor(sub: Subcontractor): Promise<{ success: boolean; error?: string }> {
     ContractingEngine.ensureInitialized();
+    const res = await syncWriteWithOfflineFallback(CONTRACTING_COLLECTIONS.SUBCONTRACTORS, sub.id, sub);
+    if (!res.success) {
+      return { success: false, error: res.error || 'فشل مزامنة مقاول الباطن مع السحابة' };
+    }
     const list = StorageEngine.getStored<Subcontractor[]>(STORAGE_KEYS.SUBCONTRACTORS, []);
     const idx = list.findIndex(s => s.id === sub.id);
     if (idx >= 0) list[idx] = sub; else list.unshift(sub);
     StorageEngine.setStored(STORAGE_KEYS.SUBCONTRACTORS, list);
+    return { success: true };
   }
 
   static getSubcontracts(projectId?: string): SubcontractorContract[] {
@@ -372,12 +405,17 @@ export class ContractingEngine {
     return list;
   }
 
-  static saveSubcontract(contract: SubcontractorContract): void {
+  static async saveSubcontract(contract: SubcontractorContract): Promise<{ success: boolean; error?: string }> {
     ContractingEngine.ensureInitialized();
+    const res = await syncWriteWithOfflineFallback(CONTRACTING_COLLECTIONS.SUB_CONTRACTS, contract.id, contract);
+    if (!res.success) {
+      return { success: false, error: res.error || 'فشل مزامنة عقد المقاولة مع السحابة' };
+    }
     const list = StorageEngine.getStored<SubcontractorContract[]>(STORAGE_KEYS.SUB_CONTRACTS, []);
     const idx = list.findIndex(c => c.id === contract.id);
     if (idx >= 0) list[idx] = contract; else list.unshift(contract);
     StorageEngine.setStored(STORAGE_KEYS.SUB_CONTRACTS, list);
+    return { success: true };
   }
 
   // --- PAYMENT CERTIFICATES / VOUCHERS ---
@@ -389,12 +427,17 @@ export class ContractingEngine {
     return list;
   }
 
-  static savePaymentVoucher(voucher: ContractingPaymentVoucher): void {
+  static async savePaymentVoucher(voucher: ContractingPaymentVoucher): Promise<{ success: boolean; error?: string }> {
     ContractingEngine.ensureInitialized();
+    const res = await syncWriteWithOfflineFallback(CONTRACTING_COLLECTIONS.VOUCHERS, voucher.id, voucher);
+    if (!res.success) {
+      return { success: false, error: res.error || 'فشل مزامنة المستخلص مع السحابة' };
+    }
     const list = StorageEngine.getStored<ContractingPaymentVoucher[]>(STORAGE_KEYS.VOUCHERS, []);
     const idx = list.findIndex(v => v.id === voucher.id);
     if (idx >= 0) list[idx] = voucher; else list.unshift(voucher);
     StorageEngine.setStored(STORAGE_KEYS.VOUCHERS, list);
+    return { success: true };
   }
 
   /**
@@ -449,12 +492,17 @@ export class ContractingEngine {
     return list;
   }
 
-  static saveDailyWorker(worker: DailyWorker): void {
+  static async saveDailyWorker(worker: DailyWorker): Promise<{ success: boolean; error?: string }> {
     ContractingEngine.ensureInitialized();
+    const res = await syncWriteWithOfflineFallback(CONTRACTING_COLLECTIONS.WORKERS, worker.id, worker);
+    if (!res.success) {
+      return { success: false, error: res.error || 'فشل مزامنة العامل مع السحابة' };
+    }
     const list = StorageEngine.getStored<DailyWorker[]>(STORAGE_KEYS.WORKERS, []);
     const idx = list.findIndex(w => w.id === worker.id);
     if (idx >= 0) list[idx] = worker; else list.unshift(worker);
     StorageEngine.setStored(STORAGE_KEYS.WORKERS, list);
+    return { success: true };
   }
 
   static getAttendanceLogs(projectId?: string, date?: string): DailyAttendanceLog[] {
@@ -465,17 +513,22 @@ export class ContractingEngine {
     return list;
   }
 
-  static saveAttendanceLog(log: DailyAttendanceLog): void {
+  static async saveAttendanceLog(log: DailyAttendanceLog): Promise<{ success: boolean; error?: string }> {
     ContractingEngine.ensureInitialized();
     // Calculate wage
     const baseWage = (log.daily_rate || 0) * (log.days_worked || 1);
     const overtimeWage = (log.overtime_hours || 0) * (log.overtime_rate_per_hour || 0);
     log.total_wage = Math.max(0, baseWage + overtimeWage + (log.bonus_amount || 0) - (log.deduction_amount || 0));
 
+    const res = await syncWriteWithOfflineFallback(CONTRACTING_COLLECTIONS.ATTENDANCE, log.id, log);
+    if (!res.success) {
+      return { success: false, error: res.error || 'فشل مزامنة يومية العامل مع السحابة' };
+    }
     const list = StorageEngine.getStored<DailyAttendanceLog[]>(STORAGE_KEYS.ATTENDANCE, []);
     const idx = list.findIndex(a => a.id === log.id);
     if (idx >= 0) list[idx] = log; else list.unshift(log);
     StorageEngine.setStored(STORAGE_KEYS.ATTENDANCE, list);
+    return { success: true };
   }
 
   /**
@@ -490,13 +543,13 @@ export class ContractingEngine {
   /**
    * Generates a batch payout for unpaid worker logs and marks them as PAID
    */
-  static processDailyLaborPayoutBatch(
+  static async processDailyLaborPayoutBatch(
     companyId: string,
     projectId: string,
     dateFrom: string,
     dateTo: string,
     notes?: string
-  ): DailyLaborPayoutBatch {
+  ): Promise<{ success: boolean; batch?: DailyLaborPayoutBatch; error?: string }> {
     ContractingEngine.ensureInitialized();
     const logs = ContractingEngine.getAttendanceLogs(projectId).filter(
       l => l.payment_status === 'UNPAID' && l.date >= dateFrom && l.date <= dateTo
@@ -504,16 +557,6 @@ export class ContractingEngine {
 
     const batchId = `PAY-BATCH-${Date.now()}`;
     const totalWage = logs.reduce((sum, l) => sum + l.total_wage, 0);
-
-    // Update logs to PAID
-    const allLogs = StorageEngine.getStored<DailyAttendanceLog[]>(STORAGE_KEYS.ATTENDANCE, []);
-    allLogs.forEach(l => {
-      if (logs.some(unpaid => unpaid.id === l.id)) {
-        l.payment_status = 'PAID';
-        l.payout_voucher_id = batchId;
-      }
-    });
-    StorageEngine.setStored(STORAGE_KEYS.ATTENDANCE, allLogs);
 
     const batch: DailyLaborPayoutBatch = {
       id: batchId,
@@ -528,10 +571,41 @@ export class ContractingEngine {
       created_at: new Date().toISOString()
     };
 
+    // Prepare updated logs
+    const updatedLogs = logs.map(l => ({
+      ...l,
+      payment_status: 'PAID' as const,
+      payout_voucher_id: batchId
+    }));
+
+    // Sync each updated log
+    for (const log of updatedLogs) {
+      const res = await syncWriteWithOfflineFallback(CONTRACTING_COLLECTIONS.ATTENDANCE, log.id, log);
+      if (!res.success) {
+        return { success: false, error: res.error || `فشل تحديث سجل الحضور ${log.id} في السحابة` };
+      }
+    }
+
+    // Sync batch record
+    const batchRes = await syncWriteWithOfflineFallback(CONTRACTING_COLLECTIONS.PAYOUTS, batch.id, batch);
+    if (!batchRes.success) {
+      return { success: false, error: batchRes.error || 'فشل حفظ دفعة الصرف في السحابة' };
+    }
+
+    // Only update local storage on cloud success
+    const allLogs = StorageEngine.getStored<DailyAttendanceLog[]>(STORAGE_KEYS.ATTENDANCE, []);
+    allLogs.forEach(l => {
+      if (logs.some(unpaid => unpaid.id === l.id)) {
+        l.payment_status = 'PAID';
+        l.payout_voucher_id = batchId;
+      }
+    });
+    StorageEngine.setStored(STORAGE_KEYS.ATTENDANCE, allLogs);
+
     const payouts = StorageEngine.getStored<DailyLaborPayoutBatch[]>(STORAGE_KEYS.PAYOUTS, []);
     payouts.unshift(batch);
     StorageEngine.setStored(STORAGE_KEYS.PAYOUTS, payouts);
 
-    return batch;
+    return { success: true, batch };
   }
 }

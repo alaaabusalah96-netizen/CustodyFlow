@@ -5,6 +5,7 @@ export type DailyWorkerTrade = 'نجار مسلح' | 'حداد مسلح' | 'بن
 
 export interface BOQItem {
   id: string;
+  company_id?: string;
   project_id: string;
   item_number: string; // e.g. "1.1"
   description: string; // e.g. "أعمال حفر في تربة عادية ونقل الركام"

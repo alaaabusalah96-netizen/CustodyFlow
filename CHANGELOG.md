@@ -4,6 +4,101 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Phase P2 (Fleet Engine): Firestore Synchronization & Cloud-First Write-Ordering
+**Date:** 2026-08-26
+**Files Changed:** `src/lib/enterprise/fleet_engine.ts`, `CHANGELOG.md`
+**Summary:**
+- **Refactored Fleet Engine to Enforce Cloud-First Write Ordering (`src/lib/enterprise/fleet_engine.ts`)**:
+  - Defined and exported `FLEET_COLLECTIONS` constant mapping all fleet storage entities (`fleet_vehicles_items`, `fleet_trips_items`, `fleet_fuel_logs`, `fleet_maintenance_logs`, `fleet_inspections_records`, `fleet_learned_locations_items`, `fleet_trip_chat_messages`, `fleet_trip_tracks`, `fleet_vehicle_constraints`).
+  - Audited and updated all mutators across the Fleet Engine to call `syncWriteWithOfflineFallback` before updating `StorageEngine` local cache:
+    - Trip operations: `createTrip`, `overrideTripConflicts`, `startTrip`, `recordStopArrival`, `completeTrip`, `addStopToTrip`, `reorderTripStops`, `skipOrCancelStop`, `reassignStopToAnotherTrip`, `splitStopToNewTrip`, `createEmergencyTrip`, `executeBreakdownDecision`, `executeIndividualStopDecision`, `cancelTrip`, `autoProcessTripArrivals`.
+    - Vehicle & Telemetry operations: `createVehicle`, `updateVehicleStatus`, `updateVehicleLocationAndStatus`, `reassignTripVehicle`, `syncVehicleOdometer`, `recordTripBreadcrumbPoint`, `endTripTrack`.
+    - Logs & Maintenance: `logMaintenance`, `recordVehicleMaintenance`, `logFuel`, `recordVehicleFuelRefill`.
+    - Inspections: `submitVehicleInspection`, `reviewVehicleInspection`.
+    - Operational chat, constraints & learning: `sendTripChatMessage`, `saveVehicleConstraint`, `toggleVehicleConstraint`, `deleteVehicleConstraint`, `recordLearnedLocation`.
+  - Maintained complete backward compatibility, GPS accuracy bounds, and telemetry calculations.
+- **Verification**:
+  - `compile_applet`: Succeeded with 0 errors.
+
+---
+
+## Phase P2: Sales Module Firestore Synchronization & Write-Order Consistency
+**Date:** 2026-08-26
+**Files Changed:** `src/lib/enterprise/sales_engine.ts`, `src/pages/SalesAR.tsx`, `firestore.rules`, `src/sales_engine.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Refactored SalesBusinessEngine Mutations with Cloud-First Write-Ordering**:
+  - Exported `SALES_COLLECTIONS` (`customers`, `sales_invoices`, `pos_transactions`, `delivery_notes`).
+  - `createCustomer`: Updated to sync with Firestore via `syncWriteWithOfflineFallback` before writing to `StorageEngine`. Throws detailed error if sync fails.
+  - `createSalesInvoice`: Writes invoice and updated customer balance to Firestore via `syncWriteWithOfflineFallback` before updating `StorageEngine`.
+  - `processPOSCheckout`: Writes POS transactions to Firestore via `syncWriteWithOfflineFallback` before updating `StorageEngine`.
+  - `createDeliveryNote`: Writes delivery notes to Firestore via `syncWriteWithOfflineFallback` before updating `StorageEngine`.
+  - Added batch helpers `saveCustomers` and `saveSalesInvoices`.
+- **Updated Sales UI Handlers (`src/pages/SalesAR.tsx`)**:
+  - `handleRecordPayment`: Converted to async with cloud-first writes for customer balance and invoice status changes.
+  - `handleEtaSubmit`: Converted to async with cloud-first write for ETA digital signature and UUID updates.
+- **Added Tenant-Scoped Firestore Security Rules (`firestore.rules`)**:
+  - Added security rules for `delivery_notes` collection matching company isolation standards.
+- **Automated Regression & Write-Ordering Testing (`src/sales_engine.test.ts`)**:
+  - Added 5 unit tests verifying write-ordering and cloud fallback resilience across customers, invoices, POS transactions, and delivery notes.
+- **Verification**:
+  - Vitest: 14/14 tests passed across `src/sales_engine.test.ts`, `src/purchasing_engine.test.ts`, and `src/contracting_engine.test.ts`.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Full Applet Build (`compile_applet`): Succeeded.
+
+---
+
+## Phase P1: Purchasing Module Firestore Synchronization & Write-Order Consistency
+**Date:** 2026-08-26
+**Files Changed:** `src/lib/enterprise/purchasing_engine.ts`, `src/pages/Purchasing.tsx`, `src/components/ApprovalInbox.tsx`, `firestore.rules`, `src/purchasing_engine.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Refactored PurchasingBusinessEngine Mutations to Async with Write-Order Consistency**:
+  - `saveWorkflowConfig`: Converted to async, writes to `purchasing_workflow_configs` via `syncWriteWithOfflineFallback` first, updates `StorageEngine` only upon cloud write success.
+  - `addVendor`: Converted to async, writes to `vendors` via `syncWriteWithOfflineFallback` first, updates `StorageEngine` only upon success.
+  - `savePurchaseRequests`: Converted to async, syncs array elements sequentially via `syncWriteWithOfflineFallback` before updating `StorageEngine`.
+  - `savePurchaseOrders`: Converted to async, syncs array elements sequentially via `syncWriteWithOfflineFallback` before updating `StorageEngine`.
+  - `saveRFQs`: Converted to async, syncs array elements sequentially via `syncWriteWithOfflineFallback` before updating `StorageEngine`.
+  - `saveQuotations`: Converted to async, syncs array elements sequentially via `syncWriteWithOfflineFallback` before updating `StorageEngine`.
+  - `execute`: Converted to async, awaiting all downstream `savePurchaseRequests`, `savePurchaseOrders`, `saveRFQs`, `saveQuotations`, and `InventoryModule.addInventoryDocument` mutations to guarantee cloud-first consistency across all PR/PO/RFQ lifecycle events.
+- **Updated UI and Consumer Handlers**:
+  - `src/pages/Purchasing.tsx`: `handleAddVendor` and `handleSaveWorkflowConfig` converted to `async/await` with error handling and user feedback alerts on failure.
+  - `src/components/ApprovalInbox.tsx`: `syncDownstreamDocumentStatus` converted to `async` and awaited in `handleApprove` / `handleReject`.
+- **Added Tenant-Scoped Firestore Security Rules (`firestore.rules`)**:
+  - Added matching rules for `purchasing_workflow_configs`, `rfqs`, and `vendor_quotations` maintaining company isolation and role checks.
+- **Automated Regression & Write-Ordering Testing (`src/purchasing_engine.test.ts`)**:
+  - Added test suite verifying `addVendor`, `saveWorkflowConfig`, `savePurchaseRequests`, and `savePurchaseOrders` write-ordering and error resilience.
+- **Verification**:
+  - Tests: 9/9 passed across `src/purchasing_engine.test.ts` and `src/contracting_engine.test.ts`.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Build (`compile_applet`): Succeeded.
+
+---
+
+## Phase Q: Contracting Module Firestore Synchronization & Write-Order Consistency
+**Date:** 2026-08-26
+**Files Changed:** `src/types/contracting.ts`, `src/db/contracting.ts`, `src/pages/Contracting.tsx`, `firestore.rules`, `src/contracting_engine.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Refactored ContractingEngine Mutations to Async with Write-Order Consistency**:
+  - `saveProject`: Async, writes to `contracting_projects` via `syncWriteWithOfflineFallback` first, updates `StorageEngine` only upon success.
+  - `saveBOQItem`: Async, derives `company_id` if missing, writes to `contracting_boq_items` via `syncWriteWithOfflineFallback` first, updates `StorageEngine` only upon success.
+  - `saveSubcontractor`: Async, writes to `contracting_subcontractors` via `syncWriteWithOfflineFallback` first, updates `StorageEngine` only upon success.
+  - `saveSubcontract`: Async, writes to `contracting_subcontracts` via `syncWriteWithOfflineFallback` first, updates `StorageEngine` only upon success.
+  - `savePaymentVoucher`: Async, writes to `contracting_vouchers` via `syncWriteWithOfflineFallback` first, updates `StorageEngine` only upon success.
+  - `saveDailyWorker`: Async, writes to `contracting_workers` via `syncWriteWithOfflineFallback` first, updates `StorageEngine` only upon success.
+  - `saveAttendanceLog`: Async, calculates wage, writes to `contracting_attendance` via `syncWriteWithOfflineFallback` first, updates `StorageEngine` only upon success.
+  - `processDailyLaborPayoutBatch`: Async, syncs each updated log and batch record sequentially via `syncWriteWithOfflineFallback` before updating local cache.
+- **Contracting UI Consumer Error Handling (`src/pages/Contracting.tsx`)**:
+  - Updated `handleSaveProject`, `handleSaveVoucher`, `handleSaveWorker`, `handleLogAttendance`, `handleProcessBatchPayout`, and the subcontractor registration form to `async/await` and surfaced descriptive alerts on cloud failure.
+- **Added Minimal Tenant-Scoped Firestore Rules (`firestore.rules`)**:
+  - Added matching rules for `contracting_projects`, `contracting_boq_items`, `contracting_subcontractors`, `contracting_subcontracts`, `contracting_vouchers`, `contracting_workers`, `contracting_attendance`, and `contracting_payouts`.
+- **Automated Regression & Write-Ordering Testing (`src/contracting_engine.test.ts`)**:
+  - Updated test cases to `async/await` and added test verifying local cache remains untouched when offline/sync fails.
+- **Verification**:
+  - Tests: 5/5 passed in `src/contracting_engine.test.ts`.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Build (`compile_applet`): Succeeded.
+
+---
+
 ## Fleet Trip Telemetry Persistence, GPS Accuracy Guard, and Track Point Trimming
 **Date:** 2026-08-26
 **Files Changed:** `src/types/fleet.ts`, `src/lib/enterprise/fleet_engine.ts`, `CHANGELOG.md`

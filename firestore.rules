@@ -368,6 +368,12 @@ service cloud.firestore {
       allow write: if isSameCompanyWrite(request.resource.data, resource.data);
     }
 
+    // --- delivery_notes ---
+    match /delivery_notes/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow write: if isSameCompanyWrite(request.resource.data, resource.data);
+    }
+
     // --- employees_payroll_items ---
     match /employees_payroll_items/{id} {
       allow read: if isSameCompanyRead(resource.data);
@@ -506,6 +512,24 @@ service cloud.firestore {
 
     // --- Purchase & Sales Orders ---
     match /purchase_orders/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Accountant');
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /purchasing_workflow_configs/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager');
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /rfqs/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Accountant');
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /vendor_quotations/{id} {
       allow read: if isSameCompanyRead(resource.data);
       allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Accountant');
       allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
@@ -653,6 +677,55 @@ service cloud.firestore {
       allow read: if isSameCompanyRead(resource.data);
       allow create: if isSameCompanyWrite(request.resource.data, null);
       allow update, delete: if false; // Strict modification protection
+    }
+
+    // --- Contracting Module Collections ---
+    match /contracting_projects/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /contracting_boq_items/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /contracting_subcontractors/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /contracting_subcontracts/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /contracting_vouchers/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /contracting_workers/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /contracting_attendance/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /contracting_payouts/{id} {
+      allow read: if isSameCompanyRead(resource.data);
+      allow create, update: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
     }
 
     // --- Categories & System Meta ---

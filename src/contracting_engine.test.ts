@@ -1,10 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { ContractingEngine } from './db/contracting';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { ContractingEngine, CONTRACTING_COLLECTIONS } from './db/contracting';
 import { StorageEngine } from './db/storage';
+import * as offlineQueue from './db/offlineQueue';
 import { PaymentVoucherLine } from './types/contracting';
 
 describe('ContractingEngine Unit Tests', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     localStorage.clear();
   });
 
@@ -67,11 +69,17 @@ describe('ContractingEngine Unit Tests', () => {
     expect(wage).toBe(410);
   });
 
-  it('should process daily labor payout batch and mark attendance logs as paid', () => {
+  it('should process daily labor payout batch and mark attendance logs as paid when cloud sync succeeds', async () => {
+    vi.spyOn(offlineQueue, 'syncWriteWithOfflineFallback').mockResolvedValue({
+      success: true,
+      syncedToFirestore: true,
+      queuedOffline: false
+    });
+
     const project = ContractingEngine.getProjects()[0];
     
     // Add unpaid attendance log
-    ContractingEngine.saveAttendanceLog({
+    const saveRes = await ContractingEngine.saveAttendanceLog({
       id: 'ATT-TEST-1',
       company_id: project.company_id,
       project_id: project.id,
@@ -89,8 +97,9 @@ describe('ContractingEngine Unit Tests', () => {
       payment_status: 'UNPAID',
       created_at: new Date().toISOString()
     });
+    expect(saveRes.success).toBe(true);
 
-    const batch = ContractingEngine.processDailyLaborPayoutBatch(
+    const res = await ContractingEngine.processDailyLaborPayoutBatch(
       project.company_id,
       project.id,
       '2026-08-01',
@@ -98,12 +107,46 @@ describe('ContractingEngine Unit Tests', () => {
       'صرف أجور عمالة الأسبوع الأول'
     );
 
-    expect(batch.worker_count).toBeGreaterThan(0);
-    expect(batch.total_amount).toBeGreaterThan(0);
+    expect(res.success).toBe(true);
+    expect(res.batch).toBeDefined();
+    expect(res.batch!.worker_count).toBeGreaterThan(0);
+    expect(res.batch!.total_amount).toBeGreaterThan(0);
 
     const logs = ContractingEngine.getAttendanceLogs(project.id, '2026-08-11');
     const testLog = logs.find(l => l.id === 'ATT-TEST-1');
     expect(testLog?.payment_status).toBe('PAID');
-    expect(testLog?.payout_voucher_id).toBe(batch.id);
+    expect(testLog?.payout_voucher_id).toBe(res.batch!.id);
+  });
+
+  it('should not update local storage when syncWriteWithOfflineFallback fails', async () => {
+    vi.spyOn(offlineQueue, 'syncWriteWithOfflineFallback').mockResolvedValue({
+      success: false,
+      syncedToFirestore: false,
+      queuedOffline: false,
+      error: 'Device is offline'
+    });
+
+    const newPrj = {
+      id: 'PRJ-OFFLINE-TEST',
+      company_id: 'COMP-EGY-01',
+      code: 'PRJ-OFF-01',
+      name: 'مشروع فاشل المزامنة',
+      client_name: 'عميل تجريبي',
+      location: 'موقع تجريبي',
+      contract_value: 100000,
+      advance_payment_rate: 10,
+      retention_rate: 5,
+      status: 'IN_PROGRESS' as const,
+      start_date: '2026-08-01',
+      end_date: '2026-12-31',
+      created_at: new Date().toISOString()
+    };
+
+    const res = await ContractingEngine.saveProject(newPrj);
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('Device is offline');
+
+    const prjs = ContractingEngine.getProjects('COMP-EGY-01');
+    expect(prjs.some(p => p.id === 'PRJ-OFFLINE-TEST')).toBe(false);
   });
 });

@@ -1,11 +1,18 @@
 import { StorageEngine } from '../../db/storage';
-import { dbSetDoc } from '../../firebase';
+import { syncWriteWithOfflineFallback } from '../../db/offlineQueue';
 import { DocumentNumberEngine } from '../../db/documentNumberEngine';
 import { CostCenterEngine } from '../../db/costCenterEngine';
 import { OrganizationEngine } from '../../db/organizationEngine';
 import { AccountingBusinessEngine } from './accounting_engine';
 import { InventoryModule } from '../../db/inventory';
 import { Customer, SalesInvoice, POSTransaction, DeliveryNote } from '../../types/sales';
+
+export const SALES_COLLECTIONS = {
+  CUSTOMERS: 'customers',
+  SALES_INVOICES: 'sales_invoices',
+  POS_TRANSACTIONS: 'pos_transactions',
+  DELIVERY_NOTES: 'delivery_notes'
+} as const;
 
 export class SalesBusinessEngine {
   /**
@@ -95,11 +102,37 @@ export class SalesBusinessEngine {
       createdAt: new Date().toISOString()
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(SALES_COLLECTIONS.CUSTOMERS, newCustomer.id, newCustomer);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync customer with cloud database');
+    }
+
     const updated = [...allCustomers, newCustomer];
     StorageEngine.setStored('customers', updated);
-    await dbSetDoc('customers', newCustomer.id, newCustomer);
 
     return newCustomer;
+  }
+
+  public static async saveCustomers(customers: Customer[]): Promise<{ success: boolean; error?: string }> {
+    for (const c of customers) {
+      const res = await syncWriteWithOfflineFallback(SALES_COLLECTIONS.CUSTOMERS, c.id, c);
+      if (!res.success) {
+        return { success: false, error: res.error || `Failed to sync customer ${c.nameAr} with cloud` };
+      }
+    }
+    StorageEngine.setStored('customers', customers);
+    return { success: true };
+  }
+
+  public static async saveSalesInvoices(invoices: SalesInvoice[]): Promise<{ success: boolean; error?: string }> {
+    for (const inv of invoices) {
+      const res = await syncWriteWithOfflineFallback(SALES_COLLECTIONS.SALES_INVOICES, inv.id, inv);
+      if (!res.success) {
+        return { success: false, error: res.error || `Failed to sync sales invoice ${inv.invoiceNo} with cloud` };
+      }
+    }
+    StorageEngine.setStored('sales_invoices', invoices);
+    return { success: true };
   }
 
   /**
@@ -231,18 +264,24 @@ export class SalesBusinessEngine {
       createdAt: new Date().toISOString()
     };
 
-    // Save Invoice
+    // Save Invoice to Cloud First
+    const syncRes = await syncWriteWithOfflineFallback(SALES_COLLECTIONS.SALES_INVOICES, newInvoice.id, newInvoice);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync sales invoice with cloud database');
+    }
+
     StorageEngine.setStored('sales_invoices', [...allInvoices, newInvoice]);
-    await dbSetDoc('sales_invoices', newInvoice.id, newInvoice);
 
     // Update Customer Balance
     const allCustomers = StorageEngine.getStored<Customer[]>('customers', []);
     const targetCust = allCustomers.find(c => c.id === data.customerId);
     if (targetCust) {
       const updatedCust = { ...targetCust, balance: targetCust.balance + data.netAmount };
-      const updatedCustomers = allCustomers.map(c => c.id === targetCust.id ? updatedCust : c);
-      StorageEngine.setStored('customers', updatedCustomers);
-      await dbSetDoc('customers', targetCust.id, updatedCust);
+      const custSyncRes = await syncWriteWithOfflineFallback(SALES_COLLECTIONS.CUSTOMERS, targetCust.id, updatedCust);
+      if (custSyncRes.success) {
+        const updatedCustomers = allCustomers.map(c => c.id === targetCust.id ? updatedCust : c);
+        StorageEngine.setStored('customers', updatedCustomers);
+      }
     }
 
     // Deduct warehouse stock
@@ -344,9 +383,13 @@ export class SalesBusinessEngine {
       }
     }
 
-    // Save POS Sale
+    // Save POS Sale to Cloud First
+    const syncRes = await syncWriteWithOfflineFallback(SALES_COLLECTIONS.POS_TRANSACTIONS, saleRecord.id, saleRecord);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync POS transaction with cloud database');
+    }
+
     StorageEngine.setStored('pos_transactions', [...allPOSSales, saleRecord]);
-    await dbSetDoc('pos_transactions', saleRecord.id, saleRecord);
 
     // Post Double Entry GL
     try {
@@ -425,8 +468,12 @@ export class SalesBusinessEngine {
       createdAt: new Date().toISOString()
     };
 
+    const syncRes = await syncWriteWithOfflineFallback(SALES_COLLECTIONS.DELIVERY_NOTES, note.id, note);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || 'Failed to sync delivery note with cloud database');
+    }
+
     StorageEngine.setStored('delivery_notes', [...allNotes, note]);
-    await dbSetDoc('delivery_notes', note.id, note);
 
     return note;
   }

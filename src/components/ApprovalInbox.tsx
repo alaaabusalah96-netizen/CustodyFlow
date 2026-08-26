@@ -106,7 +106,7 @@ export default function ApprovalInbox({
     }
   };
 
-  const syncDownstreamDocumentStatus = (instance: ApprovalInstance, isApproved: boolean) => {
+  const syncDownstreamDocumentStatus = async (instance: ApprovalInstance, isApproved: boolean) => {
     const statusStr = isApproved ? 'APPROVED' : 'REJECTED';
     const statusCamel = isApproved ? 'Approved' : 'Rejected';
 
@@ -116,7 +116,7 @@ export default function ApprovalInbox({
         const idx = prs.findIndex(p => p.id === instance.documentId);
         if (idx !== -1) {
           prs[idx].status = isApproved ? 'APPROVED' : 'REJECTED';
-          PurchasingBusinessEngine.savePurchaseRequests(prs);
+          await PurchasingBusinessEngine.savePurchaseRequests(prs);
         }
         break;
       }
@@ -125,7 +125,7 @@ export default function ApprovalInbox({
         const idx = pos.findIndex(p => p.id === instance.documentId);
         if (idx !== -1) {
           pos[idx].status = isApproved ? 'APPROVED' : 'REJECTED';
-          StorageEngine.setStored('purchase_orders', pos);
+          await PurchasingBusinessEngine.savePurchaseOrders(pos);
         }
         break;
       }
@@ -204,7 +204,7 @@ export default function ApprovalInbox({
       });
 
       if (res.isFinalApproval) {
-        syncDownstreamDocumentStatus(instance, true);
+        await syncDownstreamDocumentStatus(instance, true);
         alert(isRtl ? 'تم الاعتماد والتصديق النهائي بنجاح!' : 'Final approval granted successfully!');
       } else {
         alert(isRtl ? 'تم الشكير والاعتماد المبدئي. تم تمرير المستند للمرحلة التالية.' : 'Initial step approved. Passed to next approval level.');
@@ -239,7 +239,7 @@ export default function ApprovalInbox({
         comments: commentText.trim()
       });
 
-      syncDownstreamDocumentStatus(instance, false);
+      await syncDownstreamDocumentStatus(instance, false);
       alert(isRtl ? 'تم رفض المستند وإشعار الجهة الطالبة.' : 'Document rejected and requester notified.');
 
       setSelectedInstance(null);
