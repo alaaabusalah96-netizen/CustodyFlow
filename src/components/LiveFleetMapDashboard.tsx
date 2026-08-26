@@ -52,7 +52,7 @@ export default function LiveFleetMapDashboard({
       handleManualRefresh();
     }, 30000);
     return () => clearInterval(interval);
-  }, [autoRefresh, companyId]);
+  }, [autoRefresh, companyId, selectedTripId]);
 
   // Keep selected trip synced if list changes
   useEffect(() => {
@@ -92,7 +92,7 @@ export default function LiveFleetMapDashboard({
     if (!mapContainerRef.current) return;
 
     if (!mapInstanceRef.current) {
-      const defaultCenter: [number, number] = [24.7136, 46.6753]; // Riyadh center as default regional coordinate
+      const defaultCenter: [number, number] = [30.0444, 31.2357]; // Cairo center as default regional coordinate (Egypt-based fleet)
       const map = L.map(mapContainerRef.current, {
         zoomControl: true,
         scrollWheelZoom: true,

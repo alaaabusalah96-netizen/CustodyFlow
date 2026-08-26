@@ -33,7 +33,7 @@ export default function EmergencyTripModal({
   if (!isOpen) return null;
 
   const allVehicles = FleetBusinessEngine.getVehiclesByOrgUnit(companyId);
-  const activeVehicles = allVehicles.filter(v => !['BREAKDOWN', 'OUT_OF_SERVICE', 'INACTIVE'].includes(v.status));
+  const activeVehicles = allVehicles.filter(v => !['BREAKDOWN', 'OUT_OF_SERVICE', 'INACTIVE', 'MAINTENANCE'].includes(v.status));
 
   const [taskType, setTaskType] = useState<string>(EMERGENCY_PRESETS[0]);
   const [selectedOrgUnitId, setSelectedOrgUnitId] = useState<string>(orgUnits[0]?.id || '');

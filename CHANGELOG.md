@@ -4,6 +4,18 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Fleet Map Default Center, Cost Analytics Distance Delta, and Maintenance Filter
+**Date:** 2026-08-26
+**Files Changed:** `src/components/LiveFleetMapDashboard.tsx`, `src/lib/enterprise/fleet_engine.ts`, `src/components/EmergencyTripModal.tsx`, `CHANGELOG.md`
+**Summary:**
+- Updated default center coordinate of `LiveFleetMapDashboard.tsx` to Cairo (`[30.0444, 31.2357]`) for Egypt-based fleet operations.
+- Added `selectedTripId` to `LiveFleetMapDashboard.tsx` auto-refresh interval effect dependencies.
+- Refined vehicle distance calculation (`vDistance`) in `calculateFleetCostAnalytics` (`fleet_engine.ts`) to compute delta between maximum and minimum recorded odometer readings across fuel and maintenance logs.
+- Excluded vehicles with `MAINTENANCE` status from `activeVehicles` in `EmergencyTripModal.tsx`.
+- **Verification**: `compile_applet` verified successfully.
+
+---
+
 ## Fleet Busy Vehicle Assignment Warning & Explicit Override Workflow
 **Date:** 2026-08-26
 **Files Changed:** `src/lib/enterprise/fleet_engine.ts`, `src/components/EmergencyTripModal.tsx`, `src/components/BreakdownReassignmentModal.tsx`, `CHANGELOG.md`

@@ -2741,7 +2741,13 @@ export class FleetBusinessEngine {
       const vFuelLiters = vFuelLogs.reduce((sum, l) => sum + (Number(l.liters) || 0), 0);
       const vMaintCost = vMaintLogs.reduce((sum, l) => sum + (Number(l.cost) || 0), 0);
       const vOperatingCost = vFuelCost + vMaintCost;
-      const vDistance = vehicle.odometerReading || 0;
+      const vOdometerReadings = [
+        ...vFuelLogs.map(l => Number(l.odometerReading) || 0),
+        ...vMaintLogs.map(l => Number(l.odometerAtService) || 0)
+      ].filter(r => r > 0);
+      const vDistance = vOdometerReadings.length >= 2
+        ? Math.max(...vOdometerReadings) - Math.min(...vOdometerReadings)
+        : 0;
 
       const vCostPerKm = vDistance > 0 ? Math.round((vOperatingCost / vDistance) * 100) / 100 : 0;
       const vFuelEfficiency = vFuelLiters > 0 ? Math.round((vDistance / vFuelLiters) * 10) / 10 : 0;
