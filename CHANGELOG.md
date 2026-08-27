@@ -4701,7 +4701,7 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 
 ## Phase U: Inactive Users & Lifecycle Management in Unified Access Control Center
 **Date:** 2026-08-27
-**Files Changed:** `src/pages/Settings.tsx`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `CHANGELOG.md`
+**Files Changed:** `src/pages/Settings.tsx`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/phase_u_inactive_users.test.ts`, `CHANGELOG.md`
 **Summary:**
 - **Status Filter in Unified Access Control Center (`src/components/settings/UnifiedAccessControlCenter.tsx`)**:
   - Replaced hardcoded `is_active === false` suppression in `scopedUsers` with dynamic `statusFilter` state (`'ACTIVE' | 'INACTIVE' | 'ALL'`), defaulting to `'ACTIVE'` for complete backward compatibility.
@@ -4715,7 +4715,10 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   - Added `editUserIsActive` state, initialized on edit start (`u.is_active !== false`).
   - Added `is_active` field to payload in `handleSaveEditUser` sent via `PATCH /api/admin/users/:id`.
   - Passed `editUserIsActive` and `setEditUserIsActive` to `UnifiedAccessControlCenter`.
+- **Automated Tests (`src/phase_u_inactive_users.test.ts`)**:
+  - Validated active/inactive filter predicates, `CustodyDB` lifecycle active status updates, and hierarchical role access guard.
 - **Verification**:
+  - Test Suite (`src/phase_u_inactive_users.test.ts`): 3/3 passed.
   - Linter (`tsc --noEmit`): 0 errors.
   - Full Applet Build (`compile_applet`): Succeeded.
 
