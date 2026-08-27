@@ -160,6 +160,8 @@ export interface UnifiedAccessControlCenterProps {
   setEditUserOrgUnitId: (v: string) => void;
   editUserAssignedOrgUnitIds: string[];
   setEditUserAssignedOrgUnitIds: (v: string[]) => void;
+  editUserIsActive?: boolean;
+  setEditUserIsActive?: (v: boolean) => void;
   editUserPermissions: UserPermissions;
   setEditUserPermissions: (v: UserPermissions) => void;
   editUserIsDefaultMode: boolean;
@@ -214,6 +216,8 @@ export default function UnifiedAccessControlCenter({
   setEditUserOrgUnitId,
   editUserAssignedOrgUnitIds,
   setEditUserAssignedOrgUnitIds,
+  editUserIsActive,
+  setEditUserIsActive,
   editUserPermissions,
   setEditUserPermissions,
   editUserIsDefaultMode,
@@ -429,6 +433,7 @@ export default function UnifiedAccessControlCenter({
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
   const [moduleFilter, setModuleFilter] = useState<string>('ALL');
   const [branchFilter, setBranchFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [showNewUserModal, setShowNewUserModal] = useState(false);
 
   // Sub-view inside Users tab: directory, signups, corrections
@@ -674,10 +679,59 @@ export default function UnifiedAccessControlCenter({
     return getUserBranchLabelHelper(user, companyOrgUnits, isRtl, stations, regions);
   };
 
+  // Toggle user active / inactive status
+  const handleToggleUserActive = async (targetUser: AppUser) => {
+    const accessCheck = UsersModule.canUserManageTargetUser(currentUser, targetUser);
+    if (!accessCheck.allowed) {
+      triggerToast?.(`⚠️ ${accessCheck.reason || (isRtl ? 'ليس لديك صلاحية لتعديل هذا المستخدم!' : 'Insufficient permissions to edit this user!')}`);
+      return;
+    }
+
+    const newActiveState = targetUser.is_active === false;
+    const confirmMsg = isRtl
+      ? `هل ترغب في ${newActiveState ? 'تفعيل' : 'تعطيل'} حساب "${targetUser.full_name}"؟`
+      : `Are you sure you want to ${newActiveState ? 'activate' : 'deactivate'} user "${targetUser.full_name}"?`;
+
+    if (!confirm(confirmMsg)) return;
+
+    const payload = {
+      is_active: newActiveState
+    };
+
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/users/${targetUser.id}`, {
+        method: 'PATCH',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        const errMsg = data.message || (isRtl ? 'فشل تحديث حالة الحساب' : 'Failed to update account status');
+        triggerToast?.(`⚠️ ${errMsg}`);
+        return;
+      }
+
+      if (data.user) {
+        const allUsers = CustodyDB.getUsers().map(u => u.id === targetUser.id ? { ...u, ...data.user } : u);
+        await CustodyDB.saveUsers(allUsers);
+      }
+      setUsers(CustodyDB.getScopedUsers());
+      triggerToast?.(isRtl
+        ? `تم ${newActiveState ? 'تفعيل' : 'تعطيل'} حساب ${targetUser.full_name} بنجاح.`
+        : `User ${targetUser.full_name} ${newActiveState ? 'activated' : 'deactivated'} successfully.`);
+    } catch (err: any) {
+      triggerToast?.(`⚠️ ${err.message || 'Error updating user status'}`);
+    }
+  };
+
   // Filter users list by company scope and search criteria
   const scopedUsers = useMemo(() => {
     return users.filter(u => {
-      if (u.is_active === false) return false;
+      if (statusFilter === 'ACTIVE' && u.is_active === false) return false;
+      if (statusFilter === 'INACTIVE' && u.is_active !== false) return false;
 
       const userCompanyId = u.company_id || (u as any).companyId || '';
 
@@ -704,7 +758,7 @@ export default function UnifiedAccessControlCenter({
 
       return true;
     });
-  }, [users, effectiveCompanyId, currentUser, isSystemAdmin]);
+  }, [users, effectiveCompanyId, currentUser, isSystemAdmin, statusFilter]);
 
   const filteredUsers = useMemo(() => {
     return scopedUsers.filter(u => {
@@ -1326,6 +1380,19 @@ export default function UnifiedAccessControlCenter({
                       ))}
                     </select>
                   )}
+
+                  {/* Status Filter */}
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as 'ALL' | 'ACTIVE' | 'INACTIVE')}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold border focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <option value="ACTIVE">{isRtl ? '🟢 الحسابات النشطة فقط' : '🟢 Active Only'}</option>
+                    <option value="INACTIVE">{isRtl ? '🔴 الحسابات المعطلة فقط' : '🔴 Inactive Only'}</option>
+                    <option value="ALL">{isRtl ? '⚪ جميع الحالات (All)' : '⚪ All Statuses'}</option>
+                  </select>
                 </div>
               </div>
 
@@ -1390,16 +1457,25 @@ export default function UnifiedAccessControlCenter({
                           <div className="flex items-start justify-between gap-2 mb-2.5">
                             <div className="flex items-center gap-2.5">
                               <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 shadow-sm ${
-                                roleDef?.bgClass || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                                u.is_active === false
+                                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                                  : (roleDef?.bgClass || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300')
                               }`}>
                                 {u.full_name?.charAt(0) || 'U'}
                               </div>
                               <div>
                                 <div className="font-bold text-xs text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                                  <span>{u.full_name}</span>
+                                  <span className={u.is_active === false ? 'line-through text-slate-400 dark:text-slate-500' : ''}>
+                                    {u.full_name}
+                                  </span>
                                   {u.id === currentUser.id && (
                                     <span className="text-[9px] bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.2 rounded font-mono">
                                       {isRtl ? 'حسابك' : 'You'}
+                                    </span>
+                                  )}
+                                  {u.is_active === false && (
+                                    <span className="text-[9px] bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 font-bold px-1.5 py-0.5 rounded-md">
+                                      {isRtl ? 'معطل' : 'Inactive'}
                                     </span>
                                   )}
                                 </div>
@@ -1470,6 +1546,21 @@ export default function UnifiedAccessControlCenter({
                             <Edit2 size={12} />
                             <span>{isRtl ? 'تعديل الصلاحيات والنطاق' : 'Edit Scope & Authority'}</span>
                           </button>
+
+                          {userCanManageThis && u.id !== currentUser.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleUserActive(u)}
+                              className={`p-1.5 rounded-xl transition-all cursor-pointer ${
+                                u.is_active === false
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400'
+                                  : 'bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400'
+                              }`}
+                              title={u.is_active === false ? (isRtl ? 'تفعيل الحساب' : 'Activate Account') : (isRtl ? 'تعطيل الحساب' : 'Deactivate Account')}
+                            >
+                              <Power size={14} />
+                            </button>
+                          )}
 
                           {isSystemAdmin && u.id !== currentUser.id && (
                             <>
@@ -1570,6 +1661,42 @@ export default function UnifiedAccessControlCenter({
                         </select>
                       </div>
                     </div>
+
+                    {/* Account Status (Active/Inactive) Toggle */}
+                    {setEditUserIsActive && (
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2.5 h-2.5 rounded-full ${editUserIsActive !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                          <div>
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                              {isRtl ? 'حالة الحساب في النظام:' : 'Account Status:'}
+                            </span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                              {editUserIsActive !== false
+                                ? (isRtl ? 'الحساب نشط ويمكنه تسجيل الدخول واستخدام النظام' : 'Account is active and can sign in')
+                                : (isRtl ? 'الحساب معطل وممنوع من تسجيل الدخول' : 'Account is inactive and cannot sign in')}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setEditUserIsActive(editUserIsActive === false ? true : false)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            editUserIsActive !== false
+                              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm'
+                              : 'bg-rose-600 hover:bg-rose-500 text-white shadow-sm'
+                          }`}
+                        >
+                          <Power size={13} />
+                          <span>
+                            {editUserIsActive !== false
+                              ? (isRtl ? 'نشط (Active)' : 'Active')
+                              : (isRtl ? 'معطل (Inactive)' : 'Inactive')}
+                          </span>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* 2. Organizational Branch / Unit Scope */}

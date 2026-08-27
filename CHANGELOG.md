@@ -4697,6 +4697,29 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   - TypeScript Linter (`tsc --noEmit`): 0 errors.
   - Applet Build (`compile_applet`): Succeeded.
 
+---
+
+## Phase U: Inactive Users & Lifecycle Management in Unified Access Control Center
+**Date:** 2026-08-27
+**Files Changed:** `src/pages/Settings.tsx`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Status Filter in Unified Access Control Center (`src/components/settings/UnifiedAccessControlCenter.tsx`)**:
+  - Replaced hardcoded `is_active === false` suppression in `scopedUsers` with dynamic `statusFilter` state (`'ACTIVE' | 'INACTIVE' | 'ALL'`), defaulting to `'ACTIVE'` for complete backward compatibility.
+  - Added visual status selector dropdown to the filter toolbar with clear indicator badges (`🟢 Active Only`, `🔴 Inactive Only`, `⚪ All Statuses`).
+- **User Cards & Quick Action Bar**:
+  - Added visual styling and badge indicator for inactive users (strikethrough text, `Inactive` status chip).
+  - Added quick one-click toggle active/inactive button (`Power` icon) in the card action bar with confirmation prompt and authority check via `UsersModule.canUserManageTargetUser`.
+- **Edit User Drawer (`is_active` Switch)**:
+  - Added dedicated interactive Account Status toggle section inside drawer identity form showing real-time active/inactive status.
+- **Backend & State Synchronization (`src/pages/Settings.tsx`)**:
+  - Added `editUserIsActive` state, initialized on edit start (`u.is_active !== false`).
+  - Added `is_active` field to payload in `handleSaveEditUser` sent via `PATCH /api/admin/users/:id`.
+  - Passed `editUserIsActive` and `setEditUserIsActive` to `UnifiedAccessControlCenter`.
+- **Verification**:
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Full Applet Build (`compile_applet`): Succeeded.
+
+
 
 
 

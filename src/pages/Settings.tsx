@@ -221,6 +221,7 @@ export default function Settings({
   const [editUserRegionId, setEditUserRegionId] = useState('');
   const [editUserOrgUnitId, setEditUserOrgUnitId] = useState('');
   const [editUserAssignedOrgUnitIds, setEditUserAssignedOrgUnitIds] = useState<string[]>([]);
+  const [editUserIsActive, setEditUserIsActive] = useState<boolean>(true);
   const [editUserPermissions, setEditUserPermissions] = useState<UserPermissions>({
     manage_settings: false,
     create_expense: false,
@@ -727,6 +728,7 @@ export default function Settings({
     setEditUserRegionId(u.region_id || '');
     setEditUserOrgUnitId(u.org_unit_id || '');
     setEditUserAssignedOrgUnitIds(u.assigned_org_unit_ids || []);
+    setEditUserIsActive(u.is_active !== false);
     setEditUserPermissions({ ...u.permissions });
 
     // Check if permissions match default permissions for this role
@@ -771,6 +773,7 @@ export default function Settings({
       station_id: editUserRole === 'StationAdmin' ? (editUserStationId || null) : null,
       org_unit_id: editUserOrgUnitId || null,
       assigned_org_unit_ids: editUserAssignedOrgUnitIds.length > 0 ? editUserAssignedOrgUnitIds : [],
+      is_active: editUserIsActive,
       permissions: editUserPermissions,
     };
 
@@ -962,6 +965,8 @@ export default function Settings({
           setEditUserOrgUnitId={setEditUserOrgUnitId}
           editUserAssignedOrgUnitIds={editUserAssignedOrgUnitIds}
           setEditUserAssignedOrgUnitIds={setEditUserAssignedOrgUnitIds}
+          editUserIsActive={editUserIsActive}
+          setEditUserIsActive={setEditUserIsActive}
           editUserPermissions={editUserPermissions}
           setEditUserPermissions={setEditUserPermissions}
           editUserIsDefaultMode={editUserIsDefaultMode}
