@@ -23,18 +23,58 @@ import { hashPassword } from './lib/hash';
 import { OfflineQueueEngine } from './db/offlineQueue';
 import { StorageEngine } from './db/storage';
 
+const isProd = Boolean(
+  (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') ||
+  (typeof (import.meta as any) !== 'undefined' && (import.meta as any).env?.PROD)
+);
+
+const getClientEnv = (viteKey: string, nodeKey: string, fallback: string = ''): string => {
+  if (typeof (import.meta as any) !== 'undefined' && (import.meta as any).env && (import.meta as any).env[viteKey]) {
+    return (import.meta as any).env[viteKey];
+  }
+  if (typeof process !== 'undefined' && process.env && process.env[nodeKey]) {
+    return process.env[nodeKey]!;
+  }
+  if (typeof process !== 'undefined' && process.env && process.env[viteKey]) {
+    return process.env[viteKey]!;
+  }
+  return fallback;
+};
+
+const apiKey = getClientEnv('VITE_FIREBASE_API_KEY', 'FIREBASE_API_KEY', '');
+const projectId = getClientEnv('VITE_FIREBASE_PROJECT_ID', 'FIREBASE_PROJECT_ID', 'custodyflow');
+const authDomain = getClientEnv('VITE_FIREBASE_AUTH_DOMAIN', 'FIREBASE_AUTH_DOMAIN', 'custodyflow.firebaseapp.com');
+const storageBucket = getClientEnv('VITE_FIREBASE_STORAGE_BUCKET', 'FIREBASE_STORAGE_BUCKET', 'custodyflow.firebasestorage.app');
+const messagingSenderId = getClientEnv('VITE_FIREBASE_MESSAGING_SENDER_ID', 'FIREBASE_MESSAGING_SENDER_ID', '');
+const appId = getClientEnv('VITE_FIREBASE_APP_ID', 'FIREBASE_APP_ID', '');
+const measurementId = getClientEnv('VITE_FIREBASE_MEASUREMENT_ID', 'FIREBASE_MEASUREMENT_ID', '');
+
+export function validateFirebaseConfig(config: { apiKey?: string; projectId?: string }) {
+  const isStrict = Boolean(
+    (typeof process !== 'undefined' && (process.env?.NODE_ENV === 'production' || process.env?.STRICT_PROD_SECURITY === 'true')) ||
+    (typeof (import.meta as any) !== 'undefined' && ((import.meta as any).env?.PROD || (import.meta as any).env?.VITE_STRICT_PROD_SECURITY === 'true'))
+  );
+  if (isStrict && (!config.apiKey || !config.projectId)) {
+    throw new Error('CRITICAL SECURITY ERROR: Required Firebase configuration (VITE_FIREBASE_API_KEY / FIREBASE_API_KEY, VITE_FIREBASE_PROJECT_ID / FIREBASE_PROJECT_ID) is missing in production/strict mode.');
+  }
+}
+
+if (isProd && (!apiKey || !projectId)) {
+  throw new Error('CRITICAL SECURITY ERROR: Required Firebase configuration (VITE_FIREBASE_API_KEY / FIREBASE_API_KEY, VITE_FIREBASE_PROJECT_ID / FIREBASE_PROJECT_ID) is missing in production/strict mode.');
+}
+
 const firebaseConfig = {
-  apiKey: "AIzaSyA2I_2GIEfQhawBL2KhXyxD6CwTLJR-jFw",
-  authDomain: "custodyflow.firebaseapp.com",
-  projectId: "custodyflow",
-  storageBucket: "custodyflow.firebasestorage.app",
-  messagingSenderId: "88602135716",
-  appId: "1:88602135716:web:b77559202f5e9f233d6a31",
-  measurementId: "G-4W5S4CETH1"
+  apiKey: apiKey || (isProd ? '' : 'dev-placeholder-key'),
+  authDomain,
+  projectId: projectId || 'custodyflow',
+  storageBucket,
+  messagingSenderId,
+  appId,
+  measurementId
 };
 
 const app = initializeApp(firebaseConfig);
-const DATABASE_ID = "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe";
+const DATABASE_ID = getClientEnv('VITE_FIREBASE_DATABASE_ID', 'FIREBASE_DATABASE_ID', 'ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe');
 export const db = initializeFirestore(app, { experimentalForceLongPolling: true }, DATABASE_ID);
 export const auth = getAuth(app);
 export const storage = getStorage(app);

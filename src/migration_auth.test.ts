@@ -27,9 +27,11 @@ describe('Phase 2 - Authentication on Migration Endpoints', () => {
 });
 
 describe('Security - Pepper Versioning & Rotation Support', () => {
-  it('returns LEGACY_EXPOSED_PEPPER for pepper_version = 1', () => {
+  it('returns LEGACY_PEPPER_V1 from env for pepper_version = 1', () => {
+    process.env.LEGACY_PEPPER_V1 = "TestLegacyPepperV1_Secret";
     const pepper = getPepperByVersion(1);
-    expect(pepper).toBe(LEGACY_EXPOSED_PEPPER);
+    expect(pepper).toBe("TestLegacyPepperV1_Secret");
+    delete process.env.LEGACY_PEPPER_V1;
   });
 
   it('returns active APP_PEPPER for pepper_version = 2', () => {
@@ -39,10 +41,12 @@ describe('Security - Pepper Versioning & Rotation Support', () => {
   });
 
   it('produces distinct password hashes for pepper_version 1 vs pepper_version 2 when APP_PEPPER differs', () => {
+    process.env.LEGACY_PEPPER_V1 = "LegacyPepperV1_Test_Value";
     process.env.APP_PEPPER = "NewRotatedSecretPepper_987654321_Unique";
     const hashV1 = hashPassword("TestPassword!2026", "user_salt_1", 1);
     const hashV2 = hashPassword("TestPassword!2026", "user_salt_1", 2);
     expect(hashV1).not.toBe(hashV2);
+    delete process.env.LEGACY_PEPPER_V1;
   });
 
   it('throws a critical security error when APP_PEPPER is unset in STRICT_PROD_SECURITY mode', () => {
@@ -64,16 +68,18 @@ describe('Security - Pepper Versioning & Rotation Support', () => {
     delete process.env.APP_PEPPER;
     try {
       delete process.env.STRICT_PROD_SECURITY;
-      expect(getPepperByVersion(2)).toBe("CustodyFlowActivePepper2026_SecureDefault_v2_KeyDerivation");
+      expect(getPepperByVersion(2)).toBe("DEV_NON_STRICT_FALLBACK_PEPPER_V2");
     } finally {
       process.env.APP_PEPPER = originalPepper;
       process.env.STRICT_PROD_SECURITY = originalStrict;
     }
   });
 
-  it('returns TRANSIENT_EXPOSED_PEPPER_V2 for pepper_version = 3 (transient regression backward compatibility)', () => {
+  it('returns LEGACY_PEPPER_V3 from env for pepper_version = 3 (transient regression backward compatibility)', () => {
+    process.env.LEGACY_PEPPER_V3 = "TestLegacyPepperV3_Secret";
     const pepper = getPepperByVersion(3);
-    expect(pepper).toBe(TRANSIENT_EXPOSED_PEPPER_V2);
+    expect(pepper).toBe("TestLegacyPepperV3_Secret");
+    delete process.env.LEGACY_PEPPER_V3;
   });
 });
 

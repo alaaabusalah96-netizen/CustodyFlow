@@ -4722,6 +4722,35 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   - Linter (`tsc --noEmit`): 0 errors.
   - Full Applet Build (`compile_applet`): Succeeded.
 
+---
+
+## Phase 1 (P0): Remove Secrets from Source & Environment Hardening
+**Date:** 2026-08-27
+**Files Changed:** `.env.example`, `src/firebase.ts`, `server.ts`, `src/migrations/run.ts`, `src/migrations/run_down.ts`, `src/lib/server_hash.ts`, `src/auth_security_hardening.test.ts`, `src/migration_auth.test.ts`, `src/phase_r_pepper_stability.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Environment Variable Declarations (`.env.example`)**: Added required Firebase client and server environment configuration keys (`FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_AUTH_DOMAIN`, etc.) and pepper variables (`APP_PEPPER`, `LEGACY_PEPPER_V1`, `LEGACY_PEPPER_V3`) with clear placeholder values only.
+- **Client & Migration Configuration (`src/firebase.ts`, `src/migrations/run.ts`, `src/migrations/run_down.ts`)**: Removed hardcoded `firebaseConfig` credentials; replaced with dynamic environment loaders with strict fail-loud startup validation in production mode.
+- **Server-Side Hardening (`server.ts`, `src/lib/server_hash.ts`)**: Removed hardcoded Firebase keys and plaintext pepper constants; added `getLegacyPepperV1()` and `getLegacyPepperV3()` to read peppers from environment variables with fail-loud validation when run in production or `STRICT_PROD_SECURITY=true`.
+- **Automated Regression & Security Suite**: Extended `src/auth_security_hardening.test.ts` to assert zero hardcoded `AIza` or plaintext pepper constants in source files and verify fail-loud validation for missing configs.
+- **Verification**:
+  - `tsc --noEmit`: 0 errors.
+  - Vitest: 23/23 tests passed across `src/auth_security_hardening.test.ts`, `src/migration_auth.test.ts`, and `src/phase_r_pepper_stability.test.ts`.
+  - Applet Build (`compile_applet`): Succeeded.
+
+---
+
+## Fix: Dev Server Initialization & Config Loader Hardening
+**Date:** 2026-08-27
+**Files Changed:** `server.ts`, `CHANGELOG.md`
+**Summary:**
+- **Server Configuration (`server.ts`)**: Added fallback loading from `firebase-applet-config.json` when `FIREBASE_API_KEY` is not present in process environment, imported `fs` module, and scoped startup exit checks to `NODE_ENV === 'production'`.
+- **Verification**:
+  - `lint_applet` (`tsc --noEmit`): 0 errors.
+  - Vitest: 23/23 tests passed across security test suites.
+  - Dev server HTTP response: Verified 200 OK on port 3000.
+  - Applet Build (`compile_applet`): Succeeded.
+
+
 
 
 

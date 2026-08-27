@@ -2,17 +2,26 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { runTenantMigrationUp } from './tenantMigration';
 
+const isStrict = process.env.NODE_ENV === 'production' || process.env.STRICT_PROD_SECURITY === 'true';
+const apiKey = process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY || '';
+const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'custodyflow';
+
+if (isStrict && (!apiKey || !projectId)) {
+  throw new Error('CRITICAL SECURITY ERROR: Required Firebase environment variables (FIREBASE_API_KEY, FIREBASE_PROJECT_ID) are missing in production/strict mode.');
+}
+
 const firebaseConfig = {
-  projectId: "custodyflow",
-  appId: "1:88602135716:web:b77559202f5e9f233d6a31",
-  apiKey: "AIzaSyA2I_2GIEfQhawBL2KhXyxD6CwTLJR-jFw",
-  authDomain: "custodyflow.firebaseapp.com",
-  storageBucket: "custodyflow.firebasestorage.app",
-  messagingSenderId: "88602135716"
+  projectId: projectId || 'custodyflow',
+  appId: process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID || '',
+  apiKey: apiKey || (isStrict ? '' : 'dev-placeholder-key'),
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN || 'custodyflow.firebaseapp.com',
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || 'custodyflow.firebasestorage.app',
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || ''
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app, "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe");
+const DATABASE_ID = process.env.FIREBASE_DATABASE_ID || process.env.VITE_FIREBASE_DATABASE_ID || "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe";
+const db = getFirestore(app, DATABASE_ID);
 
 async function main() {
   console.log('Running migration from command line...');

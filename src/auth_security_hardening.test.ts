@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { hashPassword, hashPasswordPBKDF2_210k, getPepperByVersion } from './lib/server_hash';
+import { validateFirebaseConfig } from './firebase';
 import { UsersModule } from './db/users';
 import { StorageEngine } from './db/storage';
 import { AppUser } from './types';
@@ -7,16 +8,54 @@ import fs from 'fs';
 import path from 'path';
 
 describe('v49-security-hardening: Authentication & Security Standards Verification', () => {
-  it('should verify that APP_PEPPER and placeholder PLATFORM_OWNER_EMAIL are documented in .env.example without exposing personal data', () => {
+  it('should verify that Firebase keys, APP_PEPPER, legacy peppers, and placeholder PLATFORM_OWNER_EMAIL are documented in .env.example without exposing real secrets', () => {
     const envExamplePath = path.join(process.cwd(), '.env.example');
     const content = fs.readFileSync(envExamplePath, 'utf-8');
     
     expect(content).toContain('APP_PEPPER=');
+    expect(content).toContain('FIREBASE_API_KEY=');
+    expect(content).toContain('FIREBASE_PROJECT_ID=');
+    expect(content).toContain('LEGACY_PEPPER_V1=');
+    expect(content).toContain('LEGACY_PEPPER_V3=');
     expect(content).toContain('PLATFORM_OWNER_EMAIL="admin@your-domain.com"');
+    expect(content).not.toContain('AIzaSy');
     expect(content).not.toContain('alaaabusalah96@gmail.com');
   });
 
+  it('should verify no real Firebase API keys or exposed peppers are hardcoded in source files', () => {
+    const filesToCheck = [
+      path.join(process.cwd(), 'src', 'firebase.ts'),
+      path.join(process.cwd(), 'server.ts'),
+      path.join(process.cwd(), 'src', 'migrations', 'run.ts'),
+      path.join(process.cwd(), 'src', 'migrations', 'run_down.ts'),
+      path.join(process.cwd(), 'src', 'lib', 'server_hash.ts'),
+    ];
+
+    filesToCheck.forEach(filePath => {
+      if (fs.existsSync(filePath)) {
+        const text = fs.readFileSync(filePath, 'utf-8');
+        expect(text).not.toContain('AIzaSyA2I_2GIEfQhawBL2KhXyxD6CwTLJR-jFw');
+        expect(text).not.toContain('CustodyFlowSecureSystemPepper2026!KeyDerivationV2');
+        expect(text).not.toContain('CustodyFlowActivePepper2026_SecureDefault_v2_KeyDerivation');
+      }
+    });
+  });
+
+  it('should verify validateFirebaseConfig fails loud in production/strict mode when required config is missing', () => {
+    const origStrict = process.env.STRICT_PROD_SECURITY;
+    try {
+      process.env.STRICT_PROD_SECURITY = 'true';
+      expect(() => validateFirebaseConfig({ apiKey: '', projectId: 'custodyflow' })).toThrow(/CRITICAL SECURITY ERROR: Required Firebase configuration/);
+      expect(() => validateFirebaseConfig({ apiKey: 'valid-key', projectId: '' })).toThrow(/CRITICAL SECURITY ERROR: Required Firebase configuration/);
+      expect(() => validateFirebaseConfig({ apiKey: 'valid-key', projectId: 'custodyflow' })).not.toThrow();
+    } finally {
+      process.env.STRICT_PROD_SECURITY = origStrict;
+    }
+  });
+
   it('should verify PBKDF2 210,000 iteration password hashing produces unique salted-and-peppered hashes per pepper version', () => {
+    process.env.LEGACY_PEPPER_V1 = 'TestLegacyPepperV1_Secret_Key';
+    process.env.APP_PEPPER = 'TestActivePepperV2_Secret_Key';
     const password = 'SecureFinancialPassword!2026';
     const emailSalt = 'admin@kemit-erp.com';
 
@@ -28,6 +67,7 @@ describe('v49-security-hardening: Authentication & Security Standards Verificati
     expect(hashV1).not.toEqual(hashV2);
     expect(hashV1.length).toBe(128); // 64 bytes hex
     expect(hashV2.length).toBe(128);
+    delete process.env.LEGACY_PEPPER_V1;
   });
 
   it('should verify plaintext password matching fallback is disabled when NODE_ENV is production and ALLOW_PLAINTEXT_DEV_FALLBACK is not true', () => {

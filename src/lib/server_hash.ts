@@ -1,12 +1,42 @@
 import crypto from "crypto";
 
-// Legacy hardcoded pepper: known-exposed, verification-only, never used for new hashes
-export const LEGACY_EXPOSED_PEPPER = "CustodyFlowSecureSystemPepper2026!KeyDerivationV2";
-
-// Transiently exposed pepper from previous regression: verification-only backward compatibility, never used for new hashes
-export const TRANSIENT_EXPOSED_PEPPER_V2 = "CustodyFlowActivePepper2026_SecureDefault_v2_KeyDerivation";
-
 let hasWarnedUnsetPepper = false;
+
+/**
+ * Returns legacy pepper v1 from environment (LEGACY_PEPPER_V1 / LEGACY_EXPOSED_PEPPER).
+ * In strict/production mode: fails loud if not set when requested.
+ */
+export function getLegacyPepperV1(): string {
+  const envVal = typeof process !== 'undefined' ? (process.env?.LEGACY_PEPPER_V1 || process.env?.LEGACY_EXPOSED_PEPPER) : undefined;
+  if (!envVal) {
+    const isStrict = typeof process !== 'undefined' && (process.env?.STRICT_PROD_SECURITY === 'true' || process.env?.NODE_ENV === 'production');
+    if (isStrict) {
+      throw new Error('CRITICAL SECURITY ERROR: LEGACY_PEPPER_V1 environment variable is not set in production/strict mode.');
+    }
+    return 'DEV_LEGACY_PEPPER_V1_ENV_REQUIRED';
+  }
+  return envVal;
+}
+
+/**
+ * Returns legacy pepper v3 from environment (LEGACY_PEPPER_V3 / TRANSIENT_EXPOSED_PEPPER_V2).
+ * In strict/production mode: fails loud if not set when requested.
+ */
+export function getLegacyPepperV3(): string {
+  const envVal = typeof process !== 'undefined' ? (process.env?.LEGACY_PEPPER_V3 || process.env?.TRANSIENT_EXPOSED_PEPPER_V2) : undefined;
+  if (!envVal) {
+    const isStrict = typeof process !== 'undefined' && (process.env?.STRICT_PROD_SECURITY === 'true' || process.env?.NODE_ENV === 'production');
+    if (isStrict) {
+      throw new Error('CRITICAL SECURITY ERROR: LEGACY_PEPPER_V3 environment variable is not set in production/strict mode.');
+    }
+    return 'DEV_LEGACY_PEPPER_V3_ENV_REQUIRED';
+  }
+  return envVal;
+}
+
+// Backwards-compatible exported constants referencing env helpers dynamically or returning default placeholders for non-strict dev
+export const LEGACY_EXPOSED_PEPPER = typeof process !== 'undefined' && (process.env?.LEGACY_PEPPER_V1 || process.env?.LEGACY_EXPOSED_PEPPER) ? (process.env.LEGACY_PEPPER_V1 || process.env.LEGACY_EXPOSED_PEPPER)! : 'DEV_LEGACY_PEPPER_V1_ENV_REQUIRED';
+export const TRANSIENT_EXPOSED_PEPPER_V2 = typeof process !== 'undefined' && (process.env?.LEGACY_PEPPER_V3 || process.env?.TRANSIENT_EXPOSED_PEPPER_V2) ? (process.env.LEGACY_PEPPER_V3 || process.env.TRANSIENT_EXPOSED_PEPPER_V2)! : 'DEV_LEGACY_PEPPER_V3_ENV_REQUIRED';
 
 /**
  * Returns the active APP_PEPPER from environment.
@@ -28,23 +58,23 @@ export function getActiveServerPepper(): string {
       hasWarnedUnsetPepper = true;
       console.warn('[Security Notice] APP_PEPPER environment secret is unset; using stable non-strict fallback pepper.');
     }
-    return "CustodyFlowActivePepper2026_SecureDefault_v2_KeyDerivation";
+    return "DEV_NON_STRICT_FALLBACK_PEPPER_V2";
   }
   return envPepper;
 }
 
 /**
  * Returns pepper according to stored pepper_version.
- * - pepper_version: 1 -> LEGACY_EXPOSED_PEPPER (verification-only for old hashes)
- * - pepper_version: 3 -> TRANSIENT_EXPOSED_PEPPER_V2 (verification-only for transient regression hashes)
+ * - pepper_version: 1 -> LEGACY_PEPPER_V1 from env (verification-only for old hashes)
+ * - pepper_version: 3 -> LEGACY_PEPPER_V3 from env (verification-only for transient regression hashes)
  * - pepper_version: 2 (or other) -> active APP_PEPPER from environment
  */
 export function getPepperByVersion(version: number = 2): string {
   if (version === 1) {
-    return LEGACY_EXPOSED_PEPPER;
+    return getLegacyPepperV1();
   }
   if (version === 3) {
-    return TRANSIENT_EXPOSED_PEPPER_V2;
+    return getLegacyPepperV3();
   }
   return getActiveServerPepper();
 }

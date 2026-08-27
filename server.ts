@@ -1,6 +1,7 @@
 import express from "express";
 import cookieParser from "cookie-parser";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { initializeApp } from "firebase/app";
 import { 
@@ -45,17 +46,37 @@ function generateSecureTemporaryPassword(): string {
   return pass;
 }
 
+let appletConfig: Record<string, string> = {};
+try {
+  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(configPath)) {
+    appletConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  }
+} catch (_) {}
+
+const serverApiKey = process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY || appletConfig.apiKey || "";
+const serverProjectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || appletConfig.projectId || "custodyflow";
+const serverAuthDomain = process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN || appletConfig.authDomain || "custodyflow.firebaseapp.com";
+const serverStorageBucket = process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || appletConfig.storageBucket || "custodyflow.firebasestorage.app";
+const serverMessagingSenderId = process.env.FIREBASE_MESSAGING_SENDER_ID || process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || appletConfig.messagingSenderId || "";
+const serverAppId = process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID || appletConfig.appId || "";
+
+if (process.env.NODE_ENV === 'production' && (!serverApiKey || !serverProjectId)) {
+  console.error("CRITICAL SECURITY ERROR: Required Firebase environment variables (FIREBASE_API_KEY, FIREBASE_PROJECT_ID) are missing in production mode.");
+  process.exit(1);
+}
+
 const firebaseConfig = {
-  projectId: "custodyflow",
-  appId: "1:88602135716:web:b77559202f5e9f233d6a31",
-  apiKey: "AIzaSyA2I_2GIEfQhawBL2KhXyxD6CwTLJR-jFw",
-  authDomain: "custodyflow.firebaseapp.com",
-  storageBucket: "custodyflow.firebasestorage.app",
-  messagingSenderId: "88602135716"
+  projectId: serverProjectId || "custodyflow",
+  appId: serverAppId,
+  apiKey: serverApiKey || "dev-placeholder-key",
+  authDomain: serverAuthDomain,
+  storageBucket: serverStorageBucket,
+  messagingSenderId: serverMessagingSenderId
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
-const DATABASE_ID = "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe";
+const DATABASE_ID = process.env.FIREBASE_DATABASE_ID || process.env.VITE_FIREBASE_DATABASE_ID || "ai-studio-custodyflow-b2f42bf6-7a6a-43a4-9986-3d46405d5ebe";
 const db = getFirestore(firebaseApp, DATABASE_ID);
 
 // Initialize Firebase Admin SDK
@@ -129,10 +150,10 @@ async function startServer() {
   }));
   const PORT = 3000;
 
-  const isProductionLike = process.env.NODE_ENV === 'production' || process.env.STRICT_PROD_SECURITY === 'true';
+  const isProduction = process.env.NODE_ENV === 'production';
   if (!process.env.APP_PEPPER) {
-    if (isProductionLike) {
-      console.error("CRITICAL SECURITY ERROR: APP_PEPPER environment variable is not set in a production/strict environment. Refusing to start.");
+    if (isProduction) {
+      console.error("CRITICAL SECURITY ERROR: APP_PEPPER environment variable is not set in production. Refusing to start.");
       process.exit(1);
     }
     console.warn("[Security Notice] APP_PEPPER is not set. Server will start in non-strict/dev mode with a fallback pepper — do NOT use this in production.");

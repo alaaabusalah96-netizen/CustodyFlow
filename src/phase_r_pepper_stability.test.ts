@@ -20,8 +20,8 @@ describe('Phase R: APP_PEPPER Persistence & Stability Across Server Restarts/Red
     try {
       const call1 = getActiveServerPepper();
       const call2 = getActiveServerPepper();
-      expect(call1).toBe('CustodyFlowActivePepper2026_SecureDefault_v2_KeyDerivation');
-      expect(call2).toBe('CustodyFlowActivePepper2026_SecureDefault_v2_KeyDerivation');
+      expect(call1).toBe('DEV_NON_STRICT_FALLBACK_PEPPER_V2');
+      expect(call2).toBe('DEV_NON_STRICT_FALLBACK_PEPPER_V2');
       expect(call1).toBe(call2);
     } finally {
       process.env.APP_PEPPER = originalPepper;
@@ -48,7 +48,7 @@ describe('Phase R: APP_PEPPER Persistence & Stability Across Server Restarts/Red
 
       // Simulate Server Restart / Container Redeploy (re-reading fallback pepper)
       const pepperDeploymentB = getPepperByVersion(pepperVersion);
-      expect(pepperDeploymentB).toBe('CustodyFlowActivePepper2026_SecureDefault_v2_KeyDerivation');
+      expect(pepperDeploymentB).toBe('DEV_NON_STRICT_FALLBACK_PEPPER_V2');
 
       // Deployment B: user enters same password on first login / change password
       const hashDeploymentB = hashPasswordPBKDF2_210k(plainPassword, salt, pepperVersion);
@@ -88,15 +88,19 @@ describe('Phase R: APP_PEPPER Persistence & Stability Across Server Restarts/Red
     const originalPepper = process.env.APP_PEPPER;
     const originalStrict = process.env.STRICT_PROD_SECURITY;
     const originalNodeEnv = process.env.NODE_ENV;
+    process.env.LEGACY_PEPPER_V1 = 'LegacyPepperV1_Test_Val';
+    process.env.LEGACY_PEPPER_V3 = 'LegacyPepperV3_Test_Val';
     delete process.env.APP_PEPPER;
     delete process.env.STRICT_PROD_SECURITY;
     process.env.NODE_ENV = 'development';
 
     try {
-      expect(getPepperByVersion(1)).toBe(LEGACY_EXPOSED_PEPPER);
-      expect(getPepperByVersion(3)).toBe(TRANSIENT_EXPOSED_PEPPER_V2);
-      expect(getPepperByVersion(2)).toBe('CustodyFlowActivePepper2026_SecureDefault_v2_KeyDerivation');
+      expect(getPepperByVersion(1)).toBe('LegacyPepperV1_Test_Val');
+      expect(getPepperByVersion(3)).toBe('LegacyPepperV3_Test_Val');
+      expect(getPepperByVersion(2)).toBe('DEV_NON_STRICT_FALLBACK_PEPPER_V2');
     } finally {
+      delete process.env.LEGACY_PEPPER_V1;
+      delete process.env.LEGACY_PEPPER_V3;
       process.env.APP_PEPPER = originalPepper;
       process.env.STRICT_PROD_SECURITY = originalStrict;
       process.env.NODE_ENV = originalNodeEnv;
