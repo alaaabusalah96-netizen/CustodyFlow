@@ -4,7 +4,7 @@ import { BusinessEngineContract, EngineExecutionResult } from './warehouse_contr
 import { SequenceEngine } from './sequence';
 import { AuditLogEngine } from './audit';
 import { createBaseMetadata, updateBaseMetadata } from './metadata';
-import { GLAccount, JournalEntry, LedgerLine, AccountType, AccountingDimensions, JournalEntryFilterOptions } from '../../types/accounting';
+import { GLAccount, JournalEntry, LedgerLine, AccountType, AccountingDimensions, JournalEntryFilterOptions, CoaTemplateId, CoaTemplateMetadata } from '../../types/accounting';
 import { StorageEngine } from '../../db/storage';
 import { dbSetDoc, db } from '../../firebase';
 import { syncWriteWithOfflineFallback } from '../../db/offlineQueue';
@@ -27,7 +27,51 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
 
   private auditEngine = new AuditLogEngine();
 
-  // Standard accounts template for initialization
+  // Available COA Templates Metadata
+  static COA_TEMPLATES_METADATA: CoaTemplateMetadata[] = [
+    {
+      id: 'standard',
+      nameAr: 'الدليل القياسي العام (General / Standard)',
+      nameEn: 'General Standard Template',
+      descriptionAr: 'دليل حسابات تجاري وإداري متكامل مناسب للخدمات والأنشطة العامة والمقاولات',
+      descriptionEn: 'Comprehensive commercial & administrative chart suitable for general business & services',
+      industry: 'general'
+    },
+    {
+      id: 'poultry',
+      nameAr: 'دليل قطاع الإنتاج الداجني والزراعي (Poultry & Agriculture)',
+      nameEn: 'Poultry & Agriculture Template',
+      descriptionAr: 'مهيأ بمخزون العلف، قطعان الأمهات واللاحم، مصروفات التحصينات والبيطرة، ومجازر الدواجن',
+      descriptionEn: 'Tailored with feed stock, flock assets, veterinary vaccination expenses, and processing accounts',
+      industry: 'poultry'
+    },
+    {
+      id: 'retail',
+      nameAr: 'دليل قطاع التجزئة والسوبر ماركت (Retail Supermarkets)',
+      nameEn: 'Retail Supermarkets Template',
+      descriptionAr: 'مهيأ بحسابات نقاط البيع (POS)، مخزون بضاعة التجزئة، خصومات المبيعات، ومصروفات الفروع',
+      descriptionEn: 'Configured for POS settlement, retail merchandise inventory, sales allowances, and store expenses',
+      industry: 'retail'
+    },
+    {
+      id: 'manufacturing',
+      nameAr: 'دليل قطاع التصنيع والإنتاج الصناعي (Manufacturing & Industry)',
+      nameEn: 'Manufacturing & Industrial Template',
+      descriptionAr: 'مهيأ بمخزون المواد الخام، الإنتاج تحت التشغيل، تكلفة التصنيع المباشرة ومصروفات المصانع',
+      descriptionEn: 'Configured for raw materials, work in progress (WIP), direct manufacturing, and factory overheads',
+      industry: 'manufacturing'
+    },
+    {
+      id: 'transport',
+      nameAr: 'دليل قطاع النقل والخدمات اللوجستية (Logistics & Fleet)',
+      nameEn: 'Logistics & Fleet Transport Template',
+      descriptionAr: 'مهيأ بحسابات أسطول الشاحنات، مصروفات الوقود والزيوت، الكارتات والرسوم، وصيانة المركبات',
+      descriptionEn: 'Configured for vehicle assets, fuel/lubricants, road tolls, and fleet maintenance expenses',
+      industry: 'transport'
+    }
+  ];
+
+  // Standard accounts template for initialization (General / Commercial)
   static STANDARD_COA_TEMPLATE: Omit<GLAccount, 'id' | 'company_id' | 'createdAt'>[] = [
     // Assets (1)
     { code: '110101', nameAr: 'صندوق الخزينة الرئيسي (Cash in Hand)', nameEn: 'Cash in Hand (Main Box)', type: 'ASSET', balance: 50000, status: 'ACTIVE' },
@@ -56,25 +100,206 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     { code: '510701', nameAr: 'مصروف حصة الشركة في التأمينات (Employer Social Insurance Expense)', nameEn: 'Employer Social Insurance Expense', type: 'EXPENSE', balance: 0, status: 'ACTIVE' }
   ];
 
-  static getAccounts(companyId: string): GLAccount[] {
+  // Industry Template: Poultry & Agricultural Production (قطاع الدواجن والإنتاج الزراعي)
+  static POULTRY_COA_TEMPLATE: Omit<GLAccount, 'id' | 'company_id' | 'createdAt'>[] = [
+    // Assets (1)
+    { code: '110101', nameAr: 'صندوق الخزينة الرئيسي (Cash in Hand)', nameEn: 'Cash in Hand (Main Box)', type: 'ASSET', balance: 50000, status: 'ACTIVE' },
+    { code: '110201', nameAr: 'حساب بنك الشركة الجاري (Corporate Bank Account)', nameEn: 'Corporate Checking Account', type: 'ASSET', balance: 250000, status: 'ACTIVE' },
+    { code: '110301', nameAr: 'حسابات العملاء وموزعي الدواجن (Accounts Receivable)', nameEn: 'Accounts Receivable (Poultry Distributors)', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '120101', nameAr: 'مخزون الأعلاف ومكونات التغذية (Feed Stock Inventory)', nameEn: 'Poultry Feed & Raw Feed Inventory', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '120201', nameAr: 'مخزون الأدوية واللقاحات البيطرية (Veterinary Supplies)', nameEn: 'Veterinary Medicines & Vaccines Stock', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '120301', nameAr: 'أصول حيوية - قطعان الدواجن والتربية (Biological Assets - Flocks)', nameEn: 'Biological Assets (Live Broiler & Breeder Flocks)', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '130101', nameAr: 'الأصول الثابتة - عنابر ومعدات المزارع (Farm Fixed Assets)', nameEn: 'Farm Buildings & Poultry Equipment', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '130201', nameAr: 'مجمع إهلاك أصول المزارع (Accumulated Depreciation - Farms)', nameEn: 'Accumulated Depreciation - Farms', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    // Liabilities (2)
+    { code: '210101', nameAr: 'حسابات موردي الأعلاف والكتاكيت (Accounts Payable)', nameEn: 'Accounts Payable (Feed & Hatchery Suppliers)', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210201', nameAr: 'مستحقات ضريبة القيمة المضافة (VAT Payable)', nameEn: 'VAT Payable (State Tax)', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210301', nameAr: 'ضريبة الخصم والتحصيل تحت حساب الضريبة (Withholding Tax Payable)', nameEn: 'Withholding Tax Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210401', nameAr: 'مستحقات التأمينات الاجتماعية (Social Insurance Payable)', nameEn: 'Social Insurance Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210501', nameAr: 'ضريبة كسب العمل المستحقة (Payroll Tax Payable)', nameEn: 'Payroll Taxes Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    // Equity (3)
+    { code: '310101', nameAr: 'رأس مال الشركة المدفوع (Share Capital)', nameEn: 'Corporate Paid-in Capital', type: 'EQUITY', balance: 300000, status: 'ACTIVE' },
+    // Revenue (4)
+    { code: '410101', nameAr: 'إيرادات مبيعات الدواجن الحية والمصنعة (Poultry Sales)', nameEn: 'Live Birds & Processed Poultry Sales Revenue', type: 'REVENUE', balance: 0, status: 'ACTIVE' },
+    { code: '410201', nameAr: 'إيرادات مبيعات السماد العضوي ومخلفات المزارع (Organic Fertilizer Sales)', nameEn: 'Organic Fertilizer & By-products Sales', type: 'REVENUE', balance: 0, status: 'ACTIVE' },
+    // Expenses (5)
+    { code: '510101', nameAr: 'تكلفة استهلاك الأعلاف المباشرة (Feed Consumption Cost)', nameEn: 'Direct Poultry Feed Cost', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510201', nameAr: 'مصروفات التحصين والرعاية البيطرية (Veterinary Expenses)', nameEn: 'Veterinary & Vaccination Expenses', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510301', nameAr: 'مصروفات التدفئة والطاقة للعنابر (Farm Energy & Heating)', nameEn: 'Farm Heating & Energy Expenses', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510401', nameAr: 'مصروفات الصيانة الفنية لمعدات المزارع (Farm Equipment Maintenance)', nameEn: 'Farm Maintenance & Repairs', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510501', nameAr: 'مصروفات عمومية وإدارية (G&A Expenses)', nameEn: 'General & Administrative Expenses', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510601', nameAr: 'مصروف رواتب وأجور عمال المزارع (Farm Labor & Staff Salaries)', nameEn: 'Farm Staff & Labor Salaries Expense', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510701', nameAr: 'مصروف حصة الشركة في التأمينات (Employer Social Insurance Expense)', nameEn: 'Employer Social Insurance Expense', type: 'EXPENSE', balance: 0, status: 'ACTIVE' }
+  ];
+
+  // Industry Template: Retail Supermarkets & Stores (قطاع تجارة التجزئة والسوبر ماركت)
+  static RETAIL_COA_TEMPLATE: Omit<GLAccount, 'id' | 'company_id' | 'createdAt'>[] = [
+    // Assets (1)
+    { code: '110101', nameAr: 'صندوق الخزينة الرئيسي ونقاط البيع (Cash & POS Registers)', nameEn: 'Main Cash & POS Register Tills', type: 'ASSET', balance: 50000, status: 'ACTIVE' },
+    { code: '110201', nameAr: 'حساب بنك الشركة الجاري وحساب التسويات (Bank & POS Clearing)', nameEn: 'Corporate Bank & Card Settlement Account', type: 'ASSET', balance: 250000, status: 'ACTIVE' },
+    { code: '110301', nameAr: 'حسابات عملاء الشركات والآجل (Accounts Receivable - Corporate)', nameEn: 'Accounts Receivable (Credit & Corporate)', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '120101', nameAr: 'مخزون بضاعة التجزئة بالأرفف والمستودع (Merchandise Inventory)', nameEn: 'Retail Merchandise & Store Inventory', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '130101', nameAr: 'الأصول الثابتة - ثلاجات وتجهيزات الفروع (Store Equipment & Fixtures)', nameEn: 'Refrigeration, Fixtures & Store Equipment', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '130201', nameAr: 'مجمع إهلاك تجهيزات الفروع (Accumulated Depreciation - Store Equipment)', nameEn: 'Accumulated Depreciation - Fixtures', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    // Liabilities (2)
+    { code: '210101', nameAr: 'حسابات موردي السلع الاستهلاكية (Accounts Payable - FMCG Vendors)', nameEn: 'Accounts Payable (Merchandise Vendors)', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210201', nameAr: 'مستحقات ضريبة القيمة المضافة (VAT Payable)', nameEn: 'VAT Payable (State Tax)', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210301', nameAr: 'ضريبة الخصم والتحصيل تحت حساب الضريبة (Withholding Tax Payable)', nameEn: 'Withholding Tax Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210401', nameAr: 'مستحقات التأمينات الاجتماعية (Social Insurance Payable)', nameEn: 'Social Insurance Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210501', nameAr: 'ضريبة كسب العمل المستحقة (Payroll Tax Payable)', nameEn: 'Payroll Taxes Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    // Equity (3)
+    { code: '310101', nameAr: 'رأس مال الشركة المدفوع (Share Capital)', nameEn: 'Corporate Paid-in Capital', type: 'EQUITY', balance: 300000, status: 'ACTIVE' },
+    // Revenue (4)
+    { code: '410101', nameAr: 'إيرادات مبيعات التجزئة بالفروع (Retail Store Sales Revenue)', nameEn: 'Retail Store Sales Revenue', type: 'REVENUE', balance: 0, status: 'ACTIVE' },
+    { code: '410201', nameAr: 'إيرادات مساحات العرض وتأجير الأرفف (Shelf Renting & Promo Revenue)', nameEn: 'Slotting Fees & Gondola Promo Revenue', type: 'REVENUE', balance: 0, status: 'ACTIVE' },
+    // Expenses (5)
+    { code: '510101', nameAr: 'تكلفة البضاعة المباعة (Cost of Goods Sold - COGS)', nameEn: 'Cost of Goods Sold (COGS)', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510201', nameAr: 'مصروفات التالف والهالك وفروق الجرد (Shrinkage & Waste Expense)', nameEn: 'Inventory Shrinkage & Spoilage Expense', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510301', nameAr: 'إيجارات الفروع والمخازن (Store & Warehouse Rents)', nameEn: 'Store & Warehouse Lease Expenses', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510401', nameAr: 'مصروفات التغليف والتعبئة (Packaging Supplies Expense)', nameEn: 'Packaging & Bagging Supplies', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510501', nameAr: 'مصروفات عمومية وإدارية (G&A Expenses)', nameEn: 'General & Administrative Expenses', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510601', nameAr: 'مصروف رواتب وأجور موظفي الكاشير والفروع (Store Staff & Cashier Salaries)', nameEn: 'Store Staff & Cashier Salaries Expense', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510701', nameAr: 'مصروف حصة الشركة في التأمينات (Employer Social Insurance Expense)', nameEn: 'Employer Social Insurance Expense', type: 'EXPENSE', balance: 0, status: 'ACTIVE' }
+  ];
+
+  // Industry Template: Manufacturing & Industrial Production (قطاع التصنيع والإنتاج)
+  static MANUFACTURING_COA_TEMPLATE: Omit<GLAccount, 'id' | 'company_id' | 'createdAt'>[] = [
+    // Assets (1)
+    { code: '110101', nameAr: 'صندوق الخزينة الرئيسي (Cash in Hand)', nameEn: 'Cash in Hand (Main Box)', type: 'ASSET', balance: 50000, status: 'ACTIVE' },
+    { code: '110201', nameAr: 'حساب بنك الشركة الجاري (Corporate Bank Account)', nameEn: 'Corporate Checking Account', type: 'ASSET', balance: 250000, status: 'ACTIVE' },
+    { code: '110301', nameAr: 'حسابات العملاء والمدينين (Accounts Receivable)', nameEn: 'Accounts Receivable (Customers)', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '120101', nameAr: 'مخزون المواد الخام ومستلزمات الإنتاج (Raw Materials Inventory)', nameEn: 'Raw Materials Inventory', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '120201', nameAr: 'مخزون الإنتاج تحت التشغيل (Work In Progress - WIP)', nameEn: 'Work in Progress (WIP) Inventory', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '120301', nameAr: 'مخزون الإنتاج التام والمنتجات الجاهزة (Finished Goods Inventory)', nameEn: 'Finished Goods Inventory', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '130101', nameAr: 'الأصول الثابتة - خطوط الإنتاج والآلات (Machinery & Production Lines)', nameEn: 'Industrial Machinery & Production Lines', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '130201', nameAr: 'مجمع إهلاك آلات المصنع (Accumulated Depreciation - Machinery)', nameEn: 'Accumulated Depreciation - Plant Machinery', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    // Liabilities (2)
+    { code: '210101', nameAr: 'حسابات موردي المواد الخام وموردي المصنع (Accounts Payable)', nameEn: 'Accounts Payable (Raw Material Vendors)', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210201', nameAr: 'مستحقات ضريبة القيمة المضافة (VAT Payable)', nameEn: 'VAT Payable (State Tax)', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210301', nameAr: 'ضريبة الخصم والتحصيل تحت حساب الضريبة (Withholding Tax Payable)', nameEn: 'Withholding Tax Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210401', nameAr: 'مستحقات التأمينات الاجتماعية (Social Insurance Payable)', nameEn: 'Social Insurance Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210501', nameAr: 'ضريبة كسب العمل المستحقة (Payroll Tax Payable)', nameEn: 'Payroll Taxes Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    // Equity (3)
+    { code: '310101', nameAr: 'رأس مال الشركة المدفوع (Share Capital)', nameEn: 'Corporate Paid-in Capital', type: 'EQUITY', balance: 300000, status: 'ACTIVE' },
+    // Revenue (4)
+    { code: '410101', nameAr: 'إيرادات مبيعات المنتجات المصنعة (Manufactured Goods Sales)', nameEn: 'Manufactured Goods Sales Revenue', type: 'REVENUE', balance: 0, status: 'ACTIVE' },
+    // Expenses (5)
+    { code: '510101', nameAr: 'تكلفة المواد الخام المباشرة المستهلكة (Direct Raw Materials Cost)', nameEn: 'Direct Raw Materials Used', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510201', nameAr: 'أجور العمالة الصناعية المباشرة (Direct Manufacturing Labor)', nameEn: 'Direct Manufacturing Labor Cost', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510301', nameAr: 'مصروفات التشغيل الصناعي غير المباشر (Factory Overhead Expenses)', nameEn: 'Manufacturing Overhead & Utilities', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510401', nameAr: 'مصروفات صيانة خطوط الإنتاج والقطع (Plant Maintenance)', nameEn: 'Production Line Maintenance & Spare Parts', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510501', nameAr: 'مصروفات عمومية وإدارية (G&A Expenses)', nameEn: 'General & Administrative Expenses', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510601', nameAr: 'مصروف رواتب الإدارة والمهندسين (Management & Engineering Salaries)', nameEn: 'Administrative & Engineering Salaries', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510701', nameAr: 'مصروف حصة الشركة في التأمينات (Employer Social Insurance Expense)', nameEn: 'Employer Social Insurance Expense', type: 'EXPENSE', balance: 0, status: 'ACTIVE' }
+  ];
+
+  // Industry Template: Transport & Logistics (قطاع النقل والخدمات اللوجستية)
+  static TRANSPORT_COA_TEMPLATE: Omit<GLAccount, 'id' | 'company_id' | 'createdAt'>[] = [
+    // Assets (1)
+    { code: '110101', nameAr: 'صندوق الخزينة وعهد السائقين (Cash in Hand & Driver Advances)', nameEn: 'Cash in Hand & Driver Road Custody', type: 'ASSET', balance: 50000, status: 'ACTIVE' },
+    { code: '110201', nameAr: 'حساب بنك الشركة الجاري (Corporate Bank Account)', nameEn: 'Corporate Checking Account', type: 'ASSET', balance: 250000, status: 'ACTIVE' },
+    { code: '110301', nameAr: 'حسابات عملاء الشحن والخدمات اللوجستية (Accounts Receivable)', nameEn: 'Accounts Receivable (Freight & Logistics Clients)', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '120101', nameAr: 'مخزون قطع غيار الشاحنات والإطارات (Fleet Spare Parts & Tyres Stock)', nameEn: 'Truck Spare Parts, Tyres & Oil Stock', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '130101', nameAr: 'الأصول الثابتة - أسطول الشاحنات والمركبات (Fleet Vehicles & Trucks)', nameEn: 'Fleet Trucks, Trailers & Vehicles', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    { code: '130201', nameAr: 'مجمع إهلاك أسطول السيارات (Accumulated Depreciation - Fleet)', nameEn: 'Accumulated Depreciation - Fleet', type: 'ASSET', balance: 0, status: 'ACTIVE' },
+    // Liabilities (2)
+    { code: '210101', nameAr: 'حسابات موردي قطع الغيار والوقود والورش (Accounts Payable)', nameEn: 'Accounts Payable (Fuel & Workshop Vendors)', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210201', nameAr: 'مستحقات ضريبة القيمة المضافة (VAT Payable)', nameEn: 'VAT Payable (State Tax)', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210301', nameAr: 'ضريبة الخصم والتحصيل تحت حساب الضريبة (Withholding Tax Payable)', nameEn: 'Withholding Tax Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210401', nameAr: 'مستحقات التأمينات الاجتماعية (Social Insurance Payable)', nameEn: 'Social Insurance Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    { code: '210501', nameAr: 'ضريبة كسب العمل المستحقة (Payroll Tax Payable)', nameEn: 'Payroll Taxes Payable', type: 'LIABILITY', balance: 0, status: 'ACTIVE' },
+    // Equity (3)
+    { code: '310101', nameAr: 'رأس مال الشركة المدفوع (Share Capital)', nameEn: 'Corporate Paid-in Capital', type: 'EQUITY', balance: 300000, status: 'ACTIVE' },
+    // Revenue (4)
+    { code: '410101', nameAr: 'إيرادات خدمات النقل والشحن البري (Freight & Logistics Revenue)', nameEn: 'Freight & Road Logistics Revenue', type: 'REVENUE', balance: 0, status: 'ACTIVE' },
+    // Expenses (5)
+    { code: '510101', nameAr: 'مصروفات وقود الديزل والزيوت للأسطول (Fleet Diesel & Oil Expense)', nameEn: 'Fleet Fuel & Lubricants Expenses', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510201', nameAr: 'رسوم الطرق والكارتات والموازين (Road Tolls & Weigh-bridge Fees)', nameEn: 'Highway Tolls & Weighing Fees', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510301', nameAr: 'مصروفات صيانة وتجديد الإطارات والسيارات (Vehicle Maintenance & Tyres)', nameEn: 'Vehicle Maintenance & Tyre Replacement', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510401', nameAr: 'مصروفات ترخيص وتأمين أسطول المركبات (Vehicle Insurance & Licensing)', nameEn: 'Fleet Insurance & Licensing Fees', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510501', nameAr: 'مصروفات عمومية وإدارية (G&A Expenses)', nameEn: 'General & Administrative Expenses', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510601', nameAr: 'مصروف رواتب السائقين وبدلات السفر (Drivers Salaries & Trip Allowances)', nameEn: 'Driver Salaries & Trip Allowances', type: 'EXPENSE', balance: 0, status: 'ACTIVE' },
+    { code: '510701', nameAr: 'مصروف حصة الشركة في التأمينات (Employer Social Insurance Expense)', nameEn: 'Employer Social Insurance Expense', type: 'EXPENSE', balance: 0, status: 'ACTIVE' }
+  ];
+
+  /**
+   * Retrieve accounts template by template ID.
+   */
+  static getTemplateAccounts(templateId?: CoaTemplateId | string): Omit<GLAccount, 'id' | 'company_id' | 'createdAt'>[] {
+    switch (templateId) {
+      case 'poultry':
+        return AccountingBusinessEngine.POULTRY_COA_TEMPLATE;
+      case 'retail':
+        return AccountingBusinessEngine.RETAIL_COA_TEMPLATE;
+      case 'manufacturing':
+        return AccountingBusinessEngine.MANUFACTURING_COA_TEMPLATE;
+      case 'transport':
+        return AccountingBusinessEngine.TRANSPORT_COA_TEMPLATE;
+      case 'standard':
+      default:
+        return AccountingBusinessEngine.STANDARD_COA_TEMPLATE;
+    }
+  }
+
+  /**
+   * Get all registered template metadata
+   */
+  static getAvailableTemplates(): CoaTemplateMetadata[] {
+    return AccountingBusinessEngine.COA_TEMPLATES_METADATA;
+  }
+
+  /**
+   * Determine active or recommended template ID for a company.
+   */
+  static getCompanyTemplateId(companyId: string): CoaTemplateId {
+    const company = StorageEngine.getStored<any[]>('companies', []).find(c => c.id === companyId);
+    if (company?.industry) {
+      const ind = String(company.industry).toLowerCase();
+      if (ind === 'poultry') return 'poultry';
+      if (ind === 'retail') return 'retail';
+      if (ind === 'manufacturing') return 'manufacturing';
+      if (ind === 'transport') return 'transport';
+    }
+    // Check company ID conventions
+    if (companyId.includes('poultry')) return 'poultry';
+    if (companyId.includes('carrefour') || companyId.includes('retail')) return 'retail';
+    if (companyId.includes('sewedy') || companyId.includes('mfg')) return 'manufacturing';
+    if (companyId.includes('futtaim') || companyId.includes('transport') || companyId.includes('fleet')) return 'transport';
+
+    return 'standard';
+  }
+
+  /**
+   * Initialize or re-seed Chart of Accounts for a company using the specified or auto-detected template.
+   */
+  static initializeChartOfAccounts(companyId: string, templateId?: CoaTemplateId | string): GLAccount[] {
+    const effectiveTemplateId = templateId || AccountingBusinessEngine.getCompanyTemplateId(companyId);
+    const templateItems = AccountingBusinessEngine.getTemplateAccounts(effectiveTemplateId);
+
+    const list = StorageEngine.getStored<GLAccount[]>('gl_accounts', []);
+    const existingFiltered = list.filter(a => a.company_id !== companyId);
+
+    const initialized: GLAccount[] = templateItems.map(tpl => {
+      const newAcc: GLAccount = {
+        ...tpl,
+        id: `acc-${companyId}-${tpl.code}`,
+        company_id: companyId,
+        createdAt: new Date().toISOString()
+      };
+      dbSetDoc('gl_accounts', newAcc.id, newAcc);
+      return newAcc;
+    });
+
+    StorageEngine.setStored('gl_accounts', [...existingFiltered, ...initialized]);
+    return initialized;
+  }
+
+  static getAccounts(companyId: string, templateId?: CoaTemplateId | string): GLAccount[] {
     const list = StorageEngine.getStored<GLAccount[]>('gl_accounts', []);
     const companyAccounts = list.filter(a => a.company_id === companyId);
     
     if (companyAccounts.length === 0) {
-      // Auto-initialize standard COA template for this company
-      const initialized = AccountingBusinessEngine.STANDARD_COA_TEMPLATE.map((tpl, i) => {
-        const newAcc: GLAccount = {
-          ...tpl,
-          id: `acc-${companyId}-${tpl.code}`,
-          company_id: companyId,
-          createdAt: new Date().toISOString()
-        };
-        list.push(newAcc);
-        dbSetDoc('gl_accounts', newAcc.id, newAcc);
-        return newAcc;
-      });
-      StorageEngine.setStored('gl_accounts', list);
-      return initialized;
+      return AccountingBusinessEngine.initializeChartOfAccounts(companyId, templateId);
     }
     
     return companyAccounts;
@@ -395,15 +620,18 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
       switch (event.eventType) {
         case 'CHART_OF_ACCOUNTS_INITIALIZED': {
           const companyId = event.tenantId;
-          const accounts = AccountingBusinessEngine.getAccounts(companyId);
+          const templateId = event.payload?.templateId || event.payload?.template;
+          const accounts = templateId
+            ? AccountingBusinessEngine.initializeChartOfAccounts(companyId, templateId)
+            : AccountingBusinessEngine.getAccounts(companyId);
           return {
             success: true,
             engineId: this.engineId,
             eventId: event.eventId,
             processedAt: new Date().toISOString(),
             statusCode: 'SUCCESS',
-            messageEn: `Chart of accounts initialized for company ${companyId}`,
-            messageAr: `تم تهيئة شجرة الحسابات بنجاح للشركة ${companyId}`,
+            messageEn: `Chart of accounts initialized for company ${companyId}${templateId ? ` using template: ${templateId}` : ''}`,
+            messageAr: `تم تهيئة شجرة الحسابات بنجاح للشركة ${companyId}${templateId ? ` باستخدام نموذج: ${templateId}` : ''}`,
             outputData: accounts
           };
         }

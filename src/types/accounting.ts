@@ -2,6 +2,17 @@ import { BaseMetadata } from './enterprise';
 
 export type AccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
 
+export type CoaTemplateId = 'standard' | 'poultry' | 'retail' | 'manufacturing' | 'transport';
+
+export interface CoaTemplateMetadata {
+  id: CoaTemplateId;
+  nameAr: string;
+  nameEn: string;
+  descriptionAr: string;
+  descriptionEn: string;
+  industry: string;
+}
+
 export interface GLAccount {
   id: string;
   company_id: string;

@@ -1041,14 +1041,16 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
       }
 
     } catch (error: any) {
+      const msg = error?.message || '';
+      const parts = msg.includes(' / ') ? msg.split(' / ') : [msg, msg];
       return {
         success: false,
         engineId: this.engineId,
         eventId: event.eventId,
         processedAt: new Date().toISOString(),
         statusCode: 'EXECUTION_ERROR',
-        messageEn: error.message || 'Unknown purchase processing error',
-        messageAr: error.message || 'حدث خطأ مجهول أثناء معالجة المشتريات'
+        messageEn: parts[1]?.trim() || msg || 'Unknown purchase processing error',
+        messageAr: parts[0]?.trim() || msg || 'حدث خطأ مجهول أثناء معالجة المشتريات'
       };
     }
   }

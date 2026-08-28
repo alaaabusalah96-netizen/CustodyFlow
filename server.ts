@@ -46,23 +46,29 @@ function generateSecureTemporaryPassword(): string {
   return pass;
 }
 
+const isProductionOrStrict = Boolean(
+  process.env.NODE_ENV === 'production' || process.env.STRICT_PROD_SECURITY === 'true'
+);
+
 let appletConfig: Record<string, string> = {};
-try {
-  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-  if (fs.existsSync(configPath)) {
-    appletConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-  }
-} catch (_) {}
+if (!isProductionOrStrict) {
+  try {
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (fs.existsSync(configPath)) {
+      appletConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    }
+  } catch (_) {}
+}
 
-const serverApiKey = process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY || appletConfig.apiKey || "";
-const serverProjectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || appletConfig.projectId || "custodyflow";
-const serverAuthDomain = process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN || appletConfig.authDomain || "custodyflow.firebaseapp.com";
-const serverStorageBucket = process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || appletConfig.storageBucket || "custodyflow.firebasestorage.app";
-const serverMessagingSenderId = process.env.FIREBASE_MESSAGING_SENDER_ID || process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || appletConfig.messagingSenderId || "";
-const serverAppId = process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID || appletConfig.appId || "";
+const serverApiKey = process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY || (isProductionOrStrict ? "" : (appletConfig.apiKey || ""));
+const serverProjectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || (isProductionOrStrict ? "" : (appletConfig.projectId || "custodyflow"));
+const serverAuthDomain = process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN || (isProductionOrStrict ? "custodyflow.firebaseapp.com" : (appletConfig.authDomain || "custodyflow.firebaseapp.com"));
+const serverStorageBucket = process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || (isProductionOrStrict ? "custodyflow.firebasestorage.app" : (appletConfig.storageBucket || "custodyflow.firebasestorage.app"));
+const serverMessagingSenderId = process.env.FIREBASE_MESSAGING_SENDER_ID || process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || (isProductionOrStrict ? "" : (appletConfig.messagingSenderId || ""));
+const serverAppId = process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID || (isProductionOrStrict ? "" : (appletConfig.appId || ""));
 
-if (process.env.NODE_ENV === 'production' && (!serverApiKey || !serverProjectId)) {
-  console.error("CRITICAL SECURITY ERROR: Required Firebase environment variables (FIREBASE_API_KEY, FIREBASE_PROJECT_ID) are missing in production mode.");
+if (isProductionOrStrict && (!serverApiKey || !serverProjectId)) {
+  console.error("CRITICAL SECURITY ERROR: Required Firebase environment variables (FIREBASE_API_KEY, FIREBASE_PROJECT_ID) are missing in production/strict mode. Committed JSON fallback is disabled.");
   process.exit(1);
 }
 

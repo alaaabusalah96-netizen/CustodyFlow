@@ -159,12 +159,52 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
             }
           }
 
-          // Process the transfer
-          for (const item of items) {
-            // Deduct from source
-            await InventoryModule.adjustStock(srcWarehouseId, item.product_id, -item.qty, 'Transfer', event.user_id, item.src_bin_id);
-            // Add to destination
-            await InventoryModule.adjustStock(destWarehouseId, item.product_id, item.qty, 'Transfer', event.user_id, item.dest_bin_id);
+          // Process the transfer with rollback compensation if any item step fails
+          const completedAdjustments: Array<{
+            warehouseId: string;
+            productId: string;
+            qtyChange: number;
+            binId?: string;
+          }> = [];
+
+          try {
+            for (const item of items) {
+              // Deduct from source
+              await InventoryModule.adjustStock(srcWarehouseId, item.product_id, -item.qty, 'Transfer', event.user_id, item.src_bin_id);
+              completedAdjustments.push({
+                warehouseId: srcWarehouseId,
+                productId: item.product_id,
+                qtyChange: item.qty, // Compensating action would be +item.qty
+                binId: item.src_bin_id
+              });
+
+              // Add to destination
+              await InventoryModule.adjustStock(destWarehouseId, item.product_id, item.qty, 'Transfer', event.user_id, item.dest_bin_id);
+              completedAdjustments.push({
+                warehouseId: destWarehouseId,
+                productId: item.product_id,
+                qtyChange: -item.qty, // Compensating action would be -item.qty
+                binId: item.dest_bin_id
+              });
+            }
+          } catch (transferErr: any) {
+            // Attempt compensating reverse adjustments in reverse order
+            const compensationFailures: string[] = [];
+            for (let i = completedAdjustments.length - 1; i >= 0; i--) {
+              const comp = completedAdjustments[i];
+              try {
+                await InventoryModule.adjustStock(comp.warehouseId, comp.productId, comp.qtyChange, 'Transfer', event.user_id, comp.binId);
+              } catch (rollbackErr: any) {
+                console.error(`Transfer compensation rollback failed for ${comp.productId} in ${comp.warehouseId}:`, rollbackErr);
+                compensationFailures.push(`${comp.productId}@${comp.warehouseId}`);
+              }
+            }
+
+            const errorDetails = transferErr?.message || 'Transfer adjustment step failed';
+            if (compensationFailures.length > 0) {
+              throw new Error(`فشل التحويل وفشلت بعض حركات التراجع (${compensationFailures.join(', ')}): ${errorDetails} / Transfer failed and compensation rollback had errors (${compensationFailures.join(', ')}): ${errorDetails}`);
+            }
+            throw new Error(`فشل تحويل المخزون وتم التراجع عن الحركات السابقة: ${errorDetails} / Stock transfer failed; prior adjustments were compensated and rolled back: ${errorDetails}`);
           }
 
           return {
@@ -212,14 +252,16 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
       }
 
     } catch (error: any) {
+      const msg = error?.message || '';
+      const parts = msg.includes(' / ') ? msg.split(' / ') : [msg, msg];
       return {
         success: false,
         engineId: this.engineId,
         eventId: event.eventId,
         processedAt: new Date().toISOString(),
         statusCode: 'EXECUTION_ERROR',
-        messageEn: error.message || 'Unknown execution error occurred',
-        messageAr: error.message || 'حدث خطأ مجهول أثناء المعالجة'
+        messageEn: parts[1]?.trim() || msg || 'Unknown execution error occurred',
+        messageAr: parts[0]?.trim() || msg || 'حدث خطأ مجهول أثناء المعالجة'
       };
     }
   }

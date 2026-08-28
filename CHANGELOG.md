@@ -4750,6 +4750,105 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
   - Dev server HTTP response: Verified 200 OK on port 3000.
   - Applet Build (`compile_applet`): Succeeded.
 
+---
+
+## Hardening Remediation: Task 1 (P1) - Remove Silent Non-Atomic Fallback in adjustStock
+**Date:** 2026-08-28
+**Files Changed:** `src/db/inventory.ts`, `src/lib/enterprise/warehouse_engine.ts`, `src/lib/enterprise/purchasing_engine.ts`, `src/adjust_stock_atomic.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Removed silent post-catch fallback to local memory in `InventoryModule.adjustStock` (`src/db/inventory.ts`).
+- Insufficient stock errors are rethrown directly with business validation details.
+- Generic Firestore / transaction failures rethrow dual-language errors (`Stock adjustment failed and movement was NOT persisted`) and strictly avoid updating `StorageEngine` or local stock balance.
+- Standardized dual-language error extraction in event handlers (`warehouse_engine.ts` and `purchasing_engine.ts`).
+- Added unit test in `src/adjust_stock_atomic.test.ts` verifying generic `runTransaction` failure throws loudly, writes 0 movements to `StorageEngine`, and preserves stock balances.
+- Test Result: `tsc --noEmit` passed (0 errors); Vitest 19/19 passed across targeted inventory test suites.
+
+---
+
+## Hardening Remediation: Task 2 (P1) - Multi-Item Stock Transfer Compensation Rollback
+**Date:** 2026-08-28
+**Files Changed:** `src/lib/enterprise/warehouse_engine.ts`, `src/enterprise.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Implemented reverse compensation rollback loop in `WarehouseBusinessEngine` for `STOCK_TRANSFERRED` event processing (`src/lib/enterprise/warehouse_engine.ts`).
+- Tracks all completed source deductions and destination additions; if any subsequent item adjustment fails mid-transfer, it systematically applies inverted compensating adjustments in reverse order.
+- Formulates dual-language descriptive error messages conveying whether compensation succeeded or if any compensation step encountered errors.
+- Added comprehensive unit tests in `src/enterprise.test.ts` testing both complete multi-item transfer success and partial failure with verified full compensation rollback.
+- Test Result: `tsc --noEmit` passed (0 errors); Vitest 19/19 passed in scoped test files.
+
+---
+
+## Hardening Remediation: Task 3 (P2) - Dynamic Chart of Accounts (COA) Template Selector
+**Date:** 2026-08-28
+**Files Changed:** `src/types/accounting.ts`, `src/lib/enterprise/accounting_engine.ts`, `src/pages/Accounting.tsx`, `src/enterprise.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Extended accounting types with `CoaTemplateId` and `CoaTemplateMetadata` supporting Standard/General, Poultry, Retail Supermarkets, Manufacturing, and Logistics/Transport templates.
+- Enhanced `AccountingBusinessEngine` to register 5 specialized industry Chart of Accounts templates, auto-detect company template affinity based on profile/industry, and dynamically initialize or switch accounts via `initializeChartOfAccounts` and `CHART_OF_ACCOUNTS_INITIALIZED` events.
+- Integrated dynamic template selector and active template description banner in `Accounting.tsx` (COA tab).
+- Added unit and integration tests in `src/enterprise.test.ts` verifying all templates, metadata discovery, and event processing.
+- Test Result: `tsc --noEmit` passed (0 errors); Vitest 17/17 passed.
+
+---
+
+## Hardening Remediation: Task 4 (P2) - Tenant Isolation on account_correction_requests create
+**Date:** 2026-08-28
+**Files Changed:** `firestore.rules`, `src/firestore.rules.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Added tenant isolation constraint `request.resource.data.company_id == getCompanyId()` to `allow create` rule for `/account_correction_requests/{id}` in `firestore.rules`.
+- Extended the logic-parity test suite and validator in `src/firestore.rules.test.ts` to assert structure and verify tenant isolation on account correction request creation (allowing matches, rejecting cross-tenant injection, unauthenticated calls, and non-pending states).
+- Test Result: `tsc --noEmit` passed (0 errors); Vitest 19/19 passed in `src/firestore.rules.test.ts`.
+
+---
+
+## Hardening Remediation: Task 5 (P2) - Timeout Observability and Stable Doc IDs
+**Date:** 2026-08-28
+**Files Changed:** `src/db/offlineQueue.ts`, `src/offline_queue_timeout.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Enhanced `syncWriteWithOfflineFallback` in `src/db/offlineQueue.ts` with timeout observability: detects when a write promise times out but later resolves or rejects in the background, logging `[WriteSync:LateSuccess]` and `[WriteSync:LateError]` warnings to detect and alert on ghost/duplicate writes.
+- Audited retry-prone write sites in enterprise engines (`SalesBusinessEngine`, `FleetBusinessEngine`, `PurchasingBusinessEngine`, `AccountingBusinessEngine`) to ensure stable doc ID allocation upfront prior to cloud dispatch.
+- Added comprehensive unit tests in `src/offline_queue_timeout.test.ts` covering late-settling write warning behavior and on-time resolution.
+- Test Result: `tsc --noEmit` passed (0 errors); Vitest 2/2 passed in `src/offline_queue_timeout.test.ts`.
+
+---
+
+## Hardening Remediation: Task 6 (P3) - Full Sunset of Legacy Hash Functions Audit & Policy Verification
+**Date:** 2026-08-28
+**Files Changed:** `CHANGELOG.md`
+**Summary:**
+- Verified full deprecation and sunset enforcement policy for legacy SHA-256 password hash functions (`legacyHashPassword`, `legacySinglePassHashPassword`, `legacyStretchedHashPassword1000`) and legacy pepper versions (1 and 3) in `src/lib/server_hash.ts`.
+- Verified server-side authentication endpoints (`/api/auth/verify-credentials`, `/api/auth/change-password`, `/api/admin/users`) enforce PBKDF2 210,000 iterations for all active accounts and new credentials.
+- Verified dual-mode sunset mechanics: active auto-upgrade to PBKDF2 during grace period (`ENFORCE_LEGACY_HASH_SUNSET != 'true'`) and hard rejection (HTTP 426) directing users to Forgot Password OTP when sunset is enforced (`ENFORCE_LEGACY_HASH_SUNSET = 'true'`).
+- Test Result: `tsc --noEmit` passed (0 errors); Vitest 17/17 passed across legacy hash deprecation and auth security suites; `compile_applet` succeeded.
+
+---
+
+## Hardening Remediation: Task 8 (P2) - Minimal CI Workflow
+**Date:** 2026-08-28
+**Files Changed:** `.github/workflows/ci.yml`, `CHANGELOG.md`
+**Summary:**
+- Created `.github/workflows/ci.yml` configuring continuous integration on `push` and `pull_request` against `main` and `master` branches.
+- Configured clean steps: checkout (`actions/checkout@v4`), setup Node.js 20 with npm caching (`actions/setup-node@v4`), `npm ci`, typecheck & lint (`npm run lint` / `tsc --noEmit`), and unit/integration test execution (`npm test` / `vitest run`).
+- Injected safe non-production dummy environment variables (`APP_PEPPER`, `STRICT_PROD_SECURITY=false`, placeholder Firebase variables) to satisfy import-time requirements without exposing secrets.
+- Excluded headless E2E/Playwright tests from the blocking CI pipeline.
+- Test Result: `npm run lint` passed (0 errors); `npm test` passed.
+
+---
+
+## Hardening Remediation: Task 9 (P2) - Web apiKey Config Hygiene & Strict Env Enforcement
+**Date:** 2026-08-28
+**Files Changed:** `server.ts`, `firebase-applet-config.json`, `src/web_api_key_hygiene.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Enforced strict environment variable loading for Firebase credentials in production mode (`NODE_ENV === 'production' || STRICT_PROD_SECURITY === 'true'`), completely removing silent fallback to committed JSON files for `apiKey` and `projectId`.
+- Blanked default `apiKey` and metadata in `firebase-applet-config.json` and added explicit security notes documenting environment variable configuration requirements.
+- Added automated unit test in `src/web_api_key_hygiene.test.ts` verifying that `validateFirebaseConfig` throws a critical error when credentials are missing in strict/production mode.
+- Test Result: `tsc --noEmit` passed (0 errors); Vitest 2/2 passed in `src/web_api_key_hygiene.test.ts`; `compile_applet` succeeded.
+
+
+
+
+
+
+
+
 
 
 

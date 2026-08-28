@@ -166,6 +166,28 @@ class FirestoreRulesPolicyValidator {
     }
     return true;
   }
+
+  /**
+   * Simulates evaluation of /account_correction_requests/{id} create rule
+   */
+  public evaluateAccountCorrectionRequestCreate(
+    auth: MockAuthContext | null,
+    requestData: Record<string, any> | null
+  ): boolean {
+    if (!auth || !auth.company_id) return false;
+    if (!requestData) return false;
+
+    const requiredKeys = ['targetEmail', 'targetUserId', 'correctionType', 'status', 'company_id'];
+    const hasAll = requiredKeys.every(k => k in requestData);
+    if (!hasAll) return false;
+    if (requestData.status !== 'Pending') return false;
+    if (typeof requestData.targetEmail !== 'string') return false;
+    if (typeof requestData.targetUserId !== 'string') return false;
+    if (typeof requestData.company_id !== 'string') return false;
+    if (requestData.company_id !== auth.company_id) return false;
+
+    return true;
+  }
 }
 
 describe('Phase 3.1: Firestore Security Rules Comprehensive Unit Tests', () => {
@@ -201,10 +223,14 @@ describe('Phase 3.1: Firestore Security Rules Comprehensive Unit Tests', () => {
       expect(validator.hasRuleBlock('stock_movements/{id}')).toBe(true);
       expect(validator.hasRuleBlock('journal_entries/{id}')).toBe(true);
       expect(validator.hasRuleBlock('AuditLogs/{id}')).toBe(true);
+      expect(validator.hasRuleBlock('account_correction_requests/{id}')).toBe(true);
       const raw = validator.getRawRules();
       const auditLogBlock = raw.substring(raw.indexOf('match /AuditLogs/{id}'));
       const auditLogReadRule = auditLogBlock.substring(0, auditLogBlock.indexOf('allow create:'));
       expect(auditLogReadRule).toContain('isSameCompanyRead(resource.data)');
+
+      const acrBlock = raw.substring(raw.indexOf('match /account_correction_requests/{id}'));
+      expect(acrBlock).toContain('request.resource.data.company_id == getCompanyId()');
     });
   });
 
@@ -361,6 +387,48 @@ describe('Phase 3.1: Firestore Security Rules Comprehensive Unit Tests', () => {
       };
 
       expect(validator.evaluateSelfUpdateSafe(oldProfile, spoofedProfile)).toBe(false);
+    });
+  });
+
+  describe('6. Account Correction Requests Tenant Isolation (/account_correction_requests/{id})', () => {
+    const validRequestData = {
+      targetEmail: 'target@example.com',
+      targetUserId: 'u-target-1',
+      correctionType: 'ROLE_RESET',
+      status: 'Pending',
+      company_id: 'comp-1'
+    };
+
+    it('should ALLOW create when company_id matches the authenticated user company', () => {
+      const authUser: MockAuthContext = {
+        uid: 'user-1',
+        role: 'Admin',
+        company_id: 'comp-1'
+      };
+
+      expect(validator.evaluateAccountCorrectionRequestCreate(authUser, validRequestData)).toBe(true);
+    });
+
+    it('should DENY create when company_id does NOT match the authenticated user company (cross-tenant injection)', () => {
+      const attackerAuth: MockAuthContext = {
+        uid: 'attacker-1',
+        role: 'Admin',
+        company_id: 'comp-evil'
+      };
+
+      expect(validator.evaluateAccountCorrectionRequestCreate(attackerAuth, validRequestData)).toBe(false);
+    });
+
+    it('should DENY create when unauthenticated or missing required fields', () => {
+      expect(validator.evaluateAccountCorrectionRequestCreate(null, validRequestData)).toBe(false);
+
+      const missingCompany = { ...validRequestData };
+      delete (missingCompany as any).company_id;
+      const authUser: MockAuthContext = { uid: 'user-1', role: 'Admin', company_id: 'comp-1' };
+      expect(validator.evaluateAccountCorrectionRequestCreate(authUser, missingCompany)).toBe(false);
+
+      const nonPendingStatus = { ...validRequestData, status: 'Approved' };
+      expect(validator.evaluateAccountCorrectionRequestCreate(authUser, nonPendingStatus)).toBe(false);
     });
   });
 });

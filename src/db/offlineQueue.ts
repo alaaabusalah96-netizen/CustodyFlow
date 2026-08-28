@@ -53,10 +53,24 @@ export async function syncWriteWithOfflineFallback(
     };
   }
 
+  let didTimeout = false;
+
   try {
-    const writePromise = data === null 
+    const writePromise = (data === null 
       ? dbDeleteDoc(collectionName, docId) 
-      : dbSetDoc(collectionName, docId, data);
+      : dbSetDoc(collectionName, docId, data)
+    ).then((res) => {
+      if (didTimeout) {
+        console.warn(`[WriteSync:LateSuccess] Write to ${collectionName}/${docId} succeeded after timeout was returned to caller. Possible duplicate risk if retried with new ID.`);
+      }
+      return res;
+    }).catch((err) => {
+      if (didTimeout) {
+        console.warn(`[WriteSync:LateError] Write to ${collectionName}/${docId} ultimately failed after timeout:`, err);
+      }
+      throw err;
+    });
+
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Firestore write timeout')), timeoutMs)
     );
@@ -64,6 +78,9 @@ export async function syncWriteWithOfflineFallback(
     await Promise.race([writePromise, timeoutPromise]);
     return { success: true, syncedToFirestore: true, queuedOffline: false };
   } catch (err: any) {
+    if (err?.message === 'Firestore write timeout') {
+      didTimeout = true;
+    }
     const errorMsg = `فشل الحفظ في قاعدة البيانات: ${err?.message || 'تعذر الاتصال بالسيرفر'}. يرجى التأكد من الإنترنت والمحاولة مجدداً.`;
     console.warn(`[WriteSync] Firestore write failed for ${collectionName}/${docId}:`, err);
     return {

@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, Coins, TrendingUp, Layers, Search, ArrowUpRight, ArrowDownLeft,
-  Plus, Calendar, Calculator, CheckCircle2, ChevronRight, Hash, ShieldAlert, FileText, X, Printer
+  Plus, Calendar, Calculator, CheckCircle2, ChevronRight, Hash, ShieldAlert, FileText, X, Printer,
+  Sparkles, RefreshCw
 } from 'lucide-react';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
 import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
 import { CustodyDB } from '../db';
 import { useScreenListeners } from '../firebase';
-import { GLAccount, JournalEntry, LedgerLine } from '../types/accounting';
+import { GLAccount, JournalEntry, LedgerLine, CoaTemplateId, CoaTemplateMetadata } from '../types/accounting';
 import { createEventEnvelope } from '../lib/enterprise/metadata';
 
 interface AccountingProps {
@@ -46,6 +47,12 @@ export default function Accounting({ language, theme }: AccountingProps) {
   const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
 
+  // COA Template Selector State
+  const availableTemplates = AccountingBusinessEngine.getAvailableTemplates();
+  const currentTemplateId = AccountingBusinessEngine.getCompanyTemplateId(companyId);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<CoaTemplateId>(currentTemplateId);
+  const [isSwitchingTemplate, setIsSwitchingTemplate] = useState(false);
+
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadAllData = () => {
@@ -53,8 +60,35 @@ export default function Accounting({ language, theme }: AccountingProps) {
     const ent = AccountingBusinessEngine.getJournalEntries(companyId);
     setAccounts(acc);
     setEntries(ent);
+    setSelectedTemplateId(AccountingBusinessEngine.getCompanyTemplateId(companyId));
     if (ent.length > 0 && !selectedEntry) {
       setSelectedEntry(ent[ent.length - 1]); // Default select latest
+    }
+  };
+
+  const handleApplyTemplate = async (templateId: CoaTemplateId) => {
+    setIsSwitchingTemplate(true);
+    try {
+      const engine = new AccountingBusinessEngine();
+      const event = createEventEnvelope({
+        eventType: 'CHART_OF_ACCOUNTS_INITIALIZED',
+        tenantId: companyId,
+        userId: activeUser?.id || 'system',
+        userName: activeUser?.full_name || 'System',
+        userRole: activeUser?.role as any || 'System',
+        payload: { templateId }
+      });
+      const res = await engine.processEvent(event);
+      if (res.success) {
+        triggerFeedback('success', isRtl ? res.messageAr : res.messageEn);
+        loadAllData();
+      } else {
+        triggerFeedback('error', isRtl ? res.messageAr : res.messageEn);
+      }
+    } catch (err: any) {
+      triggerFeedback('error', err.message || 'Error updating template');
+    } finally {
+      setIsSwitchingTemplate(false);
     }
   };
 
@@ -389,10 +423,59 @@ export default function Accounting({ language, theme }: AccountingProps) {
 
       {/* Tab 2: Chart of Accounts */}
       {activeTab === 'accounts' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-4">
-          <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-200">
-            {isRtl ? 'دليل وشجرة الحسابات العامة (COA)' : 'Corporate Chart of Accounts (COA)'}
-          </h3>
+        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-200">
+                {isRtl ? 'دليل وشجرة الحسابات العامة (COA)' : 'Corporate Chart of Accounts (COA)'}
+              </h3>
+              <p className="text-xs text-slate-400 font-medium mt-0.5">
+                {isRtl ? 'قوالب محاسبية متخصصة حسب طبيعة نشاط المؤسسة' : 'Specialized accounting templates tailored to your industry'}
+              </p>
+            </div>
+
+            {/* Template Selector */}
+            <div className="flex items-center gap-2">
+              <label htmlFor="coa-template-select" className="text-xs font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                {isRtl ? 'نموذج الدليل:' : 'COA Template:'}
+              </label>
+              <select
+                id="coa-template-select"
+                value={selectedTemplateId}
+                disabled={isSwitchingTemplate}
+                onChange={(e) => {
+                  const newTpl = e.target.value as CoaTemplateId;
+                  setSelectedTemplateId(newTpl);
+                  handleApplyTemplate(newTpl);
+                }}
+                className="text-xs font-extrabold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer disabled:opacity-50"
+              >
+                {availableTemplates.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {isRtl ? t.nameAr : t.nameEn}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Active Template Description Banner */}
+          {(() => {
+            const activeMeta = availableTemplates.find(t => t.id === selectedTemplateId) || availableTemplates[0];
+            return (
+              <div className="bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40 rounded-2xl p-3.5 flex items-start gap-3">
+                <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                <div className="space-y-0.5 text-xs text-slate-600 dark:text-slate-300">
+                  <span className="font-extrabold text-slate-800 dark:text-slate-100">
+                    {isRtl ? activeMeta.nameAr : activeMeta.nameEn}
+                  </span>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {isRtl ? activeMeta.descriptionAr : activeMeta.descriptionEn}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">

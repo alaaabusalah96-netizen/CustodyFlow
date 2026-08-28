@@ -1128,103 +1128,77 @@ export class InventoryModule {
     const org_unit_id = InventoryModule.resolveWarehouseOrgUnit(warehouseId, companyId);
     const balanceKey = `${productId}___${warehouseId}___${binId || 'nobin'}`;
 
-    if (db && typeof db === 'object') {
-      try {
-        const balanceDocRef = doc(db, `inventory_balances_${companyId}`, balanceKey);
-        await runTransaction(db, async (transaction) => {
-          const balanceDoc = await transaction.get(balanceDocRef);
-          let currentStock = 0;
-          if (balanceDoc.exists()) {
-            currentStock = balanceDoc.data().balance ?? 0;
-          } else {
-            currentStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
-          }
+    if (!db || typeof db !== 'object') {
+      throw new Error('قاعدة البيانات غير متاحة ولم يتم حفظ حركة المخزون / Database is unavailable; stock movement was NOT persisted.');
+    }
 
-          const current_balance_after = currentStock + qtyChange;
-          if (qtyChange < 0 && current_balance_after < 0) {
-            const config = InventoryModule.getInventoryConfig();
-            if (config.allow_overdraft === 'STRICT') {
-              throw new Error(`رصيد غير كافٍ للمنتج (${productId}) في المستودع/الحاوية. الرصيد الحالي: ${currentStock}، الكمية المطلوبة: ${Math.abs(qtyChange)}. / Insufficient stock for product (${productId}). Available: ${currentStock}, Requested: ${Math.abs(qtyChange)}.`);
-            }
-          }
+    try {
+      const balanceDocRef = doc(db, `inventory_balances_${companyId}`, balanceKey);
+      let committedMovement: StockMovement | null = null;
 
-          const movementId = `m-adj-${crypto.randomUUID()}`;
-          const movementDocRef = doc(db, 'stock_movements', movementId);
-          const movement: StockMovement = {
-            id: movementId,
-            doc_id: 'direct-adjust',
-            doc_no: `ADJ-${crypto.randomUUID().slice(0, 8)}`,
-            doc_type: docType,
-            product_id: productId,
-            warehouse_id: warehouseId,
-            org_unit_id,
-            bin_id: binId,
-            qty_change: qtyChange,
-            type: qtyChange >= 0 ? 'IN' : 'OUT',
-            current_balance_after,
-            date: new Date().toISOString().split('T')[0],
-            company_id: companyId,
-            created_at: new Date().toISOString(),
-            created_by: userId
-          };
-
-          transaction.set(balanceDocRef, {
-            balance: current_balance_after,
-            productId,
-            warehouseId,
-            binId: binId || null,
-            updatedAt: new Date().toISOString(),
-            company_id: companyId
-          }, { merge: true });
-
-          transaction.set(movementDocRef, movement);
-
-          // Update local memory / StorageEngine
-          const allMovements = InventoryModule.getStockMovements();
-          allMovements.push(movement);
-          StorageEngine.setStored('stock_movements', allMovements);
-        });
-        return;
-      } catch (err: any) {
-        // If it was a strict validation error, rethrow
-        if (err.message && (err.message.includes('رصيد غير كافٍ') || err.message.includes('Insufficient stock'))) {
-          throw err;
+      await runTransaction(db, async (transaction) => {
+        const balanceDoc = await transaction.get(balanceDocRef);
+        let currentStock = 0;
+        if (balanceDoc.exists()) {
+          currentStock = balanceDoc.data().balance ?? 0;
+        } else {
+          currentStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
         }
-        console.warn('Firestore transaction in adjustStock failed, falling back to local memory:', err);
-      }
-    }
 
-    // Offline / Memory fallback
-    const currentStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
-    const current_balance_after = currentStock + qtyChange;
-    
-    if (qtyChange < 0 && current_balance_after < 0) {
-      const config = InventoryModule.getInventoryConfig();
-      if (config.allow_overdraft === 'STRICT') {
-        throw new Error(`رصيد غير كافٍ للمنتج (${productId}) في المستودع/الحاوية. الرصيد الحالي: ${currentStock}، الكمية المطلوبة: ${Math.abs(qtyChange)}. / Insufficient stock for product (${productId}). Available: ${currentStock}, Requested: ${Math.abs(qtyChange)}.`);
-      }
-    }
+        const current_balance_after = currentStock + qtyChange;
+        if (qtyChange < 0 && current_balance_after < 0) {
+          const config = InventoryModule.getInventoryConfig();
+          if (config.allow_overdraft === 'STRICT') {
+            throw new Error(`رصيد غير كافٍ للمنتج (${productId}) في المستودع/الحاوية. الرصيد الحالي: ${currentStock}، الكمية المطلوبة: ${Math.abs(qtyChange)}. / Insufficient stock for product (${productId}). Available: ${currentStock}, Requested: ${Math.abs(qtyChange)}.`);
+          }
+        }
 
-    const movement: StockMovement = {
-      id: `m-adj-${crypto.randomUUID()}`,
-      doc_id: 'direct-adjust',
-      doc_no: `ADJ-${crypto.randomUUID().slice(0, 8)}`,
-      doc_type: docType,
-      product_id: productId,
-      warehouse_id: warehouseId,
-      org_unit_id,
-      bin_id: binId,
-      qty_change: qtyChange,
-      type: qtyChange >= 0 ? 'IN' : 'OUT',
-      current_balance_after,
-      date: new Date().toISOString().split('T')[0],
-      company_id: companyId,
-      created_at: new Date().toISOString(),
-      created_by: userId
-    };
-    const allMovements = InventoryModule.getStockMovements();
-    allMovements.push(movement);
-    await InventoryModule.saveStockMovements(allMovements);
+        const movementId = `m-adj-${crypto.randomUUID()}`;
+        const movementDocRef = doc(db, 'stock_movements', movementId);
+        const movement: StockMovement = {
+          id: movementId,
+          doc_id: 'direct-adjust',
+          doc_no: `ADJ-${crypto.randomUUID().slice(0, 8)}`,
+          doc_type: docType,
+          product_id: productId,
+          warehouse_id: warehouseId,
+          org_unit_id,
+          bin_id: binId,
+          qty_change: qtyChange,
+          type: qtyChange >= 0 ? 'IN' : 'OUT',
+          current_balance_after,
+          date: new Date().toISOString().split('T')[0],
+          company_id: companyId,
+          created_at: new Date().toISOString(),
+          created_by: userId
+        };
+
+        transaction.set(balanceDocRef, {
+          balance: current_balance_after,
+          productId,
+          warehouseId,
+          binId: binId || null,
+          updatedAt: new Date().toISOString(),
+          company_id: companyId
+        }, { merge: true });
+
+        transaction.set(movementDocRef, movement);
+        committedMovement = movement;
+      });
+
+      if (committedMovement) {
+        const allMovements = InventoryModule.getStockMovements();
+        allMovements.push(committedMovement);
+        StorageEngine.setStored('stock_movements', allMovements);
+      }
+    } catch (err: any) {
+      // 1. Business-rule rejection (insufficient stock / رصيد غير كافٍ) -> rethrow; no fallback
+      if (err.message && (err.message.includes('رصيد غير كافٍ') || err.message.includes('Insufficient stock'))) {
+        throw err;
+      }
+      // 2. Everything else -> do NOT write local stock; rethrow clear dual-language error that movement was NOT persisted
+      throw new Error(`فشل تعديل المخزون ولم يتم حفظ الحركة: ${err?.message || 'خطأ غير معروف'} / Stock adjustment failed and movement was NOT persisted: ${err?.message || 'Unknown error'}`);
+    }
   }
 
   /**

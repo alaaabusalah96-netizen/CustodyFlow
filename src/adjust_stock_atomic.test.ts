@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { InventoryModule } from './db/inventory';
 import { StorageEngine } from './db/storage';
 import { CompaniesModule } from './db/companies';
+import * as firestore from 'firebase/firestore';
 
 describe('Phase H: Atomic adjustStock Race-Condition Prevention Tests', () => {
   const companyId = 'comp-test-atomic';
@@ -80,5 +81,27 @@ describe('Phase H: Atomic adjustStock Race-Condition Prevention Tests', () => {
     // Balance should remain unchanged at 50
     const finalStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
     expect(finalStock).toBe(50);
+  });
+
+  it('fails loud on generic runTransaction failure without writing to local memory or altering balance', async () => {
+    const initialStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
+    expect(initialStock).toBe(50);
+    const initialMovementsCount = InventoryModule.getStockMovements().length;
+
+    const runTxSpy = vi.spyOn(firestore, 'runTransaction').mockRejectedValueOnce(new Error('Network transport unavailable'));
+
+    await expect(
+      InventoryModule.adjustStock(warehouseId, productId, 10, 'Receipt', 'user-1', binId)
+    ).rejects.toThrow(/فشل تعديل المخزون ولم يتم حفظ الحركة.*Network transport unavailable|Stock adjustment failed and movement was NOT persisted.*Network transport unavailable/);
+
+    // No local movement should be written
+    const currentMovements = InventoryModule.getStockMovements();
+    expect(currentMovements.length).toBe(initialMovementsCount);
+
+    // Balance in local memory must remain unchanged
+    const currentStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
+    expect(currentStock).toBe(50);
+
+    runTxSpy.mockRestore();
   });
 });

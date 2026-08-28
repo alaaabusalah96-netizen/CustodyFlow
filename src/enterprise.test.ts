@@ -68,6 +68,8 @@ import { SequenceEngine } from './lib/enterprise/sequence';
 import { PermissionEngine } from './lib/enterprise/permission';
 import { WarehouseBusinessEngine } from './lib/enterprise/warehouse_engine';
 import { AccountingBusinessEngine } from './lib/enterprise/accounting_engine';
+import { InventoryModule } from './db/inventory';
+import { CompaniesModule } from './db/companies';
 import { StorageEngine } from './db/storage';
 import { EventEnvelope, FsmConfig } from './types/enterprise';
 
@@ -76,6 +78,13 @@ describe('Kemit ERP Enterprise Foundation Engines Integration & Unit Tests', () 
     localStorageMock.clear();
     StorageEngine.clearCache();
     vi.clearAllMocks();
+    mockRunTransaction.mockImplementation((db: any, callback: any) =>
+      callback({
+        get: () => Promise.resolve({ exists: () => false, data: () => ({}) }),
+        set: () => {},
+        update: () => {},
+      })
+    );
   });
 
   // ==========================================
@@ -358,6 +367,166 @@ describe('Kemit ERP Enterprise Foundation Engines Integration & Unit Tests', () 
       expect(result.success).toBe(false);
       expect(result.statusCode).toBe('UNSUPPORTED_EVENT');
     });
+
+    it('should process multi-item STOCK_TRANSFERRED successfully when all items succeed', async () => {
+      const tenantId = 'comp-wh-test';
+      CompaniesModule.setSelectedCompanyId(tenantId);
+      StorageEngine.setStored('warehouses', [
+        { id: 'wh-src', name: 'Source WH', company_id: tenantId },
+        { id: 'wh-dest', name: 'Dest WH', company_id: tenantId }
+      ]);
+      StorageEngine.setStored('stock_movements', [
+        {
+          id: 'm-1',
+          doc_id: 'init-1',
+          doc_no: 'INIT-1',
+          doc_type: 'Receipt',
+          product_id: 'prod-A',
+          warehouse_id: 'wh-src',
+          qty_change: 100,
+          type: 'IN',
+          current_balance_after: 100,
+          date: '2026-08-28',
+          company_id: tenantId,
+          created_at: new Date().toISOString(),
+          created_by: 'u-1'
+        },
+        {
+          id: 'm-2',
+          doc_id: 'init-2',
+          doc_no: 'INIT-2',
+          doc_type: 'Receipt',
+          product_id: 'prod-B',
+          warehouse_id: 'wh-src',
+          qty_change: 50,
+          type: 'IN',
+          current_balance_after: 50,
+          date: '2026-08-28',
+          company_id: tenantId,
+          created_at: new Date().toISOString(),
+          created_by: 'u-1'
+        }
+      ]);
+
+      const engine = new WarehouseBusinessEngine();
+      const event: EventEnvelope = {
+        eventId: 'evt-transfer-ok',
+        eventType: 'STOCK_TRANSFERRED',
+        timestamp: new Date().toISOString(),
+        tenantId,
+        organizationId: 'org-1',
+        user_id: 'u-1',
+        user_name: 'Admin',
+        user_role: 'Admin',
+        payload: {
+          srcWarehouseId: 'wh-src',
+          destWarehouseId: 'wh-dest',
+          items: [
+            { product_id: 'prod-A', qty: 20 },
+            { product_id: 'prod-B', qty: 10 }
+          ]
+        },
+        metadataVersion: '1.0'
+      };
+
+      const result = await engine.processEvent(event);
+      expect(result.success).toBe(true);
+      expect(result.statusCode).toBe('SUCCESS');
+
+      // Verify stock balances
+      expect(InventoryModule.getProductStockInWarehouse('wh-src', 'prod-A')).toBe(80);
+      expect(InventoryModule.getProductStockInWarehouse('wh-dest', 'prod-A')).toBe(20);
+      expect(InventoryModule.getProductStockInWarehouse('wh-src', 'prod-B')).toBe(40);
+      expect(InventoryModule.getProductStockInWarehouse('wh-dest', 'prod-B')).toBe(10);
+    });
+
+    it('should roll back and compensate earlier items if a later step fails during multi-item transfer', async () => {
+      const tenantId = 'comp-wh-test-fail';
+      CompaniesModule.setSelectedCompanyId(tenantId);
+      StorageEngine.setStored('warehouses', [
+        { id: 'wh-src', name: 'Source WH', company_id: tenantId },
+        { id: 'wh-dest', name: 'Dest WH', company_id: tenantId }
+      ]);
+      StorageEngine.setStored('stock_movements', [
+        {
+          id: 'm-1',
+          doc_id: 'init-1',
+          doc_no: 'INIT-1',
+          doc_type: 'Receipt',
+          product_id: 'prod-A',
+          warehouse_id: 'wh-src',
+          qty_change: 100,
+          type: 'IN',
+          current_balance_after: 100,
+          date: '2026-08-28',
+          company_id: tenantId,
+          created_at: new Date().toISOString(),
+          created_by: 'u-1'
+        },
+        {
+          id: 'm-2',
+          doc_id: 'init-2',
+          doc_no: 'INIT-2',
+          doc_type: 'Receipt',
+          product_id: 'prod-B',
+          warehouse_id: 'wh-src',
+          qty_change: 50,
+          type: 'IN',
+          current_balance_after: 50,
+          date: '2026-08-28',
+          company_id: tenantId,
+          created_at: new Date().toISOString(),
+          created_by: 'u-1'
+        }
+      ]);
+
+      const engine = new WarehouseBusinessEngine();
+      const realAdjustStock = InventoryModule.adjustStock;
+      let callCount = 0;
+      const adjustSpy = vi.spyOn(InventoryModule, 'adjustStock').mockImplementation(async (...args) => {
+        callCount++;
+        // Step 1: prod-A deduct from src (call 1) -> ok
+        // Step 2: prod-A add to dest (call 2) -> ok
+        // Step 3: prod-B deduct from src (call 3) -> fail
+        if (callCount === 3) {
+          throw new Error('Database disk full / simulation error');
+        }
+        return realAdjustStock.apply(InventoryModule, args);
+      });
+
+      const event: EventEnvelope = {
+        eventId: 'evt-transfer-fail',
+        eventType: 'STOCK_TRANSFERRED',
+        timestamp: new Date().toISOString(),
+        tenantId,
+        organizationId: 'org-1',
+        user_id: 'u-1',
+        user_name: 'Admin',
+        user_role: 'Admin',
+        payload: {
+          srcWarehouseId: 'wh-src',
+          destWarehouseId: 'wh-dest',
+          items: [
+            { product_id: 'prod-A', qty: 20 },
+            { product_id: 'prod-B', qty: 10 }
+          ]
+        },
+        metadataVersion: '1.0'
+      };
+
+      const result = await engine.processEvent(event);
+      expect(result.success).toBe(false);
+      expect(result.statusCode).toBe('EXECUTION_ERROR');
+      expect(result.messageAr).toContain('فشل تحويل المخزون وتم التراجع عن الحركات السابقة');
+
+      // Crucial verification: prod-A was rolled back and source / dest balances for prod-A and prod-B are intact
+      expect(InventoryModule.getProductStockInWarehouse('wh-src', 'prod-A')).toBe(100);
+      expect(InventoryModule.getProductStockInWarehouse('wh-dest', 'prod-A')).toBe(0);
+      expect(InventoryModule.getProductStockInWarehouse('wh-src', 'prod-B')).toBe(50);
+      expect(InventoryModule.getProductStockInWarehouse('wh-dest', 'prod-B')).toBe(0);
+
+      adjustSpy.mockRestore();
+    });
   });
 
   // ==========================================
@@ -371,6 +540,59 @@ describe('Kemit ERP Enterprise Foundation Engines Integration & Unit Tests', () 
       const mainCashAcc = accounts.find(a => a.code === '110101');
       expect(mainCashAcc).toBeDefined();
       expect(mainCashAcc?.nameEn).toContain('Cash in Hand');
+    });
+
+    it('should support dynamic industry template initialization (Poultry, Retail, Manufacturing, Transport)', async () => {
+      // 1. Poultry template
+      const poultryAccs = AccountingBusinessEngine.initializeChartOfAccounts('comp-poultry-1', 'poultry');
+      expect(poultryAccs.some(a => a.nameAr.includes('الأعلاف'))).toBe(true);
+      expect(poultryAccs.some(a => a.nameEn.includes('Biological Assets'))).toBe(true);
+
+      // 2. Retail template
+      const retailAccs = AccountingBusinessEngine.initializeChartOfAccounts('comp-retail-1', 'retail');
+      expect(retailAccs.some(a => a.nameAr.includes('نقاط البيع'))).toBe(true);
+      expect(retailAccs.some(a => a.nameEn.includes('Cost of Goods Sold'))).toBe(true);
+
+      // 3. Manufacturing template
+      const mfgAccs = AccountingBusinessEngine.initializeChartOfAccounts('comp-mfg-1', 'manufacturing');
+      expect(mfgAccs.some(a => a.nameAr.includes('المواد الخام'))).toBe(true);
+      expect(mfgAccs.some(a => a.nameEn.includes('Work in Progress'))).toBe(true);
+
+      // 4. Transport template
+      const transportAccs = AccountingBusinessEngine.initializeChartOfAccounts('comp-transport-1', 'transport');
+      expect(transportAccs.some(a => a.nameAr.includes('أسطول الشاحنات'))).toBe(true);
+      expect(transportAccs.some(a => a.nameEn.includes('Highway Tolls') || a.nameAr.includes('رسوم الطرق'))).toBe(true);
+
+      // 5. Initialize via CHART_OF_ACCOUNTS_INITIALIZED event
+      const engine = new AccountingBusinessEngine();
+      const event: EventEnvelope = {
+        eventId: 'evt-coa-init-1',
+        eventType: 'CHART_OF_ACCOUNTS_INITIALIZED',
+        timestamp: new Date().toISOString(),
+        tenantId: 'comp-event-init',
+        organizationId: 'org-1',
+        user_id: 'u-1',
+        user_name: 'Admin',
+        user_role: 'Admin',
+        payload: { templateId: 'poultry' },
+        metadataVersion: '1.0'
+      };
+      const res = await engine.processEvent(event);
+      expect(res.success).toBe(true);
+      expect(res.outputData.some((a: any) => a.nameAr.includes('الأعلاف'))).toBe(true);
+    });
+
+    it('should provide available templates metadata and auto-detection fallback', () => {
+      const templates = AccountingBusinessEngine.getAvailableTemplates();
+      expect(templates.length).toBe(5);
+      expect(templates.map(t => t.id)).toEqual(['standard', 'poultry', 'retail', 'manufacturing', 'transport']);
+
+      // Auto-detection based on company ID/industry
+      expect(AccountingBusinessEngine.getCompanyTemplateId('c-poultry-corp')).toBe('poultry');
+      expect(AccountingBusinessEngine.getCompanyTemplateId('c-carrefour-eg')).toBe('retail');
+      expect(AccountingBusinessEngine.getCompanyTemplateId('c-sewedy-cables')).toBe('manufacturing');
+      expect(AccountingBusinessEngine.getCompanyTemplateId('c-transport-fleet')).toBe('transport');
+      expect(AccountingBusinessEngine.getCompanyTemplateId('c-general-trading')).toBe('standard');
     });
   });
 });
