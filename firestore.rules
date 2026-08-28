@@ -762,11 +762,13 @@ service cloud.firestore {
     }
 
     match /account_correction_requests/{id} {
-      allow create: if request.resource.data.keys().hasAll(['targetEmail', 'targetUserId', 'correctionType', 'status', 'company_id'])
+      allow create: if isLoggedIn()
+                    && request.resource.data.keys().hasAll(['targetEmail', 'targetUserId', 'correctionType', 'status', 'company_id'])
                     && request.resource.data.status == 'Pending'
                     && request.resource.data.targetEmail is string
                     && request.resource.data.targetUserId is string
                     && request.resource.data.company_id is string
+                    && request.resource.data.company_id != ""
                     && request.resource.data.company_id == getCompanyId();
       allow read, update, delete: if isSystemAdmin() || (
         isLoggedIn() &&

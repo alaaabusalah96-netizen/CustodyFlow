@@ -53,12 +53,12 @@ describe('Phase H: Atomic adjustStock Race-Condition Prevention Tests', () => {
     });
   });
 
-  it('correctly reflects concurrent stock adjustments without losing updates', async () => {
+  it('correctly executes sequential stock adjustments without losing updates', async () => {
     // Initial balance is 50
     const initialStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
     expect(initialStock).toBe(50);
 
-    // Run two sequential/concurrent adjustments
+    // Run two sequential adjustments
     await InventoryModule.adjustStock(warehouseId, productId, 20, 'Receipt', 'user-1', binId);
     await InventoryModule.adjustStock(warehouseId, productId, 15, 'Receipt', 'user-2', binId);
 
@@ -70,6 +70,72 @@ describe('Phase H: Atomic adjustStock Race-Condition Prevention Tests', () => {
       m => m.warehouse_id === warehouseId && m.product_id === productId && m.bin_id === binId
     );
     expect(movements.length).toBe(3);
+  });
+
+  it('correctly handles concurrent stock adjustments via Promise.all using atomic transaction isolation', async () => {
+    const initialStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
+    expect(initialStock).toBe(50);
+
+    // Setup an in-memory document store and transactional execution lock to emulate Firestore's atomic serializability
+    const docStore = new Map<string, any>();
+    let queueLock = Promise.resolve();
+
+    const runTxSpy = vi.spyOn(firestore, 'runTransaction').mockImplementation(async (_db: any, updateFunction: any) => {
+      const prevLock = queueLock;
+      let release: () => void;
+      queueLock = new Promise<void>(resolve => { release = resolve; });
+      await prevLock;
+
+      try {
+        const tx = {
+          get: async (docRef: any) => {
+            const path = docRef?.path || docRef?.id || String(docRef);
+            const data = docStore.get(path);
+            return {
+              exists: () => data !== undefined,
+              data: () => data || {}
+            };
+          },
+          set: (docRef: any, data: any, options?: any) => {
+            const path = docRef?.path || docRef?.id || String(docRef);
+            if (options?.merge && docStore.has(path)) {
+              docStore.set(path, { ...docStore.get(path), ...data });
+            } else {
+              docStore.set(path, data);
+            }
+          },
+          update: (docRef: any, data: any) => {
+            const path = docRef?.path || docRef?.id || String(docRef);
+            docStore.set(path, { ...docStore.get(path), ...data });
+          }
+        };
+        return await updateFunction(tx);
+      } finally {
+        release!();
+      }
+    });
+
+    // Fire two adjustments concurrently via Promise.all
+    await Promise.all([
+      InventoryModule.adjustStock(warehouseId, productId, 20, 'Receipt', 'user-1', binId),
+      InventoryModule.adjustStock(warehouseId, productId, 15, 'Receipt', 'user-2', binId)
+    ]);
+
+    // Both adjustments must be reflected: 50 + 20 + 15 = 85
+    const finalStock = InventoryModule.getProductStockInWarehouse(warehouseId, productId, binId);
+    expect(finalStock).toBe(85);
+
+    const movements = InventoryModule.getStockMovements().filter(
+      m => m.warehouse_id === warehouseId && m.product_id === productId && m.bin_id === binId
+    );
+    expect(movements.length).toBe(3);
+
+    // Verify individual adjustment quantities exist in movements
+    const deltas = movements.slice(1).map(m => m.qty_change);
+    expect(deltas).toContain(20);
+    expect(deltas).toContain(15);
+
+    runTxSpy.mockRestore();
   });
 
   it('strictly enforces overdraft prevention on negative balance adjustments', async () => {

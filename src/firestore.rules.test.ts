@@ -168,13 +168,19 @@ class FirestoreRulesPolicyValidator {
   }
 
   /**
-   * Simulates evaluation of /account_correction_requests/{id} create rule
+   * Simulates evaluation of /account_correction_requests/{id} create rule.
+   * Faithfully models Firestore helper semantics:
+   * - isLoggedIn(): auth != null
+   * - getCompanyId(): returns auth.company_id if user doc exists, else ""
+   * - Rule checks: isLoggedIn() && hasAll(...) && status == 'Pending' && ... && company_id != "" && company_id == getCompanyId()
    */
   public evaluateAccountCorrectionRequestCreate(
     auth: MockAuthContext | null,
     requestData: Record<string, any> | null
   ): boolean {
-    if (!auth || !auth.company_id) return false;
+    const isLoggedIn = auth !== null;
+    const userCompanyId = (auth && auth.company_id) ? auth.company_id : "";
+
     if (!requestData) return false;
 
     const requiredKeys = ['targetEmail', 'targetUserId', 'correctionType', 'status', 'company_id'];
@@ -184,7 +190,11 @@ class FirestoreRulesPolicyValidator {
     if (typeof requestData.targetEmail !== 'string') return false;
     if (typeof requestData.targetUserId !== 'string') return false;
     if (typeof requestData.company_id !== 'string') return false;
-    if (requestData.company_id !== auth.company_id) return false;
+
+    // Rule condition: isLoggedIn() && ... && request.resource.data.company_id != "" && request.resource.data.company_id == getCompanyId()
+    if (!isLoggedIn) return false;
+    if (requestData.company_id === "") return false;
+    if (requestData.company_id !== userCompanyId) return false;
 
     return true;
   }

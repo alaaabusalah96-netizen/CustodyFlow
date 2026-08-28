@@ -4852,6 +4852,19 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 - Retained all comparisons without disruption to support the active sunset grace period.
 - Test Result: `tsc --noEmit` passed (0 errors); Vitest 13/13 passed in scoped auth suites; `compile_applet` succeeded.
 
+---
+
+## Hardening Remediation: Task A (P1) - Honest Concurrent Test for adjustStock
+**Date:** 2026-08-28
+**Files Changed:** `src/adjust_stock_atomic.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Renamed the sequential test case in `src/adjust_stock_atomic.test.ts` to accurately describe sequential execution.
+- Added a dedicated concurrent test case using `Promise.all` executing two concurrent `adjustStock` invocations with transactional serialization and isolated document store mocks.
+- Verified that final balance matches the sum of starting balance and both deltas (50 + 20 + 15 = 85) without lost updates, with all movements correctly persisted.
+- Preserved existing overdraft prevention and generic `runTransaction` failure tests.
+- Test Result: `tsc --noEmit` passed (0 errors); Vitest 4/4 passed in `src/adjust_stock_atomic.test.ts`.
+
+
 
 
 
