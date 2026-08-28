@@ -1046,19 +1046,19 @@ async function startServer() {
       // 3. Perform Password Comparisons across KDF iterations using stored pepper_version
       const pbkdf2Hash = hashPasswordPBKDF2_210k(password, salt, pepperVersion);
       const hash10k = hashPassword(password, salt, pepperVersion);
-      const hash1k = legacyStretchedHashPassword1000(password, salt, pepperVersion);
-      const hashSinglePass = legacySinglePassHashPassword(password, salt, pepperVersion);
-      const hashOldEmailSalt = legacyHashPassword(password, emailLower);
-      const hashLegacyUnsalted = legacyHashPassword(password);
+      const hash1k = legacyStretchedHashPassword1000(password, salt, pepperVersion); // TODO(remove-after-2027-02-01)
+      const hashSinglePass = legacySinglePassHashPassword(password, salt, pepperVersion); // TODO(remove-after-2027-02-01)
+      const hashOldEmailSalt = legacyHashPassword(password, emailLower); // TODO(remove-after-2027-02-01)
+      const hashLegacyUnsalted = legacyHashPassword(password); // TODO(remove-after-2027-02-01)
 
       const isPBKDF2Match = storedPasswordHash !== '' && storedPasswordHash === pbkdf2Hash;
       const is10kMatch = storedPasswordHash !== '' && storedPasswordHash === hash10k;
-      const is1kMatch = storedPasswordHash !== '' && storedPasswordHash === hash1k;
-      const isSinglePassMatch = storedPasswordHash !== '' && storedPasswordHash === hashSinglePass;
-      const isOldEmailSaltMatch = storedPasswordHash !== '' && storedPasswordHash === hashOldEmailSalt;
-      const isLegacyUnsaltedMatch = storedPasswordHash !== '' && storedPasswordHash === hashLegacyUnsalted;
+      const is1kMatch = storedPasswordHash !== '' && storedPasswordHash === hash1k; // TODO(remove-after-2027-02-01)
+      const isSinglePassMatch = storedPasswordHash !== '' && storedPasswordHash === hashSinglePass; // TODO(remove-after-2027-02-01)
+      const isOldEmailSaltMatch = storedPasswordHash !== '' && storedPasswordHash === hashOldEmailSalt; // TODO(remove-after-2027-02-01)
+      const isLegacyUnsaltedMatch = storedPasswordHash !== '' && storedPasswordHash === hashLegacyUnsalted; // TODO(remove-after-2027-02-01)
       const allowPlaintextFallback = false;
-      const isPlainMatch = false;
+      const isPlainMatch = false; // TODO(remove-after-2027-02-01)
 
       const isMatched = isPBKDF2Match || is10kMatch || is1kMatch || isSinglePassMatch || isOldEmailSaltMatch || isLegacyUnsaltedMatch || isPlainMatch;
 
@@ -1235,17 +1235,17 @@ async function startServer() {
       // Perform Password Comparisons across KDF iterations using stored pepper_version
       const pbkdf2Hash = hashPasswordPBKDF2_210k(currentPassword, salt, pepperVersion);
       const hash10k = hashPassword(currentPassword, salt, pepperVersion);
-      const hash1k = legacyStretchedHashPassword1000(currentPassword, salt, pepperVersion);
-      const hashSinglePass = legacySinglePassHashPassword(currentPassword, salt, pepperVersion);
-      const hashOldEmailSalt = legacyHashPassword(currentPassword, emailLower);
-      const hashLegacyUnsalted = legacyHashPassword(currentPassword);
+      const hash1k = legacyStretchedHashPassword1000(currentPassword, salt, pepperVersion); // TODO(remove-after-2027-02-01)
+      const hashSinglePass = legacySinglePassHashPassword(currentPassword, salt, pepperVersion); // TODO(remove-after-2027-02-01)
+      const hashOldEmailSalt = legacyHashPassword(currentPassword, emailLower); // TODO(remove-after-2027-02-01)
+      const hashLegacyUnsalted = legacyHashPassword(currentPassword); // TODO(remove-after-2027-02-01)
 
       const isPBKDF2Match = storedPasswordHash !== '' && storedPasswordHash === pbkdf2Hash;
       const is10kMatch = storedPasswordHash !== '' && storedPasswordHash === hash10k;
-      const is1kMatch = storedPasswordHash !== '' && storedPasswordHash === hash1k;
-      const isSinglePassMatch = storedPasswordHash !== '' && storedPasswordHash === hashSinglePass;
-      const isOldEmailSaltMatch = storedPasswordHash !== '' && storedPasswordHash === hashOldEmailSalt;
-      const isLegacyUnsaltedMatch = storedPasswordHash !== '' && storedPasswordHash === hashLegacyUnsalted;
+      const is1kMatch = storedPasswordHash !== '' && storedPasswordHash === hash1k; // TODO(remove-after-2027-02-01)
+      const isSinglePassMatch = storedPasswordHash !== '' && storedPasswordHash === hashSinglePass; // TODO(remove-after-2027-02-01)
+      const isOldEmailSaltMatch = storedPasswordHash !== '' && storedPasswordHash === hashOldEmailSalt; // TODO(remove-after-2027-02-01)
+      const isLegacyUnsaltedMatch = storedPasswordHash !== '' && storedPasswordHash === hashLegacyUnsalted; // TODO(remove-after-2027-02-01)
 
       const isMatch = isPBKDF2Match || is10kMatch || is1kMatch || isSinglePassMatch || isOldEmailSaltMatch || isLegacyUnsaltedMatch;
 

@@ -4842,6 +4842,16 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 - Added automated unit test in `src/web_api_key_hygiene.test.ts` verifying that `validateFirebaseConfig` throws a critical error when credentials are missing in strict/production mode.
 - Test Result: `tsc --noEmit` passed (0 errors); Vitest 2/2 passed in `src/web_api_key_hygiene.test.ts`; `compile_applet` succeeded.
 
+---
+
+## Hardening Remediation: Task 6 Annotation - Legacy Hash Sunset Annotations
+**Date:** 2026-08-28
+**Files Changed:** `server.ts`, `CHANGELOG.md`
+**Summary:**
+- Annotated each legacy hash calculation and comparison in `server.ts` (`verify-credentials` and `change-password` routes) with `// TODO(remove-after-2027-02-01)`.
+- Retained all comparisons without disruption to support the active sunset grace period.
+- Test Result: `tsc --noEmit` passed (0 errors); Vitest 13/13 passed in scoped auth suites; `compile_applet` succeeded.
+
 
 
 
