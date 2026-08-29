@@ -170,4 +170,17 @@ describe('Phase H: Atomic adjustStock Race-Condition Prevention Tests', () => {
 
     runTxSpy.mockRestore();
   });
+
+  it('generates predictable, stable movement and doc IDs when idempotencyKey is supplied across retries', async () => {
+    const fixedKey = 'idem-retry-9988';
+    await InventoryModule.adjustStock(warehouseId, productId, 10, 'Receipt', 'user-1', binId, fixedKey);
+
+    const movements = InventoryModule.getStockMovements().filter(
+      m => m.warehouse_id === warehouseId && m.product_id === productId && m.bin_id === binId
+    );
+
+    const lastMovement = movements[movements.length - 1];
+    expect(lastMovement.id).toBe(`m-adj-${fixedKey}`);
+    expect(lastMovement.doc_no).toBe(`ADJ-${fixedKey.slice(0, 8)}`);
+  });
 });

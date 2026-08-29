@@ -432,6 +432,14 @@ describe('Phase 3.1: Firestore Security Rules Comprehensive Unit Tests', () => {
     it('should DENY create when unauthenticated or missing required fields', () => {
       expect(validator.evaluateAccountCorrectionRequestCreate(null, validRequestData)).toBe(false);
 
+      // Attempt with empty company_id while unauthenticated
+      const emptyCompanyData = { ...validRequestData, company_id: '' };
+      expect(validator.evaluateAccountCorrectionRequestCreate(null, emptyCompanyData)).toBe(false);
+
+      // Attempt with empty company_id while authenticated (user without company doc)
+      const noDocAuth: MockAuthContext = { uid: 'user-no-company', role: 'User', company_id: '' };
+      expect(validator.evaluateAccountCorrectionRequestCreate(noDocAuth, emptyCompanyData)).toBe(false);
+
       const missingCompany = { ...validRequestData };
       delete (missingCompany as any).company_id;
       const authUser: MockAuthContext = { uid: 'user-1', role: 'Admin', company_id: 'comp-1' };

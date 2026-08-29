@@ -1117,7 +1117,8 @@ export class InventoryModule {
     qtyChange: number,
     docType: InventoryDocType,
     userId: string,
-    binId?: string
+    binId?: string,
+    idempotencyKey?: string
   ): Promise<void> {
     const wh = StorageEngine.getStored<Warehouse[]>('warehouses', []).find(w => w.id === warehouseId);
     const companyId = wh?.company_id || CompaniesModule.getSelectedCompanyId();
@@ -1153,12 +1154,12 @@ export class InventoryModule {
           }
         }
 
-        const movementId = `m-adj-${crypto.randomUUID()}`;
+        const movementId = idempotencyKey ? `m-adj-${idempotencyKey}` : `m-adj-${crypto.randomUUID()}`;
         const movementDocRef = doc(db, 'stock_movements', movementId);
         const movement: StockMovement = {
           id: movementId,
           doc_id: 'direct-adjust',
-          doc_no: `ADJ-${crypto.randomUUID().slice(0, 8)}`,
+          doc_no: idempotencyKey ? `ADJ-${idempotencyKey.slice(0, 8)}` : `ADJ-${crypto.randomUUID().slice(0, 8)}`,
           doc_type: docType,
           product_id: productId,
           warehouse_id: warehouseId,

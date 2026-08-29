@@ -4864,6 +4864,41 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 - Preserved existing overdraft prevention and generic `runTransaction` failure tests.
 - Test Result: `tsc --noEmit` passed (0 errors); Vitest 4/4 passed in `src/adjust_stock_atomic.test.ts`.
 
+---
+
+## Hardening Remediation: Task B (P1) - Account Correction Requests Tenant Isolation
+**Date:** 2026-08-29
+**Files Changed:** `firestore.rules`, `src/firestore.rules.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Tightened `match /account_correction_requests/{id}` create rule in `firestore.rules` to require `isLoggedIn()` and non-empty `company_id != ""` alongside `company_id == getCompanyId()`, closing the unauthenticated/no-tenant empty string bypass loophole.
+- Updated `evaluateAccountCorrectionRequestCreate` validator stub in `src/firestore.rules.test.ts` to faithfully reflect Firestore helper mechanics (`auth == null -> ""`, missing user doc `-> ""`, explicitly checking `company_id != ""`).
+- Added test assertions denying unauthenticated creation, authenticated attempts with mismatched `company_id`, and attempts with empty string `company_id`.
+- Test Result: `tsc --noEmit` passed (0 errors); Vitest 19/19 passed in `src/firestore.rules.test.ts`.
+
+---
+
+## Hardening Remediation: Task C (P2) - Stable Movement & Document IDs for Retry Safety
+**Date:** 2026-08-29
+**Files Changed:** `src/db/inventory.ts`, `src/adjust_stock_atomic.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Added optional `idempotencyKey?: string` parameter to `InventoryModule.adjustStock(...)` to support stable movement and doc IDs across retries without duplicate record creation.
+- Defaulted to existing `crypto.randomUUID()` behavior when `idempotencyKey` is omitted, ensuring 100% backward compatibility with all callers.
+- Inspected all call sites of `adjustStock` and `syncWriteWithOfflineFallback` across `warehouse_engine.ts`, `purchasing_engine.ts`, `sales_engine.ts`, `accounting_engine.ts`, and `fleet_engine.ts`; verified all sites use deterministic IDs or pass through cleanly.
+- Added unit test in `src/adjust_stock_atomic.test.ts` verifying stable ID generation when `idempotencyKey` is supplied.
+- Test Result: `tsc --noEmit` passed (0 errors); Vitest 5/5 passed in `src/adjust_stock_atomic.test.ts`.
+
+---
+
+## Hardening Remediation: Task D (P2) - Transfer Compensation Acceptance Test
+**Date:** 2026-08-29
+**Files Changed:** `src/warehouse_engine.transfer_atomicity.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Created dedicated acceptance test suite `src/warehouse_engine.transfer_atomicity.test.ts` validating multi-item warehouse transfer atomicity and compensation mechanics.
+- Tested forward-transfer failure on subsequent items (item 2 of 3) and verified complete reverse compensation of prior items (restoring source and target stock balances).
+- Tested and asserted handling when compensation rollback itself encounters errors, verifying error messaging and reporting of unreverted items.
+- Test Result: `tsc --noEmit` passed (0 errors); Vitest 2/2 passed in `src/warehouse_engine.transfer_atomicity.test.ts`.
+
+
 
 
 
