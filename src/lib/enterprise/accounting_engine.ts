@@ -272,6 +272,30 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
   /**
    * Initialize or re-seed Chart of Accounts for a company using the specified or auto-detected template.
    */
+  static async initializeChartOfAccountsAsync(companyId: string, templateId?: CoaTemplateId | string): Promise<GLAccount[]> {
+    const effectiveTemplateId = templateId || AccountingBusinessEngine.getCompanyTemplateId(companyId);
+    const templateItems = AccountingBusinessEngine.getTemplateAccounts(effectiveTemplateId);
+
+    const initialized: GLAccount[] = templateItems.map(tpl => ({
+      ...tpl,
+      id: `acc-${companyId}-${tpl.code}`,
+      company_id: companyId,
+      createdAt: new Date().toISOString()
+    }));
+
+    for (const newAcc of initialized) {
+      const syncRes = await syncWriteWithOfflineFallback('gl_accounts', newAcc.id, newAcc);
+      if (!syncRes.success) {
+        throw new Error(syncRes.error || `فشل تهيئة الحساب ${newAcc.code} في قاعدة البيانات.`);
+      }
+    }
+
+    const list = StorageEngine.getStored<GLAccount[]>('gl_accounts', []);
+    const existingFiltered = list.filter(a => a.company_id !== companyId);
+    StorageEngine.setStored('gl_accounts', [...existingFiltered, ...initialized]);
+    return initialized;
+  }
+
   static initializeChartOfAccounts(companyId: string, templateId?: CoaTemplateId | string): GLAccount[] {
     const effectiveTemplateId = templateId || AccountingBusinessEngine.getCompanyTemplateId(companyId);
     const templateItems = AccountingBusinessEngine.getTemplateAccounts(effectiveTemplateId);
@@ -286,7 +310,9 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
         company_id: companyId,
         createdAt: new Date().toISOString()
       };
-      dbSetDoc('gl_accounts', newAcc.id, newAcc);
+      syncWriteWithOfflineFallback('gl_accounts', newAcc.id, newAcc).catch(err => {
+        console.error(`Failed background sync for initialized COA account ${newAcc.code}:`, err);
+      });
       return newAcc;
     });
 
@@ -621,9 +647,7 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
         case 'CHART_OF_ACCOUNTS_INITIALIZED': {
           const companyId = event.tenantId;
           const templateId = event.payload?.templateId || event.payload?.template;
-          const accounts = templateId
-            ? AccountingBusinessEngine.initializeChartOfAccounts(companyId, templateId)
-            : AccountingBusinessEngine.getAccounts(companyId);
+          const accounts = await AccountingBusinessEngine.initializeChartOfAccountsAsync(companyId, templateId);
           return {
             success: true,
             engineId: this.engineId,

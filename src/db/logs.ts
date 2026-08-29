@@ -1,6 +1,7 @@
 import { ActivityLog, AuditLog } from '../types';
-import { dbSetDoc, dbDeleteDoc, db } from '../firebase';
+import { db } from '../firebase';
 import { StorageEngine } from './storage';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_LOGS, DEFAULT_AUDIT_LOGS } from './defaults';
 import { AuditLogEngine } from '../lib/enterprise/audit';
 import { createEventEnvelope } from '../lib/enterprise/metadata';
@@ -71,14 +72,81 @@ export class LogsModule {
     StorageEngine.setStored('logs', logs.slice(0, 150)); // limit audit records
 
     // Sync to Firestore
-    dbSetDoc('logs', newLog.id, newLog);
+    syncWriteWithOfflineFallback('logs', newLog.id, newLog).catch(err => {
+      console.warn(`[addLog] Background sync warning for log ${newLog.id}:`, err);
+    });
+  }
+
+  static async addLogAsync(
+    userId: string,
+    userName: string,
+    action: string,
+    details: string,
+    stationId?: string,
+    companyId?: string,
+    amount?: number,
+    notes?: string
+  ): Promise<{ success: boolean; error?: string; log?: ActivityLog }> {
+    const activeUser = StorageEngine.getStored<any>('active_user', null);
+    const savedCompanyId = typeof localStorage !== 'undefined' ? localStorage.getItem('custody_selected_company_id') : null;
+    const resolvedCompanyId = companyId || activeUser?.company_id || savedCompanyId;
+
+    if (!resolvedCompanyId) {
+      console.warn('[Logs] Activity log dropped: no company context available.');
+      return { success: false, error: 'No company context available.' };
+    }
+
+    const isImpersonating = !!(activeUser?.impersonator);
+    const impersonator = activeUser?.impersonator;
+
+    const formattedDetails = isImpersonating && !details.includes('[Impersonated by') && !details.includes('[Support')
+      ? `[Support Mode by ${impersonator.full_name}] ${details}`
+      : details;
+
+    const newLog: ActivityLog = {
+      id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      user_id: userId,
+      user_name: userName,
+      action,
+      details: formattedDetails,
+      timestamp: new Date().toISOString(),
+      station_id: stationId,
+      company_id: resolvedCompanyId,
+      amount,
+      notes
+    };
+
+    const res = await syncWriteWithOfflineFallback('logs', newLog.id, newLog);
+    if (!res.success) {
+      console.warn(`[addLogAsync] Warning: ${res.error}`);
+      return { success: false, error: res.error };
+    }
+
+    const logs = LogsModule.getLogs();
+    logs.unshift(newLog);
+    StorageEngine.setStored('logs', logs.slice(0, 150));
+    return { success: true, log: newLog };
   }
 
   static deleteLog(id: string): void {
     const logs = LogsModule.getLogs();
     const filtered = logs.filter(l => l.id !== id);
     StorageEngine.setStored('logs', filtered);
-    dbDeleteDoc('logs', id);
+    syncWriteWithOfflineFallback('logs', id, null).catch(err => {
+      console.warn(`[deleteLog] Background delete sync warning for log ${id}:`, err);
+    });
+  }
+
+  static async deleteLogAsync(id: string): Promise<{ success: boolean; error?: string }> {
+    const res = await syncWriteWithOfflineFallback('logs', id, null);
+    if (!res.success) {
+      console.warn(`[deleteLogAsync] Warning: ${res.error}`);
+      return { success: false, error: res.error };
+    }
+    const logs = LogsModule.getLogs();
+    const filtered = logs.filter(l => l.id !== id);
+    StorageEngine.setStored('logs', filtered);
+    return { success: true };
   }
 
   static updateReplenishmentLog(id: string, amount: number, notes: string, details: string): void {
@@ -92,8 +160,35 @@ export class LogsModule {
         details
       };
       StorageEngine.setStored('logs', logs);
-      dbSetDoc('logs', id, logs[idx]);
+      syncWriteWithOfflineFallback('logs', id, logs[idx]).catch(err => {
+        console.warn(`[updateReplenishmentLog] Background sync warning for log ${id}:`, err);
+      });
     }
+  }
+
+  static async updateReplenishmentLogAsync(id: string, amount: number, notes: string, details: string): Promise<{ success: boolean; error?: string }> {
+    const logs = LogsModule.getLogs();
+    const idx = logs.findIndex(l => l.id === id);
+    if (idx === -1) {
+      return { success: false, error: 'Log not found' };
+    }
+
+    const updated = {
+      ...logs[idx],
+      amount,
+      notes,
+      details
+    };
+
+    const res = await syncWriteWithOfflineFallback('logs', id, updated);
+    if (!res.success) {
+      console.warn(`[updateReplenishmentLogAsync] Warning: ${res.error}`);
+      return { success: false, error: res.error };
+    }
+
+    logs[idx] = updated;
+    StorageEngine.setStored('logs', logs);
+    return { success: true };
   }
 
   static getAuditLogs(): AuditLog[] {
@@ -118,11 +213,25 @@ export class LogsModule {
     return StorageEngine.getPaginatedIDB<AuditLog>('AuditLogs', page, pageSize, filterFn, sortFn);
   }
 
+  static async addAuditLogAsync(auditLog: AuditLog): Promise<{ success: boolean; error?: string }> {
+    const res = await syncWriteWithOfflineFallback('AuditLogs', auditLog.id, auditLog);
+    if (!res.success) {
+      console.warn(`[addAuditLogAsync] Warning: ${res.error}`);
+      return { success: false, error: res.error };
+    }
+    const logs = LogsModule.getAuditLogs();
+    logs.unshift(auditLog);
+    StorageEngine.setStored('AuditLogs', logs);
+    return { success: true };
+  }
+
   static addAuditLog(auditLog: AuditLog): void {
     const logs = LogsModule.getAuditLogs();
     logs.unshift(auditLog);
     StorageEngine.setStored('AuditLogs', logs);
-    dbSetDoc('AuditLogs', auditLog.id, auditLog);
+    syncWriteWithOfflineFallback('AuditLogs', auditLog.id, auditLog).catch(err => {
+      console.warn(`[addAuditLog] Background sync warning for audit log ${auditLog.id}:`, err);
+    });
   }
 
   static logAudit(actionType: string, description: string, details?: Record<string, any>): void {

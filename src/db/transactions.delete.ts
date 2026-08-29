@@ -1,5 +1,5 @@
 import { Transaction, DeletedTransaction, Notification, ActivityLog, AuditLog } from '../types';
-import { dbSetDoc, dbDeleteDoc, db } from '../firebase';
+import { db } from '../firebase';
 import { StorageEngine } from './storage';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';

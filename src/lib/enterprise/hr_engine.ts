@@ -1,5 +1,5 @@
 import { StorageEngine } from '../../db/storage';
-import { dbSetDoc } from '../../firebase';
+import { syncWriteWithOfflineFallback } from '../../db/offlineQueue';
 import { DocumentNumberEngine } from '../../db/documentNumberEngine';
 import { CostCenterEngine } from '../../db/costCenterEngine';
 import { OrganizationEngine } from '../../db/organizationEngine';
@@ -95,8 +95,11 @@ export class HRBusinessEngine {
     };
 
     const updated = [...allEmployees, newEmployee];
+    const syncRes = await syncWriteWithOfflineFallback('employees_payroll_items', newEmployee.id, newEmployee);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || `فشل تسجيل الموظف ${newEmployee.name} في قاعدة البيانات.`);
+    }
     StorageEngine.setStored('employees_payroll_items', updated);
-    await dbSetDoc('employees_payroll_items', newEmployee.id, newEmployee);
 
     return newEmployee;
   }
@@ -145,8 +148,11 @@ export class HRBusinessEngine {
       timestamp: new Date().toISOString()
     };
 
+    const syncRes = await syncWriteWithOfflineFallback('payroll_processed_runs', runRecord.id, runRecord);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || `فشل حفظ مسير الرواتب للشهر ${data.period} في قاعدة البيانات.`);
+    }
     StorageEngine.setStored('payroll_processed_runs', [...allRuns, runRecord]);
-    await dbSetDoc('payroll_processed_runs', runRecord.id, runRecord);
 
     // Post Accounting Double-Entry (General Ledger Integration with Org Dimensions)
     try {
@@ -229,8 +235,11 @@ export class HRBusinessEngine {
       updated = [...allRecords, record];
     }
 
+    const syncRes = await syncWriteWithOfflineFallback('hr_attendance_records', record.id, record);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || `فشل تسجيل الحضور للموظف ${record.employee_name} في قاعدة البيانات.`);
+    }
     StorageEngine.setStored('hr_attendance_records', updated);
-    await dbSetDoc('hr_attendance_records', record.id, record);
     return record;
   }
 
@@ -287,8 +296,11 @@ export class HRBusinessEngine {
     };
 
     const updated = [...allLeaves, leave];
+    const syncRes = await syncWriteWithOfflineFallback('hr_leave_requests', leave.id, leave);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || `فشل تقديم طلب الإجازة للموظف ${leave.employee_name} في قاعدة البيانات.`);
+    }
     StorageEngine.setStored('hr_leave_requests', updated);
-    await dbSetDoc('hr_leave_requests', leave.id, leave);
     return leave;
   }
 
@@ -312,8 +324,11 @@ export class HRBusinessEngine {
       approvedBy: approverName
     };
 
+    const syncRes = await syncWriteWithOfflineFallback('hr_leave_requests', leaveId, updated[index]);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || `فشل تحديث حالة طلب الإجازة في قاعدة البيانات.`);
+    }
     StorageEngine.setStored('hr_leave_requests', updated);
-    await dbSetDoc('hr_leave_requests', leaveId, updated[index]);
 
     // If approved, create/update attendance records for the leave period
     if (status === 'APPROVED') {

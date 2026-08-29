@@ -1,7 +1,7 @@
 import { WarehouseTemplate, WarehouseTemplateNode, Warehouse, InstantiateWarehouseTemplateParams } from '../types/inventory';
 import { StorageEngine } from './storage';
 import { WarehouseHierarchyEngine } from './warehouseHierarchyEngine';
-import { dbSetDoc } from '../firebase';
+import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
 
@@ -302,9 +302,40 @@ export class WarehouseTemplateEngine {
     return effectiveList.filter(t => t.companyId === null || t.companyId === companyId);
   }
 
-  static saveWarehouseTemplates(templates: WarehouseTemplate[]): void {
+  static async saveWarehouseTemplatesAsync(templates: WarehouseTemplate[]): Promise<{ success: boolean; error?: string }> {
+    const existing = StorageEngine.getStored<WarehouseTemplate[]>('warehouse_templates', DEFAULT_WAREHOUSE_TEMPLATES);
+    const changed = templates.filter(t => {
+      const old = existing.find(ex => ex.id === t.id);
+      if (!old) return true;
+      return JSON.stringify(old) !== JSON.stringify(t);
+    });
+
+    for (const t of changed) {
+      const res = await syncWriteWithOfflineFallback('warehouse_templates', t.id, t);
+      if (!res.success) {
+        console.warn(`[saveWarehouseTemplatesAsync] Warning: ${res.error}`);
+        return { success: false, error: res.error };
+      }
+    }
+
     StorageEngine.setStored('warehouse_templates', templates);
-    templates.forEach(t => dbSetDoc('warehouse_templates', t.id, t));
+    return { success: true };
+  }
+
+  static saveWarehouseTemplates(templates: WarehouseTemplate[]): void {
+    const existing = StorageEngine.getStored<WarehouseTemplate[]>('warehouse_templates', DEFAULT_WAREHOUSE_TEMPLATES);
+    const changed = templates.filter(t => {
+      const old = existing.find(ex => ex.id === t.id);
+      if (!old) return true;
+      return JSON.stringify(old) !== JSON.stringify(t);
+    });
+
+    StorageEngine.setStored('warehouse_templates', templates);
+    changed.forEach(t => {
+      syncWriteWithOfflineFallback('warehouse_templates', t.id, t).catch(err => {
+        console.warn(`[saveWarehouseTemplates] Background sync warning for template ${t.id}:`, err);
+      });
+    });
   }
 
   static addWarehouseTemplate(templateData: Omit<WarehouseTemplate, 'id' | 'isPredefined'>): WarehouseTemplate {

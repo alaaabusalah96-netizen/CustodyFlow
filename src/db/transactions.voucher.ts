@@ -1,6 +1,6 @@
 import { CashVoucher } from '../types';
 import { StorageEngine } from './storage';
-import { dbSetDoc, dbDeleteDoc, db } from '../firebase';
+import { db } from '../firebase';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_EXPENSES, DEFAULT_VOUCHERS } from './defaults';
 import { LogsModule } from './logs';
@@ -10,6 +10,25 @@ import { doc, getDoc, runTransaction, deleteDoc } from 'firebase/firestore';
 export class TransactionsVoucherModule {
   static getExpenses(): any[] {
     return StorageEngine.getStored<any[]>('Expenses', DEFAULT_EXPENSES);
+  }
+
+  static async saveExpenseAsync(expense: any): Promise<{ success: boolean; error?: string }> {
+    requireCompanyId(expense.company_id);
+    const res = await syncWriteWithOfflineFallback('Expenses', expense.id, expense);
+    if (!res.success) {
+      console.warn(`[saveExpenseAsync] Warning: ${res.error}`);
+      return { success: false, error: res.error };
+    }
+
+    const expenses = TransactionsVoucherModule.getExpenses();
+    const index = expenses.findIndex(e => e.id === expense.id);
+    if (index > -1) {
+      expenses[index] = expense;
+    } else {
+      expenses.unshift(expense);
+    }
+    StorageEngine.setStored('Expenses', expenses);
+    return { success: true };
   }
 
   static saveExpense(expense: any): void {
@@ -22,18 +41,81 @@ export class TransactionsVoucherModule {
       expenses.unshift(expense);
     }
     StorageEngine.setStored('Expenses', expenses);
-    dbSetDoc('Expenses', expense.id, expense);
+    syncWriteWithOfflineFallback('Expenses', expense.id, expense).catch(err => {
+      console.warn(`[saveExpense] Background sync warning for expense ${expense.id}:`, err);
+    });
+  }
+
+  static async deleteExpenseAsync(id: string): Promise<{ success: boolean; error?: string }> {
+    const res = await syncWriteWithOfflineFallback('Expenses', id, null);
+    if (!res.success) {
+      console.warn(`[deleteExpenseAsync] Warning: ${res.error}`);
+      return { success: false, error: res.error };
+    }
+    const expenses = TransactionsVoucherModule.getExpenses();
+    const filtered = expenses.filter(e => e.id !== id);
+    StorageEngine.setStored('Expenses', filtered);
+    return { success: true };
   }
 
   static deleteExpense(id: string): void {
     const expenses = TransactionsVoucherModule.getExpenses();
     const filtered = expenses.filter(e => e.id !== id);
     StorageEngine.setStored('Expenses', filtered);
-    dbDeleteDoc('Expenses', id);
+    syncWriteWithOfflineFallback('Expenses', id, null).catch(err => {
+      console.warn(`[deleteExpense] Background delete sync warning for expense ${id}:`, err);
+    });
   }
 
   static getCashVouchers(): CashVoucher[] {
     return StorageEngine.getStored<CashVoucher[]>('CashVouchers', DEFAULT_VOUCHERS);
+  }
+
+  static async saveCashVoucherAsync(voucher: CashVoucher, expectedVersion?: number): Promise<{ success: boolean; error?: string }> {
+    requireCompanyId(voucher.company_id);
+    const vouchers = TransactionsVoucherModule.getCashVouchers();
+    const index = vouchers.findIndex(v => v.id === voucher.id);
+    const before = index > -1 ? vouchers[index] : null;
+
+    if (before) {
+      const currentVer = (before as any).metadata?.version ?? (before as any).version ?? 1;
+      const requestedVer = expectedVersion ?? (voucher as any).metadata?.version ?? (voucher as any).version;
+      if (requestedVer !== undefined && requestedVer !== currentVer) {
+        throw new Error('⚠️ عذراً، تم تعديل سند الصرف هذا بواسطة مستخدم آخر. يرجى تحديث الصفحة والمحاولة مجدداً. / This cash voucher has been modified by another user. Please refresh and try again (concurrency conflict).');
+      }
+      const newVer = currentVer + 1;
+      (voucher as any).version = newVer;
+      if ((voucher as any).metadata) {
+        (voucher as any).metadata.version = newVer;
+      }
+    } else {
+      if ((voucher as any).version === undefined) {
+        (voucher as any).version = 1;
+      }
+    }
+
+    const res = await syncWriteWithOfflineFallback('CashVouchers', voucher.id, voucher);
+    if (!res.success) {
+      console.warn(`[saveCashVoucherAsync] Warning: ${res.error}`);
+      return { success: false, error: res.error };
+    }
+
+    if (index > -1) {
+      vouchers[index] = voucher;
+    } else {
+      vouchers.unshift(voucher);
+    }
+    StorageEngine.setStored('CashVouchers', vouchers);
+
+    LogsModule.logAudit(
+      before ? 'UPDATE_CASH_VOUCHER' : 'CREATE_CASH_VOUCHER',
+      before
+        ? `Updated Cash Payment Voucher ${voucher.voucher_no} (Total: ${voucher.amount.toLocaleString()} EGP).`
+        : `Created Cash Payment Voucher ${voucher.voucher_no} (Total: ${voucher.amount.toLocaleString()} EGP).`,
+      { before, after: voucher }
+    );
+
+    return { success: true };
   }
 
   static saveCashVoucher(voucher: CashVoucher, expectedVersion?: number): void {
@@ -61,7 +143,9 @@ export class TransactionsVoucherModule {
       vouchers.unshift(voucher);
     }
     StorageEngine.setStored('CashVouchers', vouchers);
-    dbSetDoc('CashVouchers', voucher.id, voucher);
+    syncWriteWithOfflineFallback('CashVouchers', voucher.id, voucher).catch(err => {
+      console.warn(`[saveCashVoucher] Background sync warning for voucher ${voucher.id}:`, err);
+    });
 
     LogsModule.logAudit(
       before ? 'UPDATE_CASH_VOUCHER' : 'CREATE_CASH_VOUCHER',
@@ -72,12 +156,37 @@ export class TransactionsVoucherModule {
     );
   }
 
+  static async deleteCashVoucherAsync(id: string): Promise<{ success: boolean; error?: string }> {
+    const res = await syncWriteWithOfflineFallback('CashVouchers', id, null);
+    if (!res.success) {
+      console.warn(`[deleteCashVoucherAsync] Warning: ${res.error}`);
+      return { success: false, error: res.error };
+    }
+
+    const vouchers = TransactionsVoucherModule.getCashVouchers();
+    const voucher = vouchers.find(v => v.id === id);
+    const filtered = vouchers.filter(v => v.id !== id);
+    StorageEngine.setStored('CashVouchers', filtered);
+
+    if (voucher) {
+      LogsModule.logAudit(
+        'DELETE_CASH_VOUCHER',
+        `Deleted Cash Payment Voucher ${voucher.voucher_no} (Total: ${voucher.amount.toLocaleString()} EGP).`,
+        { before: voucher }
+      );
+    }
+
+    return { success: true };
+  }
+
   static deleteCashVoucher(id: string): void {
     const vouchers = TransactionsVoucherModule.getCashVouchers();
     const voucher = vouchers.find(v => v.id === id);
     const filtered = vouchers.filter(v => v.id !== id);
     StorageEngine.setStored('CashVouchers', filtered);
-    dbDeleteDoc('CashVouchers', id);
+    syncWriteWithOfflineFallback('CashVouchers', id, null).catch(err => {
+      console.warn(`[deleteCashVoucher] Background delete sync warning for voucher ${id}:`, err);
+    });
 
     if (voucher) {
       LogsModule.logAudit(

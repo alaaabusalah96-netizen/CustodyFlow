@@ -1,5 +1,4 @@
 import { Transaction, TransactionStatus } from '../types';
-import { dbSetDoc } from '../firebase';
 import { StorageEngine } from './storage';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';

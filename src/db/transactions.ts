@@ -7,7 +7,7 @@ import {
   DeletedTransaction, 
   CashVoucher 
 } from '../types';
-import { dbSetDoc, dbFetchPaginated } from '../firebase';
+import { dbFetchPaginated } from '../firebase';
 import { StorageEngine } from './storage';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_CATEGORIES, DEFAULT_TRANSACTIONS } from './defaults';

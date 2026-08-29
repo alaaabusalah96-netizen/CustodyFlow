@@ -1,5 +1,5 @@
 import { StorageEngine } from '../../db/storage';
-import { dbSetDoc } from '../../firebase';
+import { syncWriteWithOfflineFallback } from '../../db/offlineQueue';
 import { DocumentNumberEngine } from '../../db/documentNumberEngine';
 import { CostCenterEngine } from '../../db/costCenterEngine';
 import { OrganizationEngine } from '../../db/organizationEngine';
@@ -77,8 +77,11 @@ export class AssetBusinessEngine {
     };
 
     const updated = [...allAssets, newAsset];
+    const syncRes = await syncWriteWithOfflineFallback('fixed_assets_items', newAsset.id, newAsset);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || `فشل تسجيل الأصل ${newAsset.name} في قاعدة البيانات.`);
+    }
     StorageEngine.setStored('fixed_assets_items', updated);
-    await dbSetDoc('fixed_assets_items', newAsset.id, newAsset);
 
     return newAsset;
   }
@@ -127,14 +130,17 @@ export class AssetBusinessEngine {
       return a;
     });
 
-    StorageEngine.setStored('fixed_assets_items', updated);
-
-    // Sync to firebase
+    // Sync to firebase cloud-first
     for (const item of updated) {
       if (item.company_id === companyId) {
-        await dbSetDoc('fixed_assets_items', item.id, item);
+        const syncRes = await syncWriteWithOfflineFallback('fixed_assets_items', item.id, item);
+        if (!syncRes.success) {
+          throw new Error(syncRes.error || `فشل تحديث إهلاك الأصل ${item.code} في قاعدة البيانات.`);
+        }
       }
     }
+
+    StorageEngine.setStored('fixed_assets_items', updated);
 
     const totalExp = runLogs.reduce((sum, rl) => sum + rl.expense, 0);
     const targetOrgUnit = org_unit_id || undefined;
@@ -205,8 +211,11 @@ export class AssetBusinessEngine {
     };
 
     const updatedList = allAssets.map(a => a.id === asset.id ? updatedAsset : a);
+    const syncRes = await syncWriteWithOfflineFallback('fixed_assets_items', updatedAsset.id, updatedAsset);
+    if (!syncRes.success) {
+      throw new Error(syncRes.error || `فشل تسجيل استبعاد الأصل ${updatedAsset.name} في قاعدة البيانات.`);
+    }
     StorageEngine.setStored('fixed_assets_items', updatedList);
-    await dbSetDoc('fixed_assets_items', updatedAsset.id, updatedAsset);
 
     // Double-entry GL Post for Asset Disposal
     const targetOrgUnit = data.org_unit_id || asset.org_unit_id;

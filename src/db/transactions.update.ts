@@ -1,5 +1,4 @@
 import { Transaction } from '../types';
-import { dbSetDoc, dbDeleteDoc } from '../firebase';
 import { StorageEngine } from './storage';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
@@ -165,7 +164,7 @@ export class TransactionsUpdateModule {
             StorageEngine.setStored('CashVouchers', finalVouchers);
 
             if (updatedVoucher.expense_ids.length === 0) {
-              await dbDeleteDoc('CashVouchers', associatedVoucher.id);
+              await syncWriteWithOfflineFallback('CashVouchers', associatedVoucher.id, null);
             } else {
               await syncWriteWithOfflineFallback('CashVouchers', associatedVoucher.id, updatedVoucher);
             }

@@ -1,5 +1,4 @@
 import { Company } from '../types';
-import { dbSetDoc, dbDeleteDoc } from '../firebase';
 import { StorageEngine } from './storage';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_COMPANIES } from './defaults';

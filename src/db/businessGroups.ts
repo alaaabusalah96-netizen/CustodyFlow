@@ -1,5 +1,4 @@
 import { BusinessGroup } from '../types';
-import { dbSetDoc } from '../firebase';
 import { StorageEngine } from './storage';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { UsersModule } from './users';
@@ -124,5 +123,16 @@ export class BusinessGroupsModule {
         status: newStatus
       });
     }
+  }
+
+  static async deleteGroup(id: string): Promise<{ success: boolean; error?: string }> {
+    const res = await syncWriteWithOfflineFallback('business_groups', id, null);
+    if (!res.success) {
+      console.warn(`[deleteGroup] Warning: ${res.error}`);
+      return { success: false, error: res.error };
+    }
+    const groups = BusinessGroupsModule.getGroups().filter(g => g.id !== id);
+    StorageEngine.setStored('business_groups', groups);
+    return { success: true };
   }
 }
