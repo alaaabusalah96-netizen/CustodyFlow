@@ -6,7 +6,7 @@ import { AuditLogEngine } from './audit';
 import { createBaseMetadata, updateBaseMetadata } from './metadata';
 import { GLAccount, JournalEntry, LedgerLine, AccountType, AccountingDimensions, JournalEntryFilterOptions, CoaTemplateId, CoaTemplateMetadata } from '../../types/accounting';
 import { StorageEngine } from '../../db/storage';
-import { dbSetDoc, db } from '../../firebase';
+import { db } from '../../firebase';
 import { syncWriteWithOfflineFallback } from '../../db/offlineQueue';
 import { WarehouseHierarchyEngine } from '../../db/warehouseHierarchyEngine';
 import { CostCenterEngine } from '../../db/costCenterEngine';

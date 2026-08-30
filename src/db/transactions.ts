@@ -216,24 +216,24 @@ export class TransactionsModule {
     return TransactionsVoucherModule.getExpenses();
   }
 
-  static saveExpense(expense: any): void {
-    TransactionsVoucherModule.saveExpense(expense);
+  static async saveExpense(expense: any): Promise<{ success: boolean; error?: string }> {
+    return TransactionsVoucherModule.saveExpense(expense);
   }
 
-  static deleteExpense(id: string): void {
-    TransactionsVoucherModule.deleteExpense(id);
+  static async deleteExpense(id: string): Promise<{ success: boolean; error?: string }> {
+    return TransactionsVoucherModule.deleteExpense(id);
   }
 
   static getCashVouchers(): CashVoucher[] {
     return TransactionsVoucherModule.getCashVouchers();
   }
 
-  static saveCashVoucher(voucher: CashVoucher): void {
-    TransactionsVoucherModule.saveCashVoucher(voucher);
+  static async saveCashVoucher(voucher: CashVoucher, expectedVersion?: number): Promise<{ success: boolean; error?: string }> {
+    return TransactionsVoucherModule.saveCashVoucher(voucher, expectedVersion);
   }
 
-  static deleteCashVoucher(id: string): void {
-    TransactionsVoucherModule.deleteCashVoucher(id);
+  static async deleteCashVoucher(id: string): Promise<{ success: boolean; error?: string }> {
+    return TransactionsVoucherModule.deleteCashVoucher(id);
   }
 
   static getCompanySequences(): { id: string; company_id: string; last_voucher_no: number }[] {

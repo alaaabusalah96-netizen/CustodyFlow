@@ -134,7 +134,7 @@ export default function ApprovalInbox({
         const v = vouchers.find(item => item.id === instance.documentId);
         if (v) {
           v.status = statusCamel;
-          TransactionsVoucherModule.saveCashVoucher(v);
+          await TransactionsVoucherModule.saveCashVoucher(v);
         }
         break;
       }

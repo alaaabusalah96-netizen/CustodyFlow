@@ -72,7 +72,22 @@ export function getFilteredMenuItems(activeUser: AppUser | null, language: Langu
     { id: 'pos', label: isRtl ? 'نقاط البيع السريع (POS)' : 'Point of Sale (POS)', icon: PosIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
     { id: 'crm', label: isRtl ? 'علاقات العملاء CRM' : 'Customer Relations (CRM)', icon: UsersIcon, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
     { id: 'fixed_assets', label: isRtl ? 'الأصول الثابتة والاستهلاكات' : 'Fixed Assets & Depreciation', icon: AssetIcon, roleAllowed: ['SystemAdmin', 'Admin'] },
-    { id: 'fleet', label: isRtl ? 'إدارة الأسطول والحركة' : 'Fleet & Transportation', icon: FleetIcon, permission: 'manage_fleet' },
+    { 
+      id: 'fleet', 
+      label: isRtl ? 'إدارة الأسطول والحركة' : 'Fleet & Transportation', 
+      icon: FleetIcon, 
+      permission: [
+        'manage_fleet',
+        'create_trip',
+        'approve_trip',
+        'dispatch_trip',
+        'reassign_vehicle',
+        'execute_breakdown_decision',
+        'create_emergency_trip',
+        'manage_vehicle_constraints',
+        'execute_trip_tasks'
+      ] 
+    },
     { id: 'hr_payroll', label: isRtl ? 'الموارد البشرية والرواتب' : 'HR & Payroll Ledger', icon: Briefcase, roleAllowed: ['SystemAdmin', 'Admin'] },
     { id: 'contracting', label: isRtl ? 'إدارة المقاولات والمستخلصات' : 'Construction & Contracting', icon: HardHat, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
     { id: 'restaurant-menu', label: isRtl ? 'قائمة الطعام والتكاليف' : 'Restaurant Menu & Costs', icon: Utensils, roleAllowed: ['SystemAdmin', 'Admin', 'RegionalManager', 'StationAdmin'] },
@@ -126,6 +141,9 @@ export function getFilteredMenuItems(activeUser: AppUser | null, language: Langu
     
     if (item.permission) {
       const perms = activeUser.permissions || CustodyDB.enrichUserPermissions(activeUser.role);
+      if (Array.isArray(item.permission)) {
+        return item.permission.some(p => Boolean(perms[p as keyof typeof perms]));
+      }
       const permKey = item.permission as keyof typeof perms;
       return perms[permKey] ?? true;
     }

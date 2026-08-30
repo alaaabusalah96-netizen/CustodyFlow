@@ -332,6 +332,7 @@ export default function CashPaymentVoucher({
   const [toastMessage, setToastMessage] = useState('');
   const [validationError, setValidationError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Load and refresh initial datasets
   const loadData = () => {
@@ -523,6 +524,7 @@ export default function CashPaymentVoucher({
       return;
     }
 
+    setIsSubmitting(true);
     let finalVoucherNo = '';
     const selectedTxs = pendingTransactions.filter(tx => selectedTxIds.includes(tx.id));
     const existingVoucherNo = selectedTxs.find(tx => tx.voucher_no)?.voucher_no;
@@ -534,6 +536,7 @@ export default function CashPaymentVoucher({
         const manualVal = parseInt(voucherNo.trim(), 10);
         if (isNaN(manualVal) || manualVal <= 0) {
           setValidationError(isRtl ? 'يجب أن يكون رقم السند عدداً صحيحاً موجباً.' : 'Voucher number must be a positive integer.');
+          setIsSubmitting(false);
           return;
         }
         // Initialize sequence with user's starting number
@@ -544,93 +547,102 @@ export default function CashPaymentVoucher({
         const val = await CustodyDB.initializeOrIncrementSequence(primaryCompanyId);
         finalVoucherNo = String(val);
       }
-    } catch (err: any) {
-      setValidationError(isRtl ? `فشل في إنشاء رقم السند: ${err.message || err}` : `Failed to allocate voucher sequence: ${err.message || err}`);
-      return;
-    }
 
-    const existingVoucher = CustodyDB.getCashVouchers().find(v => v.voucher_no === finalVoucherNo);
-    const voucherId = existingVoucher ? existingVoucher.id : `voucher-${Date.now()}`;
+      const existingVoucher = CustodyDB.getCashVouchers().find(v => v.voucher_no === finalVoucherNo);
+      const voucherId = existingVoucher ? existingVoucher.id : `voucher-${Date.now()}`;
 
-    // Prepare CashVoucher entity
-    const newVoucher: CashVoucher = {
-      id: voucherId,
-      voucher_no: finalVoucherNo,
-      date: voucherDate,
-      station_id: primaryStationId,
-      company_id: primaryCompanyId,
-      amount: selectedTotalAmount,
-      amount_in_words: {
-        ar: getArabicTafqeet(selectedTotalAmount),
-        en: getEnglishTafqeet(selectedTotalAmount)
-      },
-      recipient_name: recipientName.trim(),
-      received_by: receivedBy.trim() || undefined,
-      approved_by: approvedBy.trim() || undefined,
-      status: 'Approved', // Marks the voucher as compiled and approved for final bookkeeping
-      expense_ids: selectedTxIds,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    // Save to Database
-    CustodyDB.saveCashVoucher(newVoucher);
-
-    // Update status of all bundled expenses in database to Under Settlement
-    for (const id of selectedTxIds) {
-      const res = await CustodyDB.updateTransaction(id, {
-        status: 'Under Settlement',
+      // Prepare CashVoucher entity
+      const newVoucher: CashVoucher = {
+        id: voucherId,
         voucher_no: finalVoucherNo,
-        voucher_date: voucherDate,
-        transaction_no: finalVoucherNo // Make transaction number match voucher number
+        date: voucherDate,
+        station_id: primaryStationId,
+        company_id: primaryCompanyId,
+        amount: selectedTotalAmount,
+        amount_in_words: {
+          ar: getArabicTafqeet(selectedTotalAmount),
+          en: getEnglishTafqeet(selectedTotalAmount)
+        },
+        recipient_name: recipientName.trim(),
+        received_by: receivedBy.trim() || undefined,
+        approved_by: approvedBy.trim() || undefined,
+        status: 'Approved', // Marks the voucher as compiled and approved for final bookkeeping
+        expense_ids: selectedTxIds,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // Save to Database with real async outcome verification
+      const saveRes = await CustodyDB.saveCashVoucher(newVoucher);
+      if (!saveRes.success) {
+        setValidationError(
+          isRtl 
+            ? `⚠️ فشل حفظ سند الصرف في السحابة: ${saveRes.error || 'خطأ غير معروف'}`
+            : `⚠️ Failed to save cash voucher to cloud: ${saveRes.error || 'Unknown cloud error'}`
+        );
+        return;
+      }
+
+      // Update status of all bundled expenses in database to Under Settlement
+      for (const id of selectedTxIds) {
+        const res = await CustodyDB.updateTransaction(id, {
+          status: 'Under Settlement',
+          voucher_no: finalVoucherNo,
+          voucher_date: voucherDate,
+          transaction_no: finalVoucherNo // Make transaction number match voucher number
+        });
+        if (!res.success) {
+          console.error('Error settling item', id, res.errors);
+        }
+      }
+
+      // Save workflow history & logs
+      CustodyDB.addLog(
+        user?.id || 'system',
+        user?.full_name || 'System',
+        isRtl ? 'إنشاء سند صرف موحد' : 'Created Unified Cash Voucher',
+        isRtl 
+          ? `تم إنشاء السند رقم ${finalVoucherNo} وتجميع عدد (${selectedTxIds.length}) مصروفات بمبلغ إجمالي ${selectedTotalAmount.toLocaleString()} جنيه.` 
+          : `Created Unified Cash Voucher ${finalVoucherNo} bundling (${selectedTxIds.length}) expenses with total amount ${selectedTotalAmount.toLocaleString()} EGP.`
+      );
+
+      // Audit logs entry
+      CustodyDB.addAuditLog({
+        id: `audit-${Date.now()}`,
+        user_id: user?.id || 'system',
+        user_name: user?.full_name || 'System',
+        user_role: user?.role || 'Guest',
+        action_type: 'CREATE_CASH_VOUCHER',
+        description: `Created Cash Voucher No: ${finalVoucherNo} | Total: ${selectedTotalAmount} EGP | Bundled items: ${selectedTxIds.length}`,
+        timestamp: new Date().toISOString(),
+        ip_address: '127.0.0.1',
+        details: {
+          voucher_no: finalVoucherNo,
+          total_amount: selectedTotalAmount,
+          expense_count: selectedTxIds.length
+        }
       });
-      if (!res.success) {
-        console.error('Error settling item', id, res.errors);
-      }
+
+      triggerToast(`${l.successCreated} | #${finalVoucherNo}`);
+      
+      // Auto clear states
+      setVoucherNo('');
+      setRecipientName('');
+      setReceivedBy('');
+      setSelectedTxIds([]);
+      setValidationError('');
+      setSelectedTx(null); // Clear parent pre-select
+
+      // Reload lists
+      loadData();
+
+      // Auto-open print preview modal for immediate print workflow!
+      setPreviewVoucher(newVoucher);
+    } catch (err: any) {
+      setValidationError(isRtl ? `فشل في إنشاء السند: ${err.message || err}` : `Failed to create voucher: ${err.message || err}`);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // Save workflow history & logs
-    CustodyDB.addLog(
-      user?.id || 'system',
-      user?.full_name || 'System',
-      isRtl ? 'إنشاء سند صرف موحد' : 'Created Unified Cash Voucher',
-      isRtl 
-        ? `تم إنشاء السند رقم ${finalVoucherNo} وتجميع عدد (${selectedTxIds.length}) مصروفات بمبلغ إجمالي ${selectedTotalAmount.toLocaleString()} جنيه.` 
-        : `Created Unified Cash Voucher ${finalVoucherNo} bundling (${selectedTxIds.length}) expenses with total amount ${selectedTotalAmount.toLocaleString()} EGP.`
-    );
-
-    // Audit logs entry
-    CustodyDB.addAuditLog({
-      id: `audit-${Date.now()}`,
-      user_id: user?.id || 'system',
-      user_name: user?.full_name || 'System',
-      user_role: user?.role || 'Guest',
-      action_type: 'CREATE_CASH_VOUCHER',
-      description: `Created Cash Voucher No: ${finalVoucherNo} | Total: ${selectedTotalAmount} EGP | Bundled items: ${selectedTxIds.length}`,
-      timestamp: new Date().toISOString(),
-      ip_address: '127.0.0.1',
-      details: {
-        voucher_no: finalVoucherNo,
-        total_amount: selectedTotalAmount,
-        expense_count: selectedTxIds.length
-      }
-    });
-
-    triggerToast(`${l.successCreated} | #${finalVoucherNo}`);
-    
-    // Auto clear states
-    setVoucherNo('');
-    setRecipientName('');
-    setReceivedBy('');
-    setSelectedTxIds([]);
-    setValidationError('');
-    setSelectedTx(null); // Clear parent pre-select
-
-    // Reload lists
-    loadData();
-
-    // Auto-open print preview modal for immediate print workflow!
-    setPreviewVoucher(newVoucher);
   };
 
   // Delete Voucher handler
@@ -638,34 +650,47 @@ export default function CashPaymentVoucher({
     const vc = vouchersList.find(v => v.id === id);
     if (!vc) return;
 
-    // Reset status of all bundled expenses back to Pending
-    for (const txId of vc.expense_ids) {
-       const res = await CustodyDB.updateTransaction(txId, {
-        status: 'Pending',
-        voucher_no: undefined,
-        voucher_date: undefined
-      });
-      if (!res.success) {
-        console.error('Error resetting item', txId, res.errors);
+    setIsSubmitting(true);
+    try {
+      // Reset status of all bundled expenses back to Pending
+      for (const txId of vc.expense_ids) {
+        const res = await CustodyDB.updateTransaction(txId, {
+          status: 'Pending',
+          voucher_no: undefined,
+          voucher_date: undefined
+        });
+        if (!res.success) {
+          console.error('Error resetting item', txId, res.errors);
+        }
       }
+
+      // Delete voucher
+      const delRes = await CustodyDB.deleteCashVoucher(id);
+      if (!delRes.success) {
+        triggerToast(
+          isRtl 
+            ? `⚠️ فشل حذف السند من السحابة: ${delRes.error || 'خطأ'}`
+            : `⚠️ Failed to delete cash voucher from cloud: ${delRes.error || 'Error'}`
+        );
+        return;
+      }
+
+      // Save logs
+      CustodyDB.addLog(
+        user?.id || 'system',
+        user?.full_name || 'System',
+        isRtl ? 'حذف سند صرف موحد' : 'Deleted Unified Cash Voucher',
+        isRtl 
+          ? `تم حذف السند رقم ${vc.voucher_no} وإرجاع الحركات المشمولة للحالة المعلقة.` 
+          : `Deleted Cash Voucher ${vc.voucher_no} and reverted bundled transactions back to Pending.`
+      );
+
+      triggerToast(l.successDeleted);
+      loadData();
+    } finally {
+      setIsSubmitting(false);
+      setDeletingId(null);
     }
-
-    // Delete voucher
-    CustodyDB.deleteCashVoucher(id);
-
-    // Save logs
-    CustodyDB.addLog(
-      user?.id || 'system',
-      user?.full_name || 'System',
-      isRtl ? 'حذف سند صرف موحد' : 'Deleted Unified Cash Voucher',
-      isRtl 
-        ? `تم حذف السند رقم ${vc.voucher_no} وإرجاع الحركات المشمولة للحالة المعلقة.` 
-        : `Deleted Cash Voucher ${vc.voucher_no} and reverted bundled transactions back to Pending.`
-    );
-
-    triggerToast(l.successDeleted);
-    setDeletingId(null);
-    loadData();
   };
 
   const handleStartEdit = (vc: CashVoucher) => {
@@ -686,59 +711,74 @@ export default function CashPaymentVoucher({
       return;
     }
 
-    const updatedVoucher: CashVoucher = {
-      ...editingVoucher,
-      voucher_no: editVoucherNo.trim(),
-      date: editVoucherDate,
-      recipient_name: editRecipientName.trim(),
-      received_by: editReceivedBy.trim() || undefined,
-      approved_by: editApprovedBy.trim() || undefined,
-      updated_at: new Date().toISOString()
-    };
+    setIsSubmitting(true);
+    try {
+      const updatedVoucher: CashVoucher = {
+        ...editingVoucher,
+        voucher_no: editVoucherNo.trim(),
+        date: editVoucherDate,
+        recipient_name: editRecipientName.trim(),
+        received_by: editReceivedBy.trim() || undefined,
+        approved_by: editApprovedBy.trim() || undefined,
+        updated_at: new Date().toISOString()
+      };
 
-    CustodyDB.saveCashVoucher(updatedVoucher);
+      const saveRes = await CustodyDB.saveCashVoucher(updatedVoucher);
+      if (!saveRes.success) {
+        setValidationError(
+          isRtl 
+            ? `⚠️ فشل تحديث سند الصرف في السحابة: ${saveRes.error || 'خطأ غير معروف'}`
+            : `⚠️ Failed to update cash voucher in cloud: ${saveRes.error || 'Unknown cloud error'}`
+        );
+        return;
+      }
 
-    // Update bundled expenses' metadata
-    if (editingVoucher.expense_ids && editingVoucher.expense_ids.length > 0) {
-      for (const txId of editingVoucher.expense_ids) {
-        const res = await CustodyDB.updateTransaction(txId, {
-          voucher_no: editVoucherNo.trim(),
-          voucher_date: editVoucherDate
-        });
-        if (!res.success) {
-          console.error('Error updating item metadata', txId, res.errors);
+      // Update bundled expenses' metadata
+      if (editingVoucher.expense_ids && editingVoucher.expense_ids.length > 0) {
+        for (const txId of editingVoucher.expense_ids) {
+          const res = await CustodyDB.updateTransaction(txId, {
+            voucher_no: editVoucherNo.trim(),
+            voucher_date: editVoucherDate
+          });
+          if (!res.success) {
+            console.error('Error updating item metadata', txId, res.errors);
+          }
         }
       }
+
+      CustodyDB.addLog(
+        user?.id || 'system',
+        user?.full_name || 'System',
+        isRtl ? 'تعديل سند صرف موحد' : 'Modified Unified Cash Voucher',
+        isRtl 
+          ? `تم تعديل بيانات السند رقم ${editVoucherNo.trim()} (المستلم: ${editRecipientName.trim()}).` 
+          : `Modified Cash Voucher ${editVoucherNo.trim()} details (Recipient: ${editRecipientName.trim()}).`
+      );
+
+      CustodyDB.addAuditLog({
+        id: `audit-${Date.now()}`,
+        user_id: user?.id || 'system',
+        user_name: user?.full_name || 'System',
+        user_role: user?.role || 'Guest',
+        action_type: 'UPDATE_CASH_VOUCHER',
+        description: `Modified Cash Voucher No: ${editVoucherNo.trim()} details.`,
+        timestamp: new Date().toISOString(),
+        ip_address: '127.0.0.1',
+        details: {
+          voucher_id: editingVoucher.id,
+          voucher_no: editVoucherNo.trim(),
+          recipient: editRecipientName.trim()
+        }
+      });
+
+      triggerToast(isRtl ? 'تم تحديث السند المالي بنجاح!' : 'Voucher updated successfully!');
+      setEditingVoucher(null);
+      loadData();
+    } catch (err: any) {
+      setValidationError(isRtl ? `خطأ أثناء الحفظ: ${err.message || err}` : `Save error: ${err.message || err}`);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    CustodyDB.addLog(
-      user?.id || 'system',
-      user?.full_name || 'System',
-      isRtl ? 'تعديل سند صرف موحد' : 'Modified Unified Cash Voucher',
-      isRtl 
-        ? `تم تعديل بيانات السند رقم ${editVoucherNo.trim()} (المستلم: ${editRecipientName.trim()}).` 
-        : `Modified Cash Voucher ${editVoucherNo.trim()} details (Recipient: ${editRecipientName.trim()}).`
-    );
-
-    CustodyDB.addAuditLog({
-      id: `audit-${Date.now()}`,
-      user_id: user?.id || 'system',
-      user_name: user?.full_name || 'System',
-      user_role: user?.role || 'Guest',
-      action_type: 'UPDATE_CASH_VOUCHER',
-      description: `Modified Cash Voucher No: ${editVoucherNo.trim()} details.`,
-      timestamp: new Date().toISOString(),
-      ip_address: '127.0.0.1',
-      details: {
-        voucher_id: editingVoucher.id,
-        voucher_no: editVoucherNo.trim(),
-        recipient: editRecipientName.trim()
-      }
-    });
-
-    triggerToast(isRtl ? 'تم تحديث السند المالي بنجاح!' : 'Voucher updated successfully!');
-    setEditingVoucher(null);
-    loadData();
   };
 
   // Filter vouchers list for the Archive/History tab
@@ -1229,15 +1269,15 @@ export default function CashPaymentVoucher({
                 {/* SUBMIT BUTTON */}
                 <button
                   type="submit"
-                  disabled={selectedTxIds.length === 0}
+                  disabled={selectedTxIds.length === 0 || isSubmitting}
                   className={`w-full py-3 rounded-xl font-black text-xs transition-all shadow-md flex items-center justify-center gap-2 ${
-                    selectedTxIds.length > 0
+                    selectedTxIds.length > 0 && !isSubmitting
                       ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer hover:shadow-emerald-600/10 hover:shadow-lg'
                       : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
                   }`}
                 >
                   <FileCheck size={16} />
-                  <span>{isRtl ? 'حفظ السند وتوليد كشف الصرف' : 'Confirm & Save Cash Voucher'}</span>
+                  <span>{isSubmitting ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ السند وتوليد كشف الصرف' : 'Confirm & Save Cash Voucher')}</span>
                 </button>
               </form>
             </div>
@@ -1895,9 +1935,12 @@ export default function CashPaymentVoucher({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10 cursor-pointer"
+                  disabled={isSubmitting}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/10 ${
+                    isSubmitting ? 'opacity-75 cursor-not-allowed' : 'cursor-pointer'
+                  }`}
                 >
-                  {isRtl ? 'حفظ التعديلات' : 'Save Changes'}
+                  {isSubmitting ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ التعديلات' : 'Save Changes')}
                 </button>
               </div>
             </form>

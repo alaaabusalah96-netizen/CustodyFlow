@@ -298,20 +298,25 @@ service cloud.firestore {
     // --- CashVouchers (CamelCase) ---
     match /CashVouchers/{id} {
       allow read: if isOrgScopedRead(resource.data);
-      allow write: if isOrgScopedWrite(request.resource.data, resource.data);
+      allow create: if isOrgScopedWrite(request.resource.data, null);
+      allow update: if isOrgScopedWrite(request.resource.data, resource.data);
+      allow delete: if isOrgScopedWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
     }
 
-    // --- Expenses (CamelCase) ---
+    // --- Expenses (Single Unified Collection) ---
     match /Expenses/{id} {
       allow read: if isOrgScopedRead(resource.data);
-      allow create, update: if isOrgScopedWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Accountant');
+      allow create: if isOrgScopedWrite(request.resource.data, null) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Accountant');
+      allow update: if isOrgScopedWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Accountant');
       allow delete: if isOrgScopedWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
     }
 
     // --- TransactionHistory ---
     match /TransactionHistory/{id} {
       allow read: if isOrgScopedRead(resource.data);
-      allow write: if isOrgScopedWrite(request.resource.data, resource.data);
+      allow create: if isOrgScopedWrite(request.resource.data, null);
+      allow update: if isOrgScopedWrite(request.resource.data, resource.data);
+      allow delete: if isOrgScopedWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
     }
 
     // --- deleted_transactions ---
@@ -365,7 +370,9 @@ service cloud.firestore {
     // --- pos_transactions ---
     match /pos_transactions/{id} {
       allow read: if isSameCompanyRead(resource.data);
-      allow write: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow create: if isSameCompanyWrite(request.resource.data, null);
+      allow update: if isSameCompanyWrite(request.resource.data, resource.data);
+      allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
     }
 
     // --- delivery_notes ---
@@ -471,6 +478,13 @@ service cloud.firestore {
       allow read: if isSameCompanyRead(resource.data);
       allow create, update: if isSameCompanyWrite(request.resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Storekeeper');
       allow delete: if isSameCompanyWrite(resource.data, resource.data) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
+    }
+
+    match /inventory_balances/{companyId}/items/{docId} {
+      allow read: if isSystemAdmin() || (isLoggedIn() && getCompanyId() == companyId);
+      allow create: if (isSystemAdmin() || (isLoggedIn() && getCompanyId() == companyId && isSameCompanyWrite(request.resource.data, null))) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Storekeeper');
+      allow update: if (isSystemAdmin() || (isLoggedIn() && getCompanyId() == companyId && isSameCompanyWrite(request.resource.data, resource.data))) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin' || getUserRole() == 'Manager' || getUserRole() == 'Storekeeper');
+      allow delete: if (isSystemAdmin() || (isLoggedIn() && getCompanyId() == companyId)) && (getUserRole() == 'Admin' || getUserRole() == 'SystemAdmin');
     }
 
     match /stock_movements/{id} {

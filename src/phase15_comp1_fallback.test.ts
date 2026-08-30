@@ -48,19 +48,19 @@ describe('Phase 15: Stop Silent comp-1 Write Fallback (Custody Paths Only)', () 
     expect(res.errors).toContain('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
   });
 
-  it('3. saveExpense throws bilingual error when company_id is empty', () => {
-    expect(() => {
+  it('3. saveExpense throws bilingual error when company_id is empty', async () => {
+    await expect(
       TransactionsVoucherModule.saveExpense({
         id: 'exp-999',
         amount: 50,
         description: 'No company expense',
         company_id: ''
-      });
-    }).toThrow('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
+      })
+    ).rejects.toThrow('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
   });
 
-  it('4. saveCashVoucher throws bilingual error when company_id is empty', () => {
-    expect(() => {
+  it('4. saveCashVoucher throws bilingual error when company_id is empty', async () => {
+    await expect(
       TransactionsVoucherModule.saveCashVoucher({
         id: 'vouch-999',
         voucher_no: 'V-001',
@@ -74,8 +74,8 @@ describe('Phase 15: Stop Silent comp-1 Write Fallback (Custody Paths Only)', () 
         recipient_name: 'Test Recipient',
         created_at: '2026-07-31T00:00:00Z',
         updated_at: '2026-07-31T00:00:00Z'
-      });
-    }).toThrow('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
+      })
+    ).rejects.toThrow('يجب اختيار شركة قبل الحفظ. / Please select a company before saving.');
   });
 
   it('5. updateTransaction rejects update and returns bilingual error when company_id is empty', async () => {

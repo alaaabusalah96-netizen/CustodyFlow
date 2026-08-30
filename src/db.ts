@@ -593,24 +593,24 @@ export class CustodyDB {
     return TransactionsModule.getExpenses();
   }
 
-  static saveExpense(expense: any): void {
-    TransactionsModule.saveExpense(expense);
+  static async saveExpense(expense: any): Promise<{ success: boolean; error?: string }> {
+    return TransactionsModule.saveExpense(expense);
   }
 
-  static deleteExpense(id: string): void {
-    TransactionsModule.deleteExpense(id);
+  static async deleteExpense(id: string): Promise<{ success: boolean; error?: string }> {
+    return TransactionsModule.deleteExpense(id);
   }
 
   static getCashVouchers(): CashVoucher[] {
     return TransactionsModule.getCashVouchers();
   }
 
-  static saveCashVoucher(voucher: CashVoucher): void {
-    TransactionsModule.saveCashVoucher(voucher);
+  static async saveCashVoucher(voucher: CashVoucher, expectedVersion?: number): Promise<{ success: boolean; error?: string }> {
+    return TransactionsModule.saveCashVoucher(voucher, expectedVersion);
   }
 
-  static deleteCashVoucher(id: string): void {
-    TransactionsModule.deleteCashVoucher(id);
+  static async deleteCashVoucher(id: string): Promise<{ success: boolean; error?: string }> {
+    return TransactionsModule.deleteCashVoucher(id);
   }
 
   static getCompanySequences(): { id: string; company_id: string; last_voucher_no: number }[] {

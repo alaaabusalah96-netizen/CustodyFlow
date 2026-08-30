@@ -1134,7 +1134,7 @@ export class InventoryModule {
     }
 
     try {
-      const balanceDocRef = doc(db, `inventory_balances_${companyId}`, balanceKey);
+      const balanceDocRef = doc(db, 'inventory_balances', companyId, 'items', balanceKey);
       let committedMovement: StockMovement | null = null;
 
       await runTransaction(db, async (transaction) => {

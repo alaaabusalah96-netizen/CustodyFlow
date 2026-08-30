@@ -111,7 +111,7 @@ describe('Phase 6: Optimistic Locking Enforcement Unit Tests', () => {
       expect(finalTx.metadata.version).toBe(2);
     });
 
-    it('should reject CashVoucher updates if expected version is stale', () => {
+    it('should reject CashVoucher updates if expected version is stale', async () => {
       const voucher: CashVoucher = {
         id: 'cv-occ-1',
         voucher_no: 'VOUCH-2026-001',
@@ -127,20 +127,20 @@ describe('Phase 6: Optimistic Locking Enforcement Unit Tests', () => {
         updated_at: new Date().toISOString()
       };
 
-      TransactionsVoucherModule.saveCashVoucher(voucher); // version = 1
+      await TransactionsVoucherModule.saveCashVoucher(voucher); // version = 1
 
       const created = TransactionsVoucherModule.getCashVouchers().find(v => v.id === 'cv-occ-1');
       expect((created as any).version).toBe(1);
 
       // Save update with matching version (1)
-      TransactionsVoucherModule.saveCashVoucher({ ...created!, amount: 300 }, 1);
+      await TransactionsVoucherModule.saveCashVoucher({ ...created!, amount: 300 }, 1);
       const updated = TransactionsVoucherModule.getCashVouchers().find(v => v.id === 'cv-occ-1');
       expect((updated as any).version).toBe(2);
 
       // Attempt save with stale expected version (1 instead of 2)
-      expect(() => {
-        TransactionsVoucherModule.saveCashVoucher({ ...updated!, amount: 400 }, 1);
-      }).toThrow('modified by another user');
+      await expect(
+        TransactionsVoucherModule.saveCashVoucher({ ...updated!, amount: 400 }, 1)
+      ).rejects.toThrow('modified by another user');
     });
   });
 

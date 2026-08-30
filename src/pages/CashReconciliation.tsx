@@ -252,7 +252,7 @@ export default function CashReconciliation({
       const vouchers = CustodyDB.getCashVouchers();
       const voucher = vouchers.find(v => v.voucher_no === vNo);
       if (voucher) {
-        CustodyDB.saveCashVoucher({
+        await CustodyDB.saveCashVoucher({
           ...voucher,
           status: 'Draft',
           updated_at: new Date().toISOString()
@@ -319,7 +319,7 @@ export default function CashReconciliation({
         const otherTxs = allTransactions.filter(t => t.voucher_no === vNo && t.id !== tx.id);
         const allOtherSettled = otherTxs.every(t => t.status === 'Settled');
         if (allOtherSettled) {
-          CustodyDB.saveCashVoucher({
+          await CustodyDB.saveCashVoucher({
             ...voucher,
             status: 'Approved',
             updated_at: new Date().toISOString()
@@ -362,7 +362,7 @@ export default function CashReconciliation({
       const vouchers = CustodyDB.getCashVouchers();
       const voucher = vouchers.find(v => v.voucher_no === vNo);
       if (voucher) {
-        CustodyDB.saveCashVoucher({
+        await CustodyDB.saveCashVoucher({
           ...voucher,
           status: 'Draft',
           updated_at: new Date().toISOString()
@@ -435,7 +435,7 @@ export default function CashReconciliation({
       const vouchers = CustodyDB.getCashVouchers();
       const voucher = vouchers.find(v => v.voucher_no === vNo);
       if (voucher) {
-        CustodyDB.saveCashVoucher({
+        await CustodyDB.saveCashVoucher({
           ...voucher,
           status: 'Approved',
           updated_at: new Date().toISOString()
@@ -496,7 +496,7 @@ export default function CashReconciliation({
       const vouchers = CustodyDB.getCashVouchers();
       const voucher = vouchers.find(v => v.voucher_no === vNo);
       if (voucher) {
-        CustodyDB.saveCashVoucher({
+        await CustodyDB.saveCashVoucher({
           ...voucher,
           status: 'Draft',
           updated_at: new Date().toISOString()

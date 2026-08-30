@@ -109,6 +109,21 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     activeUser?.permissions?.manage_fleet
   );
 
+  const hasAnyFleetPermission = Boolean(
+    activeUser?.role === 'SystemAdmin' ||
+    activeUser?.role === 'Admin' ||
+    activeUser?.role === 'RegionalManager' ||
+    activeUser?.permissions?.manage_fleet ||
+    activeUser?.permissions?.create_trip ||
+    activeUser?.permissions?.approve_trip ||
+    activeUser?.permissions?.dispatch_trip ||
+    activeUser?.permissions?.reassign_vehicle ||
+    activeUser?.permissions?.execute_breakdown_decision ||
+    activeUser?.permissions?.create_emergency_trip ||
+    activeUser?.permissions?.manage_vehicle_constraints ||
+    activeUser?.permissions?.execute_trip_tasks
+  );
+
   // Tabs - Initialized dynamically to first available tab
   const [activeTab, setActiveTab] = useState<'daily_ops' | 'vehicles' | 'trips' | 'driver_portal' | 'live_map' | 'vehicle_constraints' | 'costs_and_maintenance' | 'driver_safety'>(() => {
     if (canViewDriverPortal && !canViewTrips && !canViewVehicles) {
@@ -250,22 +265,6 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     setToast({ type, text });
     setTimeout(() => setToast(null), 3000);
   };
-
-  if (!activeUser?.permissions?.manage_fleet) {
-    return (
-      <div className="p-8 text-center max-w-md mx-auto my-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <ShieldAlert className="h-12 w-12 text-rose-500 mx-auto mb-3" />
-        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-2">
-          {isRtl ? 'غير مصرح لك بالوصول لهذه الصفحة' : 'Unauthorized Access'}
-        </h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          {isRtl
-            ? 'عذراً، لا تمتلك صلاحية إدارة الأسطول والمركبات (manage_fleet) للوصول لهذه الشاشة.'
-            : 'Sorry, you do not have permission to access Fleet Management.'}
-        </p>
-      </div>
-    );
-  }
 
   const loadData = () => {
     const units = OrganizationEngine.getUnits(companyId);
@@ -898,6 +897,22 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     const matchesType = typeFilter === 'ALL' || v.type === typeFilter;
     return matchesSearch && matchesType;
   });
+
+  if (!hasAnyFleetPermission) {
+    return (
+      <div className="p-8 text-center max-w-md mx-auto my-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <ShieldAlert className="h-12 w-12 text-rose-500 mx-auto mb-3" />
+        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-2">
+          {isRtl ? 'غير مصرح لك بالوصول لهذه الصفحة' : 'Unauthorized Access'}
+        </h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {isRtl
+            ? 'عذراً، لا تمتلك أياً من صلاحيات إدارة الأسطول أو المشاوير أو بوابة السائق للوصول لهذه الشاشة.'
+            : 'Sorry, you do not have permission to access Fleet Management or Driver Portal.'}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <ErrorBoundary>

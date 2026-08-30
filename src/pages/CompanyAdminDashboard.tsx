@@ -338,7 +338,7 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
       if (associatedVoucher) {
         const diff = amountVal - editingOp.amount;
         const newVoucherAmount = Math.max(0, associatedVoucher.amount + diff);
-        CustodyDB.saveCashVoucher({
+        await CustodyDB.saveCashVoucher({
           ...associatedVoucher,
           amount: newVoucherAmount
         });

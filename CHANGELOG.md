@@ -4,6 +4,21 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Phase 4: Fleet Screen + Sidebar Permission Gate Widening
+**Date:** 2026-08-30
+**Files Changed:** `src/components/Layout.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_permissions.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Sidebar Permission OR Gate (`src/components/Layout.tsx`)**:
+  - Expanded `menuItems` entry for `fleet` to accept the complete set of fleet permissions: `['manage_fleet', 'create_trip', 'approve_trip', 'dispatch_trip', 'reassign_vehicle', 'execute_breakdown_decision', 'create_emergency_trip', 'manage_vehicle_constraints', 'execute_trip_tasks']`.
+  - Extended `getFilteredMenuItems` to support array-based permissions with `OR` evaluation (`item.permission.some(...)`).
+- **Fleet Screen Permission Gate Widening & Hooks Order Fix (`src/pages/FleetManagement.tsx`)**:
+  - Introduced `hasAnyFleetPermission` checking for any of the 9 fleet sub-permissions or administrative roles.
+  - Removed premature early return that was executing ahead of `loadData` / `useEffect` hooks.
+  - Positioned the widened unauthorized access screen gate before the main JSX return so hooks execute unconditionally.
+- **Verification**:
+  - Tests: 13/13 passed across `src/fleet_permissions.test.ts`, `src/fleet_tab_visibility.test.ts`, and `src/components/__tests__/Layout.test.tsx`.
+  - Full applet compilation: Succeeded (`compile_applet`).
+
 ## Phase P2 (Fleet Engine): Firestore Synchronization & Cloud-First Write-Ordering
 **Date:** 2026-08-26
 **Files Changed:** `src/lib/enterprise/fleet_engine.ts`, `CHANGELOG.md`
@@ -5018,6 +5033,55 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 - Finalized complete elimination of raw direct `dbSetDoc`/`dbDeleteDoc` calls from all database modules (with only `OfflineQueueEngine` maintaining direct sync).
 - Prepared Session Reset Cadence (Rule 13) handoff summary.
 - Verified TypeScript type safety (`npx tsc --noEmit` 0 errors) and all organization and warehouse test suites passed.
+
+---
+
+## Phase 0: Verification Environment Setup & Emulator Baseline
+**Date:** 2026-08-30
+**Files Changed:** `firebase.json`, `src/emulator_baseline.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Confirmed `firebaseConfig.projectId` is "custodyflow" in `src/firebase.ts`.
+- Created minimal `firebase.json` with firestore rules and emulator port 8085.
+- Installed OpenJDK 21 runtime in environment for Firebase Emulator Suite.
+- Recorded baseline metrics: `npx tsc --noEmit` (0 errors), `npx vitest run` (87 test files passed, 470/470 tests passed).
+- Proved Firestore emulator operation dynamically with `src/emulator_baseline.test.ts` via `firebase emulators:exec` (1/1 tests passed).
+
+---
+
+## Phase 1 (P0): Firestore Security Rules & Data Model for Inventory Balances
+**Date:** 2026-08-30
+**Files Changed:** `firestore.rules`, `src/db/inventory.ts`, `src/inventory_rules_emulator.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Chosen Model: Option B (`inventory_balances/{companyId}/items/{docId}`). Reason: Clean hierarchical tenant isolation in Firestore path without fragile regex matches, compatible with native Firestore rules path matching and future collectionGroup querying.
+- Updated `src/db/inventory.ts` `adjustStock` to target `doc(db, 'inventory_balances', companyId, 'items', balanceKey)`.
+- Updated `firestore.rules` with strict company isolation reusing `isSameCompanyWrite` / `getCompanyId() == companyId`, and RBAC role validation (Admin, SystemAdmin, Manager, Storekeeper).
+- Created `src/inventory_rules_emulator.test.ts` with 9 dynamic test assertions using `@firebase/rules-unit-testing` against the live Firestore Emulator.
+- Verification: 9/9 emulator rules tests passed; 30/30 scoped inventory tests passed; `npx tsc --noEmit` 0 errors; applet compiled successfully.
+
+---
+
+## Phase 2 (P0): Cashier / POS & Transaction Collections Rules Hardening & Single-Path Verification
+**Date:** 2026-08-30
+**Files Changed:** `firestore.rules`, `src/cashier_rules_emulator.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Verified single canonical path for cashier transactions: `pos_transactions` for Point-of-Sale orders, `CashVouchers` for cash payment receipts, and `Expenses` for expense management.
+- Refined `firestore.rules` for `pos_transactions`, `CashVouchers`, `Expenses`, and `TransactionHistory` with explicit `create: ... null`, `update: ... resource.data`, and `delete: ...` definitions to prevent runtime null-evaluation exceptions on document creation while enforcing tenant isolation and RBAC.
+- Created `src/cashier_rules_emulator.test.ts` covering 7 live emulator test assertions for same-company cashier POS flows, cross-tenant isolation, CashVouchers org-unit access, and Expenses RBAC delete guards.
+- Verification: 7/7 cashier rules emulator tests passed; 9/9 inventory emulator rules tests passed; 24/24 static rules and sales engine tests passed; `npx tsc --noEmit` 0 errors; applet compiled successfully.
+
+---
+
+## Phase 3 (P1): Safe Async Expense / Cash Voucher Writes & Call-Site Migration
+**Date:** 2026-08-30
+**Files Changed:** `src/db/transactions.voucher.ts`, `src/db/transactions.ts`, `src/db.ts`, `src/pages/CashPaymentVoucher.tsx`, `src/pages/CashReconciliation.tsx`, `src/components/ApprovalInbox.tsx`, `src/components/SuperAdminOperationsTab.tsx`, `src/pages/CompanyAdminDashboard.tsx`, `src/pages/RegionAdminDashboard.tsx`, `src/phase15_comp1_fallback.test.ts`, `src/optimistic_locking.test.ts`, `src/phase3_async_voucher_writes.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Replaced fire-and-forget void signatures in `TransactionsVoucherModule.saveExpense`, `saveCashVoucher`, `deleteExpense`, and `deleteCashVoucher` with explicit `async` returning `Promise<{ success: boolean; error?: string }>`.
+- Updated proxy methods on `TransactionsModule` and `CustodyDB` to return `Promise<{ success: boolean; error?: string }>`.
+- Migrated all live UI call sites (`CashPaymentVoucher.tsx`, `CashReconciliation.tsx`, `ApprovalInbox.tsx`, `SuperAdminOperationsTab.tsx`, `CompanyAdminDashboard.tsx`, `RegionAdminDashboard.tsx`) to `await` voucher operations with submission state guards to prevent double-submits.
+- Created `src/phase3_async_voucher_writes.test.ts` mocking `syncWriteWithOfflineFallback` failures and verifying callers receive explicit failure returns.
+- Verification: 25/25 scoped unit tests passed; `tsc --noEmit` (0 errors); applet compiled successfully.
+
+
 
 
 
