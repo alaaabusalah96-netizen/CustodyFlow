@@ -533,8 +533,8 @@ describe('Kemit ERP Enterprise Foundation Engines Integration & Unit Tests', () 
   // 6. Accounting Ledger Engine Tests
   // ==========================================
   describe('6. AccountingBusinessEngine', () => {
-    it('should initialize Standard Chart of Accounts template for a company on-demand', () => {
-      const accounts = AccountingBusinessEngine.getAccounts('comp-empty-1');
+    it('should initialize Standard Chart of Accounts template for a company on-demand', async () => {
+      const accounts = await AccountingBusinessEngine.getAccounts('comp-empty-1');
       expect(accounts.length).toBeGreaterThan(0);
       
       const mainCashAcc = accounts.find(a => a.code === '110101');

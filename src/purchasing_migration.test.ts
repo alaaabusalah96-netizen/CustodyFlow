@@ -42,7 +42,7 @@ describe('Phase 13: Purchasing Module Organization Unit Migration & Integration'
     DocumentNumberEngine.resetState();
 
     // 1. Initialize Chart of Accounts for company
-    AccountingBusinessEngine.getAccounts(companyId);
+    await AccountingBusinessEngine.getAccounts(companyId);
 
     // 2. Setup Organization Tree: HQ -> Cairo Branch
     hqUnit = await OrganizationEngine.addUnit({

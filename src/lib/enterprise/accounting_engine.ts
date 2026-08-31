@@ -303,29 +303,23 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     const list = StorageEngine.getStored<GLAccount[]>('gl_accounts', []);
     const existingFiltered = list.filter(a => a.company_id !== companyId);
 
-    const initialized: GLAccount[] = templateItems.map(tpl => {
-      const newAcc: GLAccount = {
-        ...tpl,
-        id: `acc-${companyId}-${tpl.code}`,
-        company_id: companyId,
-        createdAt: new Date().toISOString()
-      };
-      syncWriteWithOfflineFallback('gl_accounts', newAcc.id, newAcc).catch(err => {
-        console.error(`Failed background sync for initialized COA account ${newAcc.code}:`, err);
-      });
-      return newAcc;
-    });
+    const initialized: GLAccount[] = templateItems.map(tpl => ({
+      ...tpl,
+      id: `acc-${companyId}-${tpl.code}`,
+      company_id: companyId,
+      createdAt: new Date().toISOString()
+    }));
 
     StorageEngine.setStored('gl_accounts', [...existingFiltered, ...initialized]);
     return initialized;
   }
 
-  static getAccounts(companyId: string, templateId?: CoaTemplateId | string): GLAccount[] {
+  static async getAccounts(companyId: string, templateId?: CoaTemplateId | string): Promise<GLAccount[]> {
     const list = StorageEngine.getStored<GLAccount[]>('gl_accounts', []);
     const companyAccounts = list.filter(a => a.company_id === companyId);
     
     if (companyAccounts.length === 0) {
-      return AccountingBusinessEngine.initializeChartOfAccounts(companyId, templateId);
+      return await AccountingBusinessEngine.initializeChartOfAccountsAsync(companyId, templateId);
     }
     
     return companyAccounts;
@@ -484,7 +478,7 @@ export class AccountingBusinessEngine implements BusinessEngineContract {
     }[],
     dimensions?: AccountingDimensions
   ): Promise<JournalEntry> {
-    const accounts = AccountingBusinessEngine.getAccounts(companyId);
+    const accounts = await AccountingBusinessEngine.getAccounts(companyId);
 
     // Validate non-negative values (BUG-05)
     for (const ln of lines) {

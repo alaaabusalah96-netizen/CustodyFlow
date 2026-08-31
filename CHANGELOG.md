@@ -5137,6 +5137,31 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 - Created `src/phase9_admin_user_security.test.ts` validating rate limiting, endpoint guards, and client-side password reset checks.
 - Verification: 9/9 scoped tests passed; `tsc --noEmit` (0 errors); applet compiled successfully.
 
+---
+
+## Item 1 (P0): Wire Firestore Emulator Tests into CI & Exclude from Default Suite
+**Date:** 2026-08-31
+**Files Changed:** `vite.config.ts`, `package.json`, `.github/workflows/ci.yml`, `src/item1_emulator_ci.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Updated `vite.config.ts` to exclude emulator test files (`**/*_emulator.test.ts`, `**/emulator_baseline.test.ts`) from standard `npm test` runs, preventing ECONNREFUSED 127.0.0.1:8085 failures in local and standard CI test invocations.
+- Added `test:rules` script in `package.json` to execute emulator test suites via `firebase emulators:exec --only firestore`.
+- Extended `.github/workflows/ci.yml` with Java 21 (temurin) setup, `firebase-tools` CLI installation, and `npm run test:rules` execution.
+- Created `src/item1_emulator_ci.test.ts` verifying configuration.
+- Verification: Default `npm test` executed with zero port 8085 connection attempts (all unit/integration tests green); scoped test passed (3/3); `tsc --noEmit` passed (0 errors); applet compiled successfully.
+
+---
+
+## Item 2 (P0): Fix getFilteredMenuItems Permission Merge & Deny-by-Default in Layout.tsx
+**Date:** 2026-08-31
+**Files Changed:** `src/components/Layout.tsx`, `CHANGELOG.md`
+**Summary:**
+- Resolved permission check discrepancy in `src/components/Layout.tsx` `getFilteredMenuItems` by merging active user permissions on top of role default permissions (`CustodyDB.enrichUserPermissions(activeUser.role)`).
+- Standardized both scalar and array permission checks to strictly adhere to deny-by-default (`Boolean(perms[key])`).
+- Verified that both `src/system_admin_navigation.test.ts` and `src/fleet_permissions.test.ts` pass with 0 edits to test assertion files.
+- Verification: 10/10 tests passed across both suites; `tsc --noEmit` (0 errors); applet compiled successfully.
+
+
+
 
 
 

@@ -55,8 +55,8 @@ export default function Accounting({ language, theme }: AccountingProps) {
 
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const loadAllData = () => {
-    const acc = AccountingBusinessEngine.getAccounts(companyId);
+  const loadAllData = async () => {
+    const acc = await AccountingBusinessEngine.getAccounts(companyId);
     const ent = AccountingBusinessEngine.getJournalEntries(companyId);
     setAccounts(acc);
     setEntries(ent);

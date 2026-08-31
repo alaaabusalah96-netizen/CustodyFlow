@@ -140,12 +140,14 @@ export function getFilteredMenuItems(activeUser: AppUser | null, language: Langu
     }
     
     if (item.permission) {
-      const perms = activeUser.permissions || CustodyDB.enrichUserPermissions(activeUser.role);
+      const perms = {
+        ...CustodyDB.enrichUserPermissions(activeUser.role),
+        ...(activeUser.permissions || {})
+      };
       if (Array.isArray(item.permission)) {
         return item.permission.some(p => Boolean(perms[p as keyof typeof perms]));
       }
-      const permKey = item.permission as keyof typeof perms;
-      return perms[permKey] ?? true;
+      return Boolean(perms[item.permission as keyof typeof perms]);
     }
     return true;
   });

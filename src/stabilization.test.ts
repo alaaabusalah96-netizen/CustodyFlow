@@ -594,7 +594,7 @@ describe('CustodyFlow Stabilization Unit Tests (Phases 0 & 1)', () => {
 
     it('should reject journal entries containing negative debit or credit amounts (BUG-05)', async () => {
       // Mock COA initialization
-      AccountingBusinessEngine.getAccounts('comp-1');
+      await AccountingBusinessEngine.getAccounts('comp-1');
 
       // Attempt to post with negative debit
       await expect(
