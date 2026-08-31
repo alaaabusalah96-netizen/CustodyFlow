@@ -156,7 +156,15 @@ export class StorageEngine {
       if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') {
         loadFromIDB(key).then((idbVal) => {
           if (idbVal !== undefined && idbVal !== null) {
+            const hasChanged = JSON.stringify(this.cache[key]) !== JSON.stringify(idbVal);
             this.cache[key] = idbVal;
+            if (hasChanged && typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('custody_db_updated', {
+                  detail: { key, value: idbVal }
+                })
+              );
+            }
           }
         }).catch(() => {});
       }

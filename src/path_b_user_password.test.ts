@@ -9,10 +9,10 @@ describe('Path B: Optional Admin-Provided Password on User Creation', () => {
   const settingsCode = fs.readFileSync(path.join(process.cwd(), 'src/pages/Settings.tsx'), 'utf-8');
   const uaccCode = fs.readFileSync(path.join(process.cwd(), 'src/components/settings/UnifiedAccessControlCenter.tsx'), 'utf-8');
 
-  it('1. server.ts extracts optional password and validates minimum length 8', () => {
+  it('1. server.ts extracts optional password and validates minimum length 12', () => {
     expect(serverCode).toContain('password,');
-    expect(serverCode).toContain('trimmed.length < 8');
-    expect(serverCode).toContain('كلمة المرور يجب أن لا تقل عن 8 أحرف / Password must be at least 8 characters.');
+    expect(serverCode).toContain('trimmed.length < 12');
+    expect(serverCode).toContain('كلمة المرور يجب أن لا تقل عن 12 حرفاً / Password must be at least 12 characters.');
   });
 
   it('2. server.ts uses provided password when valid, else falls back to generateSecureTemporaryPassword', () => {
@@ -40,8 +40,8 @@ describe('Path B: Optional Admin-Provided Password on User Creation', () => {
     expect(wrongHash).not.toBe(hash);
   });
 
-  it('4. Settings.tsx validates client-side min length 8 and includes password in payload when provided', () => {
-    expect(settingsCode).toContain('trimmedPassword.length < 8');
+  it('4. Settings.tsx validates client-side min length 12 and includes password in payload when provided', () => {
+    expect(settingsCode).toContain('trimmedPassword.length < 12');
     expect(settingsCode).toContain('payload.password = trimmedPassword');
   });
 
@@ -52,8 +52,8 @@ describe('Path B: Optional Admin-Provided Password on User Creation', () => {
     expect(settingsCode).toContain('copiedPassword');
   });
 
-  it('6. UnifiedAccessControlCenter.tsx contains helper text and min-8 validation warning', () => {
-    expect(uaccCode).toContain('Optional — leave blank to auto-generate; minimum 8 characters if typed.');
-    expect(uaccCode).toContain('اختياري — اترك الحقل فارغاً للتوليد التلقائي؛ بحد أدنى 8 أحرف في حال الإدخال اليدوي');
+  it('6. UnifiedAccessControlCenter.tsx contains helper text and min-12 validation warning', () => {
+    expect(uaccCode).toContain('Optional — leave blank to auto-generate; minimum 12 characters if typed.');
+    expect(uaccCode).toContain('اختياري — اترك الحقل فارغاً للتوليد التلقائي؛ بحد أدنى 12 حرفاً في حال الإدخال اليدوي');
   });
 });

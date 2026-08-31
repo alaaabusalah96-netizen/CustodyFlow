@@ -624,8 +624,8 @@ export default function Settings({
     if (!newUserName.trim() || !newUserEmail.trim()) return;
 
     const trimmedPassword = newUserPassword ? newUserPassword.trim() : '';
-    if (trimmedPassword && trimmedPassword.length < 8) {
-      alert(isRtl ? '⚠️ كلمة المرور يجب أن لا تقل عن 8 أحرف.' : '⚠️ Password must be at least 8 characters.');
+    if (trimmedPassword && trimmedPassword.length < 12) {
+      alert(isRtl ? '⚠️ كلمة المرور يجب أن لا تقل عن 12 حرفاً.' : '⚠️ Password must be at least 12 characters.');
       return;
     }
 

@@ -258,6 +258,8 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     odometerReading: 0
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -331,6 +333,8 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   // Constraint Handlers
   const handleSaveConstraint = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     if (!constraintForm.vehicle_id) {
       showToast('error', isRtl ? 'يرجى اختيار المركبة المراد تطبيق القيد عليها' : 'Please select a vehicle');
       return;
@@ -340,6 +344,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       await FleetBusinessEngine.saveVehicleConstraint(companyId, activeUser?.id || 'system', {
         vehicle_id: constraintForm.vehicle_id,
@@ -368,10 +373,14 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     } catch (err: any) {
       console.error(err);
       showToast('error', err.message || (isRtl ? 'تعذر حفظ القيد' : 'Failed to save constraint'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleToggleConstraint = async (constraintId: string, currentActive: boolean) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       await FleetBusinessEngine.toggleVehicleConstraint(companyId, constraintId, !currentActive);
       LogsModule.addLog(
@@ -388,10 +397,14 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     } catch (err: any) {
       console.error(err);
       showToast('error', err.message || (isRtl ? 'تعذر تعديل حالة القيد' : 'Failed to toggle constraint'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDeleteConstraint = async (constraintId: string) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       await FleetBusinessEngine.deleteVehicleConstraint(companyId, constraintId);
       showToast('success', isRtl ? 'تم حذف القيد' : 'Constraint deleted');
@@ -399,12 +412,15 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     } catch (err: any) {
       console.error(err);
       showToast('error', err.message || (isRtl ? 'تعذر حذف القيد' : 'Failed to delete constraint'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Handlers
   const handleAddVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!vehicleForm.plateNumber || !vehicleForm.plateNumber.trim()) {
       showToast('error', isRtl ? 'يرجى إدخال رقم اللوحة المعدنية (إلزامي)' : 'Please enter plate number (required)');
@@ -432,6 +448,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
       targetOrgUnitId = activeUser.org_unit_id;
     }
 
+    setIsSubmitting(true);
     try {
       const created = await FleetBusinessEngine.createVehicle(companyId, {
         code: vehicleForm.code?.trim() || undefined,
@@ -473,6 +490,8 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     } catch (err: any) {
       console.error(err);
       showToast('error', err?.message || (isRtl ? 'حدث خطأ أثناء تسجيل المركبة' : 'Error registering vehicle'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -709,6 +728,8 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   };
 
   const executeCreateTrip = async (payload: any, override?: SupervisorConflictOverride) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       await FleetBusinessEngine.createTrip(companyId, activeUser?.id || 'system', {
         ...payload,
@@ -750,11 +771,15 @@ export default function FleetManagement({ language }: FleetManagementProps) {
     } catch (err: any) {
       console.error(err);
       showToast('error', err?.message || (isRtl ? 'حدث خطأ أثناء تسجيل المشوار' : 'Error creating trip'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleCreateTrip = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     if (!canCreateTrip) {
       showToast('error', isRtl ? 'غير مصرح لك بإنشاء مشوار' : 'Unauthorized to create trip');
       return;
@@ -813,7 +838,7 @@ export default function FleetManagement({ language }: FleetManagementProps) {
   };
 
   const handleProceedConflictOverride = async (reason: string) => {
-    if (!pendingTripData) return;
+    if (!pendingTripData || isSubmitting) return;
     const override: SupervisorConflictOverride = {
       overridden: true,
       overriddenBy: activeUser?.id || 'system',
@@ -840,8 +865,9 @@ export default function FleetManagement({ language }: FleetManagementProps) {
 
   const handleLogMaintenance = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedVehicleForLog) return;
+    if (!selectedVehicleForLog || isSubmitting) return;
 
+    setIsSubmitting(true);
     try {
       await FleetBusinessEngine.logMaintenance(companyId, activeUser?.id || 'system', {
         vehicle_id: selectedVehicleForLog.id,
@@ -858,16 +884,19 @@ export default function FleetManagement({ language }: FleetManagementProps) {
       setShowLogMaintenance(false);
       setSelectedVehicleForLog(null);
       loadData();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showToast('error', isRtl ? 'حدث خطأ أثناء تسجيل الصيانة' : 'Error logging maintenance');
+      showToast('error', err?.message || (isRtl ? 'حدث خطأ أثناء تسجيل الصيانة' : 'Error logging maintenance'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleLogFuel = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedVehicleForLog) return;
+    if (!selectedVehicleForLog || isSubmitting) return;
 
+    setIsSubmitting(true);
     try {
       await FleetBusinessEngine.logFuel(companyId, activeUser?.id || 'system', {
         vehicle_id: selectedVehicleForLog.id,
@@ -882,9 +911,11 @@ export default function FleetManagement({ language }: FleetManagementProps) {
       setShowLogFuel(false);
       setSelectedVehicleForLog(null);
       loadData();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showToast('error', isRtl ? 'حدث خطأ أثناء تسجيل الوقود' : 'Error logging fuel');
+      showToast('error', err?.message || (isRtl ? 'حدث خطأ أثناء تسجيل الوقود' : 'Error logging fuel'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1882,10 +1913,15 @@ export default function FleetManagement({ language }: FleetManagementProps) {
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
+                  className="w-full py-2.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
                 >
                   <ShieldAlert className="h-4 w-4" />
-                  <span>{isRtl ? 'حفظ وتفعيل القيد على المركبة' : 'Save & Activate Constraint'}</span>
+                  <span>
+                    {isSubmitting 
+                      ? (isRtl ? 'جاري حفظ القيد...' : 'Saving constraint...') 
+                      : (isRtl ? 'حفظ وتفعيل القيد على المركبة' : 'Save & Activate Constraint')}
+                  </span>
                 </button>
               </form>
             </div>
@@ -2299,10 +2335,10 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                 </button>
                 <button
                   type="submit"
-                  disabled={!isCompanyLevelFleetManager && !activeUser?.org_unit_id}
+                  disabled={isSubmitting || (!isCompanyLevelFleetManager && !activeUser?.org_unit_id)}
                   className="flex-1 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl shadow-sm transition-all"
                 >
-                  {isRtl ? 'حفظ وتأكيد المركبة' : 'Save Vehicle'}
+                  {isSubmitting ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ وتأكيد المركبة' : 'Save Vehicle')}
                 </button>
               </div>
             </form>
@@ -2602,9 +2638,10 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl shadow-sm"
                 >
-                  {isRtl ? 'حفظ بصفة مسودة' : 'Save Draft Trip'}
+                  {isSubmitting ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ بصفة مسودة' : 'Save Draft Trip')}
                 </button>
               </div>
             </form>
@@ -2683,9 +2720,10 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl"
                 >
-                  {isRtl ? 'حفظ واعتماد الصيانة' : 'Save Maintenance'}
+                  {isSubmitting ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ واعتماد الصيانة' : 'Save Maintenance')}
                 </button>
               </div>
             </form>
@@ -2753,9 +2791,10 @@ export default function FleetManagement({ language }: FleetManagementProps) {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl"
                 >
-                  {isRtl ? 'حفظ واعتماد الوقود' : 'Save Fuel Record'}
+                  {isSubmitting ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ واعتماد الوقود' : 'Save Fuel Record')}
                 </button>
               </div>
             </form>

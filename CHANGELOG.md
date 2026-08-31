@@ -5081,6 +5081,65 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 - Created `src/phase3_async_voucher_writes.test.ts` mocking `syncWriteWithOfflineFallback` failures and verifying callers receive explicit failure returns.
 - Verification: 25/25 scoped unit tests passed; `tsc --noEmit` (0 errors); applet compiled successfully.
 
+---
+
+## Phase 5: Fleet Management Async Form Handlers & Submission Protection
+**Date:** 2026-08-31
+**Files Changed:** `src/pages/FleetManagement.tsx`, `src/fleet_phase5_safe_writes.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Implemented comprehensive `isSubmitting` submission protection across all asynchronous handlers in `FleetManagement.tsx` (`executeCreateTrip`, `handleCreateTrip`, `handleProceedConflictOverride`, `handleLogMaintenance`, `handleLogFuel`, `handleSaveConstraint`, `handleToggleConstraint`, `handleDeleteConstraint`, `handleAddVehicle`).
+- Bound `disabled={isSubmitting}` and responsive dynamic button loading labels to all modal and in-page submission forms (Vehicle registration, Trip creation, Maintenance log, Fuel log, and Constraints configuration) to prevent double submissions.
+- Added unit tests in `src/fleet_phase5_safe_writes.test.ts` verifying safe writes, threshold/odometer recalculations, error resilience, and offline integrity for maintenance and fuel.
+- Verification: 4/4 scoped unit tests passed; 65/65 fleet suite tests passed; `tsc --noEmit` (0 errors); applet compiled successfully.
+
+---
+
+## Phase 6: Lock down POST /api/seed/auto-seed & Upgrade Seed Password Hashing to PBKDF2 210k
+**Date:** 2026-08-31
+**Files Changed:** `server.ts`, `.env.example`, `src/phase6_auto_seed_lockdown.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Gated `POST /api/seed/auto-seed` with `requireAutoSeedPermission` middleware so that it is only accessible when `process.env.ALLOW_AUTO_SEED === 'true'` (default off in `.env.example`) or when authenticated with a valid SystemAdmin Firebase ID token (`requireSystemAdminAuth`).
+- Added `otpRateLimiter` to `POST /api/seed/auto-seed` as a secondary defense layer against burst/denial-of-service attempts.
+- Upgraded `seedDatabaseIfEmptyServer` to hash default user seed passwords using `hashPasswordPBKDF2_210k` with active server pepper version 2 instead of legacy 10k hashing.
+- Added comprehensive unit tests in `src/phase6_auto_seed_lockdown.test.ts` verifying authorization gating and PBKDF2 210k hashing.
+- Verification: 2/2 scoped tests passed; `tsc --noEmit` (0 errors); applet compiled successfully.
+
+---
+
+## Phase 7: StorageEngine IndexedDB Background Hydration & UI Cache Reactivity
+**Date:** 2026-08-31
+**Files Changed:** `src/db/storage.ts`, `src/phase7_storage_idb_hydration.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Enhanced `StorageEngine.getStored` background hydration from IndexedDB (`loadFromIDB`) to detect payload changes and emit `custody_db_updated` events whenever hydrated IndexedDB data differs from initial synchronous cache.
+- Prevents UI views from remaining stale when IndexedDB finishes resolving asynchronously across tabs or on initial app startup.
+- Created `src/phase7_storage_idb_hydration.test.ts` verifying cache reads, event triggers, and storage reactivity.
+- Verification: 2/2 scoped tests passed; `tsc --noEmit` (0 errors); applet compiled successfully.
+
+---
+
+## Phase 8: Password Min Length Alignment (12 chars) & Admin Endpoints Rate Limiting
+**Date:** 2026-08-31
+**Files Changed:** `server.ts`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/components/settings/unifiedAccessHelpers.ts`, `src/pages/Settings.tsx`, `src/path_b_user_password.test.ts`, `src/phase8_admin_ratelimit_password.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Unified user password minimum length to 12 characters across `server.ts` (`POST /api/admin/users`), `UnifiedAccessControlCenter.tsx`, `unifiedAccessHelpers.ts`, and `Settings.tsx`.
+- Implemented `adminRateLimiter` (max 30 requests / 15 minutes per IP) in `server.ts` protecting `POST /api/admin/users`, `DELETE /api/admin/users/:id`, and `POST /api/auth/migrate-credential-id`.
+- Added unit tests in `src/phase8_admin_ratelimit_password.test.ts` and updated `src/path_b_user_password.test.ts`.
+- Verification: 10/10 scoped tests passed; `tsc --noEmit` (0 errors); applet compiled successfully.
+
+---
+
+## Phase 9: Admin User Update & Password Reset Security Hardening
+**Date:** 2026-08-31
+**Files Changed:** `server.ts`, `src/pages/SuperAdmin.tsx`, `src/phase9_admin_user_security.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Protected `PATCH /api/admin/users/:id` and `POST /api/auth/save-credentials` with `adminRateLimiter` to defend against brute force and automated tampering.
+- Enforced 12-character minimum password validation in `POST /api/auth/save-credentials` and aligned `SuperAdmin.tsx` manager password reset flow with 12-character minimum input validation and placeholder cues.
+- Created `src/phase9_admin_user_security.test.ts` validating rate limiting, endpoint guards, and client-side password reset checks.
+- Verification: 9/9 scoped tests passed; `tsc --noEmit` (0 errors); applet compiled successfully.
+
+
+
+
 
 
 

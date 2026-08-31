@@ -633,6 +633,11 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
     e.preventDefault();
     if (!selectedUserForReset || !newPlainPassword.trim()) return;
 
+    if (newPlainPassword.trim().length < 12) {
+      alert(isRtl ? '⚠️ كلمة المرور يجب أن لا تقل عن 12 حرفاً وتحتوي على حروف وأرقام.' : '⚠️ Password must be at least 12 characters and contain letters and numbers.');
+      return;
+    }
+
     try {
       const res = await fetch(`/api/admin/users/${selectedUserForReset.id}`, {
         method: 'PATCH',
@@ -1678,8 +1683,8 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
                 <input
                   type="text"
                   required
-                  minLength={4}
-                  placeholder="e.g. Pass9922"
+                  minLength={12}
+                  placeholder="e.g. Pass@2026Secure"
                   value={newPlainPassword}
                   onChange={(e) => setNewPlainPassword(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#2451B8]/20 dark:bg-slate-950 focus:border-[#2451B8] font-mono"

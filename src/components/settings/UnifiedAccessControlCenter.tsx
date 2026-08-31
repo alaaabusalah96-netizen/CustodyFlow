@@ -2664,15 +2664,15 @@ export default function UnifiedAccessControlCenter({
 
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   {isRtl
-                    ? 'اختياري — اترك الحقل فارغاً للتوليد التلقائي؛ بحد أدنى 8 أحرف في حال الإدخال اليدوي'
-                    : 'Optional — leave blank to auto-generate; minimum 8 characters if typed.'}
+                    ? 'اختياري — اترك الحقل فارغاً للتوليد التلقائي؛ بحد أدنى 12 حرفاً في حال الإدخال اليدوي'
+                    : 'Optional — leave blank to auto-generate; minimum 12 characters if typed.'}
                 </p>
 
-                {activeNewUserPassword.trim().length > 0 && activeNewUserPassword.trim().length < 8 && (
+                {activeNewUserPassword.trim().length > 0 && activeNewUserPassword.trim().length < 12 && (
                   <p className="text-[11px] text-rose-500 font-bold">
                     {isRtl
-                      ? '⚠️ كلمة المرور يجب أن لا تقل عن 8 أحرف'
-                      : '⚠️ Password must be at least 8 characters'}
+                      ? '⚠️ كلمة المرور يجب أن لا تقل عن 12 حرفاً'
+                      : '⚠️ Password must be at least 12 characters'}
                   </p>
                 )}
 

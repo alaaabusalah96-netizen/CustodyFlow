@@ -183,6 +183,18 @@ async function startServer() {
     legacyHeaders: false,
   });
 
+  // Dedicated Rate Limiter for Admin operations and Credential ID migrations
+  const adminRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 30, // Max 30 operations per 15 minutes per IP
+    message: {
+      success: false,
+      message: "تم تجاوز الحد الأقصى للعمليات الإدارية من هذا الجهاز. يرجى المحاولة مرة أخرى لاحقاً / Rate limit exceeded for administrative operations. Please try again later."
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   const PLATFORM_OWNER_EMAIL = (process.env.PLATFORM_OWNER_EMAIL || "").toLowerCase().trim();
 
   async function isPlatformAdminUser(email?: string, userData?: any): Promise<boolean> {
@@ -538,7 +550,7 @@ async function startServer() {
   }
 
   // API Route - Unified Secure User Provisioning Endpoint (POST /api/admin/users)
-  app.post("/api/admin/users", async (req, res) => {
+  app.post("/api/admin/users", adminRateLimiter, async (req, res) => {
     try {
       // 1. AuthN
       const authResult = await authenticateSessionOrBearer(req);
@@ -568,14 +580,14 @@ async function startServer() {
         must_change_password
       } = req.body || {};
 
-      // Determine effective password (manual if provided >= 8 chars, otherwise auto-generate >= 8 chars)
+      // Determine effective password (manual if provided >= 12 chars, otherwise auto-generate >= 16 chars)
       let effectivePassword = "";
       if (password !== undefined && password !== null && typeof password === 'string' && password.trim() !== '') {
         const trimmed = password.trim();
-        if (trimmed.length < 8) {
+        if (trimmed.length < 12) {
           return res.status(400).json({
             success: false,
-            message: "كلمة المرور يجب أن لا تقل عن 8 أحرف / Password must be at least 8 characters."
+            message: "كلمة المرور يجب أن لا تقل عن 12 حرفاً / Password must be at least 12 characters."
           });
         }
         effectivePassword = trimmed;
@@ -724,7 +736,7 @@ async function startServer() {
   });
 
   // API Route - Unified Secure User Update Endpoint (PATCH /api/admin/users/:id)
-  app.patch("/api/admin/users/:id", async (req, res) => {
+  app.patch("/api/admin/users/:id", adminRateLimiter, async (req, res) => {
     try {
       const authResult = await authenticateSessionOrBearer(req);
       if (!authResult.authenticated) {
@@ -886,7 +898,7 @@ async function startServer() {
   });
 
   // API Route - Unified Secure User Deletion Endpoint (DELETE /api/admin/users/:id)
-  app.delete("/api/admin/users/:id", async (req, res) => {
+  app.delete("/api/admin/users/:id", adminRateLimiter, async (req, res) => {
     try {
       const authResult = await authenticateSessionOrBearer(req);
       if (!authResult.authenticated) {
@@ -1299,11 +1311,18 @@ async function startServer() {
   });
 
   // API Route - Server-side Save User Credentials (PBKDF2 210k)
-  app.post("/api/auth/save-credentials", requireAdminOrSystemAdminAuth, async (req, res) => {
+  app.post("/api/auth/save-credentials", adminRateLimiter, requireAdminOrSystemAdminAuth, async (req, res) => {
     try {
       const { userId, companyId, email, password, salt } = req.body;
       if (!userId || !password) {
         return res.status(400).json({ success: false, message: "معلمات غير كافية لحفظ الاعتمادات." });
+      }
+
+      if (typeof password !== 'string' || password.trim().length < 12) {
+        return res.status(400).json({
+          success: false,
+          message: "كلمة المرور يجب أن لا تقل عن 12 حرفاً / Password must be at least 12 characters."
+        });
       }
 
       const requester = (req as any).user;
@@ -1350,7 +1369,7 @@ async function startServer() {
   });
 
   // API Route - Server-side Migrate Credential Vault ID (when legacy user ID -> Firebase Auth UID)
-  app.post("/api/auth/migrate-credential-id", async (req, res) => {
+  app.post("/api/auth/migrate-credential-id", adminRateLimiter, async (req, res) => {
     try {
       const authHeader = req.headers.authorization || "";
       const idToken = authHeader.split("Bearer ")[1]?.trim();
@@ -1571,7 +1590,7 @@ async function startServer() {
       DEFAULT_USERS.forEach(u => {
         const pwd = u.password || '123456';
         const salt = u.salt || u.email;
-        const hashedPwd = hashPassword(pwd, salt, 2);
+        const hashedPwd = hashPasswordPBKDF2_210k(pwd, salt, 2);
         const { password: _p, salt: _s, ...publicUser } = u;
 
         userBatch.set(adminDbInstance.collection('users').doc(u.id), {
@@ -1592,7 +1611,7 @@ async function startServer() {
         });
       });
       await userBatch.commit();
-      console.log(`[Server Seed] Seeded ${DEFAULT_USERS.length} users and credentials.`);
+      console.log(`[Server Seed] Seeded ${DEFAULT_USERS.length} users and credentials with PBKDF2 210k.`);
 
       // 7. Seed config main
       await adminDbInstance.collection('config').doc('main').set({
@@ -1636,8 +1655,16 @@ async function startServer() {
     }
   }
 
-  // API Route - Auto seed endpoint (accessible by client on initial check or bootstrap)
-  app.post("/api/seed/auto-seed", async (req, res) => {
+  // Gated Auto-seed endpoint: only permitted if ALLOW_AUTO_SEED === 'true' OR authenticated as SystemAdmin
+  async function requireAutoSeedPermission(req: express.Request, res: express.Response, next: express.NextFunction) {
+    if (process.env.ALLOW_AUTO_SEED === 'true') {
+      return next();
+    }
+    return requireSystemAdminAuth(req, res, next);
+  }
+
+  // API Route - Auto seed endpoint (accessible by client on initial check or bootstrap with gate & rate limit)
+  app.post("/api/seed/auto-seed", otpRateLimiter, requireAutoSeedPermission, async (req, res) => {
     try {
       const result = await seedDatabaseIfEmptyServer(adminDb);
       return res.json({ success: true, result });

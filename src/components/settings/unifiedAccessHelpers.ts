@@ -212,11 +212,11 @@ export function buildDynamicPermissionCategories(sourcePermissions: SystemPermis
 }
 
 /**
- * Generates a secure temporary random password for user onboarding / provisioning
+ * Generates a secure temporary random password for user onboarding / provisioning (14 characters)
  */
 export function generateRandomPassword(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
-  let pass = 'Pass@';
+  let pass = 'Pass@2026';
   for (let i = 0; i < 6; i++) {
     pass += chars.charAt(Math.floor(Math.random() * chars.length));
   }
