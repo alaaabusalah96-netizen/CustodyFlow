@@ -908,8 +908,9 @@ async function startServer() {
       const creator = authResult.user;
       const isPlatformAdmin = await isPlatformAdminUser(creator.email, creator);
 
-      if (!isPlatformAdmin && creator.role !== "Admin") {
-        return res.status(403).json({ success: false, message: "Forbidden: Insufficient privileges to delete user / غير مصرح لك بحذف المستخدمين." });
+      // User deletion is strictly reserved for Platform Admins / SystemAdmin
+      if (!isPlatformAdmin) {
+        return res.status(403).json({ success: false, message: "Forbidden: Insufficient privileges to delete user. User deletion is reserved for Platform Admins / غير مصرح لك بحذف المستخدمين؛ هذه الصلاحية مخصصة لأدمن المنصة فقط." });
       }
 
       const targetUserId = req.params.id;
@@ -929,11 +930,6 @@ async function startServer() {
 
       const targetData = userDoc.data() || {};
       const targetEmail = (targetData.email || "").toLowerCase().trim();
-
-      // Authorization check: Company Admin can only delete users in their company
-      if (!isPlatformAdmin && targetData.company_id !== creator.company_id) {
-        return res.status(403).json({ success: false, message: "Forbidden: Cannot delete users outside your company." });
-      }
 
       // 1. Delete/Disable Firebase Auth User
       try {

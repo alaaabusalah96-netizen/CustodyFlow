@@ -10,7 +10,7 @@ describe('LeadsModule async writes and error handling', () => {
   });
 
   it('successfully saves lead and persists to StorageEngine when write succeeds', async () => {
-    vi.spyOn(offlineQueue, 'syncWriteWithOfflineFallback').mockResolvedValue({ success: true });
+    vi.spyOn(offlineQueue, 'syncWriteWithOfflineFallback').mockResolvedValue({ success: true, syncedToFirestore: true, queuedOffline: false });
 
     const newLead: Lead = {
       id: 'lead-test-1',
@@ -37,6 +37,8 @@ describe('LeadsModule async writes and error handling', () => {
   it('rolls back local storage and returns error when cloud write fails', async () => {
     vi.spyOn(offlineQueue, 'syncWriteWithOfflineFallback').mockResolvedValue({
       success: false,
+      syncedToFirestore: false,
+      queuedOffline: false,
       error: 'Permission denied / Cloud error'
     });
 
@@ -64,7 +66,7 @@ describe('LeadsModule async writes and error handling', () => {
   });
 
   it('adds interaction to lead successfully', async () => {
-    vi.spyOn(offlineQueue, 'syncWriteWithOfflineFallback').mockResolvedValue({ success: true });
+    vi.spyOn(offlineQueue, 'syncWriteWithOfflineFallback').mockResolvedValue({ success: true, syncedToFirestore: true, queuedOffline: false });
 
     const initialLead: Lead = {
       id: 'lead-int-1',
@@ -96,7 +98,7 @@ describe('LeadsModule async writes and error handling', () => {
   });
 
   it('updates lead stage successfully', async () => {
-    vi.spyOn(offlineQueue, 'syncWriteWithOfflineFallback').mockResolvedValue({ success: true });
+    vi.spyOn(offlineQueue, 'syncWriteWithOfflineFallback').mockResolvedValue({ success: true, syncedToFirestore: true, queuedOffline: false });
 
     const initialLead: Lead = {
       id: 'lead-stage-1',

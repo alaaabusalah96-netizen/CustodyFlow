@@ -23,6 +23,28 @@ import { OrganizationEngine } from './organizationEngine';
 // ============================================================================
 
 // NON-PRODUCTION SEED DATA: Default warehouses fixture
+function isDevOrTest(): boolean {
+  // If NODE_ENV is explicitly production or import.meta.env.PROD is true, it is production (not dev/test)
+  if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') {
+    return false;
+  }
+  if (typeof (import.meta as any) !== 'undefined' && (import.meta as any).env && (import.meta as any).env.PROD === true) {
+    return false;
+  }
+
+  // Otherwise check if explicitly dev or test
+  if (typeof (import.meta as any) !== 'undefined' && (import.meta as any).env) {
+    if ((import.meta as any).env.DEV) return true;
+    if ((import.meta as any).env.MODE === 'test' || (import.meta as any).env.MODE === 'development') return true;
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || process.env.VITEST) {
+      return true;
+    }
+  }
+  return false;
+}
+
 const DEFAULT_WAREHOUSES: Warehouse[] = [
   {
     id: 'wh-1',
@@ -256,7 +278,8 @@ export class InventoryModule {
   // Warehouses
   static getWarehouses(targetCompanyId?: string): Warehouse[] {
     const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
-    let list = StorageEngine.getStored<Warehouse[]>('warehouses', DEFAULT_WAREHOUSES);
+    const fallbackWarehouses = isDevOrTest() ? DEFAULT_WAREHOUSES : [];
+    let list = StorageEngine.getStored<Warehouse[]>('warehouses', fallbackWarehouses);
     const companyWarehouses = list.filter(w => w.company_id === companyId);
     
     // Check if there's any scrap/obsolete warehouse for this company
@@ -266,8 +289,8 @@ export class InventoryModule {
       w.name.toLowerCase().includes('scrap')
     );
     
-    if (!hasScrapWh && companyId) {
-      // Seed some default scrap/obsolete warehouses as specified by the user!
+    if (!hasScrapWh && companyId && isDevOrTest()) {
+      // Seed some default scrap/obsolete warehouses as specified by the user in dev/test!
       const seedScrap: Warehouse[] = [
         {
           id: `wh-scrap-sina-${companyId}`,
@@ -310,7 +333,7 @@ export class InventoryModule {
       // Save them asynchronously to avoid side-effects during render
       setTimeout(async () => {
         try {
-          const currentAll = StorageEngine.getStored<Warehouse[]>('warehouses', DEFAULT_WAREHOUSES);
+          const currentAll = StorageEngine.getStored<Warehouse[]>('warehouses', fallbackWarehouses);
           const hasScrapNow = currentAll.some(w => w.company_id === companyId && (
             w.name.includes('خردة') || w.name.includes('كهنة') || w.name.toLowerCase().includes('scrap')
           ));
@@ -334,7 +357,8 @@ export class InventoryModule {
   }
 
   static async saveWarehouses(list: Warehouse[], targetCompanyId?: string): Promise<{ success: boolean; error?: string }> {
-    const all = StorageEngine.getStored<Warehouse[]>('warehouses', DEFAULT_WAREHOUSES);
+    const fallbackWarehouses = isDevOrTest() ? DEFAULT_WAREHOUSES : [];
+    const all = StorageEngine.getStored<Warehouse[]>('warehouses', fallbackWarehouses);
     const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(w => w.company_id !== companyId);
     const combined = !companyId ? list : [...filteredOut, ...list];
@@ -693,13 +717,15 @@ export class InventoryModule {
   // Products
   static getProducts(targetCompanyId?: string): Product[] {
     const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
-    const list = StorageEngine.getStored<Product[]>('products', DEFAULT_PRODUCTS);
+    const fallbackProducts = isDevOrTest() ? DEFAULT_PRODUCTS : [];
+    const list = StorageEngine.getStored<Product[]>('products', fallbackProducts);
     if (!companyId) return list;
     return list.filter(p => p.company_id === companyId || !p.company_id);
   }
 
   static async saveProducts(list: Product[], targetCompanyId?: string): Promise<{ success: boolean; error?: string }> {
-    const all = StorageEngine.getStored<Product[]>('products', DEFAULT_PRODUCTS);
+    const fallbackProducts = isDevOrTest() ? DEFAULT_PRODUCTS : [];
+    const all = StorageEngine.getStored<Product[]>('products', fallbackProducts);
     const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(p => p.company_id !== companyId);
     const combined = !companyId ? list : [...filteredOut, ...list];
@@ -796,9 +822,10 @@ export class InventoryModule {
   }
 
   // Stock Movements
-  static getStockMovements(): StockMovement[] {
-    const companyId = CompaniesModule.getSelectedCompanyId();
-    const list = StorageEngine.getStored<StockMovement[]>('stock_movements', DEFAULT_MOVEMENTS);
+  static getStockMovements(targetCompanyId?: string): StockMovement[] {
+    const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
+    const fallbackMovements = isDevOrTest() ? DEFAULT_MOVEMENTS : [];
+    const list = StorageEngine.getStored<StockMovement[]>('stock_movements', fallbackMovements);
     if (!companyId) return [...list];
     return list.filter(m => m.company_id === companyId);
   }
@@ -833,7 +860,8 @@ export class InventoryModule {
 
   static async saveStockMovements(list: StockMovement[]): Promise<{ success: boolean; error?: string }> {
     InventoryModule.clearStockLookupIndex();
-    const all = StorageEngine.getStored<StockMovement[]>('stock_movements', DEFAULT_MOVEMENTS);
+    const fallbackMovements = isDevOrTest() ? DEFAULT_MOVEMENTS : [];
+    const all = StorageEngine.getStored<StockMovement[]>('stock_movements', fallbackMovements);
     const companyId = CompaniesModule.getSelectedCompanyId();
     const filteredOut = all.filter(m => m.company_id !== companyId);
     const combined = !companyId ? list : [...filteredOut, ...list];
@@ -857,10 +885,10 @@ export class InventoryModule {
   }
 
   // Ledger Entries
-  static getInventoryLedger(): InventoryLedgerEntry[] {
-    const companyId = CompaniesModule.getSelectedCompanyId();
+  static getInventoryLedger(targetCompanyId?: string): InventoryLedgerEntry[] {
+    const companyId = targetCompanyId || CompaniesModule.getSelectedCompanyId();
     // NON-PRODUCTION SEED DATA: Default inventory ledger fixture
-    const defaultLedger: InventoryLedgerEntry[] = [
+    const defaultLedger: InventoryLedgerEntry[] = isDevOrTest() ? [
       {
         id: 'led-init-1',
         company_id: 'comp-1', // Non-production seed company ID
@@ -937,7 +965,7 @@ export class InventoryModule {
         user_name: 'System',
         audit_ref: 'INITIAL-STOCK-02'
       }
-    ];
+    ] : [];
     const list = StorageEngine.getStored<InventoryLedgerEntry[]>('inventory_ledger', defaultLedger);
     return list.filter(entry => entry.company_id === companyId);
   }
@@ -947,7 +975,7 @@ export class InventoryModule {
     const all = StorageEngine.getStored<InventoryLedgerEntry[]>('inventory_ledger', []);
     
     // NON-PRODUCTION SEED DATA: Default inventory ledger fixture for uninitialized storage
-    const initialList = all.length === 0 ? [
+    const initialList = all.length === 0 && isDevOrTest() ? [
       {
         id: 'led-init-1',
         company_id: 'comp-1', // Non-production seed company ID
@@ -1156,6 +1184,15 @@ export class InventoryModule {
 
         const movementId = idempotencyKey ? `m-adj-${idempotencyKey}` : `m-adj-${crypto.randomUUID()}`;
         const movementDocRef = doc(db, 'stock_movements', movementId);
+
+        if (idempotencyKey) {
+          const existingMovement = await transaction.get(movementDocRef);
+          if (existingMovement.exists()) {
+            committedMovement = existingMovement.data() as StockMovement;
+            return;
+          }
+        }
+
         const movement: StockMovement = {
           id: movementId,
           doc_id: 'direct-adjust',
@@ -1189,7 +1226,12 @@ export class InventoryModule {
 
       if (committedMovement) {
         const allMovements = InventoryModule.getStockMovements();
-        allMovements.push(committedMovement);
+        const existingIdx = allMovements.findIndex(m => m.id === committedMovement!.id);
+        if (existingIdx >= 0) {
+          allMovements[existingIdx] = committedMovement;
+        } else {
+          allMovements.push(committedMovement);
+        }
         StorageEngine.setStored('stock_movements', allMovements);
       }
     } catch (err: any) {

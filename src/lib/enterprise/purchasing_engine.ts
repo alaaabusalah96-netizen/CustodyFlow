@@ -773,14 +773,17 @@ export class PurchasingBusinessEngine implements BusinessEngineContract {
           }
 
           // Inject products directly into inventory via InventoryModule
-          for (const item of allPOs[idx].items) {
+          for (let itemIdx = 0; itemIdx < allPOs[idx].items.length; itemIdx++) {
+            const item = allPOs[idx].items[itemIdx];
+            const idempotencyKey = `po-rcv-${allPOs[idx].id}-${item.productId}-${itemIdx}`;
             await InventoryModule.adjustStock(
               warehouseId,
               item.productId,
               item.qty,
               'Receipt',
               event.user_id,
-              undefined
+              undefined,
+              idempotencyKey
             );
           }
 

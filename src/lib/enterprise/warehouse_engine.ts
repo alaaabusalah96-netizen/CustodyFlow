@@ -67,8 +67,10 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
           }
 
           // Apply stock increase
-          for (const item of items) {
-            await InventoryModule.adjustStock(warehouseId, item.product_id, item.qty, 'Receipt', event.user_id, item.bin_id);
+          for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
+            const item = items[itemIdx];
+            const idempotencyKey = `wh-rcv-${event.eventId}-${warehouseId}-${item.product_id}-${item.bin_id || 'nobin'}-${itemIdx}`;
+            await InventoryModule.adjustStock(warehouseId, item.product_id, item.qty, 'Receipt', event.user_id, item.bin_id, idempotencyKey);
           }
 
           return {
@@ -102,8 +104,10 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
           }
 
           // Apply stock decrease
-          for (const item of items) {
-            await InventoryModule.adjustStock(warehouseId, item.product_id, -item.qty, 'Issue', event.user_id, item.bin_id);
+          for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
+            const item = items[itemIdx];
+            const idempotencyKey = `wh-iss-${event.eventId}-${warehouseId}-${item.product_id}-${item.bin_id || 'nobin'}-${itemIdx}`;
+            await InventoryModule.adjustStock(warehouseId, item.product_id, -item.qty, 'Issue', event.user_id, item.bin_id, idempotencyKey);
           }
 
           return {
@@ -165,26 +169,32 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
             productId: string;
             qtyChange: number;
             binId?: string;
+            compIndex: number;
           }> = [];
 
           try {
-            for (const item of items) {
+            for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
+              const item = items[itemIdx];
               // Deduct from source
-              await InventoryModule.adjustStock(srcWarehouseId, item.product_id, -item.qty, 'Transfer', event.user_id, item.src_bin_id);
+              const srcIdempotencyKey = `wh-trf-${event.eventId}-src-${srcWarehouseId}-${item.product_id}-${item.src_bin_id || 'nobin'}-${itemIdx}`;
+              await InventoryModule.adjustStock(srcWarehouseId, item.product_id, -item.qty, 'Transfer', event.user_id, item.src_bin_id, srcIdempotencyKey);
               completedAdjustments.push({
                 warehouseId: srcWarehouseId,
                 productId: item.product_id,
                 qtyChange: item.qty, // Compensating action would be +item.qty
-                binId: item.src_bin_id
+                binId: item.src_bin_id,
+                compIndex: itemIdx * 2
               });
 
               // Add to destination
-              await InventoryModule.adjustStock(destWarehouseId, item.product_id, item.qty, 'Transfer', event.user_id, item.dest_bin_id);
+              const destIdempotencyKey = `wh-trf-${event.eventId}-dest-${destWarehouseId}-${item.product_id}-${item.dest_bin_id || 'nobin'}-${itemIdx}`;
+              await InventoryModule.adjustStock(destWarehouseId, item.product_id, item.qty, 'Transfer', event.user_id, item.dest_bin_id, destIdempotencyKey);
               completedAdjustments.push({
                 warehouseId: destWarehouseId,
                 productId: item.product_id,
                 qtyChange: -item.qty, // Compensating action would be -item.qty
-                binId: item.dest_bin_id
+                binId: item.dest_bin_id,
+                compIndex: itemIdx * 2 + 1
               });
             }
           } catch (transferErr: any) {
@@ -193,7 +203,8 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
             for (let i = completedAdjustments.length - 1; i >= 0; i--) {
               const comp = completedAdjustments[i];
               try {
-                await InventoryModule.adjustStock(comp.warehouseId, comp.productId, comp.qtyChange, 'Transfer', event.user_id, comp.binId);
+                const compIdempotencyKey = `wh-trf-comp-${event.eventId}-${comp.compIndex}-${comp.warehouseId}-${comp.productId}-${comp.binId || 'nobin'}`;
+                await InventoryModule.adjustStock(comp.warehouseId, comp.productId, comp.qtyChange, 'Transfer', event.user_id, comp.binId, compIdempotencyKey);
               } catch (rollbackErr: any) {
                 console.error(`Transfer compensation rollback failed for ${comp.productId} in ${comp.warehouseId}:`, rollbackErr);
                 compensationFailures.push(`${comp.productId}@${comp.warehouseId}`);
@@ -234,7 +245,8 @@ export class WarehouseBusinessEngine implements BusinessEngineContract {
             };
           }
 
-          await InventoryModule.adjustStock(warehouseId, productId, diff, 'Adjustment', event.user_id, binId);
+          const idempotencyKey = `wh-count-adj-${event.eventId}-${warehouseId}-${productId}-${binId || 'nobin'}`;
+          await InventoryModule.adjustStock(warehouseId, productId, diff, 'Adjustment', event.user_id, binId, idempotencyKey);
 
           return {
             success: true,

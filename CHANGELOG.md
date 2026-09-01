@@ -4,6 +4,40 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Item 2 (P2): Production Empty Cache Protection for Inventory Defaults
+**Date:** 2026-09-01
+**Files Changed:** `src/db/inventory.ts`, `src/db/inventory_empty_prod.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Zero-Demo Fallback in Production (`src/db/inventory.ts`)**:
+  - Implemented `isDevOrTest()` check in `src/db/inventory.ts` to prevent fallback to `DEFAULT_WAREHOUSES`, `DEFAULT_PRODUCTS`, `DEFAULT_MOVEMENTS`, or demo `defaultLedger` fixtures when localStorage/IndexedDB cache is empty in production mode (`NODE_ENV === 'production'` or `MODE === 'production'`).
+  - Updated `getWarehouses`, `saveWarehouses`, `getProducts`, `saveProducts`, `getStockMovements`, `saveStockMovements`, `getInventoryLedger`, and `saveInventoryLedger` to safely fallback to empty arrays `[]` in production.
+  - Retained demo fixtures exclusively for development and automated test environments (`isDevOrTest() === true`), preserving existing test suite stability and onboarding flows.
+- **Verification & Tests**:
+  - Created test suite `src/db/inventory_empty_prod.test.ts` verifying that `NODE_ENV=production` returns empty arrays `[]` while `NODE_ENV=test` returns fixtures.
+  - Scoped tests: 16/16 passed across `inventory_empty_prod.test.ts`, `companies_empty_prod.test.ts`, `inventory_migration.test.ts`, `inventory_doctypes.test.ts`, and `enterprise_idempotency_adjust_stock.test.ts`.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
+## Item 1 (P1): Deterministic Idempotency Keys Across All Live adjustStock Enterprise Callers
+**Date:** 2026-09-01
+**Files Changed:** `src/db/inventory.ts`, `src/lib/enterprise/purchasing_engine.ts`, `src/lib/enterprise/sales_engine.ts`, `src/lib/enterprise/warehouse_engine.ts`, `src/enterprise_idempotency_adjust_stock.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Atomic Transaction-Level Idempotency Protection (`src/db/inventory.ts`)**:
+  - Enhanced `InventoryModule.adjustStock` to inspect `tx.get(movementDocRef)` inside Firestore `runTransaction` when an `idempotencyKey` is provided. If the movement document exists, the transaction exits early returning `{ success: true, balance: existingBalance, movementId, idempotencyKey }` without re-applying balance mutations or duplicating movements.
+- **Deterministic Idempotency Key Injection Across All Enterprise Engines**:
+  - `PurchasingBusinessEngine` (`src/lib/enterprise/purchasing_engine.ts`): PO Goods Receipt passes `po-rcv-${po.id}-${item.productId}-${itemIdx}`.
+  - `SalesBusinessEngine` (`src/lib/enterprise/sales_engine.ts`): Invoice issue passes `sales-inv-${invoice.id}-${item.productId}-${itemIdx}`; POS checkout passes `pos-${posTx.id}-${item.productId}-${itemIdx}`.
+  - `WarehouseBusinessEngine` (`src/lib/enterprise/warehouse_engine.ts`): `STOCK_RECEIVED` passes `wh-rcv-${event.eventId}-${warehouseId}-${item.product_id}-${item.bin_id || 'nobin'}-${itemIdx}`; `STOCK_ISSUED` passes `wh-iss-${event.eventId}-${warehouseId}-${item.product_id}-${item.bin_id || 'nobin'}-${itemIdx}`; `STOCK_TRANSFERRED` passes `wh-trf-${event.eventId}-src-...` and `wh-trf-${event.eventId}-dest-...` with deterministic compensation keys; `INVENTORY_COUNT_ADJUSTED` passes `wh-count-adj-${event.eventId}-${warehouseId}-${productId}-${binId || 'nobin'}`.
+- **Verification & Tests**:
+  - Created integration test suite `src/enterprise_idempotency_adjust_stock.test.ts` verifying duplicate prevention across Warehouse, Purchasing, and Sales engines.
+  - Scoped tests: 9/9 passed (`src/enterprise_idempotency_adjust_stock.test.ts` and `src/adjust_stock_atomic.test.ts`).
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
 ## Phase P2 (Fleet Engine): Firestore Synchronization & Cloud-First Write-Ordering
 **Date:** 2026-08-26
 **Files Changed:** `src/lib/enterprise/fleet_engine.ts`, `CHANGELOG.md`

@@ -288,8 +288,18 @@ export class SalesBusinessEngine {
     const warehouses = InventoryModule.getWarehouses();
     const activeWh = data.warehouseId || warehouses[0]?.id;
     if (activeWh) {
-      for (const item of data.items) {
-        await InventoryModule.adjustStock(activeWh, item.productId, -item.qty, 'Issue', operatorId);
+      for (let itemIdx = 0; itemIdx < data.items.length; itemIdx++) {
+        const item = data.items[itemIdx];
+        const idempotencyKey = `sales-inv-${newInvoice.id}-${item.productId}-${itemIdx}`;
+        await InventoryModule.adjustStock(
+          activeWh,
+          item.productId,
+          -item.qty,
+          'Issue',
+          operatorId,
+          undefined,
+          idempotencyKey
+        );
       }
     }
 
@@ -378,8 +388,18 @@ export class SalesBusinessEngine {
     const warehouses = InventoryModule.getWarehouses();
     const activeWh = data.warehouseId || warehouses[0]?.id;
     if (activeWh) {
-      for (const item of data.items) {
-        await InventoryModule.adjustStock(activeWh, item.productId, -item.qty, 'Issue', operatorId);
+      for (let itemIdx = 0; itemIdx < data.items.length; itemIdx++) {
+        const item = data.items[itemIdx];
+        const idempotencyKey = `sales-pos-${saleRecord.id}-${item.productId}-${itemIdx}`;
+        await InventoryModule.adjustStock(
+          activeWh,
+          item.productId,
+          -item.qty,
+          'Issue',
+          operatorId,
+          undefined,
+          idempotencyKey
+        );
       }
     }
 
