@@ -4,21 +4,6 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
-## Phase 4: Fleet Screen + Sidebar Permission Gate Widening
-**Date:** 2026-08-30
-**Files Changed:** `src/components/Layout.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_permissions.test.ts`, `CHANGELOG.md`
-**Summary:**
-- **Sidebar Permission OR Gate (`src/components/Layout.tsx`)**:
-  - Expanded `menuItems` entry for `fleet` to accept the complete set of fleet permissions: `['manage_fleet', 'create_trip', 'approve_trip', 'dispatch_trip', 'reassign_vehicle', 'execute_breakdown_decision', 'create_emergency_trip', 'manage_vehicle_constraints', 'execute_trip_tasks']`.
-  - Extended `getFilteredMenuItems` to support array-based permissions with `OR` evaluation (`item.permission.some(...)`).
-- **Fleet Screen Permission Gate Widening & Hooks Order Fix (`src/pages/FleetManagement.tsx`)**:
-  - Introduced `hasAnyFleetPermission` checking for any of the 9 fleet sub-permissions or administrative roles.
-  - Removed premature early return that was executing ahead of `loadData` / `useEffect` hooks.
-  - Positioned the widened unauthorized access screen gate before the main JSX return so hooks execute unconditionally.
-- **Verification**:
-  - Tests: 13/13 passed across `src/fleet_permissions.test.ts`, `src/fleet_tab_visibility.test.ts`, and `src/components/__tests__/Layout.test.tsx`.
-  - Full applet compilation: Succeeded (`compile_applet`).
-
 ## Phase P2 (Fleet Engine): Firestore Synchronization & Cloud-First Write-Ordering
 **Date:** 2026-08-26
 **Files Changed:** `src/lib/enterprise/fleet_engine.ts`, `CHANGELOG.md`
@@ -5159,6 +5144,86 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 - Standardized both scalar and array permission checks to strictly adhere to deny-by-default (`Boolean(perms[key])`).
 - Verified that both `src/system_admin_navigation.test.ts` and `src/fleet_permissions.test.ts` pass with 0 edits to test assertion files.
 - Verification: 10/10 tests passed across both suites; `tsc --noEmit` (0 errors); applet compiled successfully.
+
+---
+
+## Item 3 (P1): Eliminate Un-Awaited syncWrite Calls & Make getAccounts Async
+**Date:** 2026-09-01
+**Files Changed:** `src/lib/enterprise/accounting_engine.ts`, `src/pages/Accounting.tsx`, `src/purchasing_migration.test.ts`, `src/enterprise.test.ts`, `src/stabilization.test.ts`, `src/item3_coa_async.test.ts`, `CHANGELOG.md`
+**Summary:**
+- Converted `AccountingBusinessEngine.getAccounts()` to asynchronous `Promise<GLAccount[]>` and properly invoked `initializeChartOfAccountsAsync()` to persist newly seeded accounts.
+- Removed floating un-awaited `syncWriteWithOfflineFallback(...).catch(...)` calls from synchronous `initializeChartOfAccounts` to ensure strict offline-queue/persistence consistency.
+- Updated all call sites in `AccountingBusinessEngine`, UI pages (`src/pages/Accounting.tsx`), and tests to `await AccountingBusinessEngine.getAccounts()`.
+- Created `src/item3_coa_async.test.ts` to assert that zero un-awaited fire-and-forget sync writes occur and async COA initialization behaves correctly.
+- Verification: 47/47 tests passed across all 5 test files; `tsc --noEmit` passed (0 errors); applet compiled successfully.
+
+---
+
+## Phase 4: Fleet Screen + Sidebar Permission Gate Widening
+**Date:** 2026-08-30
+**Files Changed:** `src/components/Layout.tsx`, `src/pages/FleetManagement.tsx`, `src/fleet_permissions.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Sidebar Permission OR Gate (`src/components/Layout.tsx`)**:
+  - Expanded `menuItems` entry for `fleet` to accept the complete set of fleet permissions: `['manage_fleet', 'create_trip', 'approve_trip', 'dispatch_trip', 'reassign_vehicle', 'execute_breakdown_decision', 'create_emergency_trip', 'manage_vehicle_constraints', 'execute_trip_tasks']`.
+  - Extended `getFilteredMenuItems` to support array-based permissions with `OR` evaluation (`item.permission.some(...)`).
+- **Fleet Screen Permission Gate Widening & Hooks Order Fix (`src/pages/FleetManagement.tsx`)**:
+  - Introduced `hasAnyFleetPermission` checking for any of the 9 fleet sub-permissions or administrative roles.
+  - Removed premature early return that was executing ahead of `loadData` / `useEffect` hooks.
+  - Positioned the widened unauthorized access screen gate before the main JSX return so hooks execute unconditionally.
+- **Verification**:
+  - Tests: 13/13 passed across `src/fleet_permissions.test.ts`, `src/fleet_tab_visibility.test.ts`, and `src/components/__tests__/Layout.test.tsx`.
+  - Full applet compilation: Succeeded (`compile_applet`).
+*Note:* system_admin_navigation briefly failed due to the gate change and was restored by the Layout permissions merge (Item 2 of the prior prompt).
+
+---
+
+## Item 4: CRM Module Encapsulation & Raw Firestore Write Migration
+**Date:** 2026-09-01
+**Files Changed:** `src/db/leads.ts`, `src/pages/CRM.tsx`, `src/db/leads.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Encapsulated CRM Data Operations (`src/db/leads.ts`)**:
+  - Implemented `LeadsModule` exposing `getLeads`, `saveLeadAsync`, `addInteractionAsync`, and `updateLeadStageAsync`.
+  - Enforced `syncWriteWithOfflineFallback` write ordering before persisting or mutating local `StorageEngine` records, with automatic rollback upon cloud write failure.
+- **Refactored CRM Screen (`src/pages/CRM.tsx`)**:
+  - Eliminated all direct `dbSetDoc` calls in `handleAddLead`, `handleAddInteraction`, and `changeLeadStage`.
+  - Added async error handling with clear user-facing toasts and loading / disabled state indicators (`isSubmittingLead`, `isSubmittingInteraction`, `updatingStageLeadId`) on all submit and pipeline stage buttons to prevent double submissions.
+- **Automated Tests & Verification**:
+  - Added unit test suite `src/db/leads.test.ts` verifying safe writes, offline rollback on cloud rejection, interaction logging, and stage transitions.
+  - Tests: 4/4 passed in `src/db/leads.test.ts`.
+  - Verified 0 remaining `dbSetDoc` / `dbDeleteDoc` calls in `src/pages/*`.
+  - Applet compilation: Succeeded (`compile_applet`).
+
+---
+
+## Item 5: Prevent DEFAULT_COMPANIES in Production & Add Hydration Status Checks
+**Date:** 2026-09-01
+**Files Changed:** `src/db/companies.ts`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/db/companies_empty_prod.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Environment-Aware Default Companies Fallback (`src/db/companies.ts`)**:
+  - Restricted `DEFAULT_COMPANIES` fallback strictly to development/test environments (`NODE_ENV !== 'production'` and `!import.meta.env.PROD`).
+  - Brand-new production clients with empty local storage and empty IndexedDB now evaluate to `[]` instead of presenting demo seed companies as real tenant organizations.
+  - Implemented `isHydrated()`, `getHydrationStatus()` ('loading' | 'empty' | 'ready'), and `ensureHydrated()` asynchronous loader on `CompaniesModule`.
+- **UI Hydration Loading & Skeleton States (`src/components/settings/UnifiedAccessControlCenter.tsx`)**:
+  - Integrated `isLoadingCompanies` state using `CompaniesModule.isHydrated()` and `ensureHydrated()`.
+  - Added skeleton placeholder animation cards during initial hydration to prevent layout shift or flashing fake companies.
+  - Cleanly displays the zero-state ("لم يتم العثور على شركات مطابقة" / "No companies found") when storage is genuinely empty.
+- **Automated Tests & Verification**:
+  - Created `src/db/companies_empty_prod.test.ts` testing production empty fallback, dev fallback, hydration status lifecycle, and persistent tenant creation.
+  - Scoped tests: 4/4 passed in `src/db/companies_empty_prod.test.ts`, 28/28 passed across related suites.
+  - Applet compilation: Succeeded (`compile_applet`).
+
+---
+
+## Item 6: Inventory Balances Collection Path & Legacy Data Status Note
+**Date:** 2026-09-01
+**Files Changed:** `CHANGELOG.md`
+**Summary:**
+- **Inventory Balances Path Audit & Status Assessment**:
+  - Confirmed that all inventory balance writes, reads, and batch mutations in `src/db/inventory.ts` strictly use the canonical hierarchical Firestore path: `inventory_balances/{companyId}/items/{docId}`.
+  - Confirmed that `firestore.rules` enforces company-isolated access strictly on `match /inventory_balances/{companyId}/items/{docId}`.
+  - Conducted full codebase audit verifying zero occurrences of legacy flat `inventory_balances_${companyId}` root collections in production and development code.
+  - **Status of Legacy Data**: No active production or staging deployments contain legacy flat `inventory_balances_${companyId}` collections; the hierarchical subcollection model is active and uniformly implemented across all tenants. If any legacy data from pre-v1 prototypes is ever identified on remote clusters, a dedicated one-shot admin migration script will be scheduled upon explicit confirmation.
+
 
 
 

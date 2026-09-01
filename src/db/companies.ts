@@ -1,13 +1,100 @@
 import { Company } from '../types';
-import { StorageEngine } from './storage';
+import { StorageEngine, loadFromIDB } from './storage';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_COMPANIES } from './defaults';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
 
+export type CompanyHydrationStatus = 'loading' | 'empty' | 'ready';
+
+function isDevOrTest(): boolean {
+  // If NODE_ENV is explicitly production or import.meta.env.PROD is true, it is production (not dev/test)
+  if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') {
+    return false;
+  }
+  if (typeof (import.meta as any) !== 'undefined' && (import.meta as any).env && (import.meta as any).env.PROD === true) {
+    return false;
+  }
+
+  // Otherwise check if explicitly dev or test
+  if (typeof (import.meta as any) !== 'undefined' && (import.meta as any).env) {
+    if ((import.meta as any).env.DEV) return true;
+    if ((import.meta as any).env.MODE === 'test' || (import.meta as any).env.MODE === 'development') return true;
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || process.env.VITEST) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export class CompaniesModule {
+  private static _isHydrated: boolean = false;
+  private static _hydratePromise: Promise<Company[]> | null = null;
+
+  static isHydrated(): boolean {
+    if (StorageEngine.cache['companies'] !== undefined) return true;
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('custody_companies') !== null) return true;
+    return this._isHydrated;
+  }
+
+  static getHydrationStatus(): CompanyHydrationStatus {
+    const companies = this.getCompanies();
+    if (!this.isHydrated() && companies.length === 0) {
+      return 'loading';
+    }
+    return companies.length > 0 ? 'ready' : 'empty';
+  }
+
+  static async ensureHydrated(): Promise<Company[]> {
+    if (this._hydratePromise) return this._hydratePromise;
+
+    this._hydratePromise = (async () => {
+      // If already in cache
+      if (StorageEngine.cache['companies'] !== undefined) {
+        this._isHydrated = true;
+        return StorageEngine.cache['companies'];
+      }
+
+      // Check localStorage first
+      if (typeof localStorage !== 'undefined') {
+        const local = localStorage.getItem('custody_companies');
+        if (local !== null) {
+          try {
+            const parsed = JSON.parse(local);
+            StorageEngine.cache['companies'] = parsed;
+            this._isHydrated = true;
+            return parsed;
+          } catch {}
+        }
+      }
+
+      // Load from IDB
+      if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') {
+        try {
+          const idbVal = await loadFromIDB('companies');
+          if (idbVal !== undefined && idbVal !== null) {
+            StorageEngine.cache['companies'] = idbVal;
+            this._isHydrated = true;
+            return idbVal;
+          }
+        } catch {}
+      }
+
+      // If nothing in local or IDB
+      const fallback = isDevOrTest() ? DEFAULT_COMPANIES : [];
+      StorageEngine.cache['companies'] = fallback;
+      this._isHydrated = true;
+      return fallback;
+    })();
+
+    return this._hydratePromise;
+  }
+
   static getCompanies(): Company[] {
-    return StorageEngine.getStored<Company[]>('companies', DEFAULT_COMPANIES);
+    const fallback = isDevOrTest() ? DEFAULT_COMPANIES : [];
+    return StorageEngine.getStored<Company[]>('companies', fallback);
   }
 
   static async saveCompanies(companies: Company[]): Promise<{ success: boolean; error?: string }> {

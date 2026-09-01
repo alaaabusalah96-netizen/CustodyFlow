@@ -2,40 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, Plus, Phone, Mail, FileText, Check, X, 
   Search, Award, DollarSign, Calendar, MessageSquare, 
-  Clock, ArrowRight, TrendingUp, AlertCircle
+  Clock, ArrowRight, TrendingUp, AlertCircle, Loader2
 } from 'lucide-react';
 import { StorageEngine } from '../db/storage';
 import { UsersModule } from '../db/users';
 import { CompaniesModule } from '../db/companies';
 import { LogsModule } from '../db/logs';
-import { dbSetDoc } from '../firebase';
+import { LeadsModule, Lead, LeadInteraction } from '../db/leads';
 import { SalesBusinessEngine } from '../lib/enterprise/sales_engine';
+
+export type { Lead, LeadInteraction };
 
 interface CRMProps {
   language: 'ar' | 'en';
   theme: 'light' | 'dark';
-}
-
-export interface Lead {
-  id: string;
-  company_id: string;
-  name: string;
-  phone: string;
-  email: string;
-  source: string; // e.g., 'Social Media' | 'Direct Visit' | 'Website'
-  status: 'PROSPECT' | 'CONTACTED' | 'QUALIFIED' | 'PROPOSAL_SENT' | 'WON' | 'LOST';
-  dealValue: number;
-  assignedTo: string;
-  notes: string;
-  interactions: LeadInteraction[];
-  createdAt: string;
-}
-
-export interface LeadInteraction {
-  id: string;
-  type: 'CALL' | 'MEETING' | 'EMAIL';
-  summary: string;
-  date: string;
 }
 
 export default function CRM({ language, theme }: CRMProps) {
@@ -51,6 +31,11 @@ export default function CRM({ language, theme }: CRMProps) {
   // Modals & form states
   const [showAddLead, setShowAddLead] = useState(false);
   const [viewLeadDetails, setViewLeadDetails] = useState<Lead | null>(null);
+
+  // Submitting States
+  const [isSubmittingLead, setIsSubmittingLead] = useState(false);
+  const [isSubmittingInteraction, setIsSubmittingInteraction] = useState(false);
+  const [updatingStageLeadId, setUpdatingStageLeadId] = useState<string | null>(null);
 
   // Form States - Lead
   const [leadForm, setLeadForm] = useState({
@@ -129,7 +114,7 @@ export default function CRM({ language, theme }: CRMProps) {
   const wonValue = leads.filter(l => l.status === 'WON').reduce((sum, l) => sum + l.dealValue, 0);
 
   // Submit Lead
-  const handleAddLead = (e: React.FormEvent) => {
+  const handleAddLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId) {
       showToast('error', isRtl ? 'يرجى اختيار شركة أولاً' : 'Please select a company first');
@@ -140,128 +125,138 @@ export default function CRM({ language, theme }: CRMProps) {
       return;
     }
 
-    const allLeads = StorageEngine.getStored<Lead[]>('leads', []);
-    const newLead: Lead = {
-      id: `lead-${Date.now()}`,
-      company_id: companyId,
-      name: leadForm.name,
-      phone: leadForm.phone,
-      email: leadForm.email,
-      source: leadForm.source,
-      status: 'PROSPECT',
-      dealValue: Number(leadForm.dealValue) || 0,
-      assignedTo: leadForm.assignedTo || activeUser?.full_name || 'System Client',
-      notes: leadForm.notes,
-      interactions: [],
-      createdAt: new Date().toISOString()
-    };
+    setIsSubmittingLead(true);
+    try {
+      const newLead: Lead = {
+        id: `lead-${Date.now()}`,
+        company_id: companyId,
+        name: leadForm.name,
+        phone: leadForm.phone,
+        email: leadForm.email,
+        source: leadForm.source,
+        status: 'PROSPECT',
+        dealValue: Number(leadForm.dealValue) || 0,
+        assignedTo: leadForm.assignedTo || activeUser?.full_name || 'System Client',
+        notes: leadForm.notes,
+        interactions: [],
+        createdAt: new Date().toISOString()
+      };
 
-    StorageEngine.setStored('leads', [...allLeads, newLead]);
-    dbSetDoc('leads', newLead.id, newLead);
+      const res = await LeadsModule.saveLeadAsync(newLead);
+      if (!res.success) {
+        showToast('error', res.error || (isRtl ? 'فشل حفظ الفرصة في قاعدة البيانات' : 'Failed to save lead to database'));
+        return;
+      }
 
-    // Logs
-    LogsModule.addLog(
-      activeUser?.id || 'system',
-      activeUser?.full_name || 'System',
-      isRtl ? 'تسجيل فرصة بيعية جديدة' : 'Register New CRM Lead',
-      `Registered prospect ${newLead.name} with expected value ${newLead.dealValue.toLocaleString()} EGP`
-    );
+      // Logs
+      LogsModule.addLog(
+        activeUser?.id || 'system',
+        activeUser?.full_name || 'System',
+        isRtl ? 'تسجيل فرصة بيعية جديدة' : 'Register New CRM Lead',
+        `Registered prospect ${newLead.name} with expected value ${newLead.dealValue.toLocaleString()} EGP`
+      );
 
-    showToast('success', isRtl ? 'تم تسجيل الفرصة البيعية بنجاح' : 'CRM lead registered successfully');
-    setLeadForm({ name: '', phone: '', email: '', source: 'Social Media', dealValue: 0, notes: '', assignedTo: '' });
-    setShowAddLead(false);
-    loadLeads();
+      showToast('success', isRtl ? 'تم تسجيل الفرصة البيعية بنجاح' : 'CRM lead registered successfully');
+      setLeadForm({ name: '', phone: '', email: '', source: 'Social Media', dealValue: 0, notes: '', assignedTo: '' });
+      setShowAddLead(false);
+      loadLeads();
+    } catch (err: any) {
+      showToast('error', err?.message || (isRtl ? 'حدث خطأ غير متوقع أثناء الحفظ' : 'Unexpected error during save'));
+    } finally {
+      setIsSubmittingLead(false);
+    }
   };
 
   // Add Interaction Log
-  const handleAddInteraction = (e: React.FormEvent) => {
+  const handleAddInteraction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!viewLeadDetails || !interactionForm.summary) return;
 
-    const newInt: LeadInteraction = {
-      id: `int-${Date.now()}`,
-      type: interactionForm.type,
-      summary: interactionForm.summary,
-      date: interactionForm.date
-    };
+    setIsSubmittingInteraction(true);
+    try {
+      const newInt: LeadInteraction = {
+        id: `int-${Date.now()}`,
+        type: interactionForm.type,
+        summary: interactionForm.summary,
+        date: interactionForm.date
+      };
 
-    const updatedLeads = leads.map(l => {
-      if (l.id === viewLeadDetails.id) {
-        const list = l.interactions || [];
-        return { ...l, interactions: [...list, newInt] };
+      const res = await LeadsModule.addInteractionAsync(viewLeadDetails.id, newInt);
+      if (!res.success) {
+        showToast('error', res.error || (isRtl ? 'فشل تسجيل النشاط في قاعدة البيانات' : 'Failed to log interaction to database'));
+        return;
       }
-      return l;
-    });
 
-    const allLeads = StorageEngine.getStored<Lead[]>('leads', []);
-    const updatedAllLeads = allLeads.map(l => {
-      if (l.id === viewLeadDetails.id) {
-        return { ...l, interactions: [...(l.interactions || []), newInt] };
+      showToast('success', isRtl ? 'تم إضافة سجل التواصل والنشاط' : 'Interaction logged successfully');
+      setInteractionForm({ type: 'CALL', summary: '', date: new Date().toISOString().split('T')[0] });
+      
+      // Update active viewed lead
+      if (res.lead) {
+        setViewLeadDetails(res.lead);
       }
-      return l;
-    });
-
-    StorageEngine.setStored('leads', updatedAllLeads);
-    dbSetDoc('leads', viewLeadDetails.id, { ...viewLeadDetails, interactions: [...(viewLeadDetails.interactions || []), newInt] });
-
-    showToast('success', isRtl ? 'تم إضافة سجل التواصل والنشاط' : 'Interaction logged successfully');
-    setInteractionForm({ type: 'CALL', summary: '', date: new Date().toISOString().split('T')[0] });
-    
-    // Update active viewed lead
-    setViewLeadDetails({ ...viewLeadDetails, interactions: [...(viewLeadDetails.interactions || []), newInt] });
-    loadLeads();
+      loadLeads();
+    } catch (err: any) {
+      showToast('error', err?.message || (isRtl ? 'حدث خطأ أثناء تسجيل النشاط' : 'Unexpected error logging interaction'));
+    } finally {
+      setIsSubmittingInteraction(false);
+    }
   };
 
   // Change Lead pipeline Stage
   const changeLeadStage = async (leadId: string, nextStatus: Lead['status']) => {
-    const allLeads = StorageEngine.getStored<Lead[]>('leads', []);
-    const updated = allLeads.map(l => {
-      if (l.id === leadId) {
-        return { ...l, status: nextStatus };
-      }
-      return l;
-    });
-    StorageEngine.setStored('leads', updated);
-    
-    const leadObj = allLeads.find(l => l.id === leadId);
-    if (leadObj) {
-      dbSetDoc('leads', leadId, { ...leadObj, status: nextStatus });
-      LogsModule.addLog(
-        activeUser?.id || 'system',
-        activeUser?.full_name || 'System',
-        isRtl ? 'تحديث حالة العميل CRM' : 'Update CRM Lead Status',
-        `Moved prospect ${leadObj.name} to stage ${nextStatus}`
+    if (updatingStageLeadId) return; // Prevent concurrent stage modifications
+
+    setUpdatingStageLeadId(leadId);
+    try {
+      const res = await LeadsModule.updateLeadStageAsync(
+        leadId,
+        nextStatus,
+        activeUser?.id,
+        activeUser?.full_name,
+        isRtl
       );
 
-      // Auto-convert Lead to Customer & Sales Invoice on Closed Won
-      if (nextStatus === 'WON') {
-        try {
-          await SalesBusinessEngine.convertLeadToCustomerAndInvoice(
-            companyId,
-            activeUser?.id || 'system',
-            {
-              leadId: leadObj.id,
-              leadName: leadObj.name,
-              phone: leadObj.phone,
-              email: leadObj.email,
-              dealValue: leadObj.dealValue
-            }
-          );
-          showToast(
-            'success',
-            isRtl
-              ? 'تم الفوز بالصفقة وتحويل الفرصة إلى عميل دائم وإصدار فاتورة المبيعات القيد المحاسبي!'
-              : 'Deal won! Lead converted to permanent customer & sales invoice issued.'
-          );
-        } catch (err) {
-          console.error('Error converting lead to customer:', err);
-        }
-      } else {
-        showToast('success', isRtl ? 'تم ترقية صفقة العميل بالمرحلة' : 'Lead stage updated successfully');
+      if (!res.success) {
+        showToast('error', res.error || (isRtl ? 'فشل تحديث حالة الفرصة البيعية' : 'Failed to update lead status'));
+        return;
       }
-    }
 
-    loadLeads();
+      const leadObj = res.lead;
+      if (leadObj) {
+        // Auto-convert Lead to Customer & Sales Invoice on Closed Won
+        if (nextStatus === 'WON') {
+          try {
+            await SalesBusinessEngine.convertLeadToCustomerAndInvoice(
+              companyId,
+              activeUser?.id || 'system',
+              {
+                leadId: leadObj.id,
+                leadName: leadObj.name,
+                phone: leadObj.phone,
+                email: leadObj.email,
+                dealValue: leadObj.dealValue
+              }
+            );
+            showToast(
+              'success',
+              isRtl
+                ? 'تم الفوز بالصفقة وتحويل الفرصة إلى عميل دائم وإصدار فاتورة المبيعات القيد المحاسبي!'
+                : 'Deal won! Lead converted to permanent customer & sales invoice issued.'
+            );
+          } catch (err) {
+            console.error('Error converting lead to customer:', err);
+          }
+        } else {
+          showToast('success', isRtl ? 'تم ترقية صفقة العميل بالمرحلة' : 'Lead stage updated successfully');
+        }
+      }
+
+      loadLeads();
+    } catch (err: any) {
+      showToast('error', err?.message || (isRtl ? 'حدث خطأ أثناء تغيير المرحلة' : 'Unexpected error changing stage'));
+    } finally {
+      setUpdatingStageLeadId(null);
+    }
   };
 
   // Search filter
@@ -422,14 +417,20 @@ export default function CRM({ language, theme }: CRMProps) {
                                       };
                                       changeLeadStage(lead.id, nextMap[stage.id]);
                                     }}
-                                    className="p-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-[9px] font-bold"
+                                    disabled={updatingStageLeadId === lead.id}
+                                    className="p-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-[9px] font-bold"
                                     title={isRtl ? 'ترقية للمرحلة التالية' : 'Advance'}
                                   >
-                                    <ArrowRight size={10} />
+                                    {updatingStageLeadId === lead.id ? (
+                                      <Loader2 size={10} className="animate-spin" />
+                                    ) : (
+                                      <ArrowRight size={10} />
+                                    )}
                                   </button>
                                   <button
                                     onClick={() => changeLeadStage(lead.id, 'LOST')}
-                                    className="p-1 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-[9px]"
+                                    disabled={updatingStageLeadId === lead.id}
+                                    className="p-1 bg-rose-50 text-rose-600 hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-[9px]"
                                     title={isRtl ? 'خسارة الصفقة' : 'Mark Lost'}
                                   >
                                     <X size={10} />
@@ -600,15 +601,18 @@ export default function CRM({ language, theme }: CRMProps) {
                 <button
                   type="button"
                   onClick={() => setShowAddLead(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl"
+                  disabled={isSubmittingLead}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-800 text-xs font-bold rounded-xl"
                 >
                   {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl"
+                  disabled={isSubmittingLead}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center gap-1.5"
                 >
-                  {isRtl ? 'حفظ الفرصة البيعية' : 'Save CRM Lead'}
+                  {isSubmittingLead && <Loader2 size={12} className="animate-spin" />}
+                  <span>{isRtl ? 'حفظ الفرصة البيعية' : 'Save CRM Lead'}</span>
                 </button>
               </div>
             </form>
@@ -668,9 +672,11 @@ export default function CRM({ language, theme }: CRMProps) {
               </div>
               <button
                 type="submit"
-                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg cursor-pointer"
+                disabled={isSubmittingInteraction}
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg cursor-pointer flex items-center gap-1.5"
               >
-                {isRtl ? 'إدراج النشاط' : 'Submit Activity'}
+                {isSubmittingInteraction && <Loader2 size={12} className="animate-spin" />}
+                <span>{isRtl ? 'إدراج النشاط' : 'Submit Activity'}</span>
               </button>
             </form>
 

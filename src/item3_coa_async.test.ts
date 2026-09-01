@@ -49,7 +49,7 @@ describe('Item 3 (P1): Chart of Accounts async init & zero un-awaited sync write
       'Petty Cash Disbursement',
       [
         { accountCode: '110101', debit: 100, credit: 0 },
-        { accountCode: '110102', debit: 0, credit: 100 }
+        { accountCode: '110201', debit: 0, credit: 100 }
       ]
     );
 

@@ -255,6 +255,17 @@ export default function UnifiedAccessControlCenter({
 
   // Available Companies list
   const [companiesRefreshTrigger, setCompaniesRefreshTrigger] = useState(0);
+  const [isLoadingCompanies, setIsLoadingCompanies] = useState(() => !CompaniesModule.isHydrated());
+
+  useEffect(() => {
+    if (!CompaniesModule.isHydrated()) {
+      CompaniesModule.ensureHydrated().then(() => {
+        setIsLoadingCompanies(false);
+        setCompaniesRefreshTrigger(t => t + 1);
+      });
+    }
+  }, []);
+
   const allCompanies = useMemo(() => {
     return CompaniesModule.getCompanies();
   }, [companiesRefreshTrigger]);
@@ -2372,8 +2383,33 @@ export default function UnifiedAccessControlCenter({
           </div>
 
           {/* Companies Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {sortedAndFilteredCompanies.map((comp) => {
+          {isLoadingCompanies ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 animate-pulse">
+              {[1, 2, 3].map((idx) => (
+                <div
+                  key={idx}
+                  className={`p-4 rounded-2xl border h-48 flex flex-col justify-between ${
+                    theme === 'dark' ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-800" />
+                    <div className="space-y-2 flex-1">
+                      <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-2/3" />
+                      <div className="h-3 bg-slate-100 dark:bg-slate-800/60 rounded w-1/3" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div className="h-8 bg-slate-100 dark:bg-slate-800/40 rounded-xl" />
+                    <div className="h-8 bg-slate-100 dark:bg-slate-800/40 rounded-xl" />
+                    <div className="h-8 bg-slate-100 dark:bg-slate-800/40 rounded-xl" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {sortedAndFilteredCompanies.map((comp) => {
               const isCurrent = comp.id === effectiveCompanyId;
               const companyUsersCount = users.filter(u => u.company_id === comp.id && u.is_active !== false).length;
               const companyUnitsCount = OrganizationEngine.getOrganizationUnits(comp.id).length;
@@ -2543,9 +2579,10 @@ export default function UnifiedAccessControlCenter({
                 </div>
               );
             })}
-          </div>
+            </div>
+          )}
 
-          {sortedAndFilteredCompanies.length === 0 && (
+          {!isLoadingCompanies && sortedAndFilteredCompanies.length === 0 && (
             <div className={`p-8 rounded-2xl border text-center space-y-2 ${
               theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
             }`}>
