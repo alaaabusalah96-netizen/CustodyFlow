@@ -72,6 +72,7 @@ import { CompaniesModule } from '../../db/companies';
 import { OrganizationEngine } from '../../db/organizationEngine';
 import { OrganizationScopeEngine } from '../../db/organizationScopeEngine';
 import { DEFAULT_PERMISSIONS, DEFAULT_ROLES } from '../../db/defaults';
+import { deriveScopeIdsFromOrgUnit } from '../../pages/Settings';
 import OrgUnitTreeSelect from '../OrgUnitTreeSelect';
 import OrganizationTreeManager from '../OrganizationTreeManager';
 
@@ -1724,7 +1725,22 @@ export default function UnifiedAccessControlCenter({
                     <OrgUnitTreeSelect
                       companyId={effectiveCompanyId}
                       value={editUserOrgUnitId}
-                      onChange={(unitId) => setEditUserOrgUnitId(unitId)}
+                      onChange={(unitId) => {
+                        const newOrgUnitId = Array.isArray(unitId) ? unitId[0] : unitId;
+                        setEditUserOrgUnitId(newOrgUnitId);
+                        if (newOrgUnitId) {
+                          const derived = deriveScopeIdsFromOrgUnit(newOrgUnitId, editUserRole);
+                          if (editUserRole === 'StationAdmin' && !derived.station_id) {
+                            alert(isRtl
+                              ? 'تنبيه: الوحدة التنظيمية المحددة ليست مرتبطة بمحطة/فرع صرف، وهو ما قد يتعارض مع دور مدير الفرع/المحطة.'
+                              : 'Warning: The selected organizational unit is not linked to a station/branch, which may conflict with the Station Admin role.');
+                          } else if (editUserRole === 'RegionalManager' && !derived.region_id) {
+                            alert(isRtl
+                              ? 'تنبيه: الوحدة التنظيمية المحددة ليست مرتبطة بمنطقة جغرافية، وهو ما قد يتعارض مع دور مدير المنطقة.'
+                              : 'Warning: The selected organizational unit is not linked to a region, which may conflict with the Regional Manager role.');
+                          }
+                        }
+                      }}
                       mode="single"
                       isRtl={isRtl}
                       theme={theme}
@@ -2751,7 +2767,22 @@ export default function UnifiedAccessControlCenter({
                 <OrgUnitTreeSelect
                   companyId={effectiveCompanyId}
                   value={newUserOrgUnitId}
-                  onChange={(unitId) => setNewUserOrgUnitId(unitId)}
+                  onChange={(unitId) => {
+                    const newOrgUnitId = Array.isArray(unitId) ? unitId[0] : unitId;
+                    setNewUserOrgUnitId(newOrgUnitId);
+                    if (newOrgUnitId) {
+                      const derived = deriveScopeIdsFromOrgUnit(newOrgUnitId, newUserRole);
+                      if (newUserRole === 'StationAdmin' && !derived.station_id) {
+                        alert(isRtl
+                          ? 'تنبيه: الوحدة التنظيمية المحددة ليست مرتبطة بمحطة/فرع صرف، وهو ما قد يتعارض مع دور مدير الفرع/المحطة.'
+                          : 'Warning: The selected organizational unit is not linked to a station/branch, which may conflict with the Station Admin role.');
+                      } else if (newUserRole === 'RegionalManager' && !derived.region_id) {
+                        alert(isRtl
+                          ? 'تنبيه: الوحدة التنظيمية المحددة ليست مرتبطة بمنطقة جغرافية، وهو ما قد يتعارض مع دور مدير المنطقة.'
+                          : 'Warning: The selected organizational unit is not linked to a region, which may conflict with the Regional Manager role.');
+                      }
+                    }
+                  }}
                   mode="single"
                   isRtl={isRtl}
                   theme={theme}

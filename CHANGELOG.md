@@ -4,6 +4,86 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Item 4 (Required): Regression Test Suite for User Scope Derivation & Validation
+**Date:** 2026-09-02
+**Files Changed:** `src/settings_user_scope_derivation.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Regression Test Coverage (`src/settings_user_scope_derivation.test.ts`)**:
+  - Implemented 5 regression tests covering mocked `CustodyDB.getRegions` and `CustodyDB.getStations`:
+    1. Create: Org unit linked to region + `RegionalManager` -> payload `region_id` accurately derived and set.
+    2. Create: Org unit linked to nothing + `RegionalManager` -> submission blocked with bilingual warning.
+    3. Edit: Existing `RegionalManager` moving from Region A to Region B -> payload `region_id` changes to B (no stale ID drift).
+    4. Edit: Role demotion/change from `RegionalManager` to `Cashier` -> payload `region_id` and `station_id` set explicitly to `null`.
+    5. Edit: Unlinked org unit + `RegionalManager` -> update blocked with bilingual warning.
+- **Verification & Tests**:
+  - `src/settings_user_scope_derivation.test.ts`: 5/5 passed.
+  - Full scoped suite (`settings_user_scope_derivation.test.ts`, `settings_user_migration.test.ts`, `server_delete_user_policy.test.ts`): 19/19 passed.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
+## Item 3 (P2): Early Warning Validation on Tree Change in Access Control Center
+**Date:** 2026-09-02
+**Files Changed:** `src/components/settings/UnifiedAccessControlCenter.tsx`, `CHANGELOG.md`
+**Summary:**
+- **OrgUnitTreeSelect onChange Early Warning**:
+  - Wired `deriveScopeIdsFromOrgUnit` into `OrgUnitTreeSelect`'s `onChange` handlers for both user edit and user create modals.
+  - Implemented immediate non-blocking dual-language UX alerts when a selected organizational unit does not match the requirements of the selected role (`StationAdmin` without station linkage, `RegionalManager` without region linkage).
+- **Verification & Tests**:
+  - Scoped vitest suites: 14/14 passed (`settings_user_migration.test.ts`, `server_delete_user_policy.test.ts`).
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
+## Item 2 (P1): Scope Derivation and Validation for User Creation (handleAddUser)
+**Date:** 2026-09-02
+**Files Changed:** `src/pages/Settings.tsx`, `CHANGELOG.md`
+**Summary:**
+- **User Creation Scope Derivation (`handleAddUser`)**:
+  - Wired `deriveScopeIdsFromOrgUnit(newUserOrgUnitId, newUserRole)` into `handleAddUser` to derive underlying `region_id` and `station_id` from the organizational unit selected in the tree.
+  - Added dual-language validation alerts blocking user creation if a Regional Manager lacks a valid region-linked org unit or a Station Manager lacks a valid station-linked org unit.
+  - Ensured the provisioning payload assigns `derived.region_id || newUserRegionId || null` and `derived.station_id || newUserStationId || null` appropriately.
+- **Verification & Tests**:
+  - Scoped vitest suites: 14/14 passed (`settings_user_migration.test.ts`, `server_delete_user_policy.test.ts`).
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
+## Item 1 (P0): Shared Scope Derivation Helper and Silent Drift Elimination on Edit User
+**Date:** 2026-09-02
+**Files Changed:** `src/pages/Settings.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Scope Derivation Helper (`deriveScopeIdsFromOrgUnit`)**:
+  - Implemented pure exported helper `deriveScopeIdsFromOrgUnit(orgUnitId, role)` mapping selected organizational unit IDs directly to underlying `station_id` (with its parent `region_id`) or `region_id`.
+- **Edit User Scope Drift Prevention (`handleSaveEditUser`)**:
+  - Dynamically re-derives `region_id` and `station_id` on save from `editUserOrgUnitId` and `editUserRole`.
+  - Added dual-language validation alerts blocking submission if `RegionalManager` lacks a valid region-linked org unit or `StationAdmin` lacks a valid station-linked org unit.
+  - Ensured payload strictly uses derived values, resetting scope to `null` when role transitions away from scoped roles.
+- **Verification & Tests**:
+  - Scoped vitest suites: 14/14 passed (`settings_user_migration.test.ts`, `server_delete_user_policy.test.ts`).
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
+## Item 3 (P2): Strict Alignment of User Deletion Policy (Server API & UI)
+**Date:** 2026-09-02
+**Files Changed:** `server.ts`, `src/server_delete_user_policy.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Strict Role Policy Harmonization (`server.ts`)**:
+  - Unified the server-side `DELETE /api/admin/users/:id` endpoint on the stricter policy: strictly restricted to Platform Admin / `SystemAdmin` callers only, removing the company-`Admin` deletion branch.
+  - Aligned server authorization directly with the UI policy (`UnifiedAccessControlCenter.tsx` and `Settings.tsx` `handleDeleteUser`), which only displays and permits user deletion for `SystemAdmin` while preventing self-deletion.
+- **Verification & Tests**:
+  - Created test suite `src/server_delete_user_policy.test.ts` asserting that `server.ts` `DELETE /api/admin/users/:id` requires `isPlatformAdmin`, prevents self-deletion, matches UI role gates (`isSystemAdmin && u.id !== currentUser.id`), and correctly denies Company Admin and non-SystemAdmin callers.
+  - Scoped tests: 34/34 passed across `src/server_delete_user_policy.test.ts`, `src/phase_s_user_deletion.test.ts`, `src/phase8_admin_ratelimit_password.test.ts`, `src/phase9_admin_user_security.test.ts`, `src/user_provisioning_api.test.ts`, and `src/settings_user_migration.test.ts`.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
 ## Item 2 (P2): Production Empty Cache Protection for Inventory Defaults
 **Date:** 2026-09-01
 **Files Changed:** `src/db/inventory.ts`, `src/db/inventory_empty_prod.test.ts`, `CHANGELOG.md`

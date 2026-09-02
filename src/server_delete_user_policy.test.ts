@@ -8,10 +8,15 @@ describe('Item 3: User Delete Policy Alignment (Server & UI)', () => {
   const settingsCode = fs.readFileSync(path.resolve(process.cwd(), 'src/pages/Settings.tsx'), 'utf-8');
 
   it('1. server.ts DELETE /api/admin/users/:id strictly restricts deletion to Platform Admin / SystemAdmin', () => {
+    // Extract DELETE route block
+    const deleteRouteIndex = serverCode.indexOf('app.delete("/api/admin/users/:id"');
+    const deleteRouteCode = serverCode.slice(deleteRouteIndex, deleteRouteIndex + 1500);
+
     // Confirm company Admin cannot delete users on server API
-    expect(serverCode).toContain('if (!isPlatformAdmin) {');
-    expect(serverCode).toContain('Forbidden: Insufficient privileges to delete user. User deletion is reserved for Platform Admins');
-    expect(serverCode).not.toContain('!isPlatformAdmin && creator.role !== "Admin"');
+    expect(deleteRouteCode).toContain('if (!isPlatformAdmin) {');
+    expect(deleteRouteCode).toContain('Forbidden: Insufficient privileges to delete user. User deletion is reserved for Platform Admins');
+    expect(deleteRouteCode).not.toContain('!isPlatformAdmin && creator.role !== "Admin"');
+    expect(deleteRouteCode).not.toContain('targetData.company_id !== creator.company_id');
   });
 
   it('2. server.ts blocks self-deletion', () => {

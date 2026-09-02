@@ -90,6 +90,31 @@ const PERMISSIONS_LIST = [
   { key: 'manage_settings', ar: 'إدارة الإعدادات والنسخ', en: 'Manage settings & backups' },
 ] as const;
 
+export function deriveScopeIdsFromOrgUnit(
+  orgUnitId: string | null,
+  role: string
+): { region_id: string | null; station_id: string | null } {
+  if (!orgUnitId) return { region_id: null, station_id: null };
+
+  const allStations = CustodyDB.getStations();
+  const allRegions = CustodyDB.getRegions();
+
+  const matchedStation = allStations.find(s => s.org_unit_id === orgUnitId);
+  if (matchedStation) {
+    return {
+      station_id: matchedStation.id,
+      region_id: matchedStation.region_id || null
+    };
+  }
+
+  const matchedRegion = allRegions.find(r => r.org_unit_id === orgUnitId);
+  if (matchedRegion) {
+    return { region_id: matchedRegion.id, station_id: null };
+  }
+
+  return { region_id: null, station_id: null };
+}
+
 export default function Settings({ 
   language, 
   theme,
@@ -633,6 +658,18 @@ export default function Settings({
     const isRegional = newUserRole === 'RegionalManager';
     const isStationAdmin = newUserRole === 'StationAdmin';
 
+    const derived = deriveScopeIdsFromOrgUnit(newUserOrgUnitId, newUserRole);
+
+    if (isRegional && !derived.region_id && !newUserRegionId) {
+      alert(isRtl ? '⚠️ يجب اختيار وحدة تنظيمية تابعة لمنطقة صالحة لمدير المنطقة!' : '⚠️ A valid region-linked organizational unit must be selected for Regional Manager!');
+      return;
+    }
+
+    if (isStationAdmin && !derived.station_id && !newUserStationId) {
+      alert(isRtl ? '⚠️ يجب اختيار وحدة تنظيمية تابعة لمحطة صالحة لمدير المحطة!' : '⚠️ A valid station-linked organizational unit must be selected for Station Manager!');
+      return;
+    }
+
     const permissions = {
       manage_settings: isUserAdmin,
       create_expense: isUserAdmin || isStationAdmin,
@@ -648,8 +685,8 @@ export default function Settings({
       full_name: newUserName.trim(),
       role: newUserRole,
       company_id: companyId,
-      region_id: isRegional ? (newUserRegionId || null) : null,
-      station_id: isStationAdmin ? (newUserStationId || null) : null,
+      region_id: isRegional ? (derived.region_id || newUserRegionId || null) : null,
+      station_id: isStationAdmin ? (derived.station_id || newUserStationId || null) : null,
       org_unit_id: newUserOrgUnitId || null,
       assigned_org_unit_ids: newUserAssignedOrgUnitIds.length > 0 ? newUserAssignedOrgUnitIds : [],
       permissions: permissions,
@@ -765,12 +802,24 @@ export default function Settings({
 
     const companyId = targetUser.company_id || CustodyDB.getSelectedCompanyId() || '';
 
+    const derived = deriveScopeIdsFromOrgUnit(editUserOrgUnitId, editUserRole);
+
+    if (editUserRole === 'RegionalManager' && !derived.region_id) {
+      alert(isRtl ? '⚠️ يجب اختيار وحدة تنظيمية تابعة لمنطقة صالحة لمدير المنطقة!' : '⚠️ A valid region-linked organizational unit must be selected for Regional Manager!');
+      return;
+    }
+
+    if (editUserRole === 'StationAdmin' && !derived.station_id) {
+      alert(isRtl ? '⚠️ يجب اختيار وحدة تنظيمية تابعة لمحطة صالحة لمدير المحطة!' : '⚠️ A valid station-linked organizational unit must be selected for Station Manager!');
+      return;
+    }
+
     const payload = {
       full_name: editUserFullName.trim(),
       role: editUserRole,
       company_id: companyId,
-      region_id: editUserRole === 'RegionalManager' ? (editUserRegionId || null) : null,
-      station_id: editUserRole === 'StationAdmin' ? (editUserStationId || null) : null,
+      region_id: editUserRole === 'RegionalManager' ? (derived.region_id || null) : null,
+      station_id: editUserRole === 'StationAdmin' ? (derived.station_id || null) : null,
       org_unit_id: editUserOrgUnitId || null,
       assigned_org_unit_ids: editUserAssignedOrgUnitIds.length > 0 ? editUserAssignedOrgUnitIds : [],
       is_active: editUserIsActive,
