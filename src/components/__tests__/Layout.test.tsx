@@ -65,4 +65,32 @@ describe('Layout Component (React Testing Library)', () => {
       expect(setTheme).toHaveBeenCalled();
     }
   });
+
+  it('triggers logout button click handler immediately', () => {
+    const onLogout = vi.fn();
+
+    const { container } = render(
+      <MemoryRouter>
+        <Layout
+          currentTab="dashboard"
+          setCurrentTab={vi.fn()}
+          language="ar"
+          setLanguage={vi.fn()}
+          theme="light"
+          setTheme={vi.fn()}
+          activeUser={mockUser as any}
+          onLogout={onLogout}
+        >
+          <div>اختبار الخروج</div>
+        </Layout>
+      </MemoryRouter>
+    );
+
+    const logoutBtn = container.querySelector('#btn-logout');
+    expect(logoutBtn).not.toBeNull();
+    if (logoutBtn) {
+      fireEvent.click(logoutBtn);
+      expect(onLogout).toHaveBeenCalledTimes(1);
+    }
+  });
 });

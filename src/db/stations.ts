@@ -89,18 +89,13 @@ export class StationsModule {
       company_id: compId,
       org_unit_id
     };
-    const updated = [...regions, newReg];
-    const res = await StationsModule.saveRegions(updated);
-    if (!res.success) {
-      return null;
-    }
-
+    let createdUnitId: string | null = null;
     // Compatibility sync: mirror creation into Organization Engine
     try {
       const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
       const parentUnit = units.find(u => u.id === `org-unit-company-${compId}` || (u.companyId === compId && u.typeId === 'out-company'));
 
-      OrganizationEngine.addUnit({
+      const createdUnit = await OrganizationEngine.addUnit({
         companyId: compId,
         parentId: parentUnit?.id || null,
         typeId: 'out-region',
@@ -111,8 +106,21 @@ export class StationsModule {
         metadata: { legacyRegionId: regId },
         isActive: true
       });
+      if (createdUnit?.id) {
+        createdUnitId = createdUnit.id;
+      }
     } catch (err) {
       console.warn('Region compatibility sync to OrganizationUnit failed:', err);
+    }
+
+    if (createdUnitId) {
+      newReg.org_unit_id = createdUnitId;
+    }
+
+    const updated = [...regions, newReg];
+    const res = await StationsModule.saveRegions(updated);
+    if (!res.success) {
+      return null;
     }
 
     const user = UsersModule.getActiveUser();
@@ -256,12 +264,7 @@ export class StationsModule {
       company_id: compId,
       org_unit_id
     };
-    const updated = [...stations, newStn];
-    const res = await StationsModule.saveStations(updated);
-    if (!res.success) {
-      return null;
-    }
-
+    let createdUnitId: string | null = null;
     // Compatibility sync: mirror creation into Organization Engine
     try {
       let parentUnitId = `org-unit-company-${compId}`;
@@ -271,7 +274,7 @@ export class StationsModule {
         if (regUnit) parentUnitId = regUnit.id;
       }
 
-      OrganizationEngine.addUnit({
+      const createdUnit = await OrganizationEngine.addUnit({
         companyId: compId,
         parentId: parentUnitId,
         typeId: 'out-station',
@@ -282,8 +285,21 @@ export class StationsModule {
         metadata: { legacyStationId: stnId, custodyAmount },
         isActive: true
       });
+      if (createdUnit?.id) {
+        createdUnitId = createdUnit.id;
+      }
     } catch (err) {
       console.warn('Station compatibility sync to OrganizationUnit failed:', err);
+    }
+
+    if (createdUnitId) {
+      newStn.org_unit_id = createdUnitId;
+    }
+
+    const updated = [...stations, newStn];
+    const res = await StationsModule.saveStations(updated);
+    if (!res.success) {
+      return null;
     }
 
     const user = UsersModule.getActiveUser();

@@ -1,91 +1,173 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { deriveScopeIdsFromOrgUnit } from './pages/Settings';
 import { CustodyDB } from './db';
+import { StorageEngine } from './db/storage';
+import { OrganizationUnit } from './types/organization';
 
-describe('Item 4: User Scope Derivation & Validation Regression Tests', () => {
+describe('User Scope Derivation & Multi-Strategy Resolution Tests', () => {
   const mockRegions = [
+    { id: 'R1', name: 'Region R1', org_unit_id: 'ou_reg_r1', company_id: 'comp_1' },
     { id: 'reg_north', name: 'North Region', org_unit_id: 'ou_reg_north', company_id: 'comp_1' },
     { id: 'reg_south', name: 'South Region', org_unit_id: 'ou_reg_south', company_id: 'comp_1' }
   ];
 
   const mockStations = [
+    { id: 'S1', name: 'Station S1', org_unit_id: 'ou_stn_s1', region_id: 'R1', company_id: 'comp_1' },
     { id: 'stn_101', name: 'Station 101', org_unit_id: 'ou_stn_101', region_id: 'reg_north', company_id: 'comp_1' },
     { id: 'stn_102', name: 'Station 102', org_unit_id: 'ou_stn_102', region_id: 'reg_south', company_id: 'comp_1' }
+  ];
+
+  const mockUnits: OrganizationUnit[] = [
+    {
+      id: 'U1',
+      companyId: 'comp_1',
+      parentId: null,
+      typeId: 'out-region',
+      code: 'REG-001',
+      name: 'Region U1 Node',
+      nameAr: 'وحدة المنطقة U1',
+      nameEn: 'Region U1 Node',
+      metadata: { legacyRegionId: 'R1' },
+      isActive: true,
+      path: '/U1',
+      level: 1,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01'
+    },
+    {
+      id: 'U_STN_1',
+      companyId: 'comp_1',
+      parentId: 'U1',
+      typeId: 'out-station',
+      code: 'STN-001',
+      name: 'Station U Node',
+      nameAr: 'محطة U',
+      nameEn: 'Station U Node',
+      metadata: { legacyStationId: 'S1' },
+      isActive: true,
+      path: '/U1/U_STN_1',
+      level: 2,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01'
+    },
+    {
+      id: 'U_CHILD',
+      companyId: 'comp_1',
+      parentId: 'U1',
+      typeId: 'out-dept',
+      code: 'DEPT-001',
+      name: 'Child Dept Under Region',
+      nameAr: 'قسم فرعي تحت المنطقة',
+      nameEn: 'Child Dept Under Region',
+      isActive: true,
+      path: '/U1/U_CHILD',
+      level: 2,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01'
+    },
+    {
+      id: 'U_UNLINKED',
+      companyId: 'comp_1',
+      parentId: null,
+      typeId: 'out-custom',
+      code: 'ORG-9999',
+      name: 'Unlinked Root Unit',
+      nameAr: 'وحدة غير مرتبطة',
+      nameEn: 'Unlinked Root Unit',
+      isActive: true,
+      path: '/U_UNLINKED',
+      level: 1,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01'
+    }
   ];
 
   beforeEach(() => {
     vi.spyOn(CustodyDB, 'getRegions').mockReturnValue(mockRegions as any);
     vi.spyOn(CustodyDB, 'getStations').mockReturnValue(mockStations as any);
+    vi.spyOn(StorageEngine, 'getStored').mockImplementation((key: string, defaultValue: any) => {
+      if (key === 'organization_units') return mockUnits as any;
+      return defaultValue;
+    });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('1. Create: org_unit linked to a region + RegionalManager -> payload region_id is that region', () => {
-    const orgUnitId = 'ou_reg_north';
-    const role: string = 'RegionalManager';
-
-    const derived = deriveScopeIdsFromOrgUnit(orgUnitId, role);
-    expect(derived.region_id).toBe('reg_north');
+  // Target Test Case 1: unit.id=U1, metadata.legacyRegionId=R1 → region_id R1
+  it('1. unit.id=U1, metadata.legacyRegionId=R1 -> resolves region_id R1', () => {
+    const derived = deriveScopeIdsFromOrgUnit('U1', 'RegionalManager');
+    expect(derived.region_id).toBe('R1');
     expect(derived.station_id).toBeNull();
-
-    // Construct creation payload simulation
-    const isRegional = role === 'RegionalManager';
-    const isStationAdmin = role === 'StationAdmin';
-    const newUserRegionId = '';
-    const newUserStationId = '';
-
-    const payload = {
-      full_name: 'Regional Manager North',
-      role: role,
-      region_id: isRegional ? (derived.region_id || newUserRegionId || null) : null,
-      station_id: isStationAdmin ? (derived.station_id || newUserStationId || null) : null,
-      org_unit_id: orgUnitId || null,
-    };
-
-    expect(payload.region_id).toBe('reg_north');
-    expect(payload.station_id).toBeNull();
-    expect(payload.org_unit_id).toBe('ou_reg_north');
   });
 
-  it('2. Create: org_unit linked to nothing + RegionalManager -> submit blocked; no real fetch/API call', () => {
-    const orgUnitId = 'ou_unlinked_dept';
-    const role: string = 'RegionalManager';
+  // Target Test Case 2: regions=[{id:R1, org_unit_id:U1}], select U1 → region_id R1
+  it('2. regions=[{id:R1, org_unit_id:U_DIRECT}], select U_DIRECT -> resolves region_id R1', () => {
+    vi.spyOn(CustodyDB, 'getRegions').mockReturnValue([
+      { id: 'R1', name: 'Region R1', org_unit_id: 'U_DIRECT', company_id: 'comp_1' }
+    ] as any);
 
-    const derived = deriveScopeIdsFromOrgUnit(orgUnitId, role);
+    const derived = deriveScopeIdsFromOrgUnit('U_DIRECT', 'RegionalManager');
+    expect(derived.region_id).toBe('R1');
+    expect(derived.station_id).toBeNull();
+  });
+
+  // Target Test Case 3: select org-unit-region-R1, regions=[{id:R1, org_unit_id:'other'}] → R1
+  it('3. select org-unit-region-R1, regions=[{id:R1, org_unit_id: "other"}] -> resolves region_id R1', () => {
+    vi.spyOn(CustodyDB, 'getRegions').mockReturnValue([
+      { id: 'R1', name: 'Region R1', org_unit_id: 'other', company_id: 'comp_1' }
+    ] as any);
+
+    const derived = deriveScopeIdsFromOrgUnit('org-unit-region-R1', 'RegionalManager');
+    expect(derived.region_id).toBe('R1');
+    expect(derived.station_id).toBeNull();
+  });
+
+  // Target Test Case 4: station via legacyStationId + region_id on station
+  it('4. station via legacyStationId -> resolves station_id S1 and inherited region_id R1', () => {
+    const derived = deriveScopeIdsFromOrgUnit('U_STN_1', 'StationAdmin');
+    expect(derived.station_id).toBe('S1');
+    expect(derived.region_id).toBe('R1');
+  });
+
+  // Target Test Case 5: child unit whose parent has legacyRegionId → inherits region_id
+  it('5. child unit whose parent has legacyRegionId -> inherits region_id R1', () => {
+    const derived = deriveScopeIdsFromOrgUnit('U_CHILD', 'RegionalManager');
+    expect(derived.region_id).toBe('R1');
+    expect(derived.station_id).toBeNull();
+  });
+
+  // Target Test Case 6: no link → nulls (guards still block)
+  it('6. no link -> returns nulls and guards block creation/edit', () => {
+    const derived = deriveScopeIdsFromOrgUnit('U_UNLINKED', 'RegionalManager');
     expect(derived.region_id).toBeNull();
     expect(derived.station_id).toBeNull();
 
-    const isRegional = role === 'RegionalManager';
+    const isRegional = true;
     const newUserRegionId = '';
-
     let isBlocked = false;
     let alertMessage = '';
-    const mockAlert = (msg: string) => {
-      isBlocked = true;
-      alertMessage = msg;
-    };
 
     if (isRegional && !derived.region_id && !newUserRegionId) {
-      mockAlert('A valid region-linked organizational unit must be selected for Regional Manager!');
+      isBlocked = true;
+      alertMessage = 'A valid region-linked organizational unit must be selected for Regional Manager!';
     }
 
     expect(isBlocked).toBe(true);
     expect(alertMessage).toContain('valid region-linked organizational unit');
   });
 
-  it('3. Edit: existing RegionalManager on region A; org unit changed to region B -> payload region_id is B, not A', () => {
+  // Regression / Form Payload Tests
+  it('7. Edit: existing RegionalManager on region A; org unit changed to region B -> payload region_id is B, not A', () => {
     const existingUserRegionId = 'reg_north';
     const updatedOrgUnitId = 'ou_reg_south';
     const editUserRole: string = 'RegionalManager';
 
-    // Derive on save
     const derived = deriveScopeIdsFromOrgUnit(updatedOrgUnitId, editUserRole);
     expect(derived.region_id).toBe('reg_south');
     expect(derived.station_id).toBeNull();
 
-    // Stale existingUserRegionId is superseded by derived value
     const payload = {
       full_name: 'Updated Regional Manager',
       role: editUserRole,
@@ -99,7 +181,7 @@ describe('Item 4: User Scope Derivation & Validation Regression Tests', () => {
     expect(payload.org_unit_id).toBe('ou_reg_south');
   });
 
-  it('4. Edit: RegionalManager -> Cashier -> payload region_id is explicitly null', () => {
+  it('8. Edit: RegionalManager -> Cashier -> payload region_id is explicitly null', () => {
     const existingOrgUnitId = 'ou_reg_north';
     const newRole: string = 'Cashier';
 
@@ -119,25 +201,86 @@ describe('Item 4: User Scope Derivation & Validation Regression Tests', () => {
     expect(payload.org_unit_id).toBe('ou_reg_north');
   });
 
-  it('5. Edit: unlinked org_unit + still RegionalManager -> save blocked; no PATCH', () => {
-    const unlinkedOrgUnitId = 'ou_finance_dept';
-    const editUserRole: string = 'RegionalManager';
-
-    const derived = deriveScopeIdsFromOrgUnit(unlinkedOrgUnitId, editUserRole);
-    expect(derived.region_id).toBeNull();
-
-    let isBlocked = false;
-    let alertMessage = '';
-    const mockAlert = (msg: string) => {
-      isBlocked = true;
-      alertMessage = msg;
+  it('9. Modern tree unit "منطقة القاهرة الكبرى" (code ORG-6848, typeId: out-region) without legacy region -> resolves region_id', () => {
+    const cairoRegionUnit: OrganizationUnit = {
+      id: 'orgunit-cairo-6848',
+      companyId: 'comp_1',
+      parentId: null,
+      typeId: 'out-region',
+      code: 'ORG-6848',
+      name: 'منطقة القاهرة الكبرى',
+      nameAr: 'منطقة القاهرة الكبرى',
+      nameEn: 'Greater Cairo Region',
+      isActive: true,
+      path: '/orgunit-cairo-6848',
+      level: 1,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01'
     };
 
-    if (editUserRole === 'RegionalManager' && !derived.region_id) {
-      mockAlert('A valid region-linked organizational unit must be selected for Regional Manager!');
-    }
+    vi.spyOn(StorageEngine, 'getStored').mockImplementation((key: string, defaultValue: any) => {
+      if (key === 'organization_units') return [...mockUnits, cairoRegionUnit] as any;
+      return defaultValue;
+    });
 
-    expect(isBlocked).toBe(true);
-    expect(alertMessage).toContain('valid region-linked organizational unit');
+    const derived = deriveScopeIdsFromOrgUnit('orgunit-cairo-6848', 'RegionalManager');
+    expect(derived.region_id).toBe('orgunit-cairo-6848');
+    expect(derived.station_id).toBeNull();
+  });
+
+  it('10. Modern branch unit under Cairo region -> resolves station_id and inherited region_id', () => {
+    const cairoRegionUnit: OrganizationUnit = {
+      id: 'orgunit-cairo-6848',
+      companyId: 'comp_1',
+      parentId: null,
+      typeId: 'out-region',
+      code: 'ORG-6848',
+      name: 'منطقة القاهرة الكبرى',
+      nameAr: 'منطقة القاهرة الكبرى',
+      nameEn: 'Greater Cairo Region',
+      isActive: true,
+      path: '/orgunit-cairo-6848',
+      level: 1,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01'
+    };
+
+    const maadiBranchUnit: OrganizationUnit = {
+      id: 'orgunit-maadi-branch',
+      companyId: 'comp_1',
+      parentId: 'orgunit-cairo-6848',
+      typeId: 'out-branch',
+      code: 'ORG-7712',
+      name: 'فرع المعادي',
+      nameAr: 'فرع المعادي',
+      nameEn: 'Maadi Branch',
+      isActive: true,
+      path: '/orgunit-cairo-6848/orgunit-maadi-branch',
+      level: 2,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01'
+    };
+
+    vi.spyOn(StorageEngine, 'getStored').mockImplementation((key: string, defaultValue: any) => {
+      if (key === 'organization_units') return [...mockUnits, cairoRegionUnit, maadiBranchUnit] as any;
+      return defaultValue;
+    });
+
+    const derived = deriveScopeIdsFromOrgUnit('orgunit-maadi-branch', 'StationAdmin');
+    expect(derived.station_id).toBe('orgunit-maadi-branch');
+    expect(derived.region_id).toBe('orgunit-cairo-6848');
+    expect(derived.company_id).toBe('comp_1');
+  });
+
+  it('11. Company ID is automatically derived from unit, ancestor, or active company', () => {
+    const derivedUnit = deriveScopeIdsFromOrgUnit('U1', 'RegionalManager');
+    expect(derivedUnit.company_id).toBe('comp_1');
+
+    const derivedChild = deriveScopeIdsFromOrgUnit('U_CHILD', 'RegionalManager');
+    expect(derivedChild.company_id).toBe('comp_1');
+
+    const derivedNull = deriveScopeIdsFromOrgUnit(null, 'Admin');
+    expect(derivedNull.company_id).toBeDefined();
   });
 });
+

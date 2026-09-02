@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { CustodyDB, ModulesModule } from '../db';
+import { StorageEngine } from '../db/storage';
+import { OrganizationUnit, OrganizationUnitType } from '../types/organization';
+import { DEFAULT_ORGANIZATION_UNIT_TYPES } from '../db/organizationEngine';
 import { auth, useScreenListeners } from '../firebase';
 import ApprovalWorkflowManager from '../components/ApprovalWorkflowManager';
 import OrgUnitTreeSelect from '../components/OrgUnitTreeSelect';
@@ -93,26 +96,224 @@ const PERMISSIONS_LIST = [
 export function deriveScopeIdsFromOrgUnit(
   orgUnitId: string | null,
   role: string
-): { region_id: string | null; station_id: string | null } {
-  if (!orgUnitId) return { region_id: null, station_id: null };
+): { region_id: string | null; station_id: string | null; company_id?: string | null } {
+  // 1. If !orgUnitId → { region_id: null, station_id: null, company_id: null }
+  if (!orgUnitId) {
+    const defaultCompId = CustodyDB.getSelectedCompanyId() || StorageEngine.getStored<string>('selected_company_id', '') || (CustodyDB.getCompanies()[0]?.id || null);
+    return { region_id: null, station_id: null, company_id: defaultCompId };
+  }
 
+  // 2. Load organization_units, unit types, regions, stations
+  const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+  const unitTypes = StorageEngine.getStored<OrganizationUnitType[]>('organization_unit_types', DEFAULT_ORGANIZATION_UNIT_TYPES);
   const allStations = CustodyDB.getStations();
   const allRegions = CustodyDB.getRegions();
 
-  const matchedStation = allStations.find(s => s.org_unit_id === orgUnitId);
-  if (matchedStation) {
-    return {
-      station_id: matchedStation.id,
-      region_id: matchedStation.region_id || null
-    };
-  }
+  // Find target unit by id or code
+  const unit = units.find(u => u.id === orgUnitId || u.code === orgUnitId);
 
-  const matchedRegion = allRegions.find(r => r.org_unit_id === orgUnitId);
+  // Helper: check if a unit or type is a region
+  const isRegionTypeOrUnit = (u?: OrganizationUnit | null) => {
+    if (!u) return false;
+    if (u.typeId === 'out-region') return true;
+    if (u.metadata?.legacyRegionId || u.metadata?.legacy_region_id) return true;
+    
+    if (['out-station', 'out-branch', 'out-farm', 'out-factory', 'out-department', 'out-dept', 'out-unit', 'out-company', 'out-holding'].includes(u.typeId)) {
+      return false;
+    }
+
+    const ut = unitTypes.find(t => t.id === u.typeId);
+    if (ut) {
+      if (ut.code?.toUpperCase() === 'REGION') return true;
+      if (ut.code?.toUpperCase() && ut.code.toUpperCase() !== 'REGION') return false;
+      if (ut.nameAr?.includes('منطقة') || ut.nameAr?.includes('إقليم')) return true;
+      if (ut.nameEn?.toLowerCase().includes('region')) return true;
+    }
+    const code = (u.code || '').toUpperCase();
+    if (code.startsWith('REG-') || code.startsWith('REGION-') || code.startsWith('REG_') || code.startsWith('REGION_')) return true;
+    const name = u.name || '';
+    const nameAr = u.nameAr || '';
+    const nameEn = (u.nameEn || '').toLowerCase();
+    if (name.includes('منطقة') || nameAr.includes('منطقة') || name.includes('إقليم') || nameAr.includes('إقليم') || nameEn.includes('region')) return true;
+    return false;
+  };
+
+  // Helper: check if a unit or type is a station/branch/site
+  const isStationTypeOrUnit = (u?: OrganizationUnit | null) => {
+    if (!u) return false;
+    if (['out-station', 'out-branch', 'out-farm', 'out-factory'].includes(u.typeId)) return true;
+    if (u.metadata?.legacyStationId || u.metadata?.legacy_station_id) return true;
+
+    if (['out-region', 'out-department', 'out-dept', 'out-unit', 'out-company', 'out-holding'].includes(u.typeId)) {
+      return false;
+    }
+
+    const ut = unitTypes.find(t => t.id === u.typeId);
+    if (ut) {
+      if (['STATION', 'BRANCH', 'FARM', 'FACTORY'].includes(ut.code?.toUpperCase())) return true;
+      if (ut.code?.toUpperCase() && !['STATION', 'BRANCH', 'FARM', 'FACTORY'].includes(ut.code.toUpperCase())) return false;
+      if (ut.nameAr?.includes('محطة') || ut.nameAr?.includes('فرع') || ut.nameAr?.includes('مزرعة') || ut.nameAr?.includes('مصنع')) return true;
+      if (ut.nameEn?.toLowerCase().includes('station') || ut.nameEn?.toLowerCase().includes('branch') || ut.nameEn?.toLowerCase().includes('farm') || ut.nameEn?.toLowerCase().includes('factory')) return true;
+    }
+    const code = (u.code || '').toUpperCase();
+    if (code.startsWith('STN-') || code.startsWith('BR-') || code.startsWith('SITE-') || code.startsWith('FRM-') || code.startsWith('FAC-') || code.startsWith('STN_') || code.startsWith('BR_')) return true;
+    const name = u.name || '';
+    const nameAr = u.nameAr || '';
+    const nameEn = (u.nameEn || '').toLowerCase();
+    if (name.includes('محطة') || nameAr.includes('محطة') || name.includes('فرع') || nameAr.includes('فرع') || name.includes('مزرعة') || nameAr.includes('مزرعة') || name.includes('مصنع') || nameAr.includes('مصنع') || nameEn.includes('station') || nameEn.includes('branch')) return true;
+    return false;
+  };
+
+  // Helper: station resolution
+  const resolveStation = (targetUnit?: OrganizationUnit | null, targetId?: string) => {
+    // 3a) targetUnit?.metadata?.legacyStationId → station by id
+    const legacyStnId = targetUnit?.metadata?.legacyStationId || targetUnit?.metadata?.legacy_station_id;
+    if (legacyStnId) {
+      const stn = allStations.find(s => s.id === legacyStnId);
+      if (stn) return stn;
+    }
+
+    // 3b) stations.find(s => s.org_unit_id === targetId || targetId === `org-unit-station-${s.id}` || s.id === targetId)
+    if (targetId) {
+      const stn = allStations.find(s =>
+        s.org_unit_id === targetId ||
+        targetId === `org-unit-station-${s.id}` ||
+        s.id === targetId ||
+        (targetUnit && ((s as any).name === targetUnit.name || (s as any).station_name === targetUnit.name)) ||
+        (targetUnit && (s as any).code && targetUnit.code && (s as any).code === targetUnit.code)
+      );
+      if (stn) return stn;
+    }
+
+    // 3c) If unit itself is a station/branch type in organization tree
+    if (targetUnit && isStationTypeOrUnit(targetUnit)) {
+      return {
+        id: targetUnit.id,
+        name: targetUnit.name,
+        code: targetUnit.code,
+        company_id: targetUnit.companyId || (targetUnit as any).company_id,
+        org_unit_id: targetUnit.id,
+        region_id: targetUnit.metadata?.legacyRegionId || targetUnit.metadata?.legacy_region_id || null
+      } as any;
+    }
+
+    return null;
+  };
+
+  // Helper: region resolution
+  const resolveRegion = (targetUnit?: OrganizationUnit | null, targetId?: string) => {
+    // 4a) targetUnit?.metadata?.legacyRegionId → region by id
+    const legacyRegId = targetUnit?.metadata?.legacyRegionId || targetUnit?.metadata?.legacy_region_id;
+    if (legacyRegId) {
+      const reg = allRegions.find(r => r.id === legacyRegId);
+      if (reg) return reg;
+    }
+
+    // 4b) regions.find(r => r.org_unit_id === targetId || targetId === `org-unit-region-${r.id}` || r.id === targetId)
+    if (targetId) {
+      const reg = allRegions.find(r =>
+        r.org_unit_id === targetId ||
+        targetId === `org-unit-region-${r.id}` ||
+        r.id === targetId ||
+        (targetUnit && r.name === targetUnit.name) ||
+        (targetUnit && r.code && targetUnit.code && r.code === targetUnit.code)
+      );
+      if (reg) return reg;
+    }
+
+    // 4c) If unit itself is a region type in organization tree
+    if (targetUnit && isRegionTypeOrUnit(targetUnit)) {
+      return {
+        id: targetUnit.id,
+        name: targetUnit.name,
+        code: targetUnit.code,
+        company_id: targetUnit.companyId || (targetUnit as any).company_id,
+        org_unit_id: targetUnit.id
+      } as any;
+    }
+
+    return null;
+  };
+
+  // 3. Direct station resolution
+  const matchedStation = resolveStation(unit, orgUnitId);
+  let resolvedStationId: string | null = matchedStation ? matchedStation.id : null;
+  let resolvedRegionId: string | null = matchedStation?.region_id || null;
+  let resolvedCompanyId: string | null = unit?.companyId || (unit as any)?.company_id || matchedStation?.company_id || null;
+
+  // 4. Direct region resolution
+  const matchedRegion = resolveRegion(unit, orgUnitId);
   if (matchedRegion) {
-    return { region_id: matchedRegion.id, station_id: null };
+    resolvedRegionId = matchedRegion.id;
+    if (!resolvedCompanyId && matchedRegion.company_id) {
+      resolvedCompanyId = matchedRegion.company_id;
+    }
   }
 
-  return { region_id: null, station_id: null };
+  // 5. Ancestor fallback (for child units under a region/station/company in the tree)
+  if (unit) {
+    const ancestors: OrganizationUnit[] = [];
+    const visited = new Set<string>([unit.id]);
+    let curr = unit;
+    while (curr.parentId && !visited.has(curr.parentId)) {
+      visited.add(curr.parentId);
+      const parent = units.find(u => u.id === curr.parentId);
+      if (!parent) break;
+      ancestors.push(parent);
+      curr = parent;
+    }
+
+    if (ancestors.length === 0 && unit.path) {
+      const segs = unit.path.split('/').filter(Boolean);
+      segs.pop(); // remove self
+      segs.reverse(); // nearest first
+      for (const segId of segs) {
+        if (!visited.has(segId)) {
+          visited.add(segId);
+          const u = units.find(item => item.id === segId);
+          if (u) ancestors.push(u);
+        }
+      }
+    }
+
+    for (const ancestor of ancestors) {
+      if (!resolvedCompanyId && (ancestor.companyId || (ancestor as any).company_id)) {
+        resolvedCompanyId = ancestor.companyId || (ancestor as any).company_id;
+      }
+      if (!resolvedStationId) {
+        const ancStation = resolveStation(ancestor, ancestor.id);
+        if (ancStation) {
+          resolvedStationId = ancStation.id;
+          if (!resolvedRegionId && ancStation.region_id) {
+            resolvedRegionId = ancStation.region_id;
+          }
+          if (!resolvedCompanyId && ancStation.company_id) {
+            resolvedCompanyId = ancStation.company_id;
+          }
+        }
+      }
+      if (!resolvedRegionId) {
+        const ancRegion = resolveRegion(ancestor, ancestor.id);
+        if (ancRegion) {
+          resolvedRegionId = ancRegion.id;
+          if (!resolvedCompanyId && ancRegion.company_id) {
+            resolvedCompanyId = ancRegion.company_id;
+          }
+        }
+      }
+    }
+  }
+
+  if (!resolvedCompanyId) {
+    resolvedCompanyId = CustodyDB.getSelectedCompanyId() || StorageEngine.getStored<string>('selected_company_id', '') || (CustodyDB.getCompanies()[0]?.id || null);
+  }
+
+  // 6. Return resolved region, station, and company IDs
+  return {
+    region_id: resolvedRegionId,
+    station_id: resolvedStationId,
+    company_id: resolvedCompanyId
+  };
 }
 
 export default function Settings({ 
@@ -679,12 +880,18 @@ export default function Settings({
     };
 
     const companyId = CustodyDB.getSelectedCompanyId() || '';
+    const effectiveCompanyId =
+      companyId ||
+      derived.company_id ||
+      currentUser.company_id ||
+      StorageEngine.getStored<string>('selected_company_id', '') ||
+      (CustodyDB.getCompanies()[0]?.id || '');
 
     const payload: any = {
       email: newUserEmail.trim().toLowerCase(),
       full_name: newUserName.trim(),
       role: newUserRole,
-      company_id: companyId,
+      company_id: effectiveCompanyId || companyId,
       region_id: isRegional ? (derived.region_id || newUserRegionId || null) : null,
       station_id: isStationAdmin ? (derived.station_id || newUserStationId || null) : null,
       org_unit_id: newUserOrgUnitId || null,
@@ -736,19 +943,20 @@ export default function Settings({
       setNewUserRegionId('');
 
       const tempPass = data.temporaryPassword || '';
+      const displayCompanyId = effectiveCompanyId || companyId;
       if (tempPass) {
         setCreatedUserSuccess({
           fullName: newUserName.trim(),
           email: payload.email,
-          companyId: companyId,
+          companyId: displayCompanyId,
           temporaryPassword: tempPass
         });
         setCopiedPassword(false);
       }
 
       alert(isRtl
-        ? `✅ تم إنشاء وتوثيق حساب الموظف بنجاح!\n\nالشركة: ${companyId}\nالبريد: ${payload.email}${tempPass ? `\nكلمة المرور المؤقتة هي: ${tempPass}` : ''}\n\nيرجى تسليمها للموظف لاستخدامها عند تسجيل الدخول لأول مرة.`
-        : `✅ User account created and provisioned successfully!\n\nCompany: ${companyId}\nEmail: ${payload.email}${tempPass ? `\nTemporary Password: ${tempPass}` : ''}\n\nPlease share this temporary password with the user.`
+        ? `✅ تم إنشاء وتوثيق حساب الموظف بنجاح!\n\nالشركة: ${displayCompanyId}\nالبريد: ${payload.email}${tempPass ? `\nكلمة المرور المؤقتة هي: ${tempPass}` : ''}\n\nيرجى تسليمها للموظف لاستخدامها عند تسجيل الدخول لأول مرة.`
+        : `✅ User account created and provisioned successfully!\n\nCompany: ${displayCompanyId}\nEmail: ${payload.email}${tempPass ? `\nTemporary Password: ${tempPass}` : ''}\n\nPlease share this temporary password with the user.`
       );
 
       triggerToast(isRtl ? 'تم إضافة وتوثيق حساب المستخدم بنجاح.' : 'New user created successfully.');
@@ -803,6 +1011,12 @@ export default function Settings({
     const companyId = targetUser.company_id || CustodyDB.getSelectedCompanyId() || '';
 
     const derived = deriveScopeIdsFromOrgUnit(editUserOrgUnitId, editUserRole);
+    const effectiveCompanyId =
+      companyId ||
+      derived.company_id ||
+      currentUser.company_id ||
+      StorageEngine.getStored<string>('selected_company_id', '') ||
+      (CustodyDB.getCompanies()[0]?.id || '');
 
     if (editUserRole === 'RegionalManager' && !derived.region_id) {
       alert(isRtl ? '⚠️ يجب اختيار وحدة تنظيمية تابعة لمنطقة صالحة لمدير المنطقة!' : '⚠️ A valid region-linked organizational unit must be selected for Regional Manager!');
@@ -817,7 +1031,7 @@ export default function Settings({
     const payload = {
       full_name: editUserFullName.trim(),
       role: editUserRole,
-      company_id: companyId,
+      company_id: effectiveCompanyId || companyId,
       region_id: editUserRole === 'RegionalManager' ? (derived.region_id || null) : null,
       station_id: editUserRole === 'StationAdmin' ? (derived.station_id || null) : null,
       org_unit_id: editUserOrgUnitId || null,

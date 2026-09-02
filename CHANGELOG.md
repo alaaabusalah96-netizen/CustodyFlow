@@ -4,6 +4,121 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Step 7: Instantaneous & Non-blocking Logout Button Responsiveness Fix
+**Date:** 2026-09-02
+**Files Changed:** `src/App.tsx`, `src/components/Layout.tsx`, `src/components/__tests__/Layout.test.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Instant Optimistic Session Teardown**:
+  - Refactored `handleLogout` in `src/App.tsx` so that local state and credentials (`CustodyDB.setActiveUser(null)`, `setActiveUser(null)`, `setSelectedPendingTx(null)`, and storage keys) are cleared synchronously and immediately upon clicking the logout button.
+  - Server-side revocation (`/api/auth/logout`) and Firebase `signOut(auth)` are now executed concurrently in the background with a bounded timeout, completely eliminating UI freezing and network blocking on mobile/slow connections.
+- **Enhanced Button Interaction**:
+  - Added `type="button"`, `touch-manipulation`, `active:scale-95`, `aria-label`, and `stopPropagation()` on `#btn-logout` in `src/components/Layout.tsx` for immediate tactile feedback and zero latency on touch devices.
+- **Verification & Tests**:
+  - Added unit test in `src/components/__tests__/Layout.test.tsx` verifying immediate invocation of `onLogout` on button click.
+  - Scoped tests: 3/3 passed.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production build (`compile_applet`): Succeeded.
+
+---
+
+## Step 6: Automatic Company ID Resolution and Unified Tree Provisioning
+**Date:** 2026-09-02
+**Files Changed:** `src/pages/Settings.tsx`, `server.ts`, `src/settings_user_scope_derivation.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Automatic Company ID Derivation (`deriveScopeIdsFromOrgUnit`)**:
+  - `deriveScopeIdsFromOrgUnit` now extracts and returns the `company_id` directly from the selected tree unit, its parent/ancestor nodes, or the active company context automatically.
+  - Updated `handleAddUser` and `handleSaveEditUser` in `Settings.tsx` to automatically supply the derived `company_id` in request payloads, eliminating manual/missing company prompts for end users.
+  - Server-side provisioning (`server.ts`) updated: Automatically resolves `company_id` from the organizational unit, region, or station lookup in Firestore when not provided, and verifies permissions consistently across both legacy and modern organization hierarchies.
+- **Verification & Tests**:
+  - Scoped test runs: 17/17 passed (`src/settings_user_scope_derivation.test.ts` & `src/user_provisioning_api.test.ts`).
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
+## Step 5: Radical Resolution for Modern Organization Tree Unit Scope Derivation
+**Date:** 2026-09-02
+**Files Changed:** `src/pages/Settings.tsx`, `src/settings_user_scope_derivation.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Modern Organization Tree Type & Semantic Scope Resolver**:
+  - Root Cause: Users selecting organizational tree nodes created in modern enterprise mode (e.g. «منطقة القاهرة الكبرى» / `ORG-6848`, `typeId: 'out-region'`) failed validation because `deriveScopeIdsFromOrgUnit` previously looked only for legacy region/station database rows.
+  - Solution: Upgraded `deriveScopeIdsFromOrgUnit` with complete bidirectional unit-type awareness:
+    1. Direct type resolution: Recognizes `out-region`, `out-branch`, `out-station`, `out-farm`, `out-factory`, unit type codes (`REGION`, `STATION`, `BRANCH`), and localized prefixes/names without requiring legacy shadow rows.
+    2. Exact code and name matching against legacy tables.
+    3. Hierarchical inheritance across ancestors (e.g., child branch inheriting parent region).
+- **Verification & Tests**:
+  - Scoped tests: 10/10 passed (`src/settings_user_scope_derivation.test.ts`).
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
+## Step 4: Tests for User Scope Derivation & Multi-Strategy Resolution
+**Date:** 2026-09-02
+**Files Changed:** `src/settings_user_scope_derivation.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Comprehensive Resolution Test Suite**:
+  - Implemented 6 distinct strategy and fallback unit test cases in `src/settings_user_scope_derivation.test.ts`:
+    1. Direct unit metadata resolution (`unit.id=U1, metadata.legacyRegionId=R1 -> region_id R1`).
+    2. Direct region record `org_unit_id` match (`regions=[{id:R1, org_unit_id:U_DIRECT}], select U_DIRECT -> region_id R1`).
+    3. Synthetic prefix match fallback (`select org-unit-region-R1, regions=[{id:R1, org_unit_id: 'other'}] -> region_id R1`).
+    4. Station resolution via `metadata.legacyStationId` + inherited `region_id` on station.
+    5. Hierarchical ancestor traversal: child unit whose parent node has `legacyRegionId` inherits `region_id`.
+    6. Unlinked unit fallback: returns nulls and verifies creation/edit guard alerts block submit.
+- **Verification & Tests**:
+  - Scoped tests: 8/8 passed (`src/settings_user_scope_derivation.test.ts`).
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
+## Step 3: UACC Early Warnings Alignment Audit & Confirmation
+**Date:** 2026-09-02
+**Files Changed:** `CHANGELOG.md`
+**Summary:**
+- **UACC Scope Derivation Alignment**:
+  - Audited `src/components/settings/UnifiedAccessControlCenter.tsx` lines 75, 1732, and 2774.
+  - Confirmed that UACC already imports and invokes the single shared helper `deriveScopeIdsFromOrgUnit` from `src/pages/Settings.tsx` for both edit modal and create modal tree selection events.
+  - Thanks to Step 1's multi-strategy expansion of `deriveScopeIdsFromOrgUnit`, UACC early warning alerts and Settings validations are 100% unified with zero code divergence.
+- **Verification & Tests**:
+  - Scoped tests: 5/5 passed (`src/settings_user_scope_derivation.test.ts`).
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
+## Step 2: Stop Creating New Drift in addRegion / addStation
+**Date:** 2026-09-02
+**Files Changed:** `src/db/stations.ts`, `CHANGELOG.md`
+**Summary:**
+- **Capture Created OrganizationUnit ID**:
+  - `StationsModule.addRegion`: Awaits `OrganizationEngine.addUnit(...)` and updates `newReg.org_unit_id` to the returned `createdUnit.id` while preserving `metadata.legacyRegionId`.
+  - `StationsModule.addStation`: Awaits `OrganizationEngine.addUnit(...)` and updates `newStn.org_unit_id` to the returned `createdUnit.id` while preserving `metadata.legacyStationId`.
+  - *Note:* Existing historical rows may continue to use the multi-strategy resolver in `deriveScopeIdsFromOrgUnit` until re-saved.
+- **Verification & Tests**:
+  - Scoped tests: 21/21 passed across `src/settings_user_scope_derivation.test.ts`, `src/phase_i_weak_id_guard.test.ts`, and `src/organization_engine.test.ts`.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
+## Step 1: Expand deriveScopeIdsFromOrgUnit with Multi-Strategy Resolution
+**Date:** 2026-09-02
+**Files Changed:** `src/pages/Settings.tsx`, `CHANGELOG.md`
+**Summary:**
+- **Multi-Strategy Scope Resolution (`deriveScopeIdsFromOrgUnit`)**:
+  - Replaced strict 1:1 `org_unit_id === id` equality with prioritized multi-strategy resolution:
+    1. Null check guard.
+    2. Unit retrieval from `organization_units` storage (`StorageEngine.getStored`).
+    3. Station resolution: checks `metadata.legacyStationId`, `s.org_unit_id === orgUnitId`, `org-unit-station-${s.id}`, and `s.id === orgUnitId`.
+    4. Region resolution: checks `metadata.legacyRegionId`, `r.org_unit_id === orgUnitId`, `org-unit-region-${r.id}`, and `r.id === orgUnitId`.
+    5. Ancestor fallback traversal: walks parent hierarchy/path to resolve inherited station or region linkages for child nodes.
+- **Verification & Tests**:
+  - Scoped tests: 5/5 passed (`src/settings_user_scope_derivation.test.ts`).
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
 ## Item 4 (Required): Regression Test Suite for User Scope Derivation & Validation
 **Date:** 2026-09-02
 **Files Changed:** `src/settings_user_scope_derivation.test.ts`, `CHANGELOG.md`

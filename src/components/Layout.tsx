@@ -347,14 +347,20 @@ export default function Layout({
                 </div>
               </div>
               <button
+                type="button"
                 id="btn-logout"
-                onClick={onLogout}
-                className={`p-2 rounded-lg border transition-colors text-rose-500 ${
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onLogout();
+                }}
+                className={`p-2 rounded-lg border transition-all duration-150 text-rose-500 active:scale-95 select-none touch-manipulation cursor-pointer flex items-center justify-center shrink-0 ${
                   theme === 'dark' 
-                    ? 'bg-slate-800 border-slate-700 hover:bg-rose-500/10' 
-                    : 'bg-white border-slate-200 hover:bg-rose-50'
+                    ? 'bg-slate-800 border-slate-700 hover:bg-rose-500/10 active:bg-rose-500/20' 
+                    : 'bg-white border-slate-200 hover:bg-rose-50 active:bg-rose-100'
                 }`}
                 title={t.logout}
+                aria-label={t.logout}
               >
                 <LogOut size={18} />
               </button>

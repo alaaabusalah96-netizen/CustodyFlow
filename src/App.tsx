@@ -325,19 +325,42 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } catch (err) {
-      console.error('Logout session revocation error:', err);
-    }
-    try {
-      await signOut(auth);
-    } catch (err) {
-      console.error('Firebase signOut error:', err);
-    }
+    // 1. Instant optimistic local reset: UI transitions immediately with zero lag or delay
     CustodyDB.setActiveUser(null);
     setActiveUser(null);
     setSelectedPendingTx(null);
+
+    try {
+      localStorage.removeItem('custody_active_user');
+      localStorage.removeItem('custody_active_tab');
+      localStorage.removeItem('custody_last_home_tab');
+      sessionStorage.clear();
+    } catch {
+      // ignore storage access errors
+    }
+
+    // 2. Non-blocking resilient backend session revocation & Firebase signOut in background
+    const bgTasks = [
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true
+      }).catch(err => {
+        console.warn('Logout session revocation warning:', err);
+      }),
+      signOut(auth).catch(err => {
+        console.warn('Firebase signOut warning:', err);
+      })
+    ];
+
+    try {
+      await Promise.race([
+        Promise.allSettled(bgTasks),
+        new Promise(resolve => setTimeout(resolve, 600))
+      ]);
+    } catch {
+      // ignore
+    }
   };
 
   const handleSelectTxForSettle = (tx: Transaction) => {
