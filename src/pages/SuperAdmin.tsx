@@ -115,6 +115,8 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
   const [showStructCompanyModal, setShowStructCompanyModal] = useState(false);
   const [showStructRegionModal, setShowStructRegionModal] = useState(false);
   const [showStructStationModal, setShowStructStationModal] = useState(false);
+  const [createdCredentialsModal, setCreatedCredentialsModal] = useState<{ email: string; password: string; role: string; name: string } | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Form states
   const [structCompName, setStructCompName] = useState('');
@@ -173,23 +175,23 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
     setShowStructCompanyModal(true);
   };
 
-  const handleStructDeleteCompany = (id: string) => {
+  const handleStructDeleteCompany = async (id: string) => {
     const connectedRegions = regions.filter(r => r.company_id === id);
     const connectedStations = stations.filter(s => s.company_id === id);
 
-    if (connectedRegions.length > 0 || connectedStations.length > 0) {
-      alert(
-        isRtl 
-          ? `لا يمكن حذف هذه الشركة لوجود قطاعات (${connectedRegions.length}) أو فروع (${connectedStations.length}) تابعة لها. يرجى حذف الفروع أولاً.` 
-          : `Cannot delete company. It contains ${connectedRegions.length} regions and ${connectedStations.length} stations. Please delete them first.`
-      );
-      return;
-    }
+    const confirmMsg = isRtl
+      ? `هل تريد بالتأكيد حذف هذه الشركة نهائياً؟\nسيتم حذف الشركة وكافة فروعها (${connectedStations.length}) وقطاعاتها (${connectedRegions.length}) وجميع حسابات المستخدمين التابعين لها بدون رجعة.`
+      : `Are you sure you want to permanently delete this company?\nThis will delete the company, its ${connectedStations.length} branches, ${connectedRegions.length} regions, and all associated user accounts permanently.`;
 
-    if (confirm(isRtl ? 'هل تريد حذف هذه الشركة وجميع بياناتها بالتأكيد؟' : 'Are you sure you want to delete this company?')) {
-      CustodyDB.deleteCompany(id);
-      showStructToast(isRtl ? 'تم حذف الشركة بنجاح' : 'Company deleted successfully');
-      handleRefreshData();
+    if (confirm(confirmMsg)) {
+      try {
+        showStructToast(isRtl ? 'جاري حذف الشركة وكافة توابعها...' : 'Deleting company and all assets...');
+        await CustodyDB.deleteCompany(id);
+        showStructToast(isRtl ? 'تم حذف الشركة وكافة بياناتها ومستخدميها نهائياً' : 'Company and all associated users deleted permanently');
+        handleRefreshData();
+      } catch (err: any) {
+        alert(isRtl ? `خطأ أثناء حذف الشركة: ${err.message}` : `Error deleting company: ${err.message}`);
+      }
     }
   };
 
@@ -378,7 +380,7 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
       }
     } else {
-      const payload = {
+      const payload: any = {
         email: cleanEmail,
         full_name: isRtl ? 'أدمن الشركة' : 'Company Admin',
         role: 'Admin',
@@ -388,6 +390,9 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
         permissions: permissions || CustodyDB.enrichUserPermissions('Admin'),
         must_change_password: true
       };
+      if (pass && pass.trim()) {
+        payload.password = pass.trim();
+      }
 
       try {
         const res = await fetch('/api/admin/users', {
@@ -412,8 +417,16 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
           }
           await CustodyDB.saveUsers(allUsers);
         }
-        const tempMsg = data.temporaryPassword ? (isRtl ? ` (كلمة المرور المؤقتة: ${data.temporaryPassword})` : ` (Temp Password: ${data.temporaryPassword})`) : '';
-        showStructToast((isRtl ? 'تم إنشاء وتوثيق حساب أدمن الشركة بنجاح!' : 'Company Admin created successfully!') + tempMsg);
+
+        const effectivePass = data.temporaryPassword || (pass && pass.trim()) || '';
+        setCreatedCredentialsModal({
+          email: cleanEmail,
+          password: effectivePass,
+          role: isRtl ? 'أدمن شركة' : 'Company Admin',
+          name: isRtl ? 'أدمن الشركة' : 'Company Admin'
+        });
+
+        showStructToast(isRtl ? 'تم إنشاء حساب أدمن الشركة بنجاح!' : 'Company Admin created successfully!');
         handleRefreshData();
       } catch (err: any) {
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
@@ -463,7 +476,7 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
       }
     } else {
-      const payload = {
+      const payload: any = {
         email: cleanEmail,
         full_name: isRtl ? 'مدير قطاع' : 'Regional Manager',
         role: 'RegionalManager',
@@ -473,6 +486,9 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
         permissions: permissions || CustodyDB.enrichUserPermissions('RegionalManager'),
         must_change_password: true
       };
+      if (pass && pass.trim()) {
+        payload.password = pass.trim();
+      }
 
       try {
         const res = await fetch('/api/admin/users', {
@@ -497,8 +513,16 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
           }
           await CustodyDB.saveUsers(allUsers);
         }
-        const tempMsg = data.temporaryPassword ? (isRtl ? ` (كلمة المرور المؤقتة: ${data.temporaryPassword})` : ` (Temp Password: ${data.temporaryPassword})`) : '';
-        showStructToast((isRtl ? 'تم إنشاء وتوثيق حساب مدير القطاع بنجاح!' : 'Regional Manager created successfully!') + tempMsg);
+
+        const effectivePass = data.temporaryPassword || (pass && pass.trim()) || '';
+        setCreatedCredentialsModal({
+          email: cleanEmail,
+          password: effectivePass,
+          role: isRtl ? 'مدير قطاع' : 'Regional Manager',
+          name: isRtl ? 'مدير قطاع' : 'Regional Manager'
+        });
+
+        showStructToast(isRtl ? 'تم إنشاء حساب مدير القطاع بنجاح!' : 'Regional Manager created successfully!');
         handleRefreshData();
       } catch (err: any) {
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
@@ -549,7 +573,7 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
       }
     } else {
-      const payload = {
+      const payload: any = {
         email: cleanEmail,
         full_name: isRtl ? 'مسؤول فرع' : 'Branch Administrator',
         role: 'StationAdmin',
@@ -559,6 +583,9 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
         permissions: permissions || CustodyDB.enrichUserPermissions('StationAdmin'),
         must_change_password: true
       };
+      if (pass && pass.trim()) {
+        payload.password = pass.trim();
+      }
 
       try {
         const res = await fetch('/api/admin/users', {
@@ -583,8 +610,16 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
           }
           await CustodyDB.saveUsers(allUsers);
         }
-        const tempMsg = data.temporaryPassword ? (isRtl ? ` (كلمة المرور المؤقتة: ${data.temporaryPassword})` : ` (Temp Password: ${data.temporaryPassword})`) : '';
-        showStructToast((isRtl ? 'تم إنشاء وتوثيق حساب مسؤول الفرع بنجاح!' : 'Station Admin created successfully!') + tempMsg);
+
+        const effectivePass = data.temporaryPassword || (pass && pass.trim()) || '';
+        setCreatedCredentialsModal({
+          email: cleanEmail,
+          password: effectivePass,
+          role: isRtl ? 'مسؤول فرع' : 'Station Admin',
+          name: isRtl ? 'مسؤول فرع' : 'Station Admin'
+        });
+
+        showStructToast(isRtl ? 'تم إنشاء حساب مسؤول الفرع بنجاح!' : 'Station Admin created successfully!');
         handleRefreshData();
       } catch (err: any) {
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
@@ -1915,6 +1950,120 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: Created Credentials & Instant Copy Modal */}
+      {createdCredentialsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCreatedCredentialsModal(null)} />
+          <div className="relative bg-white dark:bg-slate-900 border border-emerald-500/30 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                  <CheckCircle2 size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    {isRtl ? 'تم إنشاء الحساب وتوثيق بيانات الدخول' : 'Account Created & Authenticated'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {createdCredentialsModal.role} - {createdCredentialsModal.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCreatedCredentialsModal(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-xl p-3 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <Info size={14} />
+                {isRtl ? 'توجيهات تسجيل الدخول الأول:' : 'First Login Instructions:'}
+              </p>
+              <p className="text-[11px] leading-relaxed">
+                {isRtl
+                  ? 'تم إنشاء الحساب بنجاح وتعيين حالة "تغيير كلمة المرور إلزامي". عند تسجيل الدخول الأول بهذه البيانات، سيتم توجيه المستخدم تلقائياً لصفحة تغيير كلمة المرور لتحديد كلمته الخاصة.'
+                  : 'Account successfully created with required password change. Upon first login with these credentials, the user will be guided to change their password.'}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">
+                  {isRtl ? 'البريد الإلكتروني / اسم المستخدم' : 'Email / Username'}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={createdCredentialsModal.email}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-mono font-bold text-slate-900 dark:text-white select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdCredentialsModal.email);
+                      setCopiedField('email');
+                      setTimeout(() => setCopiedField(null), 2000);
+                    }}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0"
+                  >
+                    {copiedField === 'email' ? <Check size={14} className="text-emerald-500" /> : <ClipboardList size={14} />}
+                    {copiedField === 'email' ? (isRtl ? 'تم!' : 'Copied') : (isRtl ? 'نسخ' : 'Copy')}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">
+                  {isRtl ? 'كلمة المرور المؤقتة المحددة' : 'Assigned Temporary Password'}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={createdCredentialsModal.password}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdCredentialsModal.password);
+                      setCopiedField('password');
+                      setTimeout(() => setCopiedField(null), 2000);
+                    }}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0"
+                  >
+                    {copiedField === 'password' ? <Check size={14} className="text-emerald-500" /> : <ClipboardList size={14} />}
+                    {copiedField === 'password' ? (isRtl ? 'تم!' : 'Copied') : (isRtl ? 'نسخ' : 'Copy')}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const textToCopy = `Email: ${createdCredentialsModal.email}\nPassword: ${createdCredentialsModal.password}`;
+                  navigator.clipboard.writeText(textToCopy);
+                  setCopiedField('all');
+                  setTimeout(() => setCopiedField(null), 2000);
+                }}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
+              >
+                {copiedField === 'all' ? <Check size={16} /> : <ClipboardList size={16} />}
+                {copiedField === 'all'
+                  ? (isRtl ? 'تم نسخ بيانات الدخول بالكامل!' : 'All Credentials Copied!')
+                  : (isRtl ? 'نسخ البريد وكلمة المرور معاً' : 'Copy Both Email & Password')}
+              </button>
+            </div>
           </div>
         </div>
       )}

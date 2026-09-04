@@ -429,9 +429,19 @@ function rebuildListeners(activeUser: AppUser | null, rawCompanyId?: string | nu
     : query(collection(db, 'companies'), where('id', '==', companyId));
 
   const unsubCompanies = onSnapshot(qCompanies, (snapshot) => {
+    let deletedCompanyIds: string[] = [];
+    try {
+      const stored = localStorage.getItem('custody_deleted_company_ids');
+      if (stored) deletedCompanyIds = JSON.parse(stored);
+    } catch (_) {}
+    const deletedSet = new Set(deletedCompanyIds);
+
     const data: Company[] = [];
     snapshot.forEach(doc => {
-      data.push(doc.data() as Company);
+      const comp = doc.data() as Company;
+      if (!deletedSet.has(comp.id)) {
+        data.push(comp);
+      }
     });
     updateLocalAndNotify('companies', data);
   }, (error) => {
@@ -474,8 +484,13 @@ function rebuildListeners(activeUser: AppUser | null, rawCompanyId?: string | nu
     : query(collection(db, 'regions'), where('company_id', '==', companyId));
   const unsubRegions = onSnapshot(qRegions, (snapshot) => {
     const data: Region[] = [];
+    const seen = new Set<string>();
     snapshot.forEach(doc => {
-      data.push(doc.data() as Region);
+      const r = doc.data() as Region;
+      if (r && r.id && !seen.has(r.id)) {
+        seen.add(r.id);
+        data.push(r);
+      }
     });
     updateLocalAndNotify('regions', data);
   }, (error) => {
@@ -489,8 +504,13 @@ function rebuildListeners(activeUser: AppUser | null, rawCompanyId?: string | nu
     : query(collection(db, 'stations'), where('company_id', '==', companyId));
   const unsubStations = onSnapshot(qStations, (snapshot) => {
     const data: Station[] = [];
+    const seen = new Set<string>();
     snapshot.forEach(doc => {
-      data.push(doc.data() as Station);
+      const s = doc.data() as Station;
+      if (s && s.id && !seen.has(s.id)) {
+        seen.add(s.id);
+        data.push(s);
+      }
     });
     updateLocalAndNotify('stations', data);
   }, (error) => {
@@ -513,8 +533,18 @@ function rebuildListeners(activeUser: AppUser | null, rawCompanyId?: string | nu
       } catch (e) {}
     }
 
+    let deletedCompanyIds: string[] = [];
+    try {
+      const stored = localStorage.getItem('custody_deleted_company_ids');
+      if (stored) deletedCompanyIds = JSON.parse(stored);
+    } catch (_) {}
+    const deletedSet = new Set(deletedCompanyIds);
+
     snapshot.forEach(docSnap => {
       const u = docSnap.data() as AppUser;
+      if (u.company_id && deletedSet.has(u.company_id)) {
+        return; // Skip users belonging to permanently deleted companies
+      }
       const cached = localUsersMap[u.id];
       // Root 'users' documents in Firestore do not hold password/salt credentials.
       // Maintain local credentials strictly for the active user's offline session.

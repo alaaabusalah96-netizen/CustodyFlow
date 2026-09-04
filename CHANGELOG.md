@@ -4,6 +4,45 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Region and Station Duplication Root-Cause Fix & Single-Write Guarantees
+**Date:** 2026-09-04
+**Files Changed:** `src/db/stations.ts`, `src/firebase.ts`, `src/pages/CompanyAdminDashboard.tsx`, `src/region_station_deduplication.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Root Cause Analysis**:
+  - When `StationsModule.addRegion` or `StationsModule.addStation` was called, it initialized a local array reference from cache before invoking `OrganizationEngine.addUnit`.
+  - Inside `OrganizationEngine.addUnit`, a reverse-compatibility sync wrote the new legacy region/station record into cache and storage.
+  - Subsequently, `addRegion` / `addStation` appended `newReg` / `newStn` again to its original reference (`[...regions, newReg]`), storing duplicate entries with identical IDs in local storage and triggering duplicate UI cards.
+- **Architectural Resolution & Defense-in-Depth**:
+  - **In-Flight Single-Write Protection (`src/db/stations.ts`)**: `addRegion` and `addStation` now query the latest records and merge/update if `existingIndex >= 0`, ensuring exactly one entity instance is persisted.
+  - **Automatic Deduplication & Self-Healing (`src/db/stations.ts`)**: `getRegions()`, `getStations()`, `saveRegions()`, and `saveStations()` now enforce unique IDs using `Set<string>` and automatically heal corrupted storage states on the fly.
+  - **Firestore Snapshot Listener Deduplication (`src/firebase.ts`)**: Ensured `unsubRegions` and `unsubStations` enforce single document instances by ID upon receiving cloud snapshot events.
+  - **UI Form Double-Click Guard & Asynchronous Execution (`src/pages/CompanyAdminDashboard.tsx`)**: Made `handleStructAddRegion` and `handleStructAddStation` asynchronous with an `isSubmittingStruct` lock and disabled submit buttons during submission to prevent rapid double-clicks on touch devices.
+- **Verification & Tests**:
+  - New test suite `src/region_station_deduplication.test.ts`: 5/5 tests passed.
+  - E2E Lifecycle test suite `src/real_company_provisioning_e2e.test.ts`: 6/6 tests passed.
+  - Full applet compilation: Succeeded (0 errors).
+
+---
+
+## End-to-End Real Lifecycle Verification: Platform Admin Company, Region, Station, Users, Forced Password Change & Cascading Deletion
+**Date:** 2026-09-04
+**Files Changed:** `src/real_company_provisioning_e2e.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Full End-to-End Lifecycle Execution & Audit**:
+  - Successfully simulated the Platform SuperAdmin manually creating a new company (`comp_riyadh_enterprise_2026`), regional district (`reg_central_riyadh_2026`), and operational branch station (`st_olaya_branch_2026`).
+  - Provisioned Company Admin (`ahmed.admin@riyadh-enterprise.com`) and Station Admin (`khaled.branch@riyadh-enterprise.com`) with secure temporary credentials hashed via PBKDF2 with 210,000 iterations and pepper_version 2 stored strictly in the credential vault without plaintext exposure.
+  - Executed first-time login under `must_change_password: true`, verifying that the user is correctly forced into password change mode and blocked from operational routes.
+  - Completed the forced password reset to a permanent secure password (`RiyadhPermSecurePass2026!#`), cleared the `must_change_password` flag, and confirmed subsequent logins succeed with the new password while the old temporary password is permanently rejected.
+  - Validated Station Admin scoped login to ensure automatic binding to their assigned branch station and region.
+  - Executed cascading company deletion, confirming that deleting the company wipes its regions, stations, and associated user accounts from local state and cloud vaults, registering a persistent tombstone in `deleted_company_ids` that prevents data resurrection even upon sync.
+- **Verification & Tests**:
+  - Vitest suite `src/real_company_provisioning_e2e.test.ts`: 6/6 tests passed (100% green).
+  - Vitest multi-suite: 29/29 tests passed across `src/real_company_provisioning_e2e.test.ts`, `src/auth_change_password_flow.test.ts`, `src/phase7_temp_passwords.test.ts`, and `src/settings_user_migration.test.ts`.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production build (`compile_applet`): Succeeded.
+
+---
+
 ## Step 7: Instantaneous & Non-blocking Logout Button Responsiveness Fix
 **Date:** 2026-09-02
 **Files Changed:** `src/App.tsx`, `src/components/Layout.tsx`, `src/components/__tests__/Layout.test.tsx`, `CHANGELOG.md`
@@ -5495,3 +5534,18 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 
 
 
+
+## [2026-09-03] - Authentication rate limit and login hang resolution
+- **Files changed**: server.ts, src/pages/Login.tsx, src/components/ChangePasswordRequired.tsx
+- **Summary**: Increased auth rate limits, decoupled session cookie rate limiters, prevented frontend UI hang with bounded token resolution timeout, enabled resilient user lookup, and synced branch manager temporary credentials.
+- **Test result**: Verified PBKDF2 hash match and compile_applet build succeeded.
+
+## [2026-09-03] - Password change session mismatch and cookie isolation resolution
+- **Files changed**: server.ts, src/components/ChangePasswordRequired.tsx, src/App.tsx, src/pages/Login.tsx
+- **Summary**: Resolved stale session cookie identity mismatch during forced password change, authorized RegionalManager to provision StationAdmin users, ensured credentials: 'include' across session and logout requests, and transitioned client session with customToken upon password change.
+- **Test result**: 11/11 scoped tests passed in src/auth_change_password_flow.test.ts, src/reproduce_change_password_bug.test.ts, and src/password_lifecycle_audit.test.ts. Full compile_applet succeeded.
+
+## [2026-09-04] - Permanent cascading company deletion and platform admin user provisioning flow
+- **Files changed**: src/db/companies.ts, src/firebase.ts, src/components/ChangePasswordRequired.tsx, src/pages/SuperAdmin.tsx, src/pages/RegionAdminDashboard.tsx, src/pages/Stations.tsx, server.ts
+- **Summary**: Implemented client-side and real-time tombstone filtering for permanently deleted companies and users, connected cascading server-side deletion to SuperAdmin structure manager, updated user in-place during forced password change without wiping user cache, added one-click credential copy modal in SuperAdmin with explicit temporary password and manual password propagation across user creation handlers, and applied otpRateLimiter to change-password endpoint.
+- **Test result**: 9/9 passed in settings_user_migration.test.ts, 8/8 passed in phase7_temp_passwords.test.ts, 19/19 passed in auth_change_password_flow.test.ts, db/companies_empty_prod.test.ts, reproduce_change_password_bug.test.ts, and user_provisioning_api.test.ts. Full compile_applet and lint_applet passed.

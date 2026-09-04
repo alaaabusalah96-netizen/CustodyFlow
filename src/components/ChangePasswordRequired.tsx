@@ -3,6 +3,7 @@ import { AppUser } from '../types';
 import { KeyRound, Lock, LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
 import { CustodyDB } from '../db';
 import { auth } from '../firebase';
+import { signInWithCustomToken } from 'firebase/auth';
 
 interface ChangePasswordRequiredProps {
   activeUser: AppUser;
@@ -56,9 +57,13 @@ export default function ChangePasswordRequired({
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
       };
-      const token = await auth.currentUser?.getIdToken();
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+      // Only attach Authorization Bearer if auth.currentUser actually matches activeUser!
+      // This prevents sending a stale Super Admin token when a newly created user is changing password!
+      if (auth.currentUser && (!activeUser?.email || auth.currentUser.email?.toLowerCase() === activeUser.email.toLowerCase())) {
+        const token = await auth.currentUser?.getIdToken().catch(() => null);
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
       }
 
       const res = await fetch('/api/auth/change-password', {
@@ -66,14 +71,33 @@ export default function ChangePasswordRequired({
         headers,
         credentials: 'include',
         body: JSON.stringify({
+          email: activeUser?.email,
+          userId: activeUser?.id,
           currentPassword: trimmedCurrent,
           newPassword: trimmedNew
         })
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         throw new Error(data.message || (isRtl ? 'فشل تغيير كلمة المرور' : 'Failed to change password.'));
+      }
+
+      if (data.customToken) {
+        try {
+          await signInWithCustomToken(auth, data.customToken);
+          const idToken = await auth.currentUser?.getIdToken();
+          if (idToken) {
+            await fetch('/api/auth/session', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ idToken })
+            }).catch(() => {});
+          }
+        } catch (authErr) {
+          console.warn('Firebase client auth switch notice:', authErr);
+        }
       }
 
       const updatedUser: AppUser = {
@@ -82,8 +106,16 @@ export default function ChangePasswordRequired({
         must_change_password: false
       };
 
-      // Sync local storage / DB
-      await CustodyDB.saveUsers([updatedUser]);
+      // Sync local storage / DB preserving all existing users
+      const allUsers = CustodyDB.getUsers();
+      const existingIdx = allUsers.findIndex(u => u.id === updatedUser.id);
+      let newUsersList: AppUser[];
+      if (existingIdx >= 0) {
+        newUsersList = allUsers.map((u, i) => i === existingIdx ? updatedUser : u);
+      } else {
+        newUsersList = [...allUsers, updatedUser];
+      }
+      await CustodyDB.saveUsers(newUsersList);
 
       onPasswordChanged(updatedUser);
     } catch (err: any) {

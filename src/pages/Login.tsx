@@ -43,37 +43,55 @@ export default function Login({
         body: JSON.stringify({ email: cleanEmail, password }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok || !data.success) {
+        if (res.status === 429) {
+          throw new Error(data.message || (isRtl ? 'تم تجاوز الحد الأقصى للمحاولات من هذا الجهاز. يرجى الانتظار بضع دقائق قبل إعادة المحاولة.' : 'Too many attempts. Please wait a few minutes before trying again.'));
+        }
         throw new Error(data.message || (isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid credentials'));
       }
 
+      // 1. Instantly register active local user
+      if (data.user) {
+        CustodyDB.setActiveUser(data.user);
+      }
+
+      // 2. Resilient Firebase client auth & session establishment with bounded timeout
       if (data.customToken) {
-        await signInWithCustomToken(auth, data.customToken);
         try {
-          const idToken = await auth.currentUser?.getIdToken();
-          if (idToken) {
-            await fetch('/api/auth/session', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ idToken }),
-            });
-          }
-        } catch (sessionErr) {
-          console.error('Failed to set session cookie:', sessionErr);
+          const authSignInPromise = (async () => {
+            await signInWithCustomToken(auth, data.customToken);
+            const idToken = await auth.currentUser?.getIdToken();
+            if (idToken) {
+              await fetch('/api/auth/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ idToken }),
+              }).catch(() => {});
+            }
+          })();
+
+          const authTimeoutPromise = new Promise((resolve) =>
+            setTimeout(resolve, 3000)
+          );
+
+          // Wait at most 3 seconds so the user is never stuck spinning indefinitely
+          await Promise.race([authSignInPromise, authTimeoutPromise]);
+        } catch (authErr) {
+          console.warn('Firebase client auth background notice:', authErr);
         }
       }
 
       if (data.user) {
-        CustodyDB.setActiveUser(data.user);
         onLoginSuccess(data.user);
       } else {
         throw new Error(isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid credentials');
       }
     } catch (err: any) {
       console.error('Login failed:', err);
-      setError(isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid login credentials');
+      setError(err?.message || (isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid login credentials'));
     } finally {
       setLoading(false);
     }

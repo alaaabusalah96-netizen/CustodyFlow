@@ -168,7 +168,7 @@ export default function Stations({
         }
         showToast(isRtl ? 'تم تحديث بيانات مدير القطاع بنجاح!' : 'Regional Manager credentials updated successfully!');
       } else {
-        const payload = {
+        const payload: any = {
           email: cleanEmail,
           full_name: isRtl ? `مدير قطاع` : `Regional Manager`,
           role: 'RegionalManager',
@@ -178,6 +178,9 @@ export default function Stations({
           permissions: CustodyDB.enrichUserPermissions('RegionalManager'),
           must_change_password: true
         };
+        if (pass && pass.trim()) {
+          payload.password = pass.trim();
+        }
         const res = await fetch('/api/admin/users', {
           method: 'POST',
           headers,
@@ -192,7 +195,8 @@ export default function Stations({
         if (data.user) {
           await CustodyDB.saveUsers([...usersList, data.user]);
         }
-        const tempMsg = data.temporaryPassword ? (isRtl ? ` (كلمة المرور المؤقتة: ${data.temporaryPassword})` : ` (Temp Password: ${data.temporaryPassword})`) : '';
+        const effectivePass = data.temporaryPassword || (pass && pass.trim()) || '';
+        const tempMsg = effectivePass ? (isRtl ? ` (كلمة المرور: ${effectivePass})` : ` (Password: ${effectivePass})`) : '';
         showToast((isRtl ? 'تم حفظ بيانات مدير القطاع بنجاح!' : 'Regional Manager created successfully!') + tempMsg);
       }
       refreshData();
@@ -241,7 +245,7 @@ export default function Stations({
         }
         showToast(isRtl ? 'تم تحديث بيانات مسؤول الفرع بنجاح!' : 'Branch Admin credentials updated successfully!');
       } else {
-        const payload = {
+        const payload: any = {
           email: cleanEmail,
           full_name: isRtl ? `مسؤول فرع` : `Branch Administrator`,
           role: 'StationAdmin',
@@ -251,6 +255,9 @@ export default function Stations({
           permissions: CustodyDB.enrichUserPermissions('StationAdmin'),
           must_change_password: true
         };
+        if (pass && pass.trim()) {
+          payload.password = pass.trim();
+        }
         const res = await fetch('/api/admin/users', {
           method: 'POST',
           headers,
@@ -265,7 +272,8 @@ export default function Stations({
         if (data.user) {
           await CustodyDB.saveUsers([...usersList, data.user]);
         }
-        const tempMsg = data.temporaryPassword ? (isRtl ? ` (كلمة المرور المؤقتة: ${data.temporaryPassword})` : ` (Temp Password: ${data.temporaryPassword})`) : '';
+        const effectivePass = data.temporaryPassword || (pass && pass.trim()) || '';
+        const tempMsg = effectivePass ? (isRtl ? ` (كلمة المرور: ${effectivePass})` : ` (Password: ${effectivePass})`) : '';
         showToast((isRtl ? 'تم حفظ بيانات مسؤول الفرع بنجاح!' : 'Branch Admin created successfully!') + tempMsg);
       }
       refreshData();

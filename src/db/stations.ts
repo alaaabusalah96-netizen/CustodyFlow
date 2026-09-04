@@ -13,7 +13,19 @@ import { requireCompanyId } from './companyGuard';
 export class StationsModule {
   // Regions
   static getRegions(): Region[] {
-    return StorageEngine.getStored<Region[]>('regions', DEFAULT_REGIONS);
+    const raw = StorageEngine.getStored<Region[]>('regions', DEFAULT_REGIONS);
+    const seen = new Set<string>();
+    const deduplicated: Region[] = [];
+    for (const r of raw) {
+      if (r && r.id && !seen.has(r.id)) {
+        seen.add(r.id);
+        deduplicated.push(r);
+      }
+    }
+    if (raw.length !== deduplicated.length) {
+      StorageEngine.setStored('regions', deduplicated);
+    }
+    return deduplicated;
   }
 
   static getScopedRegions(): Region[] {
@@ -56,8 +68,17 @@ export class StationsModule {
   }
 
   static async saveRegions(regions: Region[]): Promise<{ success: boolean; error?: string }> {
+    const seen = new Set<string>();
+    const deduplicated: Region[] = [];
+    for (const r of regions) {
+      if (r && r.id && !seen.has(r.id)) {
+        seen.add(r.id);
+        deduplicated.push(r);
+      }
+    }
+
     const existing = StorageEngine.getStored<Region[]>('regions', []);
-    const changedRegions = regions.filter(r => {
+    const changedRegions = deduplicated.filter(r => {
       const old = existing.find(ex => ex.id === r.id);
       if (!old) return true;
       return JSON.stringify(old) !== JSON.stringify(r);
@@ -72,13 +93,12 @@ export class StationsModule {
       }
     }
 
-    StorageEngine.setStored('regions', regions);
+    StorageEngine.setStored('regions', deduplicated);
     return { success: true };
   }
 
   static async addRegion(name: string, code?: string, companyId?: string): Promise<Region | null> {
     const compId = requireCompanyId(companyId || CompaniesModule.getSelectedCompanyId());
-    const regions = StationsModule.getRegions();
     const regId = crypto.randomUUID();
     const org_unit_id = `org-unit-region-${regId}`;
 
@@ -117,7 +137,15 @@ export class StationsModule {
       newReg.org_unit_id = createdUnitId;
     }
 
-    const updated = [...regions, newReg];
+    const currentRegions = StationsModule.getRegions();
+    const existingIndex = currentRegions.findIndex(r => r.id === newReg.id);
+    let updated: Region[];
+    if (existingIndex >= 0) {
+      updated = [...currentRegions];
+      updated[existingIndex] = { ...updated[existingIndex], ...newReg };
+    } else {
+      updated = [...currentRegions, newReg];
+    }
     const res = await StationsModule.saveRegions(updated);
     if (!res.success) {
       return null;
@@ -189,7 +217,19 @@ export class StationsModule {
 
   // Stations
   static getStations(): Station[] {
-    return StorageEngine.getStored<Station[]>('stations', DEFAULT_STATIONS);
+    const raw = StorageEngine.getStored<Station[]>('stations', DEFAULT_STATIONS);
+    const seen = new Set<string>();
+    const deduplicated: Station[] = [];
+    for (const s of raw) {
+      if (s && s.id && !seen.has(s.id)) {
+        seen.add(s.id);
+        deduplicated.push(s);
+      }
+    }
+    if (raw.length !== deduplicated.length) {
+      StorageEngine.setStored('stations', deduplicated);
+    }
+    return deduplicated;
   }
 
   static getScopedStations(): Station[] {
@@ -226,8 +266,17 @@ export class StationsModule {
   }
 
   static async saveStations(stations: Station[]): Promise<{ success: boolean; error?: string }> {
+    const seen = new Set<string>();
+    const deduplicated: Station[] = [];
+    for (const s of stations) {
+      if (s && s.id && !seen.has(s.id)) {
+        seen.add(s.id);
+        deduplicated.push(s);
+      }
+    }
+
     const existing = StorageEngine.getStored<Station[]>('stations', []);
-    const changedStations = stations.filter(s => {
+    const changedStations = deduplicated.filter(s => {
       const old = existing.find(ex => ex.id === s.id);
       if (!old) return true;
       return JSON.stringify(old) !== JSON.stringify(s);
@@ -242,7 +291,7 @@ export class StationsModule {
       }
     }
 
-    StorageEngine.setStored('stations', stations);
+    StorageEngine.setStored('stations', deduplicated);
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Update Stations', 'Modified available cash custody stations configuration.');
     return { success: true };
@@ -250,7 +299,6 @@ export class StationsModule {
 
   static async addStation(name: string, code: string, custodyAmount: number, regionId?: string, companyId?: string): Promise<Station | null> {
     const compId = requireCompanyId(companyId || CompaniesModule.getSelectedCompanyId());
-    const stations = StationsModule.getStations();
     const stnId = crypto.randomUUID();
     const org_unit_id = `org-unit-station-${stnId}`;
 
@@ -296,7 +344,15 @@ export class StationsModule {
       newStn.org_unit_id = createdUnitId;
     }
 
-    const updated = [...stations, newStn];
+    const currentStations = StationsModule.getStations();
+    const existingIndex = currentStations.findIndex(s => s.id === newStn.id);
+    let updated: Station[];
+    if (existingIndex >= 0) {
+      updated = [...currentStations];
+      updated[existingIndex] = { ...updated[existingIndex], ...newStn };
+    } else {
+      updated = [...currentStations, newStn];
+    }
     const res = await StationsModule.saveStations(updated);
     if (!res.success) {
       return null;

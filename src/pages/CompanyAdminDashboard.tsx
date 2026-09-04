@@ -75,6 +75,7 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
 
   // Visual cues
   const [structToastMsg, setStructToastMsg] = useState<string>('');
+  const [isSubmittingStruct, setIsSubmittingStruct] = useState(false);
 
   const showStructToast = (msg: string) => {
     setStructToastMsg(msg);
@@ -146,23 +147,28 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
   };
 
   // Region Handlers
-  const handleStructAddRegion = (e: React.FormEvent) => {
+  const handleStructAddRegion = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!structRegName.trim()) return;
+    if (!structRegName.trim() || isSubmittingStruct) return;
 
-    if (structEditingRegion) {
-      CustodyDB.updateRegion(structEditingRegion.id, {
-        name: structRegName.trim()
-      });
-      showStructToast(isRtl ? 'تم تحديث الإقليم بنجاح' : 'Region updated successfully');
-      setStructEditingRegion(null);
-    } else {
-      CustodyDB.addRegion(structRegName.trim(), '', myCompanyId);
-      showStructToast(isRtl ? 'تم إضافة الإقليم بنجاح' : 'Region added successfully');
+    setIsSubmittingStruct(true);
+    try {
+      if (structEditingRegion) {
+        await CustodyDB.updateRegion(structEditingRegion.id, {
+          name: structRegName.trim()
+        });
+        showStructToast(isRtl ? 'تم تحديث الإقليم بنجاح' : 'Region updated successfully');
+        setStructEditingRegion(null);
+      } else {
+        await CustodyDB.addRegion(structRegName.trim(), '', myCompanyId);
+        showStructToast(isRtl ? 'تم إضافة الإقليم بنجاح' : 'Region added successfully');
+      }
+      setStructRegName('');
+      setShowStructRegionModal(false);
+      loadData();
+    } finally {
+      setIsSubmittingStruct(false);
     }
-    setStructRegName('');
-    setShowStructRegionModal(false);
-    loadData();
   };
 
   const handleStructDeleteRegion = (id: string) => {
@@ -184,33 +190,38 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
   };
 
   // Station Handlers
-  const handleStructAddStation = (e: React.FormEvent) => {
+  const handleStructAddStation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!structStnName.trim() || !structStnCode.trim() || !structStnCustody) return;
+    if (!structStnName.trim() || !structStnCode.trim() || !structStnCustody || isSubmittingStruct) return;
     const val = parseFloat(structStnCustody);
     if (isNaN(val) || val <= 0) return;
 
     const rId = structStnRegionId === 'none' || !structStnRegionId ? undefined : structStnRegionId;
 
-    if (structEditingStation) {
-      CustodyDB.updateStation(structEditingStation.id, {
-        station_name: structStnName.trim(),
-        station_code: structStnCode.toUpperCase().trim(),
-        custody_amount: val,
-        region_id: rId
-      });
-      showStructToast(isRtl ? 'تم تحديث الفرع بنجاح' : 'Branch updated successfully');
-      setStructEditingStation(null);
-    } else {
-      CustodyDB.addStation(structStnName.trim(), structStnCode.toUpperCase().trim(), val, rId, myCompanyId);
-      showStructToast(isRtl ? 'تم إضافة الفرع بنجاح' : 'Branch added successfully');
+    setIsSubmittingStruct(true);
+    try {
+      if (structEditingStation) {
+        await CustodyDB.updateStation(structEditingStation.id, {
+          station_name: structStnName.trim(),
+          station_code: structStnCode.toUpperCase().trim(),
+          custody_amount: val,
+          region_id: rId
+        });
+        showStructToast(isRtl ? 'تم تحديث الفرع بنجاح' : 'Branch updated successfully');
+        setStructEditingStation(null);
+      } else {
+        await CustodyDB.addStation(structStnName.trim(), structStnCode.toUpperCase().trim(), val, rId, myCompanyId);
+        showStructToast(isRtl ? 'تم إضافة الفرع بنجاح' : 'Branch added successfully');
+      }
+      setStructStnName('');
+      setStructStnCode('');
+      setStructStnCustody('');
+      setStructStnRegionId('none');
+      setShowStructStationModal(false);
+      loadData();
+    } finally {
+      setIsSubmittingStruct(false);
     }
-    setStructStnName('');
-    setStructStnCode('');
-    setStructStnCustody('');
-    setStructStnRegionId('none');
-    setShowStructStationModal(false);
-    loadData();
   };
 
   const handleStructDeleteStation = (id: string) => {
@@ -1116,9 +1127,10 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                  disabled={isSubmittingStruct}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
                 >
-                  {isRtl ? 'حفظ البيانات' : 'Save Region'}
+                  {isSubmittingStruct ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ البيانات' : 'Save Region')}
                 </button>
               </div>
             </form>
@@ -1204,9 +1216,10 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                  disabled={isSubmittingStruct}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
                 >
-                  {isRtl ? 'حفظ البيانات' : 'Save Branch'}
+                  {isSubmittingStruct ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ البيانات' : 'Save Branch')}
                 </button>
               </div>
             </form>

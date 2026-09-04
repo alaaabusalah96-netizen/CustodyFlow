@@ -93,8 +93,10 @@ export class CompaniesModule {
   }
 
   static getCompanies(): Company[] {
-    const fallback = isDevOrTest() ? DEFAULT_COMPANIES : [];
-    return StorageEngine.getStored<Company[]>('companies', fallback);
+    const deletedIds = new Set(StorageEngine.getStored<string[]>('deleted_company_ids', []));
+    const fallback = isDevOrTest() ? DEFAULT_COMPANIES.filter(c => !deletedIds.has(c.id)) : [];
+    const companies = StorageEngine.getStored<Company[]>('companies', fallback);
+    return companies.filter(c => !deletedIds.has(c.id));
   }
 
   static async saveCompanies(companies: Company[]): Promise<{ success: boolean; error?: string }> {
@@ -155,15 +157,65 @@ export class CompaniesModule {
   }
 
   static async deleteCompany(id: string): Promise<{ success: boolean; error?: string }> {
-    const res = await syncWriteWithOfflineFallback('companies', id, null);
-    if (!res.success) {
-      console.warn(`[deleteCompany] Warning: ${res.error}`);
-      return { success: false, error: res.error };
+    // 1. Record permanent tombstone in client storage
+    const deletedIds = StorageEngine.getStored<string[]>('deleted_company_ids', []);
+    if (!deletedIds.includes(id)) {
+      deletedIds.push(id);
+      StorageEngine.setStored('deleted_company_ids', deletedIds);
     }
-    const companies = CompaniesModule.getCompanies().filter(c => c.id !== id);
+
+    // 2. Call backend server cascading deletion API
+    try {
+      let authHeader = '';
+      if (typeof window !== 'undefined') {
+        const sessionToken = localStorage.getItem('custody_auth_token');
+        if (sessionToken) authHeader = `Bearer ${sessionToken}`;
+      }
+      await fetch(`/api/admin/companies/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authHeader ? { 'Authorization': authHeader } : {})
+        },
+        credentials: 'include'
+      }).catch(err => console.warn('[deleteCompany] Server call notice:', err));
+    } catch (apiErr) {
+      console.warn('[deleteCompany] Network error calling /api/admin/companies:', apiErr);
+    }
+
+    // 3. Delete from Firestore via syncWriteWithOfflineFallback
+    await syncWriteWithOfflineFallback('companies', id, null);
+
+    // 4. Cascade delete across all local collections
+    // Filter companies
+    const companies = StorageEngine.getStored<Company[]>('companies', []).filter(c => c.id !== id);
     StorageEngine.setStored('companies', companies);
+
+    // Filter users belonging to this company
+    const allUsers = StorageEngine.getStored<any[]>('users', []).filter(u => u.company_id !== id);
+    StorageEngine.setStored('users', allUsers);
+
+    // Filter regions belonging to this company
+    const allRegions = StorageEngine.getStored<any[]>('regions', []).filter(r => r.company_id !== id);
+    StorageEngine.setStored('regions', allRegions);
+
+    // Filter stations belonging to this company
+    const allStations = StorageEngine.getStored<any[]>('stations', []).filter(s => s.company_id !== id);
+    StorageEngine.setStored('stations', allStations);
+
+    // If current selected company was this deleted one, reset selection
+    if (StorageEngine.getStored('selected_company_id', '') === id) {
+      const nextComp = companies[0]?.id || '';
+      StorageEngine.setStored('selected_company_id', nextComp);
+    }
+
     const user = UsersModule.getActiveUser();
-    LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Delete Company', `Deleted company ID: ${id}`);
+    LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Delete Company', `Deleted company ID: ${id} and all associated users and data`);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('custody_db_updated'));
+    }
+
     return { success: true };
   }
 

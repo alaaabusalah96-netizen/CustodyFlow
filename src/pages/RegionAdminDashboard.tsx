@@ -203,7 +203,7 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
         alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
       }
     } else {
-      const payload = {
+      const payload: any = {
         email: cleanEmail,
         full_name: isRtl ? 'مسؤول فرع' : 'Branch Manager',
         role: 'StationAdmin',
@@ -213,6 +213,9 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
         permissions: permissions || CustodyDB.enrichUserPermissions('StationAdmin'),
         must_change_password: true
       };
+      if (pass && pass.trim()) {
+        payload.password = pass.trim();
+      }
 
       try {
         const res = await fetch('/api/admin/users', {
@@ -237,7 +240,8 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
           }
           await CustodyDB.saveUsers(allUsers);
         }
-        const tempMsg = data.temporaryPassword ? (isRtl ? ` (كلمة المرور المؤقتة: ${data.temporaryPassword})` : ` (Temp Password: ${data.temporaryPassword})`) : '';
+        const effectivePass = data.temporaryPassword || (pass && pass.trim()) || '';
+        const tempMsg = effectivePass ? (isRtl ? ` (كلمة المرور: ${effectivePass})` : ` (Password: ${effectivePass})`) : '';
         showStructToast((isRtl ? 'تم إنشاء وتوثيق حساب مدير الفرع بنجاح!' : 'Branch Admin created successfully!') + tempMsg);
         loadData();
       } catch (err: any) {

@@ -344,6 +344,7 @@ export default function App() {
       fetch('/api/auth/logout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         keepalive: true
       }).catch(err => {
         console.warn('Logout session revocation warning:', err);
