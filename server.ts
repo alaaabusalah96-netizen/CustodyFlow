@@ -716,18 +716,27 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "المحطة مطلوبة لهذا الدور / station_id is required for StationAdmin." });
       }
 
-      // Region/Station belong to company check (supports legacy collections & modern organization_units)
+      // Region/Station belong to company check (supports legacy collections & modern organization_units) - FAIL-CLOSED
       if (region_id) {
         let isValidRegion = false;
+        let regionFound = false;
+        let infraError = false;
         try {
           const regDoc = await adminDb.collection("regions").doc(region_id).get();
-          if (regDoc.exists && (!effectiveCompanyId || regDoc.data()?.company_id === effectiveCompanyId)) {
-            isValidRegion = true;
-            if (!effectiveCompanyId && regDoc.data()?.company_id) effectiveCompanyId = regDoc.data()?.company_id;
+          if (regDoc.exists) {
+            regionFound = true;
+            const regData = regDoc.data();
+            const regCompId = regData?.company_id;
+            if (!effectiveCompanyId || regCompId === effectiveCompanyId) {
+              isValidRegion = true;
+              if (!effectiveCompanyId && regCompId) effectiveCompanyId = regCompId;
+            }
           } else {
             const orgDoc = await adminDb.collection("organization_units").doc(region_id).get();
             if (orgDoc.exists) {
-              const orgCompId = orgDoc.data()?.companyId || orgDoc.data()?.company_id;
+              regionFound = true;
+              const orgData = orgDoc.data();
+              const orgCompId = orgData?.companyId || orgData?.company_id;
               if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
                 isValidRegion = true;
                 if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
@@ -735,37 +744,66 @@ async function startServer() {
             } else {
               const orgCodeSnap = await adminDb.collection("organization_units").where("code", "==", region_id).limit(1).get();
               if (!orgCodeSnap.empty) {
-                const orgCompId = orgCodeSnap.docs[0].data()?.companyId || orgCodeSnap.docs[0].data()?.company_id;
+                regionFound = true;
+                const orgData = orgCodeSnap.docs[0].data();
+                const orgCompId = orgData?.companyId || orgData?.company_id;
                 if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
                   isValidRegion = true;
                   if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
                 }
-              } else {
-                // If neither found in Firestore, accept region_id under the active company
-                isValidRegion = true;
               }
             }
           }
-        } catch (_) {
-          isValidRegion = true;
+        } catch (regLookupErr) {
+          console.error("Infrastructure error during region verification:", regLookupErr);
+          infraError = true;
         }
 
-        if (!isValidRegion) {
-          return res.status(400).json({ success: false, message: "المنطقة غير موجودة أو لا تنتمي للشركة المحجوزة / Region does not belong to company." });
+        if (infraError) {
+          return res.status(503).json({
+            success: false,
+            message: "تعذر التحقق من بيانات المنطقة بسبب خطأ في الخادم، يرجى إعادة المحاولة / Infrastructure error verifying region. Please retry."
+          });
+        }
+
+        if (!regionFound || !isValidRegion) {
+          return res.status(400).json({
+            success: false,
+            message: "المنطقة غير موجودة أو لا تنتمي للشركة المحجوزة / Region does not exist or does not belong to company."
+          });
         }
       }
 
+      let resolvedStationRegionId: string | null = null;
       if (station_id) {
         let isValidStation = false;
+        let stationFound = false;
+        let infraError = false;
         try {
           const stDoc = await adminDb.collection("stations").doc(station_id).get();
-          if (stDoc.exists && (!effectiveCompanyId || stDoc.data()?.company_id === effectiveCompanyId)) {
-            isValidStation = true;
-            if (!effectiveCompanyId && stDoc.data()?.company_id) effectiveCompanyId = stDoc.data()?.company_id;
+          if (stDoc.exists) {
+            stationFound = true;
+            const stData = stDoc.data();
+            const stCompId = stData?.company_id;
+            resolvedStationRegionId = stData?.region_id || null;
+            if (!effectiveCompanyId || stCompId === effectiveCompanyId) {
+              isValidStation = true;
+              if (!effectiveCompanyId && stCompId) effectiveCompanyId = stCompId;
+            }
           } else {
             const orgDoc = await adminDb.collection("organization_units").doc(station_id).get();
             if (orgDoc.exists) {
-              const orgCompId = orgDoc.data()?.companyId || orgDoc.data()?.company_id;
+              stationFound = true;
+              const orgData = orgDoc.data();
+              const orgCompId = orgData?.companyId || orgData?.company_id;
+              resolvedStationRegionId = orgData?.metadata?.legacyRegionId || orgData?.metadata?.legacy_region_id || null;
+              if (!resolvedStationRegionId && orgData?.parentId) {
+                const parentDoc = await adminDb.collection("organization_units").doc(orgData.parentId).get();
+                if (parentDoc.exists) {
+                  const parentData = parentDoc.data();
+                  resolvedStationRegionId = parentData?.metadata?.legacyRegionId || parentData?.metadata?.legacy_region_id || parentDoc.id.replace('org-unit-region-', '');
+                }
+              }
               if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
                 isValidStation = true;
                 if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
@@ -773,23 +811,46 @@ async function startServer() {
             } else {
               const orgCodeSnap = await adminDb.collection("organization_units").where("code", "==", station_id).limit(1).get();
               if (!orgCodeSnap.empty) {
-                const orgCompId = orgCodeSnap.docs[0].data()?.companyId || orgCodeSnap.docs[0].data()?.company_id;
+                stationFound = true;
+                const orgData = orgCodeSnap.docs[0].data();
+                const orgCompId = orgData?.companyId || orgData?.company_id;
+                resolvedStationRegionId = orgData?.metadata?.legacyRegionId || orgData?.metadata?.legacy_region_id || null;
                 if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
                   isValidStation = true;
                   if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
                 }
-              } else {
-                // If neither found in Firestore, accept station_id under the active company
-                isValidStation = true;
               }
             }
           }
-        } catch (_) {
-          isValidStation = true;
+        } catch (stLookupErr) {
+          console.error("Infrastructure error during station verification:", stLookupErr);
+          infraError = true;
         }
 
-        if (!isValidStation) {
-          return res.status(400).json({ success: false, message: "المحطة غير موجودة أو لا تنتمي للشركة المحجوزة / Station does not belong to company." });
+        if (infraError) {
+          return res.status(503).json({
+            success: false,
+            message: "تعذر التحقق من بيانات المحطة بسبب خطأ في الخادم، يرجى إعادة المحاولة / Infrastructure error verifying station. Please retry."
+          });
+        }
+
+        if (!stationFound || !isValidStation) {
+          return res.status(400).json({
+            success: false,
+            message: "المحطة غير موجودة أو لا تنتمي للشركة المحجوزة / Station does not exist or does not belong to company."
+          });
+        }
+      }
+
+      // Check RegionalManager authorization over station
+      if (isRegionalManager && role === "StationAdmin") {
+        const creatorRegionId = creator.region_id || creator.scoped_region_id;
+        const targetRegionId = resolvedStationRegionId || region_id;
+        if (!creatorRegionId || (targetRegionId && targetRegionId !== creatorRegionId)) {
+          return res.status(403).json({
+            success: false,
+            message: "غير مصرح: مصرح فقط بإنشاء مدراء محطات تابعين لمنطقتك / Forbidden: You can only create station admins for stations within your assigned region."
+          });
         }
       }
 
@@ -820,7 +881,11 @@ async function startServer() {
               displayName: full_name.trim()
             });
           } catch (updateAuthErr: any) {
-            console.warn("Notice: Auth updateUser error (continuing):", updateAuthErr?.message);
+            console.error("Auth updateUser error:", updateAuthErr?.message);
+            return res.status(500).json({
+              success: false,
+              message: "فشل تحديث بيانات المستخدم في Firebase Auth / Failed to update user in Firebase Auth: " + (updateAuthErr?.message || "Unknown error")
+            });
           }
         }
         userId = existingAuthUser.uid;
@@ -835,8 +900,11 @@ async function startServer() {
             });
             userId = authUser.uid;
           } catch (createAuthErr: any) {
-            console.warn("Notice: Auth createUser error, generating local UID:", createAuthErr?.message);
-            userId = 'user-' + crypto.randomUUID();
+            console.error("Auth createUser error:", createAuthErr?.message);
+            return res.status(500).json({
+              success: false,
+              message: "فشل إنشاء حساب المستخدم في Firebase Auth / Failed to create user in Firebase Auth: " + (createAuthErr?.message || "Unknown error")
+            });
           }
         } else {
           userId = 'user-' + crypto.randomUUID();
@@ -919,10 +987,6 @@ async function startServer() {
       const creator = authResult.user;
       const isPlatformAdmin = await isPlatformAdminUser(creator.email, creator);
 
-      if (!isPlatformAdmin && creator.role !== "Admin") {
-        return res.status(403).json({ success: false, message: "Forbidden: Insufficient privileges / غير مصرح لك بتحديث المستخدمين." });
-      }
-
       const targetUserId = req.params.id;
       if (!targetUserId) {
         return res.status(400).json({ success: false, message: "Target user ID is required." });
@@ -935,6 +999,23 @@ async function startServer() {
 
       const targetData = targetDoc.data() || {};
       const isTargetPlatformAdmin = await isPlatformAdminUser(targetData.email, targetData);
+
+      const isRegionalManager = creator.role === "RegionalManager" || creator.role === "BranchManager";
+      const canUpdate = isPlatformAdmin || creator.role === "Admin" || (isRegionalManager && targetData.role === "StationAdmin" && (!req.body?.role || req.body.role === "StationAdmin"));
+
+      if (!canUpdate) {
+        return res.status(403).json({ success: false, message: "Forbidden: Insufficient privileges / غير مصرح لك بتحديث المستخدمين." });
+      }
+
+      if (isRegionalManager) {
+        const creatorRegionId = creator.region_id || creator.scoped_region_id;
+        if (!creatorRegionId || targetData.region_id !== creatorRegionId) {
+          return res.status(403).json({
+            success: false,
+            message: "غير مصرح: مصرح فقط بتعديل مدراء محطات تابعين لمنطقتك / Forbidden: You can only modify station admins within your assigned region."
+          });
+        }
+      }
 
       // SystemAdmin / Platform Owner protection
       if (isTargetPlatformAdmin && !isPlatformAdmin) {
@@ -961,7 +1042,7 @@ async function startServer() {
       }
 
       // Company Admin Scope Check
-      if (!isPlatformAdmin) {
+      if (!isPlatformAdmin && !isRegionalManager) {
         if (targetData.company_id !== creator.company_id) {
           return res.status(403).json({ success: false, message: "غير مصرح لك بتعديل مستخدم ينتمي لشركة أخرى / Admin cannot edit user from another company." });
         }
@@ -970,7 +1051,7 @@ async function startServer() {
         }
       }
 
-      const effectiveCompanyId = company_id !== undefined ? company_id : targetData.company_id;
+      let effectiveCompanyId = company_id !== undefined ? company_id : targetData.company_id;
       const effectiveRole = role !== undefined ? role : targetData.role;
       const effectiveRegionId = region_id !== undefined ? region_id : targetData.region_id;
       const effectiveStationId = station_id !== undefined ? station_id : targetData.station_id;
@@ -983,63 +1064,140 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "المحطة مطلوبة لهذا الدور / station_id is required for StationAdmin." });
       }
 
-      // Validate region/station belong to company if changed or set
+      // Validate region/station belong to company if changed or set - FAIL-CLOSED
       if (region_id) {
         let isValidRegion = false;
+        let regionFound = false;
+        let infraError = false;
         try {
           const regDoc = await adminDb.collection("regions").doc(region_id).get();
-          if (regDoc.exists && (!effectiveCompanyId || regDoc.data()?.company_id === effectiveCompanyId)) {
-            isValidRegion = true;
+          if (regDoc.exists) {
+            regionFound = true;
+            const regData = regDoc.data();
+            const regCompId = regData?.company_id;
+            if (!effectiveCompanyId || regCompId === effectiveCompanyId) {
+              isValidRegion = true;
+              if (!effectiveCompanyId && regCompId) effectiveCompanyId = regCompId;
+            }
           } else {
             const orgDoc = await adminDb.collection("organization_units").doc(region_id).get();
             if (orgDoc.exists) {
-              const orgCompId = orgDoc.data()?.companyId || orgDoc.data()?.company_id;
-              if (!effectiveCompanyId || orgCompId === effectiveCompanyId) isValidRegion = true;
+              regionFound = true;
+              const orgData = orgDoc.data();
+              const orgCompId = orgData?.companyId || orgData?.company_id;
+              if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
+                isValidRegion = true;
+                if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
+              }
             } else {
               const orgCodeSnap = await adminDb.collection("organization_units").where("code", "==", region_id).limit(1).get();
               if (!orgCodeSnap.empty) {
-                const orgCompId = orgCodeSnap.docs[0].data()?.companyId || orgCodeSnap.docs[0].data()?.company_id;
-                if (!effectiveCompanyId || orgCompId === effectiveCompanyId) isValidRegion = true;
-              } else {
-                isValidRegion = true;
+                regionFound = true;
+                const orgData = orgCodeSnap.docs[0].data();
+                const orgCompId = orgData?.companyId || orgData?.company_id;
+                if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
+                  isValidRegion = true;
+                  if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
+                }
               }
             }
           }
-        } catch (_) {
-          isValidRegion = true;
+        } catch (regErr) {
+          console.error("Infrastructure error during region verification in PATCH:", regErr);
+          infraError = true;
         }
 
-        if (!isValidRegion) {
-          return res.status(400).json({ success: false, message: "المنطقة غير موجودة أو لا تنتمي للشركة / Region does not belong to company." });
+        if (infraError) {
+          return res.status(503).json({
+            success: false,
+            message: "تعذر التحقق من بيانات المنطقة بسبب خطأ في الخادم، يرجى إعادة المحاولة / Infrastructure error verifying region. Please retry."
+          });
+        }
+
+        if (!regionFound || !isValidRegion) {
+          return res.status(400).json({
+            success: false,
+            message: "المنطقة غير موجودة أو لا تنتمي للشركة / Region does not exist or does not belong to company."
+          });
         }
       }
+
+      let resolvedStationRegionId: string | null = null;
       if (station_id) {
         let isValidStation = false;
+        let stationFound = false;
+        let infraError = false;
         try {
           const stDoc = await adminDb.collection("stations").doc(station_id).get();
-          if (stDoc.exists && (!effectiveCompanyId || stDoc.data()?.company_id === effectiveCompanyId)) {
-            isValidStation = true;
+          if (stDoc.exists) {
+            stationFound = true;
+            const stData = stDoc.data();
+            const stCompId = stData?.company_id;
+            resolvedStationRegionId = stData?.region_id || null;
+            if (!effectiveCompanyId || stCompId === effectiveCompanyId) {
+              isValidStation = true;
+              if (!effectiveCompanyId && stCompId) effectiveCompanyId = stCompId;
+            }
           } else {
             const orgDoc = await adminDb.collection("organization_units").doc(station_id).get();
             if (orgDoc.exists) {
-              const orgCompId = orgDoc.data()?.companyId || orgDoc.data()?.company_id;
-              if (!effectiveCompanyId || orgCompId === effectiveCompanyId) isValidStation = true;
+              stationFound = true;
+              const orgData = orgDoc.data();
+              const orgCompId = orgData?.companyId || orgData?.company_id;
+              resolvedStationRegionId = orgData?.metadata?.legacyRegionId || orgData?.metadata?.legacy_region_id || null;
+              if (!resolvedStationRegionId && orgData?.parentId) {
+                const parentDoc = await adminDb.collection("organization_units").doc(orgData.parentId).get();
+                if (parentDoc.exists) {
+                  const parentData = parentDoc.data();
+                  resolvedStationRegionId = parentData?.metadata?.legacyRegionId || parentData?.metadata?.legacy_region_id || parentDoc.id.replace('org-unit-region-', '');
+                }
+              }
+              if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
+                isValidStation = true;
+                if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
+              }
             } else {
               const orgCodeSnap = await adminDb.collection("organization_units").where("code", "==", station_id).limit(1).get();
               if (!orgCodeSnap.empty) {
-                const orgCompId = orgCodeSnap.docs[0].data()?.companyId || orgCodeSnap.docs[0].data()?.company_id;
-                if (!effectiveCompanyId || orgCompId === effectiveCompanyId) isValidStation = true;
-              } else {
-                isValidStation = true;
+                stationFound = true;
+                const orgData = orgCodeSnap.docs[0].data();
+                const orgCompId = orgData?.companyId || orgData?.company_id;
+                resolvedStationRegionId = orgData?.metadata?.legacyRegionId || orgData?.metadata?.legacy_region_id || null;
+                if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
+                  isValidStation = true;
+                  if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
+                }
               }
             }
           }
-        } catch (_) {
-          isValidStation = true;
+        } catch (stErr) {
+          console.error("Infrastructure error during station verification in PATCH:", stErr);
+          infraError = true;
         }
 
-        if (!isValidStation) {
-          return res.status(400).json({ success: false, message: "المحطة غير موجودة أو لا تنتمي للشركة / Station does not belong to company." });
+        if (infraError) {
+          return res.status(503).json({
+            success: false,
+            message: "تعذر التحقق من بيانات المحطة بسبب خطأ في الخادم، يرجى إعادة المحاولة / Infrastructure error verifying station. Please retry."
+          });
+        }
+
+        if (!stationFound || !isValidStation) {
+          return res.status(400).json({
+            success: false,
+            message: "المحطة غير موجودة أو لا تنتمي للشركة / Station does not exist or does not belong to company."
+          });
+        }
+      }
+
+      if (isRegionalManager && station_id) {
+        const creatorRegionId = creator.region_id || creator.scoped_region_id;
+        const targetRegionId = resolvedStationRegionId || region_id;
+        if (!creatorRegionId || (targetRegionId && targetRegionId !== creatorRegionId)) {
+          return res.status(403).json({
+            success: false,
+            message: "غير مصرح: مصرح فقط بتعيين مدراء محطات تابعين لمنطقتك / Forbidden: You can only assign station admins to stations within your assigned region."
+          });
         }
       }
 
@@ -1690,8 +1848,14 @@ async function startServer() {
       }
 
       // Verify current password against vault
-      const credDoc = await adminDb.collection("user_credentials").doc(uid).get();
+      let credDoc = await adminDb.collection("user_credentials").doc(uid).get();
       const emailLower = String(user.email || '').toLowerCase().trim();
+      if (!credDoc.exists && emailLower) {
+        const credEmailDoc = await adminDb.collection("user_credentials").doc(emailLower).get();
+        if (credEmailDoc.exists) {
+          credDoc = credEmailDoc;
+        }
+      }
 
       let storedPasswordHash = '';
       let salt = user.salt || emailLower;
@@ -1711,13 +1875,14 @@ async function startServer() {
 
       // Perform Password Comparisons across KDF iterations using stored pepper_version
       const pbkdf2Hash = hashPasswordPBKDF2_210k(currentPassword, salt, pepperVersion);
+      const pbkdf2HashAlt = hashPasswordPBKDF2_210k(currentPassword, salt, pepperVersion === 2 ? 1 : 2);
       const hash10k = hashPassword(currentPassword, salt, pepperVersion);
       const hash1k = legacyStretchedHashPassword1000(currentPassword, salt, pepperVersion); // TODO(remove-after-2027-02-01)
       const hashSinglePass = legacySinglePassHashPassword(currentPassword, salt, pepperVersion); // TODO(remove-after-2027-02-01)
       const hashOldEmailSalt = legacyHashPassword(currentPassword, emailLower); // TODO(remove-after-2027-02-01)
       const hashLegacyUnsalted = legacyHashPassword(currentPassword); // TODO(remove-after-2027-02-01)
 
-      const isPBKDF2Match = storedPasswordHash !== '' && storedPasswordHash === pbkdf2Hash;
+      const isPBKDF2Match = storedPasswordHash !== '' && (storedPasswordHash === pbkdf2Hash || storedPasswordHash === pbkdf2HashAlt);
       const is10kMatch = storedPasswordHash !== '' && storedPasswordHash === hash10k;
       const is1kMatch = storedPasswordHash !== '' && storedPasswordHash === hash1k; // TODO(remove-after-2027-02-01)
       const isSinglePassMatch = storedPasswordHash !== '' && storedPasswordHash === hashSinglePass; // TODO(remove-after-2027-02-01)
@@ -1740,16 +1905,22 @@ async function startServer() {
       // Re-hash new password with PBKDF2 210,000 iterations & vault it
       const newSalt = crypto.randomUUID();
       const newPbkdf2Hash = hashPasswordPBKDF2_210k(newPassword, newSalt, 2);
-      await adminDb.collection("user_credentials").doc(uid).set({
+      const updatedCredPayload = {
         id: uid,
         company_id: user.company_id || 'platform',
         email: emailLower,
         passwordHash: newPbkdf2Hash,
+        password: newPbkdf2Hash,
         salt: newSalt,
         kdf: 'sha256_pbkdf2_210k',
         pepper_version: 2,
+        is_temporary: false,
         updated_at: new Date().toISOString()
-      }, { merge: true });
+      };
+      await adminDb.collection("user_credentials").doc(uid).set(updatedCredPayload, { merge: true });
+      if (emailLower) {
+        await adminDb.collection("user_credentials").doc(emailLower).set(updatedCredPayload, { merge: true });
+      }
 
       // Update users collection document: set must_change_password = false & strip plaintext password/salt
       await adminDb.collection("users").doc(uid).update({

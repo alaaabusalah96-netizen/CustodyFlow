@@ -3,6 +3,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { CustodyDB, ModulesModule, ERP_MODULES_REGISTRY, CompanyModuleSettings } from '../db';
 import { useScreenListeners, auth } from '../firebase';
 import { Company, AppUser, Language, Theme, AuditLog, Region, Station, UserPermissions, Transaction, TransactionStatus, ActivityLog, DeletedTransaction, SignupRequest } from '../types';
+import { createManagedUser, updateManagedUser } from '../lib/userProvisioning';
 import { 
   Building2, ShieldCheck, KeyRound, UserCheck, RefreshCw, AlertTriangle, 
   Plus, Calendar, Sparkles, User, LogOut, ClipboardList, Info, Check, Search, ShieldAlert,
@@ -324,21 +325,6 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
     }
   };
 
-  const getAuthHeaders = async () => {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-    } catch (err) {
-      console.warn('Failed to retrieve ID token:', err);
-    }
-    return headers;
-  };
-
   const handleSaveCompanyAdmin = async (companyId: string, email: string, pass: string, permissions?: UserPermissions) => {
     if (!email || !email.trim()) return;
     const cleanEmail = email.trim().toLowerCase();
@@ -358,14 +344,8 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
       }
 
       try {
-        const res = await fetch(`/api/admin/users/${existingAdmin.id}`, {
-          method: 'PATCH',
-          headers: await getAuthHeaders(),
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
+        const data = await updateManagedUser(existingAdmin.id, payload);
+        if (!data.success) {
           alert(`⚠️ ${data.message || (isRtl ? 'فشل تحديث بيانات أدمن الشركة' : 'Failed to update Company Admin')}`);
           return;
         }
@@ -395,25 +375,19 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
       }
 
       try {
-        const res = await fetch('/api/admin/users', {
-          method: 'POST',
-          headers: await getAuthHeaders(),
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
+        const data = await createManagedUser(payload);
+        if (!data.success) {
           alert(`⚠️ ${data.message || (isRtl ? 'فشل إنشاء حساب أدمن الشركة' : 'Failed to create Company Admin')}`);
           return;
         }
 
         if (data.user) {
           const allUsers = CustodyDB.getUsers();
-          const existingIdx = allUsers.findIndex(u => u.id === data.user.id);
+          const existingIdx = allUsers.findIndex(u => u.id === data.user!.id);
           if (existingIdx >= 0) {
-            allUsers[existingIdx] = data.user;
+            allUsers[existingIdx] = data.user!;
           } else {
-            allUsers.push(data.user);
+            allUsers.push(data.user!);
           }
           await CustodyDB.saveUsers(allUsers);
         }
@@ -423,7 +397,7 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
           email: cleanEmail,
           password: effectivePass,
           role: isRtl ? 'أدمن شركة' : 'Company Admin',
-          name: isRtl ? 'أدمن الشركة' : 'Company Admin'
+          name: isRtl ? 'أدمن شركة' : 'Company Admin'
         });
 
         showStructToast(isRtl ? 'تم إنشاء حساب أدمن الشركة بنجاح!' : 'Company Admin created successfully!');
@@ -434,7 +408,7 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
     }
   };
 
-  const handleSaveRegionManager = async (regionId: string, companyId: string, email: string, pass: string, permissions?: UserPermissions) => {
+  const handleSaveRegionalManager = async (regionId: string, companyId: string, email: string, pass: string, permissions?: UserPermissions) => {
     if (!email || !email.trim()) return;
     const cleanEmail = email.trim().toLowerCase();
     const usersList = CustodyDB.getUsers();
@@ -454,14 +428,8 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
       }
 
       try {
-        const res = await fetch(`/api/admin/users/${existingManager.id}`, {
-          method: 'PATCH',
-          headers: await getAuthHeaders(),
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
+        const data = await updateManagedUser(existingManager.id, payload);
+        if (!data.success) {
           alert(`⚠️ ${data.message || (isRtl ? 'فشل تحديث بيانات مدير القطاع' : 'Failed to update Regional Manager')}`);
           return;
         }
@@ -491,25 +459,19 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
       }
 
       try {
-        const res = await fetch('/api/admin/users', {
-          method: 'POST',
-          headers: await getAuthHeaders(),
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
+        const data = await createManagedUser(payload);
+        if (!data.success) {
           alert(`⚠️ ${data.message || (isRtl ? 'فشل إنشاء حساب مدير القطاع' : 'Failed to create Regional Manager')}`);
           return;
         }
 
         if (data.user) {
           const allUsers = CustodyDB.getUsers();
-          const existingIdx = allUsers.findIndex(u => u.id === data.user.id);
+          const existingIdx = allUsers.findIndex(u => u.id === data.user!.id);
           if (existingIdx >= 0) {
-            allUsers[existingIdx] = data.user;
+            allUsers[existingIdx] = data.user!;
           } else {
-            allUsers.push(data.user);
+            allUsers.push(data.user!);
           }
           await CustodyDB.saveUsers(allUsers);
         }
@@ -551,14 +513,8 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
       }
 
       try {
-        const res = await fetch(`/api/admin/users/${existingAdmin.id}`, {
-          method: 'PATCH',
-          headers: await getAuthHeaders(),
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
+        const data = await updateManagedUser(existingAdmin.id, payload);
+        if (!data.success) {
           alert(`⚠️ ${data.message || (isRtl ? 'فشل تحديث بيانات مسؤول الفرع' : 'Failed to update Station Admin')}`);
           return;
         }
@@ -588,25 +544,19 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
       }
 
       try {
-        const res = await fetch('/api/admin/users', {
-          method: 'POST',
-          headers: await getAuthHeaders(),
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
+        const data = await createManagedUser(payload);
+        if (!data.success) {
           alert(`⚠️ ${data.message || (isRtl ? 'فشل إنشاء حساب مسؤول الفرع' : 'Failed to create Station Admin')}`);
           return;
         }
 
         if (data.user) {
           const allUsers = CustodyDB.getUsers();
-          const existingIdx = allUsers.findIndex(u => u.id === data.user.id);
+          const existingIdx = allUsers.findIndex(u => u.id === data.user!.id);
           if (existingIdx >= 0) {
-            allUsers[existingIdx] = data.user;
+            allUsers[existingIdx] = data.user!;
           } else {
-            allUsers.push(data.user);
+            allUsers.push(data.user!);
           }
           await CustodyDB.saveUsers(allUsers);
         }
@@ -674,16 +624,10 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
     }
 
     try {
-      const res = await fetch(`/api/admin/users/${selectedUserForReset.id}`, {
-        method: 'PATCH',
-        headers: await getAuthHeaders(),
-        credentials: 'include',
-        body: JSON.stringify({
-          password: newPlainPassword.trim()
-        })
+      const data = await updateManagedUser(selectedUserForReset.id, {
+        password: newPlainPassword.trim()
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
+      if (!data.success) {
         alert(`⚠️ ${data.message || (isRtl ? 'فشل إعادة تعيين كلمة المرور' : 'Failed to reset password')}`);
         return;
       }
@@ -1290,7 +1234,7 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
           setCompanyModules={setCompanyModules}
           setActiveModalTab={setActiveModalTab}
           handleSaveCompanyAdmin={handleSaveCompanyAdmin}
-          handleSaveRegionManager={handleSaveRegionManager}
+          handleSaveRegionManager={handleSaveRegionalManager}
           handleSaveStationAdmin={handleSaveStationAdmin}
           structureTab={structureTab}
           setStructureTab={setStructureTab}

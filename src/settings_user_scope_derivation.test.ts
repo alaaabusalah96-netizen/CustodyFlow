@@ -282,5 +282,40 @@ describe('User Scope Derivation & Multi-Strategy Resolution Tests', () => {
     const derivedNull = deriveScopeIdsFromOrgUnit(null, 'Admin');
     expect(derivedNull.company_id).toBeDefined();
   });
+
+  it('12. Unit name containing "منطقة" or "region" alone does NOT invent region_id if not type out-region or linked', () => {
+    const fakeRegionNameUnit: OrganizationUnit = {
+      id: 'ou-dept-fake',
+      companyId: 'comp_1',
+      parentId: null,
+      typeId: 'out-dept',
+      code: 'DEPT-99',
+      name: 'منطقة المبيعات العامة والتسويق (Department)',
+      nameAr: 'منطقة المبيعات العامة والتسويق',
+      nameEn: 'General Sales Region Department',
+      isActive: true,
+      path: '/ou-dept-fake',
+      level: 1,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01'
+    };
+
+    vi.spyOn(StorageEngine, 'getStored').mockImplementation((key: string, defaultValue: any) => {
+      if (key === 'organization_units') return [...mockUnits, fakeRegionNameUnit] as any;
+      return defaultValue;
+    });
+
+    const derived = deriveScopeIdsFromOrgUnit('ou-dept-fake', 'RegionalManager');
+    // Name containing 'منطقة' must NOT trick resolution into inventing a region_id
+    expect(derived.region_id).toBeNull();
+    expect(derived.unlinked).toBe(true);
+    expect(derived.unlinkedMessage).toBeDefined();
+  });
+
+  it('13. Unlinked unit returns unlinked: true and explicit bilingual unlinkedMessage', () => {
+    const derived = deriveScopeIdsFromOrgUnit('U_UNLINKED', 'RegionalManager');
+    expect(derived.unlinked).toBe(true);
+    expect(derived.unlinkedMessage).toContain('غير مرتبطة');
+  });
 });
 

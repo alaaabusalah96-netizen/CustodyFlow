@@ -159,7 +159,10 @@ export default function ChangePasswordRequired({
                 type="password"
                 required
                 value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
+                onChange={(e) => {
+                  setCurrentPassword(e.target.value);
+                  if (errorMsg) setErrorMsg(null);
+                }}
                 placeholder={isRtl ? 'أدخل كلمة المرور الحالية' : 'Enter current password'}
                 className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
               />
@@ -176,7 +179,10 @@ export default function ChangePasswordRequired({
                 type="password"
                 required
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                onChange={(e) => {
+                  setNewPassword(e.target.value);
+                  if (errorMsg) setErrorMsg(null);
+                }}
                 placeholder={isRtl ? '12 حرفاً على الأقل (حروف وأرقام)' : 'Min 12 characters (letters & digits)'}
                 className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
               />
@@ -193,7 +199,10 @@ export default function ChangePasswordRequired({
                 type="password"
                 required
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (errorMsg) setErrorMsg(null);
+                }}
                 placeholder={isRtl ? 'أعد إدخال كلمة المرور الجديدة' : 'Re-enter new password'}
                 className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
               />

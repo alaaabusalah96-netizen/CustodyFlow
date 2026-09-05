@@ -30,7 +30,8 @@ export default function Login({
     setError(null);
 
     const cleanEmail = email.trim();
-    if (!cleanEmail || !password) {
+    const cleanPassword = password.trim();
+    if (!cleanEmail || !cleanPassword) {
       setError(isRtl ? 'يرجى إدخال البريد الإلكتروني وكلمة السر' : 'Please enter both email and password');
       return;
     }
@@ -40,7 +41,7 @@ export default function Login({
       const res = await fetch('/api/auth/verify-credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, password }),
+        body: JSON.stringify({ email: cleanEmail, password: cleanPassword }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -49,7 +50,9 @@ export default function Login({
         if (res.status === 429) {
           throw new Error(data.message || (isRtl ? 'تم تجاوز الحد الأقصى للمحاولات من هذا الجهاز. يرجى الانتظار بضع دقائق قبل إعادة المحاولة.' : 'Too many attempts. Please wait a few minutes before trying again.'));
         }
-        throw new Error(data.message || (isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid credentials'));
+        // Honest server message - do not mask specific error codes or explanations
+        const fallbackMsg = isRtl ? 'فشل تسجيل الدخول. يرجى مراجعة البيانات المدخلة والمحاولة مجدداً.' : 'Login failed. Please verify your credentials and try again.';
+        throw new Error(data.message || data.error || fallbackMsg);
       }
 
       // 1. Instantly register active local user
@@ -69,7 +72,9 @@ export default function Login({
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({ idToken }),
-              }).catch(() => {});
+              }).catch((sessionErr) => {
+                console.warn('[Login] Firebase session cookie creation notice:', sessionErr);
+              });
             }
           })();
 
@@ -79,19 +84,19 @@ export default function Login({
 
           // Wait at most 3 seconds so the user is never stuck spinning indefinitely
           await Promise.race([authSignInPromise, authTimeoutPromise]);
-        } catch (authErr) {
-          console.warn('Firebase client auth background notice:', authErr);
+        } catch (authErr: any) {
+          console.warn('[Login] Firebase client auth notice (continuing with server-verified user):', authErr?.message || authErr);
         }
       }
 
       if (data.user) {
         onLoginSuccess(data.user);
       } else {
-        throw new Error(isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid credentials');
+        throw new Error(isRtl ? 'تعذر استرجاع بيانات المستخدم من الخادم' : 'Failed to retrieve user profile from server');
       }
     } catch (err: any) {
-      console.error('Login failed:', err);
-      setError(err?.message || (isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid login credentials'));
+      console.error('Login failed:', err?.message || 'Unknown error');
+      setError(err?.message || (isRtl ? 'حدث خطأ أثناء تسجيل الدخول' : 'An error occurred during login'));
     } finally {
       setLoading(false);
     }

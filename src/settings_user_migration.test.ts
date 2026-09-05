@@ -5,7 +5,8 @@ import path from 'node:path';
 describe('Phase 2 - Settings.tsx User Creation/Editing Migration Audit', () => {
   const settingsPath = path.join(process.cwd(), 'src', 'pages', 'Settings.tsx');
   const usersTabPath = path.join(process.cwd(), 'src', 'components', 'settings', 'UnifiedAccessControlCenter.tsx');
-  const settingsContent = fs.readFileSync(settingsPath, 'utf8') + '\n' + fs.readFileSync(usersTabPath, 'utf8');
+  const userProvPath = path.join(process.cwd(), 'src', 'lib', 'userProvisioning.ts');
+  const settingsContent = fs.readFileSync(settingsPath, 'utf8') + '\n' + fs.readFileSync(usersTabPath, 'utf8') + '\n' + fs.readFileSync(userProvPath, 'utf8');
 
   it('1. Verify handleAddUser uses POST /api/admin/users', () => {
     expect(settingsContent).toContain("fetch('/api/admin/users'");

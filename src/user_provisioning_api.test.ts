@@ -51,4 +51,21 @@ describe('Phase 1: Unified Secure User Provisioning API', () => {
     expect(serverCode).toContain('authorization');
     expect(serverCode).toContain('verifyIdToken');
   });
+
+  it('7. Enforces fail-closed validation for region and station lookups in server.ts', () => {
+    // Catch blocks must not set isValidRegion/Station = true
+    expect(serverCode).toContain('Infrastructure error during region verification');
+    expect(serverCode).toContain('Infrastructure error during station verification');
+    expect(serverCode).toContain('status(503)');
+    expect(serverCode).toContain('status(400)');
+    expect(serverCode).not.toContain('catch (_) {\n          isValidRegion = true;');
+    expect(serverCode).not.toContain('catch (_) {\n          isValidStation = true;');
+  });
+
+  it('8. Enforces RegionalManager can only create/update StationAdmin within their own region', () => {
+    expect(serverCode).toContain('isRegionalManager && role === "StationAdmin"');
+    expect(serverCode).toContain('targetRegionId !== creatorRegionId');
+    expect(serverCode).toContain('status(403)');
+    expect(serverCode).toContain('مصرح فقط بإنشاء مدراء محطات تابعين لمنطقتك');
+  });
 });

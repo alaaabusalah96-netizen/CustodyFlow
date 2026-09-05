@@ -35,6 +35,7 @@ import {
 import { CustodyDB } from '../db';
 import { auth } from '../firebase';
 import { translations, Language, Theme, Station, Region, Company, AppUser } from '../types';
+import { createManagedUser, updateManagedUser } from '../lib/userProvisioning';
 import OrganizationTreeManager from '../components/OrganizationTreeManager';
 
 interface StationsProps {
@@ -136,10 +137,6 @@ export default function Stations({
     const existingManager = usersList.find(u => u.region_id === regionId && u.role === 'RegionalManager');
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      const token = await auth.currentUser?.getIdToken();
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       if (existingManager) {
         const payload: any = {
           email: cleanEmail,
@@ -151,19 +148,13 @@ export default function Stations({
         if (pass && pass.trim()) {
           payload.password = pass.trim();
         }
-        const res = await fetch(`/api/admin/users/${existingManager.id}`, {
-          method: 'PATCH',
-          headers,
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
+        const data = await updateManagedUser(existingManager.id, payload);
+        if (!data.success) {
           alert(`⚠️ ${data.message || (isRtl ? 'فشل تحديث حساب مدير القطاع' : 'Failed to update Regional Manager account')}`);
           return;
         }
         if (data.user) {
-          const updatedUsers = usersList.map(u => u.id === data.user.id ? data.user : u);
+          const updatedUsers = usersList.map(u => u.id === data.user!.id ? data.user! : u);
           await CustodyDB.saveUsers(updatedUsers);
         }
         showToast(isRtl ? 'تم تحديث بيانات مدير القطاع بنجاح!' : 'Regional Manager credentials updated successfully!');
@@ -181,14 +172,8 @@ export default function Stations({
         if (pass && pass.trim()) {
           payload.password = pass.trim();
         }
-        const res = await fetch('/api/admin/users', {
-          method: 'POST',
-          headers,
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
+        const data = await createManagedUser(payload);
+        if (!data.success) {
           alert(`⚠️ ${data.message || (isRtl ? 'فشل إنشاء حساب مدير القطاع' : 'Failed to create Regional Manager account')}`);
           return;
         }
@@ -212,10 +197,6 @@ export default function Stations({
     const existingAdmin = usersList.find(u => u.station_id === stationId && u.role === 'StationAdmin');
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      const token = await auth.currentUser?.getIdToken();
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       if (existingAdmin) {
         const payload: any = {
           email: cleanEmail,
@@ -228,19 +209,13 @@ export default function Stations({
         if (pass && pass.trim()) {
           payload.password = pass.trim();
         }
-        const res = await fetch(`/api/admin/users/${existingAdmin.id}`, {
-          method: 'PATCH',
-          headers,
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
+        const data = await updateManagedUser(existingAdmin.id, payload);
+        if (!data.success) {
           alert(`⚠️ ${data.message || (isRtl ? 'فشل تحديث حساب مسؤول الفرع' : 'Failed to update Branch Admin account')}`);
           return;
         }
         if (data.user) {
-          const updatedUsers = usersList.map(u => u.id === data.user.id ? data.user : u);
+          const updatedUsers = usersList.map(u => u.id === data.user!.id ? data.user! : u);
           await CustodyDB.saveUsers(updatedUsers);
         }
         showToast(isRtl ? 'تم تحديث بيانات مسؤول الفرع بنجاح!' : 'Branch Admin credentials updated successfully!');
@@ -258,14 +233,8 @@ export default function Stations({
         if (pass && pass.trim()) {
           payload.password = pass.trim();
         }
-        const res = await fetch('/api/admin/users', {
-          method: 'POST',
-          headers,
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
+        const data = await createManagedUser(payload);
+        if (!data.success) {
           alert(`⚠️ ${data.message || (isRtl ? 'فشل إنشاء حساب مسؤول الفرع' : 'Failed to create Branch Admin account')}`);
           return;
         }

@@ -699,7 +699,8 @@ export class OrganizationEngine {
       if (params.typeId === 'out-region' || (params.metadata && params.metadata.legacyRegionId)) {
         const regId = (params.metadata && params.metadata.legacyRegionId) || unitId.replace('org-unit-region-', '');
         const regions = StationsModule.getRegions();
-        if (!regions.some(r => r.id === regId)) {
+        const existingReg = regions.find(r => r.id === regId);
+        if (!existingReg) {
           regions.push({
             id: regId,
             name: params.name,
@@ -708,11 +709,15 @@ export class OrganizationEngine {
             org_unit_id: unitId
           });
           await StationsModule.saveRegions(regions);
+        } else if (existingReg.org_unit_id !== unitId) {
+          existingReg.org_unit_id = unitId;
+          await StationsModule.saveRegions(regions);
         }
       } else if (params.typeId === 'out-station' || (params.metadata && params.metadata.legacyStationId)) {
         const stnId = (params.metadata && params.metadata.legacyStationId) || unitId.replace('org-unit-station-', '');
         const stations = StationsModule.getStations();
-        if (!stations.some(s => s.id === stnId)) {
+        const existingStn = stations.find(s => s.id === stnId);
+        if (!existingStn) {
           let legacyRegId: string | undefined = undefined;
           if (params.parentId) {
             const parentUnit = units.find(u => u.id === params.parentId);
@@ -730,6 +735,9 @@ export class OrganizationEngine {
             company_id: params.companyId,
             org_unit_id: unitId
           });
+          await StationsModule.saveStations(stations);
+        } else if (existingStn.org_unit_id !== unitId) {
+          existingStn.org_unit_id = unitId;
           await StationsModule.saveStations(stations);
         }
       }
@@ -1473,6 +1481,149 @@ export class OrganizationEngine {
       unit: updated
     };
   }
+}
+
+export interface LinkageRepairReport {
+  fixedRegions: number;
+  fixedStations: number;
+  unmatchedUnits: number;
+  unmatchedRegions: number;
+  unmatchedStations: number;
+  details: string[];
+}
+
+export function repairOrgUnitLegacyLinkages(companyId?: string): LinkageRepairReport {
+  const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+  const regions = StationsModule.getRegions();
+  const stations = StationsModule.getStations();
+
+  let fixedRegions = 0;
+  let fixedStations = 0;
+  let unmatchedUnits = 0;
+  let unmatchedRegions = 0;
+  let unmatchedStations = 0;
+  const details: string[] = [];
+
+  const targetRegions = companyId ? regions.filter(r => r.company_id === companyId) : regions;
+  const targetStations = companyId ? stations.filter(s => s.company_id === companyId) : stations;
+  const targetUnits = companyId ? units.filter(u => (u.companyId || (u as any).company_id) === companyId) : units;
+
+  let unitsModified = false;
+  let regionsModified = false;
+  let stationsModified = false;
+
+  // 1. Repair Regions whose org_unit_id does not point to a valid unit
+  for (const reg of targetRegions) {
+    const existingUnit = units.find(u => u.id === reg.org_unit_id);
+    if (!existingUnit) {
+      // Find matching unit by legacyRegionId metadata or legacy prefix
+      const matches = units.filter(u =>
+        u.metadata?.legacyRegionId === reg.id ||
+        u.metadata?.legacy_region_id === reg.id ||
+        u.id === `org-unit-region-${reg.id}`
+      );
+      if (matches.length === 1) {
+        reg.org_unit_id = matches[0].id;
+        if (!matches[0].metadata) matches[0].metadata = {};
+        if (matches[0].metadata.legacyRegionId !== reg.id) {
+          matches[0].metadata.legacyRegionId = reg.id;
+          unitsModified = true;
+        }
+        fixedRegions++;
+        regionsModified = true;
+        details.push(`Linked Region ${reg.id} (${reg.name}) to OrganizationUnit ${matches[0].id}`);
+      } else {
+        unmatchedRegions++;
+        details.push(`Region ${reg.id} (${reg.name}) has no unique matching OrganizationUnit (found: ${matches.length})`);
+      }
+    } else {
+      if (!existingUnit.metadata) existingUnit.metadata = {};
+      if (existingUnit.metadata.legacyRegionId !== reg.id) {
+        existingUnit.metadata.legacyRegionId = reg.id;
+        unitsModified = true;
+      }
+    }
+  }
+
+  // 2. Repair Stations whose org_unit_id does not point to a valid unit
+  for (const stn of targetStations) {
+    const existingUnit = units.find(u => u.id === stn.org_unit_id);
+    if (!existingUnit) {
+      const matches = units.filter(u =>
+        u.metadata?.legacyStationId === stn.id ||
+        u.metadata?.legacy_station_id === stn.id ||
+        u.id === `org-unit-station-${stn.id}`
+      );
+      if (matches.length === 1) {
+        stn.org_unit_id = matches[0].id;
+        if (!matches[0].metadata) matches[0].metadata = {};
+        if (matches[0].metadata.legacyStationId !== stn.id) {
+          matches[0].metadata.legacyStationId = stn.id;
+          unitsModified = true;
+        }
+        fixedStations++;
+        stationsModified = true;
+        details.push(`Linked Station ${stn.id} (${stn.station_name}) to OrganizationUnit ${matches[0].id}`);
+      } else {
+        unmatchedStations++;
+        details.push(`Station ${stn.id} (${stn.station_name}) has no unique matching OrganizationUnit (found: ${matches.length})`);
+      }
+    } else {
+      if (!existingUnit.metadata) existingUnit.metadata = {};
+      if (existingUnit.metadata.legacyStationId !== stn.id) {
+        existingUnit.metadata.legacyStationId = stn.id;
+        unitsModified = true;
+      }
+    }
+  }
+
+  // 3. Reconcile Units with legacy metadata to ensure corresponding region/station points back to unit.id
+  for (const unit of targetUnits) {
+    const legReg = unit.metadata?.legacyRegionId || unit.metadata?.legacy_region_id;
+    const legStn = unit.metadata?.legacyStationId || unit.metadata?.legacy_station_id;
+    if (legReg) {
+      const r = regions.find(item => item.id === legReg);
+      if (r && r.org_unit_id !== unit.id) {
+        r.org_unit_id = unit.id;
+        regionsModified = true;
+        fixedRegions++;
+        details.push(`Synchronized Region ${r.id} org_unit_id to ${unit.id}`);
+      } else if (!r) {
+        unmatchedUnits++;
+      }
+    }
+    if (legStn) {
+      const s = stations.find(item => item.id === legStn);
+      if (s && s.org_unit_id !== unit.id) {
+        s.org_unit_id = unit.id;
+        stationsModified = true;
+        fixedStations++;
+        details.push(`Synchronized Station ${s.id} org_unit_id to ${unit.id}`);
+      } else if (!s) {
+        unmatchedUnits++;
+      }
+    }
+  }
+
+  if (regionsModified) {
+    StorageEngine.setStored('regions', regions);
+  }
+  if (stationsModified) {
+    StorageEngine.setStored('stations', stations);
+  }
+  if (unitsModified) {
+    StorageEngine.setStored('organization_units', units);
+    OrganizationEngine.invalidateLookupIndex();
+  }
+
+  return {
+    fixedRegions,
+    fixedStations,
+    unmatchedUnits,
+    unmatchedRegions,
+    unmatchedStations,
+    details
+  };
 }
 
 

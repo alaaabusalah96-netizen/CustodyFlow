@@ -73,6 +73,7 @@ import { OrganizationEngine } from '../../db/organizationEngine';
 import { OrganizationScopeEngine } from '../../db/organizationScopeEngine';
 import { DEFAULT_PERMISSIONS, DEFAULT_ROLES } from '../../db/defaults';
 import { deriveScopeIdsFromOrgUnit } from '../../pages/Settings';
+import { createManagedUser, updateManagedUser } from '../../lib/userProvisioning';
 import OrgUnitTreeSelect from '../OrgUnitTreeSelect';
 import OrganizationTreeManager from '../OrganizationTreeManager';
 
@@ -545,14 +546,8 @@ export default function UnifiedAccessControlCenter({
       let tempPasswordMsg = '';
 
       try {
-        const res = await fetch('/api/admin/users', {
-          method: 'POST',
-          headers,
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (res.ok && data.success && data.user) {
+        const data = await createManagedUser(payload);
+        if (data.success && data.user) {
           createdUser = data.user;
           if (data.temporaryPassword) {
             tempPasswordMsg = isRtl ? ` (كلمة المرور المؤقتة: ${data.temporaryPassword})` : ` (Temporary Password: ${data.temporaryPassword})`;
@@ -711,16 +706,9 @@ export default function UnifiedAccessControlCenter({
     };
 
     try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/users/${targetUser.id}`, {
-        method: 'PATCH',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
+      const data = await updateManagedUser(targetUser.id, payload);
 
-      if (!res.ok || !data.success) {
+      if (!data.success) {
         const errMsg = data.message || (isRtl ? 'فشل تحديث حالة الحساب' : 'Failed to update account status');
         triggerToast?.(`⚠️ ${errMsg}`);
         return;
@@ -924,24 +912,18 @@ export default function UnifiedAccessControlCenter({
       if (newCompanyAdminEmail.trim()) {
         const adminPass = newCompanyAdminPassword.trim() || `Pass@${Math.floor(100000 + Math.random() * 900000)}`;
         try {
-          const res = await fetch('/api/admin/users', {
-            method: 'POST',
-            headers: await getAuthHeaders(),
-            credentials: 'include',
-            body: JSON.stringify({
-              email: newCompanyAdminEmail.trim().toLowerCase(),
-              password: adminPass,
-              full_name: newCompanyAdminName.trim() || `Admin ${newCompanyName.trim()}`,
-              role: 'Admin',
-              company_id: targetCompanyId,
-              permissions: CustodyDB.enrichUserPermissions('Admin'),
-              must_change_password: newCompanyAdminMustChangePassword
-            })
+          const data = await createManagedUser({
+            email: newCompanyAdminEmail.trim().toLowerCase(),
+            password: adminPass,
+            full_name: newCompanyAdminName.trim() || `Admin ${newCompanyName.trim()}`,
+            role: 'Admin',
+            company_id: targetCompanyId,
+            permissions: CustodyDB.enrichUserPermissions('Admin'),
+            must_change_password: newCompanyAdminMustChangePassword
           });
-          const data = await res.json();
           if (data.user) {
             const allUsers = CustodyDB.getUsers();
-            if (!allUsers.some(u => u.id === data.user.id)) {
+            if (!allUsers.some(u => u.id === data.user!.id)) {
               allUsers.push(data.user);
               await CustodyDB.saveUsers(allUsers);
               setUsers(allUsers);
@@ -1730,7 +1712,11 @@ export default function UnifiedAccessControlCenter({
                         setEditUserOrgUnitId(newOrgUnitId);
                         if (newOrgUnitId) {
                           const derived = deriveScopeIdsFromOrgUnit(newOrgUnitId, editUserRole);
-                          if (editUserRole === 'StationAdmin' && !derived.station_id) {
+                          if (derived.unlinked && (editUserRole === 'StationAdmin' || editUserRole === 'RegionalManager')) {
+                            alert(derived.unlinkedMessage || (isRtl
+                              ? 'تنبيه: الوحدة التنظيمية المحددة غير مرتبطة بسجل منطقة أو محطة معتمد.'
+                              : 'Warning: The selected organizational unit is not linked to an official Region or Station.'));
+                          } else if (editUserRole === 'StationAdmin' && !derived.station_id) {
                             alert(isRtl
                               ? 'تنبيه: الوحدة التنظيمية المحددة ليست مرتبطة بمحطة/فرع صرف، وهو ما قد يتعارض مع دور مدير الفرع/المحطة.'
                               : 'Warning: The selected organizational unit is not linked to a station/branch, which may conflict with the Station Admin role.');
@@ -2772,7 +2758,11 @@ export default function UnifiedAccessControlCenter({
                     setNewUserOrgUnitId(newOrgUnitId);
                     if (newOrgUnitId) {
                       const derived = deriveScopeIdsFromOrgUnit(newOrgUnitId, newUserRole);
-                      if (newUserRole === 'StationAdmin' && !derived.station_id) {
+                      if (derived.unlinked && (newUserRole === 'StationAdmin' || newUserRole === 'RegionalManager')) {
+                        alert(derived.unlinkedMessage || (isRtl
+                          ? 'تنبيه: الوحدة التنظيمية المحددة غير مرتبطة بسجل منطقة أو محطة.'
+                          : 'Warning: The selected organizational unit is not linked to a Region or Station record.'));
+                      } else if (newUserRole === 'StationAdmin' && !derived.station_id) {
                         alert(isRtl
                           ? 'تنبيه: الوحدة التنظيمية المحددة ليست مرتبطة بمحطة/فرع صرف، وهو ما قد يتعارض مع دور مدير الفرع/المحطة.'
                           : 'Warning: The selected organizational unit is not linked to a station/branch, which may conflict with the Station Admin role.');

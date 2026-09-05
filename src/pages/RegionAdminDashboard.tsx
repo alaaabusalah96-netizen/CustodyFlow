@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { CustodyDB } from '../db';
 import { useScreenListeners, auth } from '../firebase';
 import { Company, AppUser, Language, Theme, Region, Station, UserPermissions, Transaction, TransactionStatus, ActivityLog, DeletedTransaction, SignupRequest } from '../types';
+import { createManagedUser, updateManagedUser } from '../lib/userProvisioning';
 import { 
   Building2, ShieldCheck, KeyRound, UserCheck, RefreshCw, AlertTriangle, 
   Plus, Calendar, Sparkles, User, LogOut, ClipboardList, Info, Check, Search, ShieldAlert,
@@ -144,21 +145,6 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
     return { amount, stationId };
   };
 
-  const getAuthHeaders = async () => {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-    } catch (err) {
-      console.warn('Failed to retrieve ID token:', err);
-    }
-    return headers;
-  };
-
   // Directory manager for stations inside my region
   const handleSaveStationAdmin = async (stationId: string, email: string, pass: string, permissions?: UserPermissions) => {
     if (!email || !email.trim()) return;
@@ -181,14 +167,8 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
       }
 
       try {
-        const res = await fetch(`/api/admin/users/${existingAdmin.id}`, {
-          method: 'PATCH',
-          headers: await getAuthHeaders(),
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
+        const data = await updateManagedUser(existingAdmin.id, payload);
+        if (!data.success) {
           alert(`⚠️ ${data.message || (isRtl ? 'فشل تحديث بيانات مدير الفرع' : 'Failed to update Branch Admin')}`);
           return;
         }
@@ -218,25 +198,19 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
       }
 
       try {
-        const res = await fetch('/api/admin/users', {
-          method: 'POST',
-          headers: await getAuthHeaders(),
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
+        const data = await createManagedUser(payload);
+        if (!data.success) {
           alert(`⚠️ ${data.message || (isRtl ? 'فشل إنشاء حساب مدير الفرع' : 'Failed to create Branch Admin')}`);
           return;
         }
 
         if (data.user) {
           const allUsers = CustodyDB.getUsers();
-          const existingIdx = allUsers.findIndex(u => u.id === data.user.id);
+          const existingIdx = allUsers.findIndex(u => u.id === data.user!.id);
           if (existingIdx >= 0) {
-            allUsers[existingIdx] = data.user;
+            allUsers[existingIdx] = data.user!;
           } else {
-            allUsers.push(data.user);
+            allUsers.push(data.user!);
           }
           await CustodyDB.saveUsers(allUsers);
         }
