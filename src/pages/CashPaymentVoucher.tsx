@@ -286,7 +286,7 @@ export default function CashPaymentVoucher({
 
   // Core collections for lookups
   const companies = CustodyDB.getCompanies();
-  const stations = CustodyDB.getScopedStations();
+  const stations = CustodyDB.getStationsForUser(user);
 
   // Main UI Tabs
   const [activeTab, setActiveTab] = useState<'create' | 'history'>('create');

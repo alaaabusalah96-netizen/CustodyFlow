@@ -61,6 +61,8 @@ export function getFilteredMenuItems(activeUser: AppUser | null, language: Langu
     { id: 'super-admin', label: isRtl ? 'لوحة تحكم الساس SaaS' : 'SaaS Super Admin', icon: ShieldCheck, roleAllowed: ['SystemAdmin'] },
     { id: 'company-admin', label: isRtl ? 'لوحة تحكم الشركة' : 'Company Dashboard', icon: Building, roleAllowed: ['Admin'] },
     { id: 'region-admin', label: isRtl ? 'لوحة تحكم المنطقة' : 'Region Dashboard', icon: Layers, roleAllowed: ['RegionalManager'] },
+    // Documented permission flag: 'replace_custody' (deny-by-default: only roles/users with replace_custody permission can view/access)
+    { id: 'custody', label: isRtl ? 'العهدة / Custody' : 'Custody / العهدة', icon: Coins, permission: 'replace_custody', roleAllowed: ['Admin', 'RegionalManager', 'StationAdmin'] },
     { id: 'new-expense', label: t.newExpense, icon: PlusCircle, permission: 'create_expense' },
     { id: 'voucher', label: t.cashPaymentVoucher, icon: FileCheck, permission: 'settle_voucher' },
     { id: 'reconciliation', label: isRtl ? 'جرد ومطابقة العهدة' : 'Custody Reconciliation & Inventory', icon: TrendingUp, roleAllowed: ['Admin', 'StationAdmin', 'RegionalManager'] },
@@ -109,6 +111,7 @@ export function getFilteredMenuItems(activeUser: AppUser | null, language: Langu
     // Explicitly hide operational module entries from SystemAdmin (SaaS / Platform Tools only)
     if (activeUser.role === 'SystemAdmin') {
       const operationalModuleIds = [
+        'custody',
         'new-expense',
         'voucher',
         'reconciliation',

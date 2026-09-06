@@ -28,7 +28,7 @@ export const ERP_MODULES_REGISTRY: ERPModule[] = [
     name_ar: 'إدارة العهد النقدية',
     description_en: 'Core custody system, expense requests, vouchers, and cash reconciliation.',
     description_ar: 'النظام الأساسي لإدارة العهد النقدية، طلبات الصرف، السندات، وجرد وتسوية النقدية.',
-    screens: ['new-expense', 'voucher', 'reconciliation']
+    screens: ['custody', 'new-expense', 'voucher', 'reconciliation']
   },
   {
     id: 'inventory',

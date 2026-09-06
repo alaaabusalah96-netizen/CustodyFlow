@@ -65,7 +65,7 @@ export default function Stations({
   // Scopes and data
   const [companies, setCompanies] = useState<Company[]>(() => CustodyDB.getCompanies());
   const [regions, setRegions] = useState<Region[]>(() => CustodyDB.getRegions());
-  const [stations, setStations] = useState<Station[]>(() => CustodyDB.getStations());
+  const [stations, setStations] = useState<Station[]>(() => CustodyDB.getStationsForUser(activeUser));
   const [users, setUsers] = useState<AppUser[]>(() => CustodyDB.getUsers());
   const allTransactions = CustodyDB.getScopedTransactions();
 
@@ -126,7 +126,7 @@ export default function Stations({
   const refreshData = () => {
     setCompanies(CustodyDB.getCompanies());
     setRegions(CustodyDB.getRegions());
-    setStations(CustodyDB.getStations());
+    setStations(CustodyDB.getStationsForUser(activeUser));
     setUsers(CustodyDB.getUsers());
   };
 
@@ -489,7 +489,7 @@ export default function Stations({
 
   // Filtering scoped entities
   const companyRegions = regions.filter(r => r.company_id === selectedCompanyId);
-  const companyStations = stations.filter(s => s.company_id === selectedCompanyId);
+  const companyStations = isSystemAdmin ? stations.filter(s => s.company_id === selectedCompanyId) : stations;
 
   // Active stations shown in main grid
   const stationsToDisplay = companyStations.filter(s => {

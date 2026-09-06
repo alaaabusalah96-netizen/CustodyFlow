@@ -81,18 +81,17 @@ export default function RegionAdminDashboard({ activeUser, language, theme }: Re
     const rawRegions = CustodyDB.getRegions();
     setMyRegion(rawRegions.find(r => r.id === myRegionId) || null);
 
-    // Filter stations inside my region
-    const rawStations = CustodyDB.getStations();
-    setStations(rawStations.filter(s => s.region_id === myRegionId && s.company_id === myCompanyId));
+    // Filter stations inside my region using unified getStationsForUser
+    const scopedStations = CustodyDB.getStationsForUser(activeUser);
+    setStations(scopedStations);
 
     // Filter users inside my region
     const rawUsers = CustodyDB.getUsers();
     setUsers(rawUsers.filter(u => u.region_id === myRegionId && u.company_id === myCompanyId));
 
     // Filter operations ledger scoped to my region
-    const regionStations = rawStations.filter(s => s.region_id === myRegionId && s.company_id === myCompanyId);
-    const filteredStationsIds = regionStations.map(s => s.id);
-    const filteredStationsNames = regionStations.map(s => s.station_name);
+    const filteredStationsIds = scopedStations.map(s => s.id);
+    const filteredStationsNames = scopedStations.map(s => s.station_name);
 
     setAllTransactions(CustodyDB.getTransactions().filter(t => filteredStationsIds.includes(t.station_id)));
     setAllLogs(CustodyDB.getLogs().filter(l => l.station_id && filteredStationsIds.includes(l.station_id)));

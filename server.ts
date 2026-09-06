@@ -171,10 +171,13 @@ async function startServer() {
   app.use(express.json());
   app.use(cookieParser());
 
+  const isRelaxedAuthRateLimit = !isProduction && process.env.RELAX_AUTH_RATE_LIMIT === 'true';
+
   // Rate limiting for auth verification endpoints (generous 60 attempts / 15m to avoid blocking legit admins testing multiple accounts)
   const authRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 60, // Max 60 attempts per 15 minutes per IP
+    skip: () => isRelaxedAuthRateLimit,
     message: {
       success: false,
       message: "تم تجاوز الحد الأقصى للمحاولات من هذا الجهاز. يرجى الانتظار بضع دقائق قبل إعادة المحاولة / Rate limit exceeded. Please try again in a few minutes."
@@ -187,6 +190,7 @@ async function startServer() {
   const sessionRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 120,
+    skip: () => isRelaxedAuthRateLimit,
     message: {
       success: false,
       message: "Rate limit exceeded for session operations. Please try again later."
@@ -199,6 +203,7 @@ async function startServer() {
   const changePasswordRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 30,
+    skip: () => isRelaxedAuthRateLimit,
     message: {
       success: false,
       message: "تم تجاوز الحد الأقصى لمحاولات تغيير كلمة المرور. يرجى المحاولة لاحقاً / Password change rate limit exceeded. Please try again later."
@@ -214,6 +219,7 @@ async function startServer() {
   const adminRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 30, // Max 30 operations per 15 minutes per IP
+    skip: () => isRelaxedAuthRateLimit,
     message: {
       success: false,
       message: "تم تجاوز الحد الأقصى للعمليات الإدارية من هذا الجهاز. يرجى المحاولة مرة أخرى لاحقاً / Rate limit exceeded for administrative operations. Please try again later."

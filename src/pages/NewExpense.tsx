@@ -36,7 +36,7 @@ export default function NewExpense({ language, theme, onNavigate }: NewExpensePr
   const isRtl = language === 'ar';
 
   const activeUser = CustodyDB.getActiveUser();
-  const scopedStations = CustodyDB.getScopedStations();
+  const scopedStations = CustodyDB.getStationsForUser(activeUser);
 
   // Form states
   const [stationId, setStationId] = useState<string>(() => {

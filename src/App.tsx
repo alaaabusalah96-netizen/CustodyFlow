@@ -14,6 +14,7 @@ const PendingTransactions = lazy(() => import('./pages/PendingTransactions'));
 const CashPaymentVoucher = lazy(() => import('./pages/CashPaymentVoucher'));
 const UnderSettlement = lazy(() => import('./pages/UnderSettlement'));
 const CashReconciliation = lazy(() => import('./pages/CashReconciliation'));
+const Custody = lazy(() => import('./pages/Custody'));
 const Reports = lazy(() => import('./pages/Reports'));
 const Search = lazy(() => import('./pages/Search'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -546,6 +547,17 @@ export default function App() {
             theme={theme} 
             onNavigate={setCurrentTab}
             onSelectTransactionForSettle={handleSelectTxForSettle}
+          />
+        );
+      case 'custody':
+        if (activeUser?.role === 'SystemAdmin' && !activeUser?.impersonator) {
+          return renderAccessDenied();
+        }
+        return (
+          <Custody 
+            language={language} 
+            theme={theme} 
+            onNavigate={setCurrentTab}
           />
         );
       case 'approvals':

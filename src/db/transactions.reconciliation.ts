@@ -3,6 +3,7 @@ import { StationsModule } from './stations';
 import { StorageEngine } from './storage';
 import { UsersModule } from './users';
 import { OrganizationEngine } from './organizationEngine';
+import { CustodyEngine } from './custody';
 import { DEFAULT_TRANSACTIONS } from './defaults';
 
 export class TransactionsReconciliationModule {
@@ -155,10 +156,7 @@ export class TransactionsReconciliationModule {
   }
 
   static getStationDeductedCustody(stationId: string): number {
-    const stations = StationsModule.getStations();
-    const st = stations.find(s => s.id === stationId);
-    if (!st) return 0;
-    return st.custody_amount;
+    return CustodyEngine.getBalances(stationId).nominal;
   }
 
   static getCompanyDeductedCustody(companyId: string): number {

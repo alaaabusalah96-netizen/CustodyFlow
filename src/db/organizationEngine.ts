@@ -1,6 +1,8 @@
 import { OrganizationUnit, OrganizationUnitType, OrganizationPath, OrganizationTemplate, OrganizationTreeNode, OrganizationHierarchyValidationResult } from '../types/organization';
+import { Region, Station } from '../types';
 import { StorageEngine } from './storage';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
+import { DEFAULT_REGIONS, DEFAULT_STATIONS } from './defaults';
 import { UsersModule } from './users';
 import { LogsModule } from './logs';
 import { CompaniesModule } from './companies';
@@ -19,6 +21,57 @@ export const DEFAULT_ORGANIZATION_UNIT_TYPES: OrganizationUnitType[] = [
   { id: 'out-factory', companyId: null, code: 'FACTORY', nameAr: 'مصنع', nameEn: 'Factory', level: 3, description: 'Manufacturing facility', isActive: true },
   { id: 'out-unit', companyId: null, code: 'UNIT', nameAr: 'وحدة عمل', nameEn: 'Work Unit', level: 5, description: 'Operational work unit', isActive: true },
 ];
+
+// Operational unit type IDs treated as custody sites:
+// - out-station: Dedicated fuel or service station
+// - out-branch: Operational company branch
+// - out-farm: Agricultural site/farm (custody site)
+// - out-factory: Manufacturing plant/factory (custody site)
+export const OPERATIONAL_CUSTODY_TYPE_IDS = ['out-station', 'out-branch', 'out-farm', 'out-factory'];
+
+export function isOperationalCustodyType(typeId?: string | null): boolean {
+  if (!typeId) return false;
+  return OPERATIONAL_CUSTODY_TYPE_IDS.includes(typeId);
+}
+
+/**
+ * Resolves region_id from the parent region chain of an operational unit.
+ * Checks ancestor metadata.legacyRegionId, regions.org_unit_id, legacy prefixes (org-unit-region-), and codes.
+ */
+export function resolveParentRegionChain(
+  unit: { id?: string; parentId?: string | null; parent_id?: string | null; companyId?: string; company_id?: string; metadata?: Record<string, any> },
+  units: OrganizationUnit[],
+  regions: { id: string; org_unit_id?: string; code?: string; company_id?: string }[]
+): string | undefined {
+  if (unit.metadata?.legacyRegionId) return unit.metadata.legacyRegionId;
+  if (unit.metadata?.legacy_region_id) return unit.metadata.legacy_region_id;
+
+  let currentParentId = unit.parentId || unit.parent_id;
+  const visited = new Set<string>();
+
+  while (currentParentId && !visited.has(currentParentId)) {
+    visited.add(currentParentId);
+    const parent = units.find(u => u.id === currentParentId);
+    if (!parent) break;
+
+    if (parent.metadata?.legacyRegionId) return parent.metadata.legacyRegionId;
+    if (parent.metadata?.legacy_region_id) return parent.metadata.legacy_region_id;
+
+    const matchingRegion = regions.find(r => r.org_unit_id === parent.id);
+    if (matchingRegion) return matchingRegion.id;
+
+    if (parent.typeId === 'out-region' || parent.id.startsWith('org-unit-region-')) {
+      return parent.metadata?.legacyRegionId || parent.id.replace(/^org-unit-region-/, '');
+    }
+
+    const directMatch = regions.find(r => r.id === parent.id || (parent.code && r.code === parent.code));
+    if (directMatch) return directMatch.id;
+
+    currentParentId = parent.parentId || parent.parent_id;
+  }
+
+  return undefined;
+}
 
 // Phase 3: Predefined Industry Organization Templates
 export const DEFAULT_ORGANIZATION_TEMPLATES: OrganizationTemplate[] = [
@@ -634,6 +687,7 @@ export class OrganizationEngine {
   }
 
   static async addUnit(params: {
+    id?: string;
     companyId: string;
     parentId?: string | null;
     typeId: string;
@@ -648,7 +702,7 @@ export class OrganizationEngine {
     const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
     const paths = StorageEngine.getStored<OrganizationPath[]>('organization_paths', []);
 
-    const unitId = `orgunit-${crypto.randomUUID()}`;
+    const unitId = params.id || `orgunit-${crypto.randomUUID()}`;
     const parentId = params.parentId || null;
 
     const { path, level, ancestorIds } = OrganizationEngine.computePathAndLevel(unitId, parentId, units);
@@ -694,7 +748,7 @@ export class OrganizationEngine {
     paths.push(newPathObj);
     await OrganizationEngine.savePaths(paths);
 
-    // Reverse compatibility sync: if type is region or station, ensure legacy record exists
+    // Reverse compatibility sync: if type is region or operational custody site (station, branch, farm, factory)
     try {
       if (params.typeId === 'out-region' || (params.metadata && params.metadata.legacyRegionId)) {
         const regId = (params.metadata && params.metadata.legacyRegionId) || unitId.replace('org-unit-region-', '');
@@ -713,18 +767,19 @@ export class OrganizationEngine {
           existingReg.org_unit_id = unitId;
           await StationsModule.saveRegions(regions);
         }
-      } else if (params.typeId === 'out-station' || (params.metadata && params.metadata.legacyStationId)) {
-        const stnId = (params.metadata && params.metadata.legacyStationId) || unitId.replace('org-unit-station-', '');
+      } else if (isOperationalCustodyType(params.typeId) || (params.metadata && params.metadata.legacyStationId)) {
+        const regions = StationsModule.getRegions();
+        const legacyRegId = resolveParentRegionChain(newUnit, units, regions);
+
+        const stnId = (params.metadata && params.metadata.legacyStationId) ||
+          (unitId.startsWith('org-unit-station-') ? unitId.replace('org-unit-station-', '') : `stn-${unitId.replace(/^orgunit-|^org-unit-/, '')}`);
+
+        if (!newUnit.metadata) newUnit.metadata = {};
+        newUnit.metadata.legacyStationId = stnId;
+
         const stations = StationsModule.getStations();
-        const existingStn = stations.find(s => s.id === stnId);
+        const existingStn = stations.find(s => s.id === stnId || s.org_unit_id === unitId);
         if (!existingStn) {
-          let legacyRegId: string | undefined = undefined;
-          if (params.parentId) {
-            const parentUnit = units.find(u => u.id === params.parentId);
-            if (parentUnit && (parentUnit.typeId === 'out-region' || parentUnit.metadata?.legacyRegionId)) {
-              legacyRegId = parentUnit.metadata?.legacyRegionId || parentUnit.id.replace('org-unit-region-', '');
-            }
-          }
           stations.push({
             id: stnId,
             station_name: params.name,
@@ -736,10 +791,20 @@ export class OrganizationEngine {
             org_unit_id: unitId
           });
           await StationsModule.saveStations(stations);
-        } else if (existingStn.org_unit_id !== unitId) {
+        } else {
+          existingStn.station_name = params.name || existingStn.station_name;
+          existingStn.station_code = params.code || existingStn.station_code;
           existingStn.org_unit_id = unitId;
+          existingStn.company_id = params.companyId || existingStn.company_id;
+          if (legacyRegId) {
+            existingStn.region_id = legacyRegId;
+          }
+          if (params.isActive !== undefined) {
+            existingStn.is_active = params.isActive;
+          }
           await StationsModule.saveStations(stations);
         }
+        await OrganizationEngine.saveUnits(units);
       }
     } catch (err) {
       console.warn('Reverse compatibility sync failed in addUnit:', err);
@@ -835,10 +900,20 @@ export class OrganizationEngine {
           };
           await StationsModule.saveRegions(regions);
         }
-      } else if (updatedUnit.typeId === 'out-station' || updatedUnit.metadata?.legacyStationId) {
-        const stnId = updatedUnit.metadata?.legacyStationId || updatedUnit.id.replace('org-unit-station-', '');
+      } else if (isOperationalCustodyType(updatedUnit.typeId) || updatedUnit.metadata?.legacyStationId) {
+        const regions = StationsModule.getRegions();
+        const legacyRegId = resolveParentRegionChain(updatedUnit, units, regions);
+
+        const stnId = updatedUnit.metadata?.legacyStationId ||
+          (updatedUnit.id.startsWith('org-unit-station-') ? updatedUnit.id.replace('org-unit-station-', '') : `stn-${updatedUnit.id.replace(/^orgunit-|^org-unit-/, '')}`);
+
+        if (!updatedUnit.metadata) updatedUnit.metadata = {};
+        if (!updatedUnit.metadata.legacyStationId) {
+          updatedUnit.metadata.legacyStationId = stnId;
+        }
+
         const stations = StationsModule.getStations();
-        const sIdx = stations.findIndex(s => s.id === stnId);
+        const sIdx = stations.findIndex(s => s.id === stnId || s.org_unit_id === updatedUnit.id);
         if (sIdx !== -1) {
           stations[sIdx] = {
             ...stations[sIdx],
@@ -846,8 +921,22 @@ export class OrganizationEngine {
             station_code: updatedUnit.code || stations[sIdx].station_code,
             is_active: updatedUnit.isActive ?? stations[sIdx].is_active,
             custody_amount: updatedUnit.metadata?.custodyAmount !== undefined ? updatedUnit.metadata.custodyAmount : stations[sIdx].custody_amount,
-            company_id: updatedUnit.companyId || stations[sIdx].company_id
+            company_id: updatedUnit.companyId || stations[sIdx].company_id,
+            org_unit_id: updatedUnit.id,
+            region_id: legacyRegId || stations[sIdx].region_id
           };
+          await StationsModule.saveStations(stations);
+        } else {
+          stations.push({
+            id: stnId,
+            station_name: updatedUnit.name || updatedUnit.nameAr || updatedUnit.code,
+            station_code: updatedUnit.code,
+            custody_amount: updatedUnit.metadata?.custodyAmount || 0,
+            is_active: updatedUnit.isActive ?? true,
+            region_id: legacyRegId,
+            company_id: updatedUnit.companyId,
+            org_unit_id: updatedUnit.id
+          });
           await StationsModule.saveStations(stations);
         }
       }
@@ -1486,6 +1575,7 @@ export class OrganizationEngine {
 export interface LinkageRepairReport {
   fixedRegions: number;
   fixedStations: number;
+  repairedBranches?: number;
   unmatchedUnits: number;
   unmatchedRegions: number;
   unmatchedStations: number;
@@ -1494,8 +1584,8 @@ export interface LinkageRepairReport {
 
 export function repairOrgUnitLegacyLinkages(companyId?: string): LinkageRepairReport {
   const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
-  const regions = StationsModule.getRegions();
-  const stations = StationsModule.getStations();
+  const regions = StorageEngine.getStored<Region[]>('regions', DEFAULT_REGIONS);
+  const stations = StorageEngine.getStored<Station[]>('stations', DEFAULT_STATIONS);
 
   let fixedRegions = 0;
   let fixedStations = 0;
@@ -1605,6 +1695,57 @@ export function repairOrgUnitLegacyLinkages(companyId?: string): LinkageRepairRe
     }
   }
 
+  // 4. Repair existing operational branches/sites without Station when parent region resolvable
+  let repairedBranches = 0;
+  for (const unit of targetUnits) {
+    if (isOperationalCustodyType(unit.typeId) || unit.metadata?.legacyStationId) {
+      const existingStation = stations.find(s => s.org_unit_id === unit.id || (unit.metadata?.legacyStationId && s.id === unit.metadata.legacyStationId));
+      const resolvedRegionId = resolveParentRegionChain(unit, units, regions);
+
+      if (!existingStation) {
+        if (resolvedRegionId) {
+          const stnId = unit.metadata?.legacyStationId ||
+            (unit.id.startsWith('org-unit-station-') ? unit.id.replace('org-unit-station-', '') : `stn-${unit.id.replace(/^orgunit-|^org-unit-/, '')}`);
+          if (!unit.metadata) unit.metadata = {};
+          unit.metadata.legacyStationId = stnId;
+
+          stations.push({
+            id: stnId,
+            station_name: unit.name || unit.nameAr || unit.code,
+            station_code: unit.code,
+            custody_amount: unit.metadata?.custodyAmount || 0,
+            is_active: unit.isActive ?? unit.is_active ?? true,
+            region_id: resolvedRegionId,
+            company_id: unit.companyId || (unit as any).company_id,
+            org_unit_id: unit.id
+          });
+
+          fixedStations++;
+          repairedBranches++;
+          stationsModified = true;
+          unitsModified = true;
+          details.push(`Created and linked Station ${stnId} for operational branch ${unit.id} (${unit.name}) in Region ${resolvedRegionId}`);
+        } else {
+          unmatchedUnits++;
+          details.push(`Operational branch ${unit.id} (${unit.name}) has no resolvable parent region; Station not created`);
+        }
+      } else {
+        if (!existingStation.region_id && resolvedRegionId) {
+          existingStation.region_id = resolvedRegionId;
+          stationsModified = true;
+          fixedStations++;
+          details.push(`Updated Station ${existingStation.id} region_id to ${resolvedRegionId} from parent chain of unit ${unit.id}`);
+        }
+        if (existingStation.org_unit_id !== unit.id) {
+          existingStation.org_unit_id = unit.id;
+          stationsModified = true;
+          fixedStations++;
+          details.push(`Linked Station ${existingStation.id} org_unit_id to ${unit.id}`);
+        }
+      }
+    }
+  }
+
   if (regionsModified) {
     StorageEngine.setStored('regions', regions);
   }
@@ -1619,6 +1760,7 @@ export function repairOrgUnitLegacyLinkages(companyId?: string): LinkageRepairRe
   return {
     fixedRegions,
     fixedStations,
+    repairedBranches,
     unmatchedUnits,
     unmatchedRegions,
     unmatchedStations,

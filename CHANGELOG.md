@@ -5560,3 +5560,13 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 - **Summary**: Centralized all user management interactions under `src/lib/userProvisioning.ts` with standardized auth headers, credentials: 'include', and unified error parsing; migrated RegionAdminDashboard and SuperAdmin to use the provisioning module removing all raw `/api/admin/users` fetch calls; added live error-clearing on re-type in ChangePasswordRequired; and established automated vitest suite enforcing zero raw fetches, fail-closed server user creation, and 12+ char password standards.
 - **Test result**: 5/5 tests passed in src/user_provisioning_module.test.ts; 9/9 tests passed in src/settings_user_migration.test.ts; 28/28 tests passed across password lifecycle and security suites; compile_applet passed with 0 errors.
 
+
+## [2026-09-06 08:24:47 UTC] Phase 3: Station Visibility and Operational Branch Reverse-Sync
+- Files Changed: src/db/organizationEngine.ts, src/db/stations.ts, src/db.ts, src/pages/CashReconciliation.tsx, src/pages/Stations.tsx, src/pages/CompanyAdminDashboard.tsx, src/pages/RegionAdminDashboard.tsx, src/pages/NewExpense.tsx, src/pages/CashPaymentVoucher.tsx, src/phase3_station_visibility.test.ts
+- Summary: Implemented operational branch reverse-sync (out-branch -> Station) with parent region chain resolution, unified getStationsForUser visibility API with OR semantics for RegionalManager, and migrated all custody UIs to remove contradictory local filters.
+- Test Result: PASS (src/phase3_station_visibility.test.ts: 10/10 passed; regression tests: 34/34 passed; lint: clean; build: successful)
+
+## [2026-09-06 08:37:00 UTC] Phase 4: Custody as a Real Module with Unified Engine, Primary UI, and Audit Movements
+- Files Changed: src/types.ts, src/db/custody.ts, src/db/transactions.reconciliation.ts, src/db.ts, src/db/modules.ts, src/components/Layout.tsx, src/pages/Custody.tsx, src/App.tsx, src/pages/CashReconciliation.tsx, src/pages/CompanyAdminDashboard.tsx, src/phase4_custody_engine.test.ts
+- Summary: Centralized all custody balance calculations and balance-modifying operations (replenish, reverseReplenish, count_adjust) into CustodyEngine with atomic custody_movement ledger logging, eliminated scattered updateStation calls in reconciliation and dashboard, and created a dedicated primary Custody management UI with deny-by-default replace_custody gating.
+- Test Result: PASS (src/phase4_custody_engine.test.ts: 6/6 passed; src/phase3_station_visibility.test.ts: 10/10 passed; src/region_station_deduplication.test.ts: 5/5 passed; compile_applet: successful)

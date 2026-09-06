@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CustodyDB } from '../db';
+import { CustodyDB, CustodyEngine } from '../db';
 import { useScreenListeners } from '../firebase';
 import { translations, Language, Theme, Transaction, ExpenseCategory } from '../types';
 import { 
@@ -51,23 +51,14 @@ export default function CashReconciliation({
   const t = translations[language];
   const isRtl = language === 'ar';
   const user = CustodyDB.getActiveUser();
-  const stations = CustodyDB.getScopedStations();
+  const stations = CustodyDB.getStationsForUser(user);
   const activeStation = stations.find(s => s.id === user?.station_id);
   const isAdmin = user && (user.role === 'Admin' || user.role === 'SystemAdmin');
   const isManager = user && (user.role === 'RegionalManager' || user.role === 'Admin' || user.role === 'SystemAdmin');
   const isRegionalManager = user?.role === 'RegionalManager';
 
-  // Allowed stations for selection
-  const allowedStations = React.useMemo(() => {
-    if (isAdmin) return stations;
-    if (isRegionalManager) {
-      return stations.filter(s => {
-        if (!user?.region_id) return true;
-        return s.region_id === user?.region_id || !s.region_id || s.region_id === '' || s.region_id === 'none';
-      });
-    }
-    return activeStation ? [activeStation] : [];
-  }, [stations, user, isAdmin, isRegionalManager, activeStation]);
+  // Allowed stations for selection (governed by getStationsForUser visibility API)
+  const allowedStations = stations;
 
   const [selectedStationId, setSelectedStationId] = useState<string>(() => {
     if (user?.station_id) return user.station_id;
@@ -569,7 +560,7 @@ export default function CashReconciliation({
   const settledTotal = metrics.settledTotal || 0;
   const netCashAvailable = metrics.cashAvailable;
 
-  const handlePageReplenishSubmit = (e: React.FormEvent) => {
+  const handlePageReplenishSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const targetId = selectedStationId === 'all' ? replenishStationId : selectedStationId;
     if (!targetId || targetId === 'all') {
@@ -589,27 +580,21 @@ export default function CashReconciliation({
       return;
     }
 
-    const currentCustody = stationToReplenish.custody_amount;
-    const nextCustody = currentCustody + amountVal;
-
-    // 1. Update custody amount of the station in DB
-    CustodyDB.updateStation(stationToReplenish.id, {
-      custody_amount: nextCustody
+    // Call CustodyEngine to replenish custody and write custody_movement
+    const res = await CustodyEngine.replenish({
+      stationId: stationToReplenish.id,
+      amount: amountVal,
+      notes: replenishNotes || undefined,
+      actorId: user?.id || 'unknown',
+      actorName: user?.full_name || 'Anonymous'
     });
 
-    // 2. Add an activity log of type "Custody Replenishment"
-    CustodyDB.addLog(
-      user?.id || 'unknown',
-      user?.full_name || 'Anonymous',
-      'Custody Replenishment',
-      `Replenished custody balance of ${stationToReplenish.station_name} with +${amountVal.toLocaleString()} EGP (Total custody updated from ${currentCustody.toLocaleString()} to ${nextCustody.toLocaleString()} EGP). Notes: ${replenishNotes || '-'}`,
-      stationToReplenish.id,
-      stationToReplenish.company_id,
-      amountVal,
-      replenishNotes
-    );
+    if (!res.success) {
+      alert(res.error || (isRtl ? 'فشلت عملية التغذية' : 'Failed to replenish custody'));
+      return;
+    }
 
-    // 3. Reset form and show success toast
+    // Reset form and show success toast
     setReplenishAmount('');
     setReplenishNotes('');
     refreshData();

@@ -1,4 +1,4 @@
-import { Region, Station } from '../types';
+import { Region, Station, AppUser } from '../types';
 import { StorageEngine } from './storage';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_REGIONS, DEFAULT_STATIONS } from './defaults';
@@ -6,7 +6,7 @@ import { UsersModule } from './users';
 import { LogsModule } from './logs';
 import { CompaniesModule } from './companies';
 import { OrganizationScopeEngine } from './organizationScopeEngine';
-import { OrganizationEngine } from './organizationEngine';
+import { OrganizationEngine, isOperationalCustodyType, repairOrgUnitLegacyLinkages } from './organizationEngine';
 import { OrganizationUnit } from '../types/organization';
 import { requireCompanyId } from './companyGuard';
 
@@ -215,6 +215,8 @@ export class StationsModule {
     return { success: true };
   }
 
+  private static isRepairing = false;
+
   // Stations
   static getStations(): Station[] {
     const raw = StorageEngine.getStored<Station[]>('stations', DEFAULT_STATIONS);
@@ -229,40 +231,125 @@ export class StationsModule {
     if (raw.length !== deduplicated.length) {
       StorageEngine.setStored('stations', deduplicated);
     }
+
+    // Auto-repair existing out-branch/operational units without Station if parent region resolvable
+    if (!StationsModule.isRepairing) {
+      const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+      const hasUnlinkedOperationalUnit = units.some(u =>
+        isOperationalCustodyType(u.typeId) &&
+        !deduplicated.some(s => s.org_unit_id === u.id || (u.metadata?.legacyStationId && s.id === u.metadata.legacyStationId))
+      );
+      if (hasUnlinkedOperationalUnit) {
+        StationsModule.isRepairing = true;
+        try {
+          repairOrgUnitLegacyLinkages();
+        } finally {
+          StationsModule.isRepairing = false;
+        }
+        return StorageEngine.getStored<Station[]>('stations', deduplicated);
+      }
+    }
+
     return deduplicated;
   }
 
-  static getScopedStations(): Station[] {
-    const stations = StationsModule.getStations();
-    const user = UsersModule.getActiveUser();
+  static getStationsForUser(user: AppUser | null | undefined): Station[] {
     if (!user) return [];
 
-    if (user.role === 'SystemAdmin') {
-      const targetCompanyId = CompaniesModule.getSelectedCompanyId();
-      return stations.filter(s => s.company_id === targetCompanyId);
+    const stations = StationsModule.getStations();
+
+    // SystemAdmin: selected company
+    if (user.role === 'SystemAdmin' || user.is_platform_owner) {
+      const targetCompanyId = CompaniesModule.getSelectedCompanyId() || user.company_id;
+      if (targetCompanyId) {
+        return stations.filter(s => s.company_id === targetCompanyId);
+      }
+      return stations;
     }
 
-    const userCompanyId = user.company_id;
-    let filtered = stations.filter(s => s.company_id === userCompanyId);
-
-    // Organization Scope evaluation with tree inheritance
-    if (user.org_unit_id || (user.assigned_org_unit_ids && user.assigned_org_unit_ids.length > 0)) {
-      return OrganizationScopeEngine.filterByOrganizationScope(filtered, user);
+    // Admin: all stations for user.company_id
+    if (user.role === 'Admin') {
+      if (!user.company_id) return [];
+      return stations.filter(s => s.company_id === user.company_id);
     }
 
+    // RegionalManager: company_id match AND (
+    //   station.region_id === user.region_id
+    //   OR org-tree scope of org_unit_id / assigned_org_unit_ids
+    //   OR station.org_unit_id descendant of user’s region unit
+    // ) using OR — never skip region match only because org_unit_id is set
     if (user.role === 'RegionalManager') {
+      const userCompanyId = user.company_id;
+      if (!userCompanyId) return [];
+
+      const hasOrgScope = Boolean(user.org_unit_id || (user.assigned_org_unit_ids && user.assigned_org_unit_ids.length > 0));
+      const accessibleOrgUnitIds = hasOrgScope ? OrganizationScopeEngine.getAccessibleOrgUnitIds(user, userCompanyId) : [];
+
+      let regionUnitIds: Set<string> | null = null;
       if (user.region_id) {
-        filtered = filtered.filter(s => s.region_id === user.region_id);
+        regionUnitIds = new Set<string>();
+        const allUnits = OrganizationEngine.getOrganizationUnits(userCompanyId);
+        const regions = StationsModule.getRegions();
+        const userRegion = regions.find(r => r.id === user.region_id && r.company_id === userCompanyId);
+
+        const matchingUnits = allUnits.filter(u =>
+          (userRegion?.org_unit_id && u.id === userRegion.org_unit_id) ||
+          u.metadata?.legacyRegionId === user.region_id ||
+          u.metadata?.legacy_region_id === user.region_id ||
+          u.id === `org-unit-region-${user.region_id}` ||
+          u.id === user.region_id ||
+          u.code === user.region_id
+        );
+
+        for (const ru of matchingUnits) {
+          regionUnitIds.add(ru.id);
+          const descendants = OrganizationEngine.getDescendantUnits(ru.id, userCompanyId);
+          for (const d of descendants) {
+            regionUnitIds.add(d.id);
+          }
+        }
       }
-    } else if (user.role === 'StationAdmin') {
-      if (user.station_id) {
-        filtered = filtered.filter(s => s.id === user.station_id);
-      } else {
-        return [];
-      }
+
+      return stations.filter(station => {
+        if (station.company_id !== userCompanyId) return false;
+
+        // 1. Direct region_id match
+        if (user.region_id && station.region_id === user.region_id) {
+          return true;
+        }
+
+        // 2. Org-tree scope of org_unit_id / assigned_org_unit_ids
+        if (hasOrgScope) {
+          if (station.org_unit_id && accessibleOrgUnitIds.includes(station.org_unit_id)) {
+            return true;
+          }
+          if (OrganizationScopeEngine.isTargetInUserScope(station, user)) {
+            return true;
+          }
+        }
+
+        // 3. station.org_unit_id descendant of user's region unit
+        if (station.org_unit_id && regionUnitIds && regionUnitIds.has(station.org_unit_id)) {
+          return true;
+        }
+
+        return false;
+      });
     }
 
-    return filtered;
+    // StationAdmin: user.station_id only
+    if (user.role === 'StationAdmin') {
+      if (!user.station_id) return [];
+      return stations.filter(s => (user.company_id ? s.company_id === user.company_id : true) && s.id === user.station_id);
+    }
+
+    // Deny-by-default otherwise
+    return [];
+  }
+
+  static getScopedStations(forUser?: AppUser): Station[] {
+    const user = forUser || UsersModule.getActiveUser();
+    return StationsModule.getStationsForUser(user);
   }
 
   static async saveStations(stations: Station[]): Promise<{ success: boolean; error?: string }> {

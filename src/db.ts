@@ -56,11 +56,13 @@ import { ModulesModule, ERP_MODULES_REGISTRY, CompanyModuleSettings } from './db
 import { InventoryModule, StockLookupIndex } from './db/inventory';
 import { ContractingEngine } from './db/contracting';
 import { RestaurantEngine } from './db/restaurant';
+import { CustodyEngine, ReplenishParams, ReverseReplenishParams, CountAdjustParams, UpdateReplenishParams, ConsumeParams } from './db/custody';
+import { PeriodReportFilter, CustodyPeriodReport } from './types';
 import { ConfigurationEngine } from './lib/enterprise/configuration';
 import { TenantSettings } from './types/enterprise';
 import { db } from './firebase';
 
-export { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings, ConfigurationEngine, type TenantSettings, type StockLookupIndex, ContractingEngine, RestaurantEngine, InventoryModule, CompaniesModule, UsersModule };
+export { hashPassword, legacyHashPassword, legacySinglePassHashPassword, legacyStretchedHashPassword1000, ModulesModule, ERP_MODULES_REGISTRY, type CompanyModuleSettings, ConfigurationEngine, type TenantSettings, type StockLookupIndex, ContractingEngine, RestaurantEngine, InventoryModule, CompaniesModule, UsersModule, CustodyEngine };
 
 export class CustodyDB {
   static hashPassword(password: string, salt: string = '', pepperVersion: number = 2): string {
@@ -373,6 +375,10 @@ export class CustodyDB {
     return StationsModule.getScopedStations();
   }
 
+  static getStationsForUser(user: AppUser | null | undefined): Station[] {
+    return StationsModule.getStationsForUser(user);
+  }
+
   static async saveStations(stations: Station[]): Promise<{ success: boolean; error?: string }> {
     return StationsModule.saveStations(stations);
   }
@@ -583,6 +589,38 @@ export class CustodyDB {
 
   static getStationDeductedCustody(stationId: string): number {
     return TransactionsModule.getStationDeductedCustody(stationId);
+  }
+
+  static getCustodyBalances(stationId: string) {
+    return CustodyEngine.getBalances(stationId);
+  }
+
+  static replenishCustody(params: ReplenishParams) {
+    return CustodyEngine.replenish(params);
+  }
+
+  static reverseCustodyReplenishment(params: ReverseReplenishParams) {
+    return CustodyEngine.reverseReplenishment(params);
+  }
+
+  static countAdjustCustody(params: CountAdjustParams) {
+    return CustodyEngine.count_adjust(params);
+  }
+
+  static getCustodyMovements(stationId?: string, companyId?: string) {
+    return CustodyEngine.getMovements(stationId, companyId);
+  }
+
+  static getBalanceAt(stationId: string, at: Date | string): number {
+    return CustodyEngine.getBalanceAt(stationId, at);
+  }
+
+  static getPeriodReport(filter: PeriodReportFilter): CustodyPeriodReport {
+    return CustodyEngine.getPeriodReport(filter);
+  }
+
+  static async consumeCustody(params: ConsumeParams) {
+    return CustodyEngine.consume(params);
   }
 
   static getCompanyDeductedCustody(companyId: string): number {

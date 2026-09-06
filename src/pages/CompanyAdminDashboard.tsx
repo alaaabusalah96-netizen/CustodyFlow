@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { CustodyDB } from '../db';
+import { CustodyDB, CustodyEngine } from '../db';
 import { useScreenListeners, auth } from '../firebase';
 import { Company, AppUser, Language, Theme, Region, Station, UserPermissions, Transaction, TransactionStatus, ActivityLog, DeletedTransaction, SignupRequest } from '../types';
 import { 
@@ -91,7 +91,7 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
     setRegions(rawRegions.filter(r => r.company_id === myCompanyId));
 
     const rawStations = CustodyDB.getStations();
-    setStations(rawStations.filter(s => s.company_id === myCompanyId));
+    setStations(CustodyDB.getStationsForUser(activeUser));
 
     const rawUsers = CustodyDB.getUsers();
     setUsers(rawUsers.filter(u => u.company_id === myCompanyId));
@@ -377,7 +377,7 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
     loadData();
   };
 
-  const handleEditReplenishmentSubmit = (e: React.FormEvent) => {
+  const handleEditReplenishmentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingOp) return;
     const { amount: oldAmount, stationId } = parseReplenishmentLog(editingOp.original);
@@ -398,24 +398,20 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
       return;
     }
 
-    const diff = newAmount - oldAmount;
-    const nextCustody = station.custody_amount + diff;
-
-    CustodyDB.updateStation(stationId, {
-      custody_amount: nextCustody
+    const res = await CustodyEngine.updateReplenishment({
+      stationId,
+      oldAmount,
+      newAmount,
+      notes: opEditReplenishNotes,
+      actorId: activeUser.id,
+      actorName: activeUser.full_name,
+      logId: editingOp.id
     });
 
-    const detailsMsg = `Replenished custody balance of ${station.station_name} with +${newAmount.toLocaleString()} EGP (Total custody updated). Notes: ${opEditReplenishNotes || '-'}`;
-    CustodyDB.updateReplenishmentLog(editingOp.id, newAmount, opEditReplenishNotes, detailsMsg);
-
-    CustodyDB.addLog(
-      activeUser.id,
-      activeUser.full_name,
-      'Replenishment Updated By CompanyAdmin',
-      `CompanyAdmin updated replenishment for ${station.station_name}: amount ${oldAmount} -> ${newAmount}. Notes: ${opEditReplenishNotes || '-'}`,
-      stationId,
-      myCompanyId
-    );
+    if (!res.success) {
+      alert(res.error || 'Failed to update replenishment');
+      return;
+    }
 
     showStructToast(isRtl ? 'تم تعديل مبلغ الاستعاضة وتحديث قيمة العهدة للمحطة بنجاح!' : 'Replenishment updated successfully and nominal custody adjusted!');
     setShowOpEditModal(false);
@@ -459,21 +455,20 @@ export default function CompanyAdminDashboard({ activeUser, language, theme }: C
         return;
       }
 
-      const nextCustody = Math.max(0, station.custody_amount - amount);
-      CustodyDB.updateStation(stationId, {
-        custody_amount: nextCustody
+      const res = await CustodyEngine.reverseReplenishment({
+        stationId,
+        amount,
+        reason: opDeleteReason,
+        actorId: activeUser.id,
+        actorName: activeUser.full_name,
+        logId: deletingOp.id
       });
 
-      CustodyDB.deleteLog(deletingOp.id);
+      if (!res.success) {
+        alert(res.error || 'Failed to reverse replenishment');
+        return;
+      }
 
-      CustodyDB.addLog(
-        activeUser.id,
-        activeUser.full_name,
-        'Replenishment Deleted By CompanyAdmin',
-        `CompanyAdmin deleted replenishment log ${deletingOp.id} for ${station.station_name} of amount ${amount} EGP. Reason: ${opDeleteReason}`,
-        stationId,
-        myCompanyId
-      );
       showStructToast(isRtl ? 'تم حذف عملية الاستعاضة وإلغاء أثرها المالي من قيمة العهدة!' : 'Replenishment deleted successfully and nominal custody reverted!');
     }
 

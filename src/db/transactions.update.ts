@@ -7,6 +7,7 @@ import { CompaniesModule } from './companies';
 import { TransactionsVoucherModule } from './transactions.voucher';
 import { TransactionsHistoryModule } from './transactions.history';
 import { CustodyService } from './custodyService';
+import { CustodyEngine } from './custody';
 import { ValidationEngine, isValidCompanyId, REQUIRE_COMPANY_ID_ERROR } from './validation';
 import { DEFAULT_TRANSACTIONS } from './defaults';
 import { AccountingBusinessEngine } from '../lib/enterprise/accounting_engine';
@@ -74,6 +75,15 @@ export class TransactionsUpdateModule {
           const compId = updated.company_id || user?.company_id || CompaniesModule.getSelectedCompanyId();
           if (stationId) {
             CustodyService.applySettlement(stationId, compId, amount);
+            await CustodyEngine.consume({
+              stationId,
+              amount,
+              voucherNo: updated.voucher_no,
+              transactionNo: updated.transaction_no,
+              actorId: user?.id || 'system',
+              actorName: user?.full_name || 'System',
+              notes: `Voucher #${updated.voucher_no || updated.transaction_no || ''} settled`
+            }).catch(e => console.warn('[CustodyEngine.consume error]', e));
           }
 
           // Auto-post double-entry accounting record
@@ -112,6 +122,15 @@ export class TransactionsUpdateModule {
           const compId = old.company_id || user?.company_id || CompaniesModule.getSelectedCompanyId();
           if (stationId) {
             CustodyService.rollbackSettlement(stationId, compId, amount);
+            await CustodyEngine.rollbackConsume({
+              stationId,
+              amount,
+              voucherNo: old.voucher_no,
+              transactionNo: old.transaction_no,
+              actorId: user?.id || 'system',
+              actorName: user?.full_name || 'System',
+              notes: `Settlement rolled back for voucher #${old.voucher_no || old.transaction_no || ''}`
+            }).catch(e => console.warn('[CustodyEngine.rollbackConsume error]', e));
           }
         }
 

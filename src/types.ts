@@ -622,6 +622,58 @@ export interface AccountCorrectionRequest {
   organizationId?: string;
 }
 
+export type CustodyMovementType = 
+  | 'replenish' 
+  | 'reverse_replenish' 
+  | 'count_adjust' 
+  | 'consume' 
+  | 'rollback_consume' 
+  | 'opening_balance' 
+  | 'transfer_in' 
+  | 'transfer_out' 
+  | string;
+
+export interface CustodyMovement {
+  id: string;
+  station_id: string;
+  company_id: string;
+  region_id?: string;
+  type: CustodyMovementType;
+  amount: number;
+  at: string;
+  actor_id: string;
+  actor_name?: string;
+  ref?: string;
+  notes?: string;
+  balance_after?: number;
+  metadata?: Record<string, any>;
+}
+
+export interface CustodyBalances {
+  nominal: number;
+  deducted: number;
+  available: number;
+}
+
+export interface PeriodReportFilter {
+  from: Date | string;
+  to: Date | string;
+  companyId?: string;
+  regionId?: string;
+  stationId?: string;
+  type?: CustodyMovementType | 'all';
+}
+
+export interface CustodyPeriodReport {
+  from: string;
+  to: string;
+  opening: number;
+  total_in: number;
+  total_out: number;
+  closing: number;
+  movements: CustodyMovement[];
+}
+
 export * from './types/enterprise';
 export * from './types/organization';
 
