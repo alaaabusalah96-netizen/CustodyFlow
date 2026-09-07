@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CustodyDB, ModulesModule } from '../db';
 import { StorageEngine } from '../db/storage';
 import { OrganizationUnit, OrganizationUnitType } from '../types/organization';
-import { DEFAULT_ORGANIZATION_UNIT_TYPES } from '../db/organizationEngine';
+import { DEFAULT_ORGANIZATION_UNIT_TYPES, REGION_TYPE_IDS } from '../db/organizationEngine';
 import { auth, useScreenListeners } from '../firebase';
 import { createManagedUser, updateManagedUser, deleteManagedUser, getAuthHeaders } from '../lib/userProvisioning';
 import ApprovalWorkflowManager from '../components/ApprovalWorkflowManager';
@@ -185,18 +185,14 @@ export function deriveScopeIdsFromOrgUnit(
   // - metadata.legacyRegionId / legacy_region_id
   // - region.org_unit_id === targetId || targetId === `org-unit-region-${r.id}` || r.id === targetId
   // - targetId startsWith('org-unit-region-')
-  // - targetUnit.typeId === 'out-region'
-  // STRICTLY FORBIDDEN: Name or substring heuristics
+  // - targetUnit.typeId === 'out-region' or REGION_TYPE_IDS
+  // STRICTLY FORBIDDEN: Name or substring heuristics or synthetic region fallback when record does not exist
   const resolveRegion = (targetUnit?: OrganizationUnit | null, targetId?: string) => {
     const legacyRegId = targetUnit?.metadata?.legacyRegionId || targetUnit?.metadata?.legacy_region_id;
     if (legacyRegId) {
       const reg = allRegions.find(r => r.id === legacyRegId);
       if (reg) return reg;
-      return {
-        id: legacyRegId,
-        org_unit_id: targetUnit?.id,
-        company_id: targetUnit?.companyId || (targetUnit as any)?.company_id
-      } as any;
+      return null;
     }
 
     if (targetId) {
@@ -209,22 +205,20 @@ export function deriveScopeIdsFromOrgUnit(
 
       if (targetId.startsWith('org-unit-region-')) {
         const parsedId = targetId.replace('org-unit-region-', '');
-        return {
-          id: parsedId,
-          org_unit_id: targetId,
-          company_id: targetUnit?.companyId || (targetUnit as any)?.company_id
-        } as any;
+        const reg2 = allRegions.find(r => r.id === parsedId);
+        if (reg2) return reg2;
+        return null;
       }
     }
 
-    if (targetUnit && targetUnit.typeId === 'out-region') {
-      return {
-        id: targetUnit.id,
-        name: targetUnit.name,
-        code: targetUnit.code,
-        company_id: targetUnit.companyId || (targetUnit as any)?.company_id,
-        org_unit_id: targetUnit.id
-      } as any;
+    if (targetUnit && (targetUnit.typeId === 'out-region' || REGION_TYPE_IDS.includes(targetUnit.typeId))) {
+      const reg = allRegions.find(r =>
+        r.org_unit_id === targetUnit.id ||
+        r.id === targetUnit.id ||
+        (targetUnit.metadata?.legacyRegionId && r.id === targetUnit.metadata.legacyRegionId)
+      );
+      if (reg) return reg;
+      return null;
     }
 
     return null;
@@ -303,9 +297,12 @@ export function deriveScopeIdsFromOrgUnit(
     resolvedCompanyId = CustodyDB.getSelectedCompanyId() || StorageEngine.getStored<string>('selected_company_id', '') || (CustodyDB.getCompanies()[0]?.id || null);
   }
 
-  const isUnlinked = !resolvedRegionId && !resolvedStationId;
+  const isRegionLike = unit && (unit.typeId === 'out-region' || REGION_TYPE_IDS.includes(unit.typeId));
+  const isUnlinked = (isRegionLike && !resolvedRegionId) || (!resolvedRegionId && !resolvedStationId);
   const unlinkedMessage = isUnlinked
-    ? 'الوحدة التنظيمية المحددة غير مرتبطة بسجل منطقة أو محطة / The selected organizational unit is not linked to a Region or Station record.'
+    ? (isRegionLike && !resolvedRegionId
+        ? 'الوحدة التنظيمية المحددة كمنطقة غير مرتبطة بسجل منطقة معتمد في قاعدة البيانات / The selected region unit is not linked to an official region record in the database.'
+        : 'الوحدة التنظيمية المحددة غير مرتبطة بسجل منطقة أو محطة / The selected organizational unit is not linked to a Region or Station record.')
     : null;
 
   return {
@@ -867,8 +864,10 @@ export default function Settings({
       return;
     }
 
-    if (isRegional && !derived.region_id && !newUserRegionId) {
-      alert(isRtl ? '⚠️ يجب اختيار وحدة تنظيمية تابعة لمنطقة صالحة لمدير المنطقة!' : '⚠️ A valid region-linked organizational unit must be selected for Regional Manager!');
+    if (isRegional && (!derived.region_id || derived.unlinked)) {
+      alert(isRtl
+        ? '⚠️ لا يمكن حفظ المستخدم: يجب اختيار وحدة تنظيمية تابعة لمنطقة صالحة وموثقة في قاعدة البيانات لمدير المنطقة!'
+        : '⚠️ Cannot create user: A valid region-linked organizational unit must be selected for Regional Manager!');
       return;
     }
 
@@ -895,19 +894,24 @@ export default function Settings({
       view_reports: true
     };
 
-    const companyId = CustodyDB.getSelectedCompanyId() || '';
-    const effectiveCompanyId =
-      companyId ||
-      derived.company_id ||
-      currentUser.company_id ||
-      StorageEngine.getStored<string>('selected_company_id', '') ||
-      (CustodyDB.getCompanies()[0]?.id || '');
+    let effectiveCompanyId: string;
+    if (currentUser.role === 'Admin' && currentUser.company_id) {
+      effectiveCompanyId = currentUser.company_id;
+    } else {
+      const companyId = CustodyDB.getSelectedCompanyId() || '';
+      effectiveCompanyId =
+        companyId ||
+        derived.company_id ||
+        currentUser.company_id ||
+        StorageEngine.getStored<string>('selected_company_id', '') ||
+        (CustodyDB.getCompanies()[0]?.id || '');
+    }
 
     const payload: any = {
       email: newUserEmail.trim().toLowerCase(),
       full_name: newUserName.trim(),
       role: newUserRole,
-      company_id: effectiveCompanyId || companyId,
+      company_id: effectiveCompanyId,
       region_id: isRegional ? (derived.region_id || newUserRegionId || null) : null,
       station_id: isStationAdmin ? (derived.station_id || newUserStationId || null) : null,
       org_unit_id: newUserOrgUnitId || null,
@@ -953,7 +957,7 @@ export default function Settings({
       setNewUserRegionId('');
 
       const tempPass = data.temporaryPassword || '';
-      const displayCompanyId = effectiveCompanyId || companyId;
+      const displayCompanyId = effectiveCompanyId;
       if (tempPass) {
         setCreatedUserSuccess({
           fullName: newUserName.trim(),
@@ -1018,23 +1022,30 @@ export default function Settings({
     }
     if (!editUserFullName.trim()) return;
 
-    const companyId = targetUser.company_id || CustodyDB.getSelectedCompanyId() || '';
-
     const derived = deriveScopeIdsFromOrgUnit(editUserOrgUnitId, editUserRole);
-    const effectiveCompanyId =
-      companyId ||
-      derived.company_id ||
-      currentUser.company_id ||
-      StorageEngine.getStored<string>('selected_company_id', '') ||
-      (CustodyDB.getCompanies()[0]?.id || '');
+
+    let effectiveCompanyId: string;
+    if (currentUser.role === 'Admin' && currentUser.company_id) {
+      effectiveCompanyId = currentUser.company_id;
+    } else {
+      const companyId = targetUser.company_id || CustodyDB.getSelectedCompanyId() || '';
+      effectiveCompanyId =
+        companyId ||
+        derived.company_id ||
+        currentUser.company_id ||
+        StorageEngine.getStored<string>('selected_company_id', '') ||
+        (CustodyDB.getCompanies()[0]?.id || '');
+    }
 
     if (editUserOrgUnitId && derived.unlinked && (editUserRole === 'RegionalManager' || editUserRole === 'StationAdmin')) {
       alert(`⚠️ ${derived.unlinkedMessage || (isRtl ? 'الوحدة التنظيمية المحددة غير مرتبطة بسجل منطقة أو محطة' : 'The selected organizational unit is not linked to a Region or Station record.')}`);
       return;
     }
 
-    if (editUserRole === 'RegionalManager' && !derived.region_id) {
-      alert(isRtl ? '⚠️ يجب اختيار وحدة تنظيمية تابعة لمنطقة صالحة لمدير المنطقة!' : '⚠️ A valid region-linked organizational unit must be selected for Regional Manager!');
+    if (editUserRole === 'RegionalManager' && (!derived.region_id || derived.unlinked)) {
+      alert(isRtl
+        ? '⚠️ لا يمكن تحديث المستخدم: يجب اختيار وحدة تنظيمية تابعة لمنطقة صالحة وموثقة في قاعدة البيانات لمدير المنطقة!'
+        : '⚠️ Cannot update user: A valid region-linked organizational unit must be selected for Regional Manager!');
       return;
     }
 
@@ -1056,7 +1067,7 @@ export default function Settings({
     const payload = {
       full_name: editUserFullName.trim(),
       role: editUserRole,
-      company_id: effectiveCompanyId || companyId,
+      company_id: effectiveCompanyId,
       region_id: editUserRole === 'RegionalManager' ? (derived.region_id || null) : null,
       station_id: editUserRole === 'StationAdmin' ? (derived.station_id || null) : null,
       org_unit_id: editUserOrgUnitId || null,

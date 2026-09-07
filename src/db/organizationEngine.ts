@@ -29,6 +29,15 @@ export const DEFAULT_ORGANIZATION_UNIT_TYPES: OrganizationUnitType[] = [
 // - out-factory: Manufacturing plant/factory (custody site)
 export const OPERATIONAL_CUSTODY_TYPE_IDS = ['out-station', 'out-branch', 'out-farm', 'out-factory'];
 
+// REGION_TYPE_IDS defines organization unit type IDs treated as geographic regions for RegionalManager.
+// 'out-sector' represents an organizational business sector/division, not a geographic region.
+export const REGION_TYPE_IDS = ['out-region'];
+
+export function isRegionLikeType(typeId?: string | null): boolean {
+  if (!typeId) return false;
+  return REGION_TYPE_IDS.includes(typeId);
+}
+
 export function isOperationalCustodyType(typeId?: string | null): boolean {
   if (!typeId) return false;
   return OPERATIONAL_CUSTODY_TYPE_IDS.includes(typeId);
@@ -709,6 +718,14 @@ export class OrganizationEngine {
 
     const now = new Date().toISOString();
 
+    const isRegionLike = isRegionLikeType(params.typeId) || (params.metadata && params.metadata.legacyRegionId);
+    let regId: string | null = null;
+    const metadata = { ...(params.metadata || {}) };
+    if (isRegionLike) {
+      regId = metadata.legacyRegionId || unitId;
+      metadata.legacyRegionId = regId;
+    }
+
     const newUnit: OrganizationUnit = {
       id: unitId,
       companyId: params.companyId,
@@ -723,7 +740,7 @@ export class OrganizationEngine {
       nameEn: params.nameEn || params.name,
       path,
       level,
-      metadata: params.metadata || {},
+      metadata,
       isActive: params.isActive ?? true,
       is_active: params.isActive ?? true,
       max_accounts_allowed: params.max_accounts_allowed ?? 1,
@@ -732,7 +749,11 @@ export class OrganizationEngine {
     };
 
     units.push(newUnit);
-    await OrganizationEngine.saveUnits(units);
+    const saveUnitsRes = await OrganizationEngine.saveUnits(units);
+    if (!saveUnitsRes.success) {
+      const errorMsg = saveUnitsRes.error || 'فشل حفظ الوحدة التنظيمية في قاعدة البيانات / Failed to save organization unit.';
+      throw new Error(errorMsg);
+    }
 
     // Save corresponding OrganizationPath
     const newPathObj: OrganizationPath = {
@@ -748,66 +769,102 @@ export class OrganizationEngine {
     paths.push(newPathObj);
     await OrganizationEngine.savePaths(paths);
 
-    // Reverse compatibility sync: if type is region or operational custody site (station, branch, farm, factory)
-    try {
-      if (params.typeId === 'out-region' || (params.metadata && params.metadata.legacyRegionId)) {
-        const regId = (params.metadata && params.metadata.legacyRegionId) || unitId.replace('org-unit-region-', '');
-        const regions = StationsModule.getRegions();
-        const existingReg = regions.find(r => r.id === regId);
-        if (!existingReg) {
-          regions.push({
-            id: regId,
-            name: params.name,
-            code: params.code,
-            company_id: params.companyId,
-            org_unit_id: unitId
-          });
-          await StationsModule.saveRegions(regions);
-        } else if (existingReg.org_unit_id !== unitId) {
-          existingReg.org_unit_id = unitId;
-          await StationsModule.saveRegions(regions);
-        }
-      } else if (isOperationalCustodyType(params.typeId) || (params.metadata && params.metadata.legacyStationId)) {
-        const regions = StationsModule.getRegions();
-        const legacyRegId = resolveParentRegionChain(newUnit, units, regions);
+    // Synchronous region / station reverse compatibility sync
+    if (isRegionLike && regId) {
+      const regions = StationsModule.getRegions();
+      const existingRegIdx = regions.findIndex(r => r.id === regId || r.org_unit_id === unitId);
+      const regionRecord: Region = {
+        id: regId,
+        name: params.name,
+        code: params.code,
+        company_id: params.companyId,
+        org_unit_id: unitId
+      };
 
-        const stnId = (params.metadata && params.metadata.legacyStationId) ||
-          (unitId.startsWith('org-unit-station-') ? unitId.replace('org-unit-station-', '') : `stn-${unitId.replace(/^orgunit-|^org-unit-/, '')}`);
-
-        if (!newUnit.metadata) newUnit.metadata = {};
-        newUnit.metadata.legacyStationId = stnId;
-
-        const stations = StationsModule.getStations();
-        const existingStn = stations.find(s => s.id === stnId || s.org_unit_id === unitId);
-        if (!existingStn) {
-          stations.push({
-            id: stnId,
-            station_name: params.name,
-            station_code: params.code,
-            custody_amount: params.metadata?.custodyAmount || 0,
-            is_active: params.isActive ?? true,
-            region_id: legacyRegId,
-            company_id: params.companyId,
-            org_unit_id: unitId
-          });
-          await StationsModule.saveStations(stations);
-        } else {
-          existingStn.station_name = params.name || existingStn.station_name;
-          existingStn.station_code = params.code || existingStn.station_code;
-          existingStn.org_unit_id = unitId;
-          existingStn.company_id = params.companyId || existingStn.company_id;
-          if (legacyRegId) {
-            existingStn.region_id = legacyRegId;
-          }
-          if (params.isActive !== undefined) {
-            existingStn.is_active = params.isActive;
-          }
-          await StationsModule.saveStations(stations);
-        }
-        await OrganizationEngine.saveUnits(units);
+      let updatedRegions: Region[];
+      if (existingRegIdx >= 0) {
+        updatedRegions = [...regions];
+        updatedRegions[existingRegIdx] = { ...updatedRegions[existingRegIdx], ...regionRecord };
+      } else {
+        updatedRegions = [...regions, regionRecord];
       }
-    } catch (err) {
-      console.warn('Reverse compatibility sync failed in addUnit:', err);
+
+      let saveRegRes: { success: boolean; error?: string };
+      try {
+        saveRegRes = await StationsModule.saveRegions(updatedRegions);
+      } catch (err: any) {
+        saveRegRes = { success: false, error: err?.message || 'Storage failure' };
+      }
+
+      if (!saveRegRes.success) {
+        // Compensating rollback of the unit and path write
+        try {
+          const rollbackUnits = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []).filter(u => u.id !== unitId);
+          await OrganizationEngine.saveUnits(rollbackUnits);
+          const rollbackPaths = StorageEngine.getStored<OrganizationPath[]>('organization_paths', []).filter(p => p.unitId !== unitId);
+          await OrganizationEngine.savePaths(rollbackPaths);
+        } catch (rollbackErr) {
+          console.error('CRITICAL: Compensating rollback failed after saveRegions failure:', rollbackErr);
+        }
+        const errorMsg = saveRegRes.error || 'فشل حفظ سجل المنطقة المرتبط بالوحدة التنظيمية في قاعدة البيانات / Failed to save associated region record.';
+        throw new Error(errorMsg);
+      }
+    } else if (isOperationalCustodyType(params.typeId) || (params.metadata && params.metadata.legacyStationId)) {
+      const regions = StationsModule.getRegions();
+      const legacyRegId = resolveParentRegionChain(newUnit, units, regions);
+
+      const stnId = (params.metadata && params.metadata.legacyStationId) ||
+        (unitId.startsWith('org-unit-station-') ? unitId.replace('org-unit-station-', '') : `stn-${unitId.replace(/^orgunit-|^org-unit-/, '')}`);
+
+      if (!newUnit.metadata) newUnit.metadata = {};
+      newUnit.metadata.legacyStationId = stnId;
+
+      const stations = StationsModule.getStations();
+      const existingStn = stations.find(s => s.id === stnId || s.org_unit_id === unitId);
+      if (!existingStn) {
+        stations.push({
+          id: stnId,
+          station_name: params.name,
+          station_code: params.code,
+          custody_amount: params.metadata?.custodyAmount || 0,
+          is_active: params.isActive ?? true,
+          region_id: legacyRegId,
+          company_id: params.companyId,
+          org_unit_id: unitId
+        });
+      } else {
+        existingStn.station_name = params.name || existingStn.station_name;
+        existingStn.station_code = params.code || existingStn.station_code;
+        existingStn.org_unit_id = unitId;
+        existingStn.company_id = params.companyId || existingStn.company_id;
+        if (legacyRegId) {
+          existingStn.region_id = legacyRegId;
+        }
+        if (params.isActive !== undefined) {
+          existingStn.is_active = params.isActive;
+        }
+      }
+
+      let saveStnRes: { success: boolean; error?: string };
+      try {
+        saveStnRes = await StationsModule.saveStations(stations);
+      } catch (err: any) {
+        saveStnRes = { success: false, error: err?.message || 'Storage failure' };
+      }
+
+      if (!saveStnRes.success) {
+        try {
+          const rollbackUnits = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []).filter(u => u.id !== unitId);
+          await OrganizationEngine.saveUnits(rollbackUnits);
+          const rollbackPaths = StorageEngine.getStored<OrganizationPath[]>('organization_paths', []).filter(p => p.unitId !== unitId);
+          await OrganizationEngine.savePaths(rollbackPaths);
+        } catch (rollbackErr) {
+          console.error('CRITICAL: Compensating rollback failed after saveStations failure:', rollbackErr);
+        }
+        const errorMsg = saveStnRes.error || 'فشل حفظ سجل المحطة المرتبط / Failed to save associated station record.';
+        throw new Error(errorMsg);
+      }
+      await OrganizationEngine.saveUnits(units);
     }
 
     const activeUser = UsersModule.getActiveUser();
@@ -862,7 +919,11 @@ export class OrganizationEngine {
       units = OrganizationEngine.recalculateSubtreePaths(id, units, paths);
     }
 
-    await OrganizationEngine.saveUnits(units);
+    const saveUnitsRes = await OrganizationEngine.saveUnits(units);
+    if (!saveUnitsRes.success) {
+      const errorMsg = saveUnitsRes.error || 'فشل حفظ تعديلات الوحدة التنظيمية في قاعدة البيانات / Failed to update organization unit.';
+      throw new Error(errorMsg);
+    }
 
     // Sync path object for updated unit
     const unitPathObj = OrganizationEngine.getPaths().find(p => p.unitId === id);
@@ -885,63 +946,80 @@ export class OrganizationEngine {
       await OrganizationEngine.savePaths(paths);
     }
 
-    // Reverse compatibility sync
-    try {
-      if (updatedUnit.typeId === 'out-region' || updatedUnit.metadata?.legacyRegionId) {
-        const regId = updatedUnit.metadata?.legacyRegionId || updatedUnit.id.replace('org-unit-region-', '');
-        const regions = StationsModule.getRegions();
-        const rIdx = regions.findIndex(r => r.id === regId);
-        if (rIdx !== -1) {
-          regions[rIdx] = {
-            ...regions[rIdx],
-            name: updatedUnit.name || updatedUnit.nameAr || regions[rIdx].name,
-            code: updatedUnit.code || regions[rIdx].code,
-            company_id: updatedUnit.companyId || regions[rIdx].company_id
-          };
-          await StationsModule.saveRegions(regions);
+    // Reverse compatibility sync: region / operational custody site
+    if (isRegionLikeType(updatedUnit.typeId) || updatedUnit.metadata?.legacyRegionId) {
+      const regId = updatedUnit.metadata?.legacyRegionId || updatedUnit.id;
+      if (!updatedUnit.metadata) updatedUnit.metadata = {};
+      updatedUnit.metadata.legacyRegionId = regId;
+
+      const regions = StationsModule.getRegions();
+      const rIdx = regions.findIndex(r => r.id === regId || r.org_unit_id === updatedUnit.id);
+      const regionRecord: Region = {
+        id: regId,
+        name: updatedUnit.name || updatedUnit.nameAr || (rIdx >= 0 ? regions[rIdx].name : updatedUnit.code),
+        code: updatedUnit.code,
+        company_id: updatedUnit.companyId || (rIdx >= 0 ? regions[rIdx].company_id : ''),
+        org_unit_id: updatedUnit.id
+      };
+      let updatedRegions: Region[];
+      if (rIdx !== -1) {
+        updatedRegions = [...regions];
+        updatedRegions[rIdx] = { ...updatedRegions[rIdx], ...regionRecord };
+      } else {
+        updatedRegions = [...regions, regionRecord];
+      }
+      const saveRegRes = await StationsModule.saveRegions(updatedRegions);
+      if (!saveRegRes.success) {
+        const errorMsg = saveRegRes.error || 'فشل تحديث سجل المنطقة المرتبط بالوحدة التنظيمية / Failed to update associated region record.';
+        throw new Error(errorMsg);
+      }
+    } else if (isOperationalCustodyType(updatedUnit.typeId) || updatedUnit.metadata?.legacyStationId) {
+      const regions = StationsModule.getRegions();
+      const legacyRegId = resolveParentRegionChain(updatedUnit, units, regions);
+
+      const stnId = updatedUnit.metadata?.legacyStationId ||
+        (updatedUnit.id.startsWith('org-unit-station-') ? updatedUnit.id.replace('org-unit-station-', '') : `stn-${updatedUnit.id.replace(/^orgunit-|^org-unit-/, '')}`);
+
+      if (!updatedUnit.metadata) updatedUnit.metadata = {};
+      if (!updatedUnit.metadata.legacyStationId) {
+        updatedUnit.metadata.legacyStationId = stnId;
+      }
+
+      const stations = StationsModule.getStations();
+      const sIdx = stations.findIndex(s => s.id === stnId || s.org_unit_id === updatedUnit.id);
+      if (sIdx !== -1) {
+        stations[sIdx] = {
+          ...stations[sIdx],
+          station_name: updatedUnit.name || updatedUnit.nameAr || stations[sIdx].station_name,
+          station_code: updatedUnit.code || stations[sIdx].station_code,
+          is_active: updatedUnit.isActive ?? stations[sIdx].is_active,
+          custody_amount: updatedUnit.metadata?.custodyAmount !== undefined ? updatedUnit.metadata.custodyAmount : stations[sIdx].custody_amount,
+          company_id: updatedUnit.companyId || stations[sIdx].company_id,
+          org_unit_id: updatedUnit.id,
+          region_id: legacyRegId || stations[sIdx].region_id
+        };
+        const saveStnRes = await StationsModule.saveStations(stations);
+        if (!saveStnRes.success) {
+          const errorMsg = saveStnRes.error || 'فشل تحديث سجل المحطة المرتبط / Failed to update associated station record.';
+          throw new Error(errorMsg);
         }
-      } else if (isOperationalCustodyType(updatedUnit.typeId) || updatedUnit.metadata?.legacyStationId) {
-        const regions = StationsModule.getRegions();
-        const legacyRegId = resolveParentRegionChain(updatedUnit, units, regions);
-
-        const stnId = updatedUnit.metadata?.legacyStationId ||
-          (updatedUnit.id.startsWith('org-unit-station-') ? updatedUnit.id.replace('org-unit-station-', '') : `stn-${updatedUnit.id.replace(/^orgunit-|^org-unit-/, '')}`);
-
-        if (!updatedUnit.metadata) updatedUnit.metadata = {};
-        if (!updatedUnit.metadata.legacyStationId) {
-          updatedUnit.metadata.legacyStationId = stnId;
-        }
-
-        const stations = StationsModule.getStations();
-        const sIdx = stations.findIndex(s => s.id === stnId || s.org_unit_id === updatedUnit.id);
-        if (sIdx !== -1) {
-          stations[sIdx] = {
-            ...stations[sIdx],
-            station_name: updatedUnit.name || updatedUnit.nameAr || stations[sIdx].station_name,
-            station_code: updatedUnit.code || stations[sIdx].station_code,
-            is_active: updatedUnit.isActive ?? stations[sIdx].is_active,
-            custody_amount: updatedUnit.metadata?.custodyAmount !== undefined ? updatedUnit.metadata.custodyAmount : stations[sIdx].custody_amount,
-            company_id: updatedUnit.companyId || stations[sIdx].company_id,
-            org_unit_id: updatedUnit.id,
-            region_id: legacyRegId || stations[sIdx].region_id
-          };
-          await StationsModule.saveStations(stations);
-        } else {
-          stations.push({
-            id: stnId,
-            station_name: updatedUnit.name || updatedUnit.nameAr || updatedUnit.code,
-            station_code: updatedUnit.code,
-            custody_amount: updatedUnit.metadata?.custodyAmount || 0,
-            is_active: updatedUnit.isActive ?? true,
-            region_id: legacyRegId,
-            company_id: updatedUnit.companyId,
-            org_unit_id: updatedUnit.id
-          });
-          await StationsModule.saveStations(stations);
+      } else {
+        stations.push({
+          id: stnId,
+          station_name: updatedUnit.name || updatedUnit.nameAr || updatedUnit.code,
+          station_code: updatedUnit.code,
+          custody_amount: updatedUnit.metadata?.custodyAmount || 0,
+          is_active: updatedUnit.isActive ?? true,
+          region_id: legacyRegId,
+          company_id: updatedUnit.companyId,
+          org_unit_id: updatedUnit.id
+        });
+        const saveStnRes = await StationsModule.saveStations(stations);
+        if (!saveStnRes.success) {
+          const errorMsg = saveStnRes.error || 'فشل حفظ سجل المحطة المرتبط / Failed to save associated station record.';
+          throw new Error(errorMsg);
         }
       }
-    } catch (err) {
-      console.warn('Reverse compatibility sync failed in updateUnit:', err);
     }
 
     const activeUser = UsersModule.getActiveUser();
@@ -953,6 +1031,79 @@ export class OrganizationEngine {
     );
 
     return updatedUnit;
+  }
+
+  /**
+   * One-shot idempotent repair function:
+   * Finds organization_units with region-like typeId missing a corresponding regions row
+   * for the same company, and creates the missing regions records.
+   * Reports { fixed: number, skipped: number, details: Array<{ unitId: string, regionId: string, status: string, reason?: string }> }.
+   */
+  static async repairMissingRegions(): Promise<{
+    fixed: number;
+    skipped: number;
+    details: Array<{ unitId: string; regionId: string; status: 'created' | 'skipped'; reason?: string }>;
+  }> {
+    const units = StorageEngine.getStored<OrganizationUnit[]>('organization_units', []);
+    const regions = StationsModule.getRegions();
+    const regionUnits = units.filter(u => isRegionLikeType(u.typeId) || (u.metadata && u.metadata.legacyRegionId));
+
+    let fixed = 0;
+    let skipped = 0;
+    const details: Array<{ unitId: string; regionId: string; status: 'created' | 'skipped'; reason?: string }> = [];
+    const updatedRegions = [...regions];
+
+    for (const unit of regionUnits) {
+      const targetCompanyId = unit.companyId || (unit as any).company_id;
+      if (!targetCompanyId) {
+        skipped++;
+        details.push({ unitId: unit.id, regionId: '', status: 'skipped', reason: 'Missing companyId on unit' });
+        continue;
+      }
+
+      const existing = updatedRegions.find(r =>
+        (r.org_unit_id === unit.id || r.id === unit.id || (unit.metadata?.legacyRegionId && r.id === unit.metadata.legacyRegionId)) &&
+        r.company_id === targetCompanyId
+      );
+
+      if (existing) {
+        let changed = false;
+        if (!existing.org_unit_id) {
+          existing.org_unit_id = unit.id;
+          changed = true;
+        }
+        if (!unit.metadata?.legacyRegionId) {
+          if (!unit.metadata) unit.metadata = {};
+          unit.metadata.legacyRegionId = existing.id;
+        }
+        skipped++;
+        details.push({ unitId: unit.id, regionId: existing.id, status: 'skipped', reason: 'Already linked to valid region' });
+        continue;
+      }
+
+      const regId = (unit.metadata && unit.metadata.legacyRegionId) || unit.id;
+      if (!unit.metadata) unit.metadata = {};
+      unit.metadata.legacyRegionId = regId;
+
+      const newRegion: Region = {
+        id: regId,
+        name: unit.name || unit.nameAr || unit.code,
+        code: unit.code,
+        company_id: targetCompanyId,
+        org_unit_id: unit.id
+      };
+
+      updatedRegions.push(newRegion);
+      fixed++;
+      details.push({ unitId: unit.id, regionId: regId, status: 'created' });
+    }
+
+    if (fixed > 0) {
+      await StationsModule.saveRegions(updatedRegions);
+      await OrganizationEngine.saveUnits(units);
+    }
+
+    return { fixed, skipped, details };
   }
 
   private static recalculateSubtreePaths(

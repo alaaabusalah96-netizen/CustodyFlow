@@ -201,7 +201,7 @@ describe('User Scope Derivation & Multi-Strategy Resolution Tests', () => {
     expect(payload.org_unit_id).toBe('ou_reg_north');
   });
 
-  it('9. Modern tree unit "منطقة القاهرة الكبرى" (code ORG-6848, typeId: out-region) without legacy region -> resolves region_id', () => {
+  it('9. Modern tree unit "منطقة القاهرة الكبرى" (code ORG-6848, typeId: out-region) without legacy region -> returns region_id: null and unlinked: true', () => {
     const cairoRegionUnit: OrganizationUnit = {
       id: 'orgunit-cairo-6848',
       companyId: 'comp_1',
@@ -224,11 +224,13 @@ describe('User Scope Derivation & Multi-Strategy Resolution Tests', () => {
     });
 
     const derived = deriveScopeIdsFromOrgUnit('orgunit-cairo-6848', 'RegionalManager');
-    expect(derived.region_id).toBe('orgunit-cairo-6848');
+    expect(derived.region_id).toBeNull();
     expect(derived.station_id).toBeNull();
+    expect(derived.unlinked).toBe(true);
+    expect(derived.unlinkedMessage).toBeDefined();
   });
 
-  it('10. Modern branch unit under Cairo region -> resolves station_id and inherited region_id', () => {
+  it('10. Modern branch unit under Cairo region without backing records -> returns station_id but inherited region_id is null', () => {
     const cairoRegionUnit: OrganizationUnit = {
       id: 'orgunit-cairo-6848',
       companyId: 'comp_1',
@@ -266,9 +268,15 @@ describe('User Scope Derivation & Multi-Strategy Resolution Tests', () => {
       return defaultValue;
     });
 
+    // Parent out-region without regions row returns region_id: null and unlinked: true
+    const derivedParent = deriveScopeIdsFromOrgUnit('orgunit-cairo-6848', 'RegionalManager');
+    expect(derivedParent.region_id).toBeNull();
+    expect(derivedParent.unlinked).toBe(true);
+
+    // Branch under Cairo region -> resolves station_id, but cannot inherit unbacked region_id
     const derived = deriveScopeIdsFromOrgUnit('orgunit-maadi-branch', 'StationAdmin');
     expect(derived.station_id).toBe('orgunit-maadi-branch');
-    expect(derived.region_id).toBe('orgunit-cairo-6848');
+    expect(derived.region_id).toBeNull();
     expect(derived.company_id).toBe('comp_1');
   });
 

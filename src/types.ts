@@ -81,6 +81,7 @@ export interface AppUser {
 export interface Region {
   id: string;
   name: string;
+  region_name?: string;
   code?: string;
   company_id?: string;
   org_unit_id?: string;

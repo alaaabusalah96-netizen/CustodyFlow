@@ -611,8 +611,8 @@ export class CustodyDB {
     return CustodyEngine.getMovements(stationId, companyId);
   }
 
-  static getBalanceAt(stationId: string, at: Date | string): number {
-    return CustodyEngine.getBalanceAt(stationId, at);
+  static getBalanceAt(stationId: string, at: Date | string, inclusive: boolean = true): number {
+    return CustodyEngine.getBalanceAt(stationId, at, inclusive);
   }
 
   static getPeriodReport(filter: PeriodReportFilter): CustodyPeriodReport {

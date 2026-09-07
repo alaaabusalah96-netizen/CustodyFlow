@@ -9,19 +9,23 @@ export interface ReplenishParams {
   stationId: string;
   amount: number;
   notes?: string;
-  actorId: string;
+  actorId?: string;
   actorName?: string;
   ref?: string;
+  transferRef?: string;
+  bankAccount?: string;
+  date?: string;
 }
 
 export interface ReverseReplenishParams {
   stationId: string;
   amount: number;
   reason: string;
-  actorId: string;
+  actorId?: string;
   actorName?: string;
   movementId?: string;
   logId?: string;
+  date?: string;
 }
 
 export interface CountAdjustParams {
@@ -30,9 +34,10 @@ export interface CountAdjustParams {
   countedAmount?: number;
   expectedAmount?: number;
   notes?: string;
-  actorId: string;
+  actorId?: string;
   actorName?: string;
   ref?: string;
+  date?: string;
 }
 
 export interface UpdateReplenishParams {
@@ -40,10 +45,11 @@ export interface UpdateReplenishParams {
   oldAmount: number;
   newAmount: number;
   notes?: string;
-  actorId: string;
+  actorId?: string;
   actorName?: string;
   movementId?: string;
   logId?: string;
+  date?: string;
 }
 
 export interface ConsumeParams {
@@ -53,9 +59,10 @@ export interface ConsumeParams {
   voucherNo?: string;
   transactionNo?: string;
   notes?: string;
-  actorId: string;
+  actorId?: string;
   actorName?: string;
   at?: string;
+  date?: string;
   metadata?: Record<string, any>;
 }
 
@@ -63,9 +70,10 @@ export interface OpeningBalanceParams {
   stationId: string;
   amount: number;
   notes?: string;
-  actorId: string;
+  actorId?: string;
   actorName?: string;
   at?: string;
+  date?: string;
   ref?: string;
 }
 
@@ -187,6 +195,10 @@ export class CustodyEngine {
       custody_amount: nextNominal
     });
 
+    const activeUser = UsersModule.getActiveUser();
+    const actorId = params.actorId || activeUser?.id;
+    const actorName = params.actorName || activeUser?.full_name || 'Anonymous';
+
     const movement: CustodyMovement = {
       id: `cm-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       station_id: station.id,
@@ -194,10 +206,10 @@ export class CustodyEngine {
       region_id: station.region_id,
       type: 'replenish',
       amount: params.amount,
-      at: new Date().toISOString(),
-      actor_id: params.actorId,
-      actor_name: params.actorName || 'Anonymous',
-      ref: params.ref || `REP-${Date.now()}`,
+      at: params.date ? new Date(params.date).toISOString() : new Date().toISOString(),
+      actor_id: actorId,
+      actor_name: actorName,
+      ref: params.ref || params.transferRef || `REP-${Date.now()}`,
       notes: params.notes || '',
       balance_after: nextNominal
     };
@@ -206,8 +218,8 @@ export class CustodyEngine {
 
     // Audit and activity log
     LogsModule.addLog(
-      params.actorId,
-      params.actorName || 'Anonymous',
+      actorId,
+      actorName,
       'Custody Replenishment',
       `Replenished custody balance of ${station.station_name} with +${params.amount.toLocaleString()} EGP (Nominal custody updated from ${currentNominal.toLocaleString()} to ${nextNominal.toLocaleString()} EGP). Notes: ${params.notes || '-'}`,
       station.id,
@@ -260,6 +272,10 @@ export class CustodyEngine {
       custody_amount: nextNominal
     });
 
+    const activeUser = UsersModule.getActiveUser();
+    const actorId = params.actorId || activeUser?.id;
+    const actorName = params.actorName || activeUser?.full_name || 'Anonymous';
+
     const movement: CustodyMovement = {
       id: `cm-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       station_id: station.id,
@@ -267,9 +283,9 @@ export class CustodyEngine {
       region_id: station.region_id,
       type: 'reverse_replenish',
       amount: -params.amount,
-      at: new Date().toISOString(),
-      actor_id: params.actorId,
-      actor_name: params.actorName || 'Anonymous',
+      at: params.date ? new Date(params.date).toISOString() : new Date().toISOString(),
+      actor_id: actorId,
+      actor_name: actorName,
       ref: params.movementId || params.logId || `REV-${Date.now()}`,
       notes: params.reason,
       balance_after: nextNominal
@@ -282,8 +298,8 @@ export class CustodyEngine {
     }
 
     LogsModule.addLog(
-      params.actorId,
-      params.actorName || 'Anonymous',
+      actorId,
+      actorName,
       'Custody Reversal',
       `Reversed replenishment of ${params.amount.toLocaleString()} EGP for ${station.station_name}. Reason: ${params.reason}. (Nominal custody updated from ${currentNominal.toLocaleString()} to ${nextNominal.toLocaleString()} EGP)`,
       station.id,
@@ -339,6 +355,10 @@ export class CustodyEngine {
         ? `Physical count deficit: ${Math.abs(params.variance).toLocaleString()} EGP`
         : `Physical count surplus: +${params.variance.toLocaleString()} EGP`;
 
+    const activeUser = UsersModule.getActiveUser();
+    const actorId = params.actorId || activeUser?.id;
+    const actorName = params.actorName || activeUser?.full_name || 'Anonymous';
+
     const movement: CustodyMovement = {
       id: `cm-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       station_id: station.id,
@@ -346,9 +366,9 @@ export class CustodyEngine {
       region_id: station.region_id,
       type: 'count_adjust',
       amount: params.variance,
-      at: new Date().toISOString(),
-      actor_id: params.actorId,
-      actor_name: params.actorName || 'Anonymous',
+      at: params.date ? new Date(params.date).toISOString() : new Date().toISOString(),
+      actor_id: actorId,
+      actor_name: actorName,
       ref: params.ref || `COUNT-${Date.now()}`,
       notes: params.notes || defaultNote,
       balance_after: nextNominal,
@@ -362,8 +382,8 @@ export class CustodyEngine {
     await this.recordMovement(movement);
 
     LogsModule.addLog(
-      params.actorId,
-      params.actorName || 'Anonymous',
+      actorId,
+      actorName,
       'Count Sheet Adjustment',
       `Audited custody of ${station.station_name}. Variance: ${params.variance >= 0 ? '+' : ''}${params.variance.toLocaleString()} EGP. (Nominal custody updated from ${currentNominal.toLocaleString()} to ${nextNominal.toLocaleString()} EGP). Notes: ${params.notes || defaultNote}`,
       station.id,
@@ -641,7 +661,7 @@ export class CustodyEngine {
   /**
    * Returns the exact station balance at a given point in time (timestamp or Date)
    */
-  static getBalanceAt(stationId: string, at: Date | string): number {
+  static getBalanceAt(stationId: string, at: Date | string, inclusive: boolean = true): number {
     const targetDate = at instanceof Date ? at : new Date(at);
     const targetTime = targetDate.getTime();
     if (isNaN(targetTime)) {
@@ -658,7 +678,10 @@ export class CustodyEngine {
     const sorted = [...allMovements].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 
     // Movements up to targetTime
-    const upToTarget = sorted.filter(m => new Date(m.at).getTime() <= targetTime);
+    const upToTarget = sorted.filter(m => {
+      const mTime = new Date(m.at).getTime();
+      return inclusive ? mTime <= targetTime : mTime < targetTime;
+    });
 
     if (upToTarget.length > 0) {
       const last = upToTarget[upToTarget.length - 1];
@@ -681,15 +704,22 @@ export class CustodyEngine {
    * Generates period report with opening, total_in, total_out, closing, and movements
    */
   static getPeriodReport(filter: PeriodReportFilter): CustodyPeriodReport {
-    const fromDate = filter.from instanceof Date ? filter.from : new Date(filter.from);
-    let toDate = filter.to instanceof Date ? filter.to : new Date(filter.to);
+    let fromDate: Date;
+    if (filter.from instanceof Date) {
+      fromDate = filter.from;
+    } else if (typeof filter.from === 'string' && filter.from.trim().length === 10) {
+      fromDate = new Date(`${filter.from.trim()}T00:00:00.000Z`);
+    } else {
+      fromDate = new Date(filter.from);
+    }
 
-    // If 'to' is a date string of YYYY-MM-DD, default to end-of-day
-    if (typeof filter.to === 'string' && filter.to.trim().length === 10) {
-      const eod = new Date(`${filter.to.trim()}T23:59:59.999Z`);
-      if (!isNaN(eod.getTime())) {
-        toDate = eod;
-      }
+    let toDate: Date;
+    if (filter.to instanceof Date) {
+      toDate = filter.to;
+    } else if (typeof filter.to === 'string' && filter.to.trim().length === 10) {
+      toDate = new Date(`${filter.to.trim()}T23:59:59.999Z`);
+    } else {
+      toDate = new Date(filter.to);
     }
 
     const fromTime = fromDate.getTime();
@@ -733,8 +763,8 @@ export class CustodyEngine {
       targetStations = allStations;
     }
 
-    const opening = targetStations.reduce((sum, s) => sum + this.getBalanceAt(s.id, fromDate), 0);
-    const closing = targetStations.reduce((sum, s) => sum + this.getBalanceAt(s.id, toDate), 0);
+    const opening = targetStations.reduce((sum, s) => sum + this.getBalanceAt(s.id, fromDate, false), 0);
+    const closing = targetStations.reduce((sum, s) => sum + this.getBalanceAt(s.id, toDate, true), 0);
 
     const total_in = filteredMovements
       .filter(m => m.amount > 0)

@@ -1159,7 +1159,7 @@ export default function CustodyPage({ language, theme, onNavigate }: CustodyProp
                 >
                   <option value="all">{isRtl ? 'جميع المناطق' : 'All Regions'}</option>
                   {regions.map(r => (
-                    <option key={r.id} value={r.id}>{r.region_name}</option>
+                    <option key={r.id} value={r.id}>{r.region_name || r.name}</option>
                   ))}
                 </select>
               </div>

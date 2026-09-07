@@ -4,6 +4,25 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Phase 5: Complete Custody Ledger, Period Reports & Settlement Integration
+**Date:** 2026-09-07
+**Files Changed:** `src/db/custody.ts`, `src/db.ts`, `src/phase5_custody_reports.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Custody Period Reports & Point-in-Time Balances (`src/db/custody.ts`, `src/db.ts`)**:
+  - Enhanced `CustodyEngine.getBalanceAt(stationId, targetDate, inclusive)` with `inclusive` flag for chronological point-in-time calculation.
+  - Hardened `CustodyEngine.getPeriodReport({ from, to, companyId, stationId, regionId, type })` with date boundary coverage (`00:00:00` start-of-day for opening balance, `23:59:59` end-of-day for closing balance).
+  - Extended `replenish`, `reverseReplenishment`, and `count_adjust` to honor custom movement timestamps (`params.date`), resolve `actor_id` and `actor_name` from the active user session when omitted, and support `transferRef`.
+  - Implemented `CustodyEngine.consume` and `CustodyEngine.rollbackConsume` to log custody reductions and restorations upon voucher and expense settlements.
+- **TransactionsModule Settlement Integration (`src/db/transactions.update.ts`)**:
+  - Integrated automatic `CustodyEngine.consume` on transaction settlement (`status: 'Settled'`).
+  - Integrated automatic `CustodyEngine.rollbackConsume` if settlement is reverted from 'Settled'.
+- **Verification & Tests**:
+  - Created test suite `src/phase5_custody_reports.test.ts`: 4/4 passed (10/10 with phase 4).
+  - Full application test suite: 107/107 files passed, 573/573 tests passed (100% green).
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
 ## Region and Station Duplication Root-Cause Fix & Single-Write Guarantees
 **Date:** 2026-09-04
 **Files Changed:** `src/db/stations.ts`, `src/firebase.ts`, `src/pages/CompanyAdminDashboard.tsx`, `src/region_station_deduplication.test.ts`, `CHANGELOG.md`
@@ -5570,3 +5589,15 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 - Files Changed: src/types.ts, src/db/custody.ts, src/db/transactions.reconciliation.ts, src/db.ts, src/db/modules.ts, src/components/Layout.tsx, src/pages/Custody.tsx, src/App.tsx, src/pages/CashReconciliation.tsx, src/pages/CompanyAdminDashboard.tsx, src/phase4_custody_engine.test.ts
 - Summary: Centralized all custody balance calculations and balance-modifying operations (replenish, reverseReplenish, count_adjust) into CustodyEngine with atomic custody_movement ledger logging, eliminated scattered updateStation calls in reconciliation and dashboard, and created a dedicated primary Custody management UI with deny-by-default replace_custody gating.
 - Test Result: PASS (src/phase4_custody_engine.test.ts: 6/6 passed; src/phase3_station_visibility.test.ts: 10/10 passed; src/region_station_deduplication.test.ts: 5/5 passed; compile_applet: successful)
+
+## [2026-09-07 07:30:00 UTC] Phase 1: Atomic Org-Tree Region & Station Persistence with Compensating Rollback and Strict UI Scope Resolution
+- Files Changed: src/db/organizationEngine.ts, src/pages/Settings.tsx, src/phase1_org_region_atomicity.test.ts, CHANGELOG.md
+- Summary: Implemented atomic reverse-sync in OrganizationEngine.addUnit and updateUnit for region-like units (REGION_TYPE_IDS / isRegionLikeType) with compensating rollbacks on storage exceptions; added repairMissingRegions idempotent utility; hardened deriveScopeIdsFromOrgUnit to forbid synthetic region IDs when no regions record exists (returning unlinked: true and region_id: null); enforced effectiveCompanyId from currentUser for Admin role; and blocked RegionalManager and StationAdmin creation/update when scope is unlinked.
+- Test Result: PASS (src/phase1_org_region_atomicity.test.ts: 6/6 passed; src/organization_engine.test.ts: 12/12 passed; compile_applet: successful)
+
+## [2026-09-07 07:44:00 UTC] Phase 1 Follow-ups: Scope Derivation Tests & UACC Confirmation
+- Files Changed: src/settings_user_scope_derivation.test.ts, CHANGELOG.md
+- Summary: Updated tests 9-10 in settings_user_scope_derivation.test.ts to assert region_id: null and unlinked: true for unbacked units; confirmed isRegionLikeType is strictly narrowed to exact REGION_TYPE_IDS match only; and verified UACC create/update flows share identical unlinked blocking logic and currentUser.company_id scoping for Admin role.
+- Test Result: PASS (44/44 passed across phase1_org_region_atomicity.test.ts, settings_user_scope_derivation.test.ts, organization_engine.test.ts, region_station_deduplication.test.ts, and user_provisioning_api.test.ts; lint_applet and compile_applet passed with 0 errors)
+
+
