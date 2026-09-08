@@ -203,7 +203,7 @@ export class CustodyDB {
     return CompaniesModule.updateCompany(id, updates);
   }
 
-  static async deleteCompany(id: string): Promise<{ success: boolean; error?: string }> {
+  static async deleteCompany(id: string): Promise<{ success: boolean; error?: string; message?: string }> {
     return CompaniesModule.deleteCompany(id);
   }
 

@@ -12,17 +12,19 @@ describe('Phase 7: StorageEngine IndexedDB Hydration Reactivity', () => {
     expect(res).toEqual([{ id: '1', name: 'Company Test' }]);
   });
 
-  it('2. StorageEngine.setStored updates cache and dispatches custody_db_updated', () => {
+  it('2. StorageEngine.setStored updates cache and dispatches custody_db_updated', async () => {
     const listener = vi.fn();
     window.addEventListener('custody_db_updated', listener);
 
-    StorageEngine.setStored('test_company', { id: 'c1', name: 'Acme Corp' });
-    expect(StorageEngine.cache['test_company']).toEqual({ id: 'c1', name: 'Acme Corp' });
+    try {
+      StorageEngine.setStored('test_company', { id: 'c1', name: 'Acme Corp' });
+      expect(StorageEngine.cache['test_company']).toEqual({ id: 'c1', name: 'Acme Corp' });
 
-    // Wait for dispatch event
-    setTimeout(() => {
+      // Wait for dispatch event
+      await new Promise(resolve => setTimeout(resolve, 20));
       expect(listener).toHaveBeenCalled();
-    }, 10);
-    window.removeEventListener('custody_db_updated', listener);
+    } finally {
+      window.removeEventListener('custody_db_updated', listener);
+    }
   });
 });

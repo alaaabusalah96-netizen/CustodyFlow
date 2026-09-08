@@ -839,18 +839,18 @@ export default function Settings({
   };
 
   // --- USERS ACTIONS ---
-  const handleAddUser = async (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.FormEvent): Promise<boolean> => {
     e.preventDefault();
     if (currentUser.role !== 'SystemAdmin' && currentUser.role !== 'Admin' && !currentUser.permissions?.manage_users) {
       alert(isRtl ? '⚠️ هذه الصلاحية حصرية لإدارة المنصة والشركة فقط!' : '⚠️ Privilege restricted to Platform & Company Admins.');
-      return;
+      return false;
     }
-    if (!newUserName.trim() || !newUserEmail.trim()) return;
+    if (!newUserName.trim() || !newUserEmail.trim()) return false;
 
     const trimmedPassword = newUserPassword ? newUserPassword.trim() : '';
     if (trimmedPassword && trimmedPassword.length < 12) {
       alert(isRtl ? '⚠️ كلمة المرور يجب أن لا تقل عن 12 حرفاً.' : '⚠️ Password must be at least 12 characters.');
-      return;
+      return false;
     }
 
     const isUserAdmin = newUserRole === 'Admin' || newUserRole === 'SystemAdmin';
@@ -861,19 +861,19 @@ export default function Settings({
 
     if (newUserOrgUnitId && derived.unlinked && (isRegional || isStationAdmin)) {
       alert(`⚠️ ${derived.unlinkedMessage || (isRtl ? 'الوحدة التنظيمية المحددة غير مرتبطة بسجل منطقة أو محطة' : 'The selected organizational unit is not linked to a Region or Station record.')}`);
-      return;
+      return false;
     }
 
     if (isRegional && (!derived.region_id || derived.unlinked)) {
       alert(isRtl
         ? '⚠️ لا يمكن حفظ المستخدم: يجب اختيار وحدة تنظيمية تابعة لمنطقة صالحة وموثقة في قاعدة البيانات لمدير المنطقة!'
         : '⚠️ Cannot create user: A valid region-linked organizational unit must be selected for Regional Manager!');
-      return;
+      return false;
     }
 
     if (isStationAdmin && !derived.station_id && !newUserStationId) {
       alert(isRtl ? '⚠️ يجب اختيار وحدة تنظيمية تابعة لمحطة صالحة لمدير المحطة!' : '⚠️ A valid station-linked organizational unit must be selected for Station Manager!');
-      return;
+      return false;
     }
 
     // RegionalManager caller guard: cannot create StationAdmin for station outside creator's region
@@ -882,7 +882,7 @@ export default function Settings({
       const creatorRegionId = currentUser.region_id;
       if (creatorRegionId && derived.region_id && derived.region_id !== creatorRegionId) {
         alert(isRtl ? '⚠️ غير مصرح: مصرح فقط بإنشاء مدراء محطات تابعين لمنطقتك!' : '⚠️ Forbidden: You can only create station admins for stations within your assigned region!');
-        return;
+        return false;
       }
     }
 
@@ -912,7 +912,7 @@ export default function Settings({
       full_name: newUserName.trim(),
       role: newUserRole,
       company_id: effectiveCompanyId,
-      region_id: isRegional ? (derived.region_id || newUserRegionId || null) : null,
+      region_id: isRegional ? (derived.region_id || null) : null,
       station_id: isStationAdmin ? (derived.station_id || newUserStationId || null) : null,
       org_unit_id: newUserOrgUnitId || null,
       assigned_org_unit_ids: newUserAssignedOrgUnitIds.length > 0 ? newUserAssignedOrgUnitIds : [],
@@ -930,7 +930,7 @@ export default function Settings({
       if (!data.success) {
         const errMsg = data.message || (isRtl ? 'فشل إنشاء حساب المستخدم' : 'Failed to create user');
         alert(`⚠️ ${errMsg}`);
-        return;
+        return false;
       }
 
       if (data.user) {
@@ -974,8 +974,10 @@ export default function Settings({
       );
 
       triggerToast(isRtl ? 'تم إضافة وتوثيق حساب المستخدم بنجاح.' : 'New user created successfully.');
+      return true;
     } catch (err: any) {
       alert(isRtl ? `⚠️ خطأ في الاتصال بالخادم: ${err.message}` : `⚠️ Server connection error: ${err.message}`);
+      return false;
     }
   };
 

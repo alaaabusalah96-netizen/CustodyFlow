@@ -49,7 +49,8 @@ import {
   Calendar,
   ArrowUpDown,
   SlidersHorizontal,
-  Zap
+  Zap,
+  Loader2
 } from 'lucide-react';
 import { 
   Language, 
@@ -190,7 +191,7 @@ export interface UnifiedAccessControlCenterProps {
   setNewUserOrgUnitId: (v: string) => void;
   newUserAssignedOrgUnitIds: string[];
   setNewUserAssignedOrgUnitIds: (v: string[]) => void;
-  handleAddUser: (e: React.FormEvent) => void;
+  handleAddUser: (e: React.FormEvent) => void | boolean | Promise<void | boolean>;
   getAuthHeaders: () => Promise<Record<string, string>>;
   setUsers: (users: AppUser[]) => void;
   triggerToast: (msg: string) => void;
@@ -310,6 +311,13 @@ export default function UnifiedAccessControlCenter({
   const [newCompanyAdminPassword, setNewCompanyAdminPassword] = useState('');
   const [newCompanyAdminMustChangePassword, setNewCompanyAdminMustChangePassword] = useState(true);
   const [showNewCompanyAdminPassword, setShowNewCompanyAdminPassword] = useState(false);
+  const [createdCompanyCredentials, setCreatedCompanyCredentials] = useState<{
+    companyName: string;
+    companyId: string;
+    adminEmail: string;
+    adminPassword: string;
+  } | null>(null);
+  const [showCreatedPassword, setShowCreatedPassword] = useState(true);
   const [newCompanyModules, setNewCompanyModules] = useState<Record<string, boolean>>({
     custody: true,
     inventory: true,
@@ -525,6 +533,23 @@ export default function UnifiedAccessControlCenter({
 
   // Signup Request Handlers
   const handleApproveSignup = async (req: SignupRequest) => {
+    if (req.role === 'RegionalManager') {
+      if (!req.region_id) {
+        alert(isRtl
+          ? '⚠️ لا يمكن اعتماد الطلب: يجب تحديد منطقة صالحة وموثقة لدور مدير المنطقة.'
+          : '⚠️ Cannot approve signup: A valid region is required for Regional Manager.');
+        return;
+      }
+      const allRegions = CustodyDB.getRegions();
+      const validRegion = allRegions.find(r => r.id === req.region_id || r.org_unit_id === req.region_id);
+      if (!validRegion) {
+        alert(isRtl
+          ? '⚠️ لا يمكن اعتماد الطلب: سجل المنطقة المحدد غير موجود في قاعدة البيانات.'
+          : '⚠️ Cannot approve signup: The selected region record does not exist in the database.');
+        return;
+      }
+    }
+
     const cleanEmail = req.email.trim().toLowerCase();
     const payload = {
       email: cleanEmail,
@@ -881,17 +906,23 @@ export default function UnifiedAccessControlCenter({
 
   const handleCreateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCompanyName.trim()) return;
+    const compName = newCompanyName.trim();
+    if (!compName) return;
+
+    const targetCompanyId = newCompanyId.trim();
+    const adminEmail = newCompanyAdminEmail.trim().toLowerCase();
+    const adminName = newCompanyAdminName.trim() || `Admin ${compName}`;
+    const rawAdminPass = newCompanyAdminPassword.trim();
 
     try {
-      const createdComp = await CustodyDB.addCompany(newCompanyName.trim(), newCompanyCustody || 0);
+      const createdComp = await CustodyDB.addCompany(compName, newCompanyCustody || 0);
       if (!createdComp) {
-        throw new Error('Failed to create company');
+        throw new Error(isRtl ? 'فشل إنشاء سجل الشركة في قاعدة البيانات' : 'Failed to create company record');
       }
-      const targetCompanyId = newCompanyId.trim() || createdComp.id;
+      const effectiveCompanyId = targetCompanyId || createdComp.id;
       
       await CustodyDB.updateCompany(createdComp.id, {
-        id: targetCompanyId,
+        id: effectiveCompanyId,
         subscription_plan: newCompanyPlan,
         subscription_status: newCompanyStatus,
         subscription_expiry: newCompanyExpiry || undefined,
@@ -906,32 +937,52 @@ export default function UnifiedAccessControlCenter({
           moduleSettings[mId].status = newCompanyModules[mId] ? 'active' : 'inactive';
         }
       });
-      ModulesModule.saveCompanyModules(targetCompanyId, moduleSettings);
+      ModulesModule.saveCompanyModules(effectiveCompanyId, moduleSettings);
 
       // Provision Admin User if provided
-      if (newCompanyAdminEmail.trim()) {
-        const adminPass = newCompanyAdminPassword.trim() || `Pass@${Math.floor(100000 + Math.random() * 900000)}`;
-        try {
-          const data = await createManagedUser({
-            email: newCompanyAdminEmail.trim().toLowerCase(),
-            password: adminPass,
-            full_name: newCompanyAdminName.trim() || `Admin ${newCompanyName.trim()}`,
-            role: 'Admin',
-            company_id: targetCompanyId,
-            permissions: CustodyDB.enrichUserPermissions('Admin'),
-            must_change_password: newCompanyAdminMustChangePassword
-          });
-          if (data.user) {
-            const allUsers = CustodyDB.getUsers();
-            if (!allUsers.some(u => u.id === data.user!.id)) {
-              allUsers.push(data.user);
-              await CustodyDB.saveUsers(allUsers);
-              setUsers(allUsers);
-            }
+      let finalAdminPassword = '';
+      if (adminEmail) {
+        // Resolve password once: trimmed manual if length >= 12, else generate secure temp (length >= 12)
+        const initialAdminPass = rawAdminPass.length >= 12
+          ? rawAdminPass
+          : `Pass@${Math.floor(100000 + Math.random() * 900000)}${Math.random().toString(36).slice(2, 6)}`;
+
+        const provisionRes = await createManagedUser({
+          email: adminEmail,
+          password: initialAdminPass,
+          full_name: adminName,
+          role: 'Admin',
+          company_id: effectiveCompanyId,
+          permissions: CustodyDB.enrichUserPermissions('Admin'),
+          must_change_password: true // Rule 6: must_change_password true by default for that admin
+        });
+
+        if (!provisionRes.success || !provisionRes.user) {
+          // Rule 4: If admin email was provided and createManagedUser fails -> overall operation FAILS.
+          // Roll back the company just created.
+          try {
+            await CustodyDB.deleteCompany(effectiveCompanyId);
+          } catch (rbErr) {
+            console.warn('[handleCreateCompany] Rollback failed:', rbErr);
           }
-        } catch (uErr) {
-          console.warn('Failed to provision company admin user:', uErr);
+          const errMsg = provisionRes.message || (isRtl ? 'تعذر إنشاء حساب مدير الشركة' : 'Failed to provision Admin user');
+          throw new Error(isRtl
+            ? `فشل إنشاء حساب مدير الشركة (${errMsg}). تم إلغاء إنشاء الشركة منعاً لتعليق الحسابات.`
+            : `Failed to provision Company Admin user (${errMsg}). Company creation rolled back.`);
         }
+
+        finalAdminPassword = provisionRes.temporaryPassword || initialAdminPass;
+
+        // Rule 5: On admin success: merge user into local users and refresh directory via same source as the screen
+        const allUsers = CustodyDB.getUsers();
+        const existingIdx = allUsers.findIndex(u => u.id === provisionRes.user!.id || u.email.toLowerCase() === adminEmail);
+        if (existingIdx >= 0) {
+          allUsers[existingIdx] = provisionRes.user;
+        } else {
+          allUsers.push(provisionRes.user);
+        }
+        await CustodyDB.saveUsers(allUsers);
+        setUsers(CustodyDB.getScopedUsers());
       }
 
       setCompaniesRefreshTrigger(prev => prev + 1);
@@ -943,7 +994,24 @@ export default function UnifiedAccessControlCenter({
       setNewCompanyAdminEmail('');
       setNewCompanyAdminPassword('');
 
-      triggerToast?.(isRtl ? '✅ تم إنشاء الشركة وتفعيل اشتراكها بنجاح!' : '✅ Company created and configured successfully!');
+      // Rule 3: Success UI MUST show the exact password used (copyable), whether manual or generated.
+      // One bilingual success message including email + password. Never success-only “company created” without password when admin was requested.
+      if (adminEmail && finalAdminPassword) {
+        setCreatedCompanyCredentials({
+          companyName: compName,
+          companyId: effectiveCompanyId,
+          adminEmail: adminEmail,
+          adminPassword: finalAdminPassword
+        });
+
+        const bilingualMsg = isRtl
+          ? `✅ تم إنشاء الشركة وتعيين المدير بنجاح!\nالبريد: ${adminEmail}\nكلمة المرور: ${finalAdminPassword}`
+          : `✅ Company and Admin created successfully!\nEmail: ${adminEmail}\nPassword: ${finalAdminPassword}`;
+        triggerToast?.(bilingualMsg);
+      } else {
+        triggerToast?.(isRtl ? '✅ تم إنشاء الشركة وتفعيل اشتراكها بنجاح!' : '✅ Company created and configured successfully!');
+      }
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('custody_db_updated'));
       }
@@ -1005,14 +1073,31 @@ export default function UnifiedAccessControlCenter({
     }
   };
 
-  const handleDeleteCompany = () => {
-    if (!deletingCompany) return;
-    CompaniesModule.deleteCompany(deletingCompany.id);
-    setCompaniesRefreshTrigger(prev => prev + 1);
-    setDeletingCompany(null);
-    triggerToast?.(isRtl ? '🗑️ تم حذف الشركة بنجاح.' : 'Company deleted.');
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('custody_db_updated'));
+  const [isDeletingCompany, setIsDeletingCompany] = useState(false);
+
+  const handleDeleteCompany = async () => {
+    if (!deletingCompany || isDeletingCompany) return;
+    setIsDeletingCompany(true);
+    try {
+      const result = await CompaniesModule.deleteCompany(deletingCompany.id);
+      if (!result.success) {
+        triggerToast?.(isRtl
+          ? `❌ فشل حذف الشركة: ${result.error || 'خطأ في الخادم'}`
+          : `❌ Failed to delete company: ${result.error || 'Server error'}`);
+        return;
+      }
+      setCompaniesRefreshTrigger(prev => prev + 1);
+      setDeletingCompany(null);
+      triggerToast?.(isRtl ? '🗑️ تم حذف الشركة بنجاح.' : 'Company deleted.');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('custody_db_updated'));
+      }
+    } catch (err: any) {
+      triggerToast?.(isRtl
+        ? `❌ خطأ غير متوقع أثناء الحذف: ${err?.message || ''}`
+        : `❌ Unexpected error deleting company: ${err?.message || ''}`);
+    } finally {
+      setIsDeletingCompany(false);
     }
   };
 
@@ -2620,8 +2705,10 @@ export default function UnifiedAccessControlCenter({
             </div>
 
             <form onSubmit={async (e) => {
-              await handleAddUser(e);
-              setShowNewUserModal(false);
+              const res = await handleAddUser(e);
+              if (res !== false) {
+                setShowNewUserModal(false);
+              }
             }} className="space-y-3.5 text-xs">
               <div>
                 <label className="block text-slate-500 font-bold mb-1">{isRtl ? 'الاسم بالكامل:' : 'Full Name:'}</label>
@@ -2992,6 +3079,112 @@ export default function UnifiedAccessControlCenter({
         </div>
       )}
 
+      {/* Modal: Created Company Admin Credentials */}
+      {createdCompanyCredentials && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-fade-in">
+          <div className={`w-full max-w-md p-6 rounded-2xl border shadow-2xl space-y-4 ${
+            theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+          }`}>
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black">
+                <CheckCircle2 size={22} />
+              </div>
+              <div>
+                <h3 className="font-black text-sm text-emerald-600 dark:text-emerald-400">
+                  {isRtl ? 'تم إنشاء الشركة وحساب المدير بنجاح!' : 'Company & Admin Created Successfully!'}
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  {isRtl ? 'يرجى حفظ بيانات الاعتماد لاستخدامها في تسجيل الدخول' : 'Please save login credentials to log in'}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                <div>
+                  <span className="text-slate-400 text-[10px] block">{isRtl ? 'اسم الشركة:' : 'Company Name:'}</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-200">{createdCompanyCredentials.companyName}</span>
+                </div>
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-400 text-[10px] block">{isRtl ? 'البريد الإلكتروني (اسم المستخدم):' : 'Admin Email:'}</span>
+                  <div className="flex items-center justify-between gap-2 mt-0.5">
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-100 select-all">{createdCompanyCredentials.adminEmail}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(createdCompanyCredentials.adminEmail);
+                        triggerToast?.(isRtl ? '📋 تم نسخ البريد الإلكتروني' : '📋 Email copied');
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700"
+                      title={isRtl ? 'نسخ البريد' : 'Copy Email'}
+                    >
+                      <Copy size={13} />
+                    </button>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-400 text-[10px] block">{isRtl ? 'كلمة المرور الابتدائية:' : 'Temporary Password:'}</span>
+                  <div className="flex items-center justify-between gap-2 mt-0.5">
+                    <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-sm select-all">
+                      {showCreatedPassword ? createdCompanyCredentials.adminPassword : '••••••••••••••••'}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowCreatedPassword(!showCreatedPassword)}
+                        className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700"
+                        title={showCreatedPassword ? 'إخفاء' : 'إظهار'}
+                      >
+                        {showCreatedPassword ? <EyeOff size={13} /> : <Eye size={13} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(createdCompanyCredentials.adminPassword);
+                          triggerToast?.(isRtl ? '📋 تم نسخ كلمة المرور' : '📋 Password copied');
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700"
+                        title={isRtl ? 'نسخ كلمة المرور' : 'Copy Password'}
+                      >
+                        <Copy size={13} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300">
+                ⚠️ {isRtl 
+                  ? 'حساب المدير ملزم بتغيير كلمة المرور عند تسجيل الدخول الأول لأسباب أمنية.'
+                  : 'The administrator must change their password upon their first login for security reasons.'}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  const credText = `Company: ${createdCompanyCredentials.companyName}\nEmail: ${createdCompanyCredentials.adminEmail}\nPassword: ${createdCompanyCredentials.adminPassword}`;
+                  navigator.clipboard.writeText(credText);
+                  triggerToast?.(isRtl ? '📋 تم نسخ كافة بيانات الاعتماد' : '📋 All credentials copied');
+                }}
+                className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5"
+              >
+                <Copy size={13} />
+                <span>{isRtl ? 'نسخ كافة البيانات' : 'Copy All'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreatedCompanyCredentials(null)}
+                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-md shadow-indigo-600/20"
+              >
+                {isRtl ? 'تم / إغلاق' : 'Done / Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Edit Company & Subscription Plan */}
       {editingCompany && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
@@ -3206,17 +3399,26 @@ export default function UnifiedAccessControlCenter({
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
-                onClick={() => setDeletingCompany(null)}
-                className="px-4 py-2 rounded-xl border text-slate-500 hover:bg-slate-100 font-bold text-xs"
+                onClick={() => !isDeletingCompany && setDeletingCompany(null)}
+                disabled={isDeletingCompany}
+                className="px-4 py-2 rounded-xl border text-slate-500 hover:bg-slate-100 font-bold text-xs disabled:opacity-50"
               >
                 {isRtl ? 'إلغاء' : 'Cancel'}
               </button>
               <button
                 type="button"
                 onClick={handleDeleteCompany}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow-md shadow-rose-600/20"
+                disabled={isDeletingCompany}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow-md shadow-rose-600/20 disabled:opacity-50 flex items-center gap-1.5"
               >
-                {isRtl ? 'تأكيد الحذف' : 'Confirm Delete'}
+                {isDeletingCompany ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>{isRtl ? 'جاري الحذف...' : 'Deleting...'}</span>
+                  </>
+                ) : (
+                  <span>{isRtl ? 'تأكيد الحذف' : 'Confirm Delete'}</span>
+                )}
               </button>
             </div>
           </div>

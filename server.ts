@@ -740,22 +740,28 @@ async function startServer() {
           } else {
             const orgDoc = await adminDb.collection("organization_units").doc(region_id).get();
             if (orgDoc.exists) {
-              regionFound = true;
               const orgData = orgDoc.data();
-              const orgCompId = orgData?.companyId || orgData?.company_id;
-              if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
-                isValidRegion = true;
-                if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
-              }
-            } else {
-              const orgCodeSnap = await adminDb.collection("organization_units").where("code", "==", region_id).limit(1).get();
-              if (!orgCodeSnap.empty) {
+              const isRegionType = orgData?.typeId === 'out-region' || orgData?.type_id === 'out-region' || Boolean(orgData?.metadata?.legacyRegionId);
+              if (isRegionType) {
                 regionFound = true;
-                const orgData = orgCodeSnap.docs[0].data();
                 const orgCompId = orgData?.companyId || orgData?.company_id;
                 if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
                   isValidRegion = true;
                   if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
+                }
+              }
+            } else {
+              const orgCodeSnap = await adminDb.collection("organization_units").where("code", "==", region_id).limit(1).get();
+              if (!orgCodeSnap.empty) {
+                const orgData = orgCodeSnap.docs[0].data();
+                const isRegionType = orgData?.typeId === 'out-region' || orgData?.type_id === 'out-region' || Boolean(orgData?.metadata?.legacyRegionId);
+                if (isRegionType) {
+                  regionFound = true;
+                  const orgCompId = orgData?.companyId || orgData?.company_id;
+                  if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
+                    isValidRegion = true;
+                    if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
+                  }
                 }
               }
             }
@@ -1088,22 +1094,28 @@ async function startServer() {
           } else {
             const orgDoc = await adminDb.collection("organization_units").doc(region_id).get();
             if (orgDoc.exists) {
-              regionFound = true;
               const orgData = orgDoc.data();
-              const orgCompId = orgData?.companyId || orgData?.company_id;
-              if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
-                isValidRegion = true;
-                if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
-              }
-            } else {
-              const orgCodeSnap = await adminDb.collection("organization_units").where("code", "==", region_id).limit(1).get();
-              if (!orgCodeSnap.empty) {
+              const isRegionType = orgData?.typeId === 'out-region' || orgData?.type_id === 'out-region' || Boolean(orgData?.metadata?.legacyRegionId);
+              if (isRegionType) {
                 regionFound = true;
-                const orgData = orgCodeSnap.docs[0].data();
                 const orgCompId = orgData?.companyId || orgData?.company_id;
                 if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
                   isValidRegion = true;
                   if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
+                }
+              }
+            } else {
+              const orgCodeSnap = await adminDb.collection("organization_units").where("code", "==", region_id).limit(1).get();
+              if (!orgCodeSnap.empty) {
+                const orgData = orgCodeSnap.docs[0].data();
+                const isRegionType = orgData?.typeId === 'out-region' || orgData?.type_id === 'out-region' || Boolean(orgData?.metadata?.legacyRegionId);
+                if (isRegionType) {
+                  regionFound = true;
+                  const orgCompId = orgData?.companyId || orgData?.company_id;
+                  if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
+                    isValidRegion = true;
+                    if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
+                  }
                 }
               }
             }
@@ -1456,40 +1468,70 @@ async function startServer() {
       }
 
       // 1. Cascade delete all users belonging to this company (Auth + user_credentials + users collection)
-      const usersSnap = await adminDb.collection("users").where("company_id", "==", companyId).get();
-      const authClient = getAdminAuth(adminApp);
+      const usersSnap1 = await adminDb.collection("users").where("company_id", "==", companyId).get();
+      const usersSnap2 = await adminDb.collection("users").where("companyId", "==", companyId).get();
+      const userDocsMap = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+      usersSnap1.docs.forEach(d => userDocsMap.set(d.id, d));
+      usersSnap2.docs.forEach(d => userDocsMap.set(d.id, d));
 
-      for (const uDoc of usersSnap.docs) {
+      const authClient = getAdminAuth(adminApp);
+      const initialUsersCount = userDocsMap.size;
+
+      for (const uDoc of userDocsMap.values()) {
         const uId = uDoc.id;
         const uData = uDoc.data() || {};
         const uEmail = (uData.email || '').toLowerCase().trim();
 
-        // Delete from Firebase Auth
+        // Delete from Firebase Auth: unconditionally attempt by uid AND by email
         if (authClient) {
           try {
             await authClient.deleteUser(uId);
-          } catch (authDelErr) {
-            if (uEmail) {
-              try {
-                const au = await authClient.getUserByEmail(uEmail);
-                if (au) await authClient.deleteUser(au.uid);
-              } catch (_) {}
-            }
+          } catch (_) {}
+          if (uEmail) {
+            try {
+              const au = await authClient.getUserByEmail(uEmail);
+              if (au && au.uid) {
+                await authClient.deleteUser(au.uid);
+              }
+            } catch (_) {}
           }
         }
 
-        // Delete from user_credentials vault
+        // Delete from user_credentials vault: unconditionally attempt by uid AND by email
         try {
           await adminDb.collection("user_credentials").doc(uId).delete();
-          if (uEmail) {
-            await adminDb.collection("user_credentials").doc(uEmail).delete();
-          }
         } catch (credDelErr) {
-          console.warn("Notice: user_credentials deletion warning:", credDelErr);
+          console.warn("Notice: user_credentials deletion warning by uid:", credDelErr);
+        }
+        if (uEmail) {
+          try {
+            await adminDb.collection("user_credentials").doc(uEmail).delete();
+          } catch (credDelErr) {
+            console.warn("Notice: user_credentials deletion warning by email:", credDelErr);
+          }
         }
 
         // Delete from users collection
-        await adminDb.collection("users").doc(uId).delete();
+        try {
+          await adminDb.collection("users").doc(uId).delete();
+        } catch (uDelErr) {
+          console.warn("Notice: users doc deletion warning:", uDelErr);
+        }
+      }
+
+      // Rule 5 Verification: If any user doc for company_id remains after attempted deletes, return 500 success:false (no partial "success")
+      const remainingUsersSnap1 = await adminDb.collection("users").where("company_id", "==", companyId).get();
+      const remainingUsersSnap2 = await adminDb.collection("users").where("companyId", "==", companyId).get();
+      const remainingUserDocs = new Set<string>();
+      remainingUsersSnap1.docs.forEach(d => remainingUserDocs.add(d.id));
+      remainingUsersSnap2.docs.forEach(d => remainingUserDocs.add(d.id));
+
+      if (remainingUserDocs.size > 0) {
+        console.error(`[DELETE /api/admin/companies/:id] Incomplete user deletion: ${remainingUserDocs.size} users remain for company ${companyId}`);
+        return res.status(500).json({
+          success: false,
+          message: `فشل الحذف الكامل: ما زال هناك ${remainingUserDocs.size} مستخدم مرتبط بالشركة في قاعدة البيانات.`
+        });
       }
 
       // 2. Cascade delete all regions belonging to this company
@@ -1531,12 +1573,20 @@ async function startServer() {
       // 6. Delete company document itself
       await adminDb.collection("companies").doc(companyId).delete();
 
+      const verifyCompanyDoc = await adminDb.collection("companies").doc(companyId).get();
+      if (verifyCompanyDoc.exists) {
+        return res.status(500).json({
+          success: false,
+          message: "فشل حذف سجل الشركة من قاعدة البيانات."
+        });
+      }
+
       // 7. Store permanent tombstone in deleted_companies collection
       await adminDb.collection("deleted_companies").doc(companyId).set({
         id: companyId,
         deleted_at: new Date().toISOString(),
         deleted_by: requester.email || requester.id,
-        deleted_users_count: usersSnap.size
+        deleted_users_count: initialUsersCount
       });
 
       // 8. Audit log entry
@@ -1546,7 +1596,7 @@ async function startServer() {
           performed_by_id: requester.id,
           performed_by_email: requester.email,
           target_company_id: companyId,
-          deleted_users_count: usersSnap.size,
+          deleted_users_count: initialUsersCount,
           timestamp: new Date().toISOString()
         });
       } catch (auditErr) {
@@ -1556,7 +1606,7 @@ async function startServer() {
       return res.json({
         success: true,
         message: "تم حذف الشركة وكافة المستخدمين والبيانات التابعة لها نهائياً وبلا رجعة.",
-        deletedUsersCount: usersSnap.size
+        deletedUsersCount: initialUsersCount
       });
     } catch (err: any) {
       console.error("Error deleting company in /api/admin/companies/:id:", err);

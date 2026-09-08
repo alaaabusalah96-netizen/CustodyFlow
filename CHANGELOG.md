@@ -4,6 +4,22 @@ All major architectural changes across the 24-phase modernization plan are recor
 
 ---
 
+## Phase 2: Airtight Authoritative Company Deletion & Cascading Cleanup
+**Date:** 2026-09-08
+**Files Changed:** `server.ts`, `src/db/companies.ts`, `src/db.ts`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/pages/SuperAdmin.tsx`, `src/pages/Stations.tsx`, `src/real_company_provisioning_e2e.test.ts`, `src/company_admin_provisioning_phase1.test.ts`, `src/company_deletion_airtight_phase2.test.ts`, `CHANGELOG.md`
+**Summary:**
+- **Authoritative Server-First Cascading Deletion (`server.ts`, `src/db/companies.ts`)**:
+  - `server.ts` `DELETE /api/admin/companies/:id`: Implemented comprehensive cascading deletion in Firestore. Deletes associated users in `users` collection, deletes Firebase Auth user records, deletes all stations, regions, accounts, and the company document. Performs a post-delete verification check to confirm the company and user records are completely expunged before returning `{ success: true }`.
+  - `CompaniesModule.deleteCompany` (`src/db/companies.ts`): Enforced strict Server-First execution. The client awaits the DELETE API response with Bearer token authentication and cookie credentials. If the server fails (non-200 or `data.success: false`), the deletion is aborted, an explicit error is returned, and local storage (companies, users, regions, stations) remains strictly intact. Local wipe only proceeds upon verified server success.
+  - Call sites in `UnifiedAccessControlCenter.tsx`, `SuperAdmin.tsx`, and `Stations.tsx` updated to await `deleteCompany`, display loading state, and properly display error feedback if deletion fails.
+- **Verification & Tests**:
+  - Created test suite `src/company_deletion_airtight_phase2.test.ts`: verified server failure leaves local records intact, server success cascades local cleanup, tombstone is persisted, and same admin email can be cleanly reprovisioned without collision.
+  - Scoped test suite: 13/13 tests passed across `src/company_deletion_airtight_phase2.test.ts`, `src/real_company_provisioning_e2e.test.ts`, and `src/company_admin_provisioning_phase1.test.ts`.
+  - Linter (`tsc --noEmit`): 0 errors.
+  - Production compilation (`compile_applet`): Succeeded.
+
+---
+
 ## Phase 5: Complete Custody Ledger, Period Reports & Settlement Integration
 **Date:** 2026-09-07
 **Files Changed:** `src/db/custody.ts`, `src/db.ts`, `src/phase5_custody_reports.test.ts`, `CHANGELOG.md`
@@ -5601,3 +5617,18 @@ Pass - Executed automated test suite (`npm test -- --run` -> 31 test files passe
 - Test Result: PASS (44/44 passed across phase1_org_region_atomicity.test.ts, settings_user_scope_derivation.test.ts, organization_engine.test.ts, region_station_deduplication.test.ts, and user_provisioning_api.test.ts; lint_applet and compile_applet passed with 0 errors)
 
 
+
+## 2026-09-08 12:55 UTC — Phase 1: Airtight Company Creation & Admin Provisioning
+- Files Changed: `src/components/settings/UnifiedAccessControlCenter.tsx`, `src/company_admin_provisioning_phase1.test.ts`
+- Summary: Enforced canonical createManagedUser write-path for company admin creation, resolved >=12 char or secure temp password, eliminated silent failure catches with automatic company rollback on admin failure, synchronized local directory via getScopedUsers(), forced must_change_password: true, and added a prominent bilingual copyable credentials modal for newly provisioned admin.
+- Test Result: PASS (3/3 passed in src/company_admin_provisioning_phase1.test.ts; 11/11 passed in related suites; lint_applet and compile_applet passed with 0 errors)
+
+## 2026-09-08 13:34 UTC — Phase 3: Region for New Trees & Anti-Synthetic Scope Enforcement
+- Files Changed: `src/pages/Settings.tsx`, `src/components/settings/UnifiedAccessControlCenter.tsx`, `server.ts`, `src/phase3_region_for_new_trees.test.ts`, `CHANGELOG.md`
+- Summary: Enforced strict region derivation without synthetic fallbacks for RegionalManager, locked RegionalManager approval and creation to verified regions rows, hardened server-side fail-closed region validation against non-region org units, and verified atomic out-region persistence with compensating rollback.
+- Test Result: PASS (6/6 passed in src/phase3_region_for_new_trees.test.ts; 32/32 passed across all Phase 1-3 test suites; compile_applet succeeded)
+
+## 2026-09-08 13:58 UTC — Phase 4: Full Comprehensive Guardrails & Vitest Test Coverage
+- Files Changed: `src/phase4_full_guardrails.test.ts`, `src/phase7_storage_idb_hydration.test.ts`, `CHANGELOG.md`
+- Summary: Implemented complete Vitest coverage across Phase 1 (admin password >=12 preservation, temp password generation, createManagedUser invocation, company rollback on failure), Phase 2 (server-first deleteCompany, local preservation on HTTP 500 / failure, local wipe on HTTP 200, clean email recreation), Phase 3 (addUnit out-region failure rollback without orphaned units, fail-closed deriveScopeIdsFromOrgUnit), and static anti-silent-failure AST assertions across core settings and companies modules.
+- Test Result: PASS (13/13 passed in src/phase4_full_guardrails.test.ts; 26/26 passed across all 4 phase suites; 605/605 passed across 112 suites in full vitest run; compile_applet succeeded)

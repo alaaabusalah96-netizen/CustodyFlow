@@ -313,9 +313,14 @@ export default function Stations({
     }
 
     if (confirm(isRtl ? 'هل تريد حذف هذه الشركة وجميع بياناتها بالتأكيد؟' : 'Are you sure you want to delete this company?')) {
-      CustodyDB.deleteCompany(id);
-      showToast(isRtl ? 'تم حذف الشركة بنجاح' : 'Company deleted successfully');
-      refreshData();
+      CustodyDB.deleteCompany(id).then(res => {
+        if (!res.success) {
+          showToast(isRtl ? `فشل حذف الشركة: ${res.error || 'خطأ في الخادم'}` : `Failed to delete company: ${res.error || 'Server error'}`);
+        } else {
+          showToast(isRtl ? 'تم حذف الشركة بنجاح' : 'Company deleted successfully');
+          refreshData();
+        }
+      });
     }
   };
 

@@ -187,7 +187,11 @@ export default function SuperAdmin({ language, theme, initialSubTab, embedded = 
     if (confirm(confirmMsg)) {
       try {
         showStructToast(isRtl ? 'جاري حذف الشركة وكافة توابعها...' : 'Deleting company and all assets...');
-        await CustodyDB.deleteCompany(id);
+        const res = await CustodyDB.deleteCompany(id);
+        if (!res.success) {
+          alert(isRtl ? `خطأ أثناء حذف الشركة: ${res.error || 'فشلت العملية'}` : `Error deleting company: ${res.error || 'Operation failed'}`);
+          return;
+        }
         showStructToast(isRtl ? 'تم حذف الشركة وكافة بياناتها ومستخدميها نهائياً' : 'Company and all associated users deleted permanently');
         handleRefreshData();
       } catch (err: any) {

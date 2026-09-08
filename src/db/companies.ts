@@ -1,4 +1,5 @@
 import { Company } from '../types';
+import { auth } from '../firebase';
 import { StorageEngine, loadFromIDB } from './storage';
 import { syncWriteWithOfflineFallback } from './offlineQueue';
 import { DEFAULT_COMPANIES } from './defaults';
@@ -156,51 +157,76 @@ export class CompaniesModule {
     return { success: false, error: 'Company not found' };
   }
 
-  static async deleteCompany(id: string): Promise<{ success: boolean; error?: string }> {
-    // 1. Record permanent tombstone in client storage
+  static async deleteCompany(id: string): Promise<{ success: boolean; error?: string; message?: string }> {
+    // 1. Call backend server cascading deletion API with credentials and valid auth header
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      } else if (typeof localStorage !== 'undefined') {
+        const sessionToken = localStorage.getItem('custody_auth_token');
+        if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+      }
+    } catch (err) {
+      console.warn('[deleteCompany] Could not acquire auth token:', err);
+    }
+
+    let serverRes: Response | null = null;
+    let data: any = null;
+    try {
+      serverRes = await fetch(`/api/admin/companies/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers,
+        credentials: 'include'
+      });
+      data = await serverRes.json().catch(() => ({}));
+    } catch (networkErr: any) {
+      console.error('[deleteCompany] Network error calling /api/admin/companies:', networkErr);
+      return {
+        success: false,
+        error: networkErr?.message || 'Network error communicating with server.'
+      };
+    }
+
+    // 2. Parse JSON; success ONLY if res.ok && data.success
+    if (!serverRes || !serverRes.ok || !data?.success) {
+      const errorMsg = data?.message || (serverRes ? `Server returned HTTP ${serverRes.status}` : 'Unknown error');
+      console.warn('[deleteCompany] Deletion aborted because server failed:', errorMsg);
+      // 3. On failure: do NOT remove company/users from local storage; show data.message; return { success: false }
+      return {
+        success: false,
+        error: errorMsg
+      };
+    }
+
+    // 4. On success only: then local cascade (companies, users, regions, stations, selection) as today
     const deletedIds = StorageEngine.getStored<string[]>('deleted_company_ids', []);
     if (!deletedIds.includes(id)) {
       deletedIds.push(id);
       StorageEngine.setStored('deleted_company_ids', deletedIds);
     }
 
-    // 2. Call backend server cascading deletion API
-    try {
-      let authHeader = '';
-      if (typeof window !== 'undefined') {
-        const sessionToken = localStorage.getItem('custody_auth_token');
-        if (sessionToken) authHeader = `Bearer ${sessionToken}`;
-      }
-      await fetch(`/api/admin/companies/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authHeader ? { 'Authorization': authHeader } : {})
-        },
-        credentials: 'include'
-      }).catch(err => console.warn('[deleteCompany] Server call notice:', err));
-    } catch (apiErr) {
-      console.warn('[deleteCompany] Network error calling /api/admin/companies:', apiErr);
-    }
-
-    // 3. Delete from Firestore via syncWriteWithOfflineFallback
+    // Delete from Firestore via syncWriteWithOfflineFallback
     await syncWriteWithOfflineFallback('companies', id, null);
 
-    // 4. Cascade delete across all local collections
+    // Cascade delete across all local collections
     // Filter companies
     const companies = StorageEngine.getStored<Company[]>('companies', []).filter(c => c.id !== id);
     StorageEngine.setStored('companies', companies);
 
-    // Filter users belonging to this company
-    const allUsers = StorageEngine.getStored<any[]>('users', []).filter(u => u.company_id !== id);
+    // Filter users belonging to this company (check both company_id and companyId)
+    const allUsers = StorageEngine.getStored<any[]>('users', []).filter(u => u.company_id !== id && u.companyId !== id);
     StorageEngine.setStored('users', allUsers);
 
     // Filter regions belonging to this company
-    const allRegions = StorageEngine.getStored<any[]>('regions', []).filter(r => r.company_id !== id);
+    const allRegions = StorageEngine.getStored<any[]>('regions', []).filter(r => r.company_id !== id && r.companyId !== id);
     StorageEngine.setStored('regions', allRegions);
 
     // Filter stations belonging to this company
-    const allStations = StorageEngine.getStored<any[]>('stations', []).filter(s => s.company_id !== id);
+    const allStations = StorageEngine.getStored<any[]>('stations', []).filter(s => s.company_id !== id && s.companyId !== id);
     StorageEngine.setStored('stations', allStations);
 
     // If current selected company was this deleted one, reset selection
@@ -216,7 +242,7 @@ export class CompaniesModule {
       window.dispatchEvent(new Event('custody_db_updated'));
     }
 
-    return { success: true };
+    return { success: true, message: data.message };
   }
 
   static getSelectedCompanyId(): string {

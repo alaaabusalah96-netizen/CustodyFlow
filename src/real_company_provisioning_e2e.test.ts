@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import crypto from 'crypto';
 import { CustodyDB } from './db';
 import { StorageEngine } from './db/storage';
@@ -20,6 +20,13 @@ describe('End-to-End Real Lifecycle: Platform Admin Manual Company, Region, Stat
 
   beforeEach(() => {
     localStorage.clear();
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, message: 'Company deleted successfully' })
+      } as any;
+    });
   });
 
   it('1. Platform Admin creates Company, Region, and Station manually', async () => {
