@@ -121,22 +121,61 @@ export class CompaniesModule {
     return { success: true };
   }
 
-  static async addCompany(name: string, custodyValue?: number): Promise<Company | null> {
+  static async addCompany(name: string, custodyValue?: number, customId?: string): Promise<Company | null> {
     const companies = CompaniesModule.getCompanies();
     const val = custodyValue ?? 0;
+    const companyId = (customId && customId.trim()) ? customId.trim() : crypto.randomUUID();
     const newCompany: Company = {
-      id: crypto.randomUUID(),
+      id: companyId,
       name,
-      custody_value: val
+      custody_value: val,
+      is_active: true,
+      subscription_status: 'active',
+      subscription_plan: 'Enterprise'
     };
     const updated = [...companies, newCompany];
     const res = await CompaniesModule.saveCompanies(updated);
     if (!res.success) {
       return null;
     }
+
+    // Auto-migrate & provision root organizational unit for the new company
+    try {
+      const { OrganizationEngine } = await import('./organizationEngine');
+      OrganizationEngine.autoMigrateLegacyStructure(newCompany.id);
+    } catch (orgErr) {
+      console.warn('[addCompany] Could not auto-migrate org structure for company:', orgErr);
+    }
+
+    // Attempt authoritative backend API sync for server-side persistence
+    try {
+      const { getAuthHeaders } = await import('../lib/userProvisioning');
+      const headers = await getAuthHeaders();
+      await fetch('/api/admin/companies', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers
+        },
+        body: JSON.stringify({
+          id: newCompany.id,
+          name: newCompany.name,
+          custody_value: newCompany.custody_value,
+          subscription_plan: 'Enterprise',
+          subscription_status: 'active'
+        })
+      });
+    } catch (apiErr) {
+      console.warn('[addCompany] Backend API company sync skipped/warning:', apiErr);
+    }
     
     const user = UsersModule.getActiveUser();
     LogsModule.addLog(user?.id || 'system', user?.full_name || 'System', 'Add Company', `Created new company: ${name}`);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('custody_db_updated', { detail: { key: 'companies', value: updated } }));
+    }
+
     return newCompany;
   }
 

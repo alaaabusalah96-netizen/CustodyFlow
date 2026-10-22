@@ -195,8 +195,8 @@ export class CustodyDB {
     return CompaniesModule.saveCompanies(companies);
   }
 
-  static async addCompany(name: string, custodyValue?: number): Promise<Company | null> {
-    return CompaniesModule.addCompany(name, custodyValue);
+  static async addCompany(name: string, custodyValue?: number, customId?: string): Promise<Company | null> {
+    return CompaniesModule.addCompany(name, custodyValue, customId);
   }
 
   static async updateCompany(id: string, updates: Partial<Company>): Promise<{ success: boolean; error?: string }> {

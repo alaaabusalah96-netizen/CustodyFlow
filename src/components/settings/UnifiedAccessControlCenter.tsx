@@ -191,6 +191,8 @@ export interface UnifiedAccessControlCenterProps {
   setNewUserOrgUnitId: (v: string) => void;
   newUserAssignedOrgUnitIds: string[];
   setNewUserAssignedOrgUnitIds: (v: string[]) => void;
+  newUserCompanyId?: string;
+  setNewUserCompanyId?: (v: string) => void;
   handleAddUser: (e: React.FormEvent) => void | boolean | Promise<void | boolean>;
   getAuthHeaders: () => Promise<Record<string, string>>;
   setUsers: (users: AppUser[]) => void;
@@ -247,6 +249,8 @@ export default function UnifiedAccessControlCenter({
   setNewUserOrgUnitId,
   newUserAssignedOrgUnitIds,
   setNewUserAssignedOrgUnitIds,
+  newUserCompanyId,
+  setNewUserCompanyId,
   handleAddUser,
   getAuthHeaders,
   setUsers,
@@ -272,6 +276,11 @@ export default function UnifiedAccessControlCenter({
   const allCompanies = useMemo(() => {
     return CompaniesModule.getCompanies();
   }, [companiesRefreshTrigger]);
+
+  // User creation company state (props with internal fallback)
+  const [internalNewUserCompanyId, setInternalNewUserCompanyId] = useState<string>('');
+  const activeNewUserCompanyId = newUserCompanyId !== undefined ? newUserCompanyId : internalNewUserCompanyId;
+  const setActiveNewUserCompanyId = setNewUserCompanyId || setInternalNewUserCompanyId;
 
   // User creation password state (props with internal fallback)
   const [internalNewUserPassword, setInternalNewUserPassword] = useState('');
@@ -419,6 +428,7 @@ export default function UnifiedAccessControlCenter({
   const handleCompanyChange = (newCompanyId: string) => {
     setSelectedCompanyId(newCompanyId);
     CustodyDB.setSelectedCompanyId(newCompanyId);
+    setActiveNewUserCompanyId(newCompanyId);
     setUsers(CustodyDB.getUsers());
     setCompaniesRefreshTrigger(prev => prev + 1);
     if (typeof window !== 'undefined') {
@@ -483,7 +493,11 @@ export default function UnifiedAccessControlCenter({
   };
 
   useEffect(() => {
-    const handleUpdate = () => refreshRequests();
+    const handleUpdate = () => {
+      refreshRequests();
+      setCompaniesRefreshTrigger(prev => prev + 1);
+      setUsers(CustodyDB.getScopedUsers());
+    };
     window.addEventListener('custody_db_updated', handleUpdate);
     return () => window.removeEventListener('custody_db_updated', handleUpdate);
   }, []);
@@ -915,7 +929,7 @@ export default function UnifiedAccessControlCenter({
     const rawAdminPass = newCompanyAdminPassword.trim();
 
     try {
-      const createdComp = await CustodyDB.addCompany(compName, newCompanyCustody || 0);
+      const createdComp = await CustodyDB.addCompany(compName, newCompanyCustody || 0, targetCompanyId || undefined);
       if (!createdComp) {
         throw new Error(isRtl ? 'فشل إنشاء سجل الشركة في قاعدة البيانات' : 'Failed to create company record');
       }
@@ -985,6 +999,9 @@ export default function UnifiedAccessControlCenter({
         setUsers(CustodyDB.getScopedUsers());
       }
 
+      setSelectedCompanyId(effectiveCompanyId);
+      CustodyDB.setSelectedCompanyId(effectiveCompanyId);
+      setActiveNewUserCompanyId(effectiveCompanyId);
       setCompaniesRefreshTrigger(prev => prev + 1);
       setShowAddCompanyModal(false);
       setNewCompanyName('');
@@ -1132,6 +1149,9 @@ export default function UnifiedAccessControlCenter({
               <button
                 onClick={() => {
                   setEditingUserId(null);
+                  if (!activeNewUserCompanyId) {
+                    setActiveNewUserCompanyId(selectedCompanyId || effectiveCompanyId);
+                  }
                   setShowNewUserModal(true);
                 }}
                 className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center gap-1.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
@@ -2833,12 +2853,55 @@ export default function UnifiedAccessControlCenter({
                 </div>
               </div>
 
+              {/* Company Selection for user creation (visible to SystemAdmin or when multi-company) */}
+              {isSystemAdmin && (
+                <div className="space-y-1">
+                  <label className="block text-slate-500 font-bold mb-1">
+                    {isRtl ? 'الشركة / المؤسسة التابع لها الموظف:' : 'Assigned Company / Tenant:'}
+                    <span className="text-rose-500 mx-1">*</span>
+                  </label>
+                  <select
+                    id="new-user-modal-company-select"
+                    value={activeNewUserCompanyId || selectedCompanyId || effectiveCompanyId}
+                    onChange={(e) => {
+                      const nextCid = e.target.value;
+                      setActiveNewUserCompanyId(nextCid);
+                      setSelectedCompanyId(nextCid);
+                      CustodyDB.setSelectedCompanyId(nextCid);
+                      setNewUserOrgUnitId('');
+                      if (setNewUserStationId) setNewUserStationId('');
+                      if (setNewUserRegionId) setNewUserRegionId('');
+                    }}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-800'
+                    }`}
+                  >
+                    {allCompanies.length === 0 && (
+                      <option value="">{isRtl ? '-- لا توجد شركات --' : '-- No companies --'}</option>
+                    )}
+                    {allCompanies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.id}) {c.subscription_plan ? `• ${c.subscription_plan}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-slate-400">
+                    {isRtl
+                      ? 'حدد الشركة التي ينتمي إليها الموظف لربطه بهيكلها الإداري'
+                      : 'Select the company the employee belongs to in order to display its organization units'}
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-1">
                 <label className="block text-slate-500 font-bold mb-1">
-                  {isRtl ? 'نطاق الفرع / المحطة (الشجرة التنظيمية):' : 'Supervisory Scope (Organization Tree):'}
+                  {newUserRole === 'Admin'
+                    ? (isRtl ? 'الفرع أو الوحدة الإشرافية (اختياري لمدير الشركة - الافتراضي كامل فروع الشركة):' : 'Supervisory Unit (Optional for Company Admin - Defaults to entire company):')
+                    : (isRtl ? 'نطاق الفرع / المحطة (الشجرة التنظيمية):' : 'Supervisory Scope (Organization Tree):')}
+                  {newUserRole !== 'Admin' && newUserRole !== 'SystemAdmin' && <span className="text-rose-500 mx-1">*</span>}
                 </label>
                 <OrgUnitTreeSelect
-                  companyId={effectiveCompanyId}
+                  companyId={activeNewUserCompanyId || selectedCompanyId || effectiveCompanyId}
                   value={newUserOrgUnitId}
                   onChange={(unitId) => {
                     const newOrgUnitId = Array.isArray(unitId) ? unitId[0] : unitId;

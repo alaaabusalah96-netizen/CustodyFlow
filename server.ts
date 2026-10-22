@@ -354,6 +354,34 @@ async function startServer() {
     }
   });
 
+  const SERVER_SESSION_SECRET = process.env.SESSION_SECRET || "kemit_server_session_secret_fallback_key_2026";
+
+  function signServerSessionToken(payload: { uid: string; email: string; role?: string; company_id?: string; timestamp?: number }): string {
+    const data = JSON.stringify({ ...payload, timestamp: payload.timestamp || Date.now() });
+    const b64Data = Buffer.from(data).toString('base64url');
+    const signature = crypto.createHmac('sha256', SERVER_SESSION_SECRET).update(b64Data).digest('base64url');
+    return `${b64Data}.${signature}`;
+  }
+
+  function verifyServerSessionToken(token: string): { valid: boolean; uid?: string; email?: string } {
+    if (!token || typeof token !== 'string' || !token.includes('.')) return { valid: false };
+    const parts = token.split('.');
+    if (parts.length !== 2) return { valid: false };
+    const [b64Data, signature] = parts;
+    if (!b64Data || !signature) return { valid: false };
+    const expectedSig = crypto.createHmac('sha256', SERVER_SESSION_SECRET).update(b64Data).digest('base64url');
+    if (signature !== expectedSig) return { valid: false };
+    try {
+      const data = JSON.parse(Buffer.from(b64Data, 'base64url').toString('utf8'));
+      if (Date.now() - (data.timestamp || 0) > 14 * 24 * 60 * 60 * 1000) {
+        return { valid: false };
+      }
+      return { valid: true, uid: data.uid, email: data.email };
+    } catch {
+      return { valid: false };
+    }
+  }
+
   // API Route - First-Run Super Admin Setup
   app.post("/api/auth/bootstrap-platform-owner", otpRateLimiter, async (req, res) => {
     try {
@@ -454,13 +482,20 @@ async function startServer() {
         updated_at: new Date().toISOString()
       });
 
-      // 7. Issue custom token
+      // 7. Issue custom token & server session token
       const customToken = await getAdminAuth(adminApp).createCustomToken(userId);
+      const serverSessionToken = signServerSessionToken({
+        uid: userId,
+        email: emailLower,
+        role: "SystemAdmin",
+        company_id: undefined
+      });
 
       return res.json({
         success: true,
         user: userDocData,
-        customToken
+        customToken,
+        sessionToken: serverSessionToken
       });
     } catch (err: any) {
       console.error("bootstrap-platform-owner error:", err);
@@ -483,22 +518,32 @@ async function startServer() {
         return res.status(401).json({ success: false, message: "ID Token is required" });
       }
 
+      let uid: string | null = null;
+      let sessionCookie: string | null = null;
+      const expiresIn = 14 * 24 * 60 * 60 * 1000; // 14 days in milliseconds
+
       try {
-        await getAdminAuth(adminApp).verifyIdToken(idToken);
+        const decoded = await getAdminAuth(adminApp).verifyIdToken(idToken);
+        uid = decoded.uid;
+        sessionCookie = await getAdminAuth(adminApp).createSessionCookie(idToken, { expiresIn });
       } catch (verifyErr) {
-        return res.status(401).json({ success: false, message: "Invalid ID Token" });
+        const serverToken = verifyServerSessionToken(idToken);
+        if (serverToken.valid && serverToken.uid) {
+          uid = serverToken.uid;
+        } else {
+          return res.status(401).json({ success: false, message: "Invalid ID Token" });
+        }
       }
 
-      const expiresIn = 14 * 24 * 60 * 60 * 1000; // 14 days in milliseconds
-      const sessionCookie = await getAdminAuth(adminApp).createSessionCookie(idToken, { expiresIn });
-
-      res.cookie('session', sessionCookie, {
-        maxAge: expiresIn,
-        httpOnly: true,
-        secure: true,
-        sameSite: 'strict',
-        path: '/'
-      });
+      if (sessionCookie) {
+        res.cookie('session', sessionCookie, {
+          maxAge: expiresIn,
+          httpOnly: true,
+          secure: true,
+          sameSite: 'none',
+          path: '/'
+        });
+      }
 
       return res.json({ success: true });
     } catch (err: any) {
@@ -527,7 +572,7 @@ async function startServer() {
       res.clearCookie('session', {
         httpOnly: true,
         secure: true,
-        sameSite: 'strict',
+        sameSite: 'none',
         path: '/'
       });
       res.clearCookie('session', { path: '/' });
@@ -535,25 +580,40 @@ async function startServer() {
     }
   });
 
-  // Helper for Authenticating requests via Bearer Token or Session Cookie
+  // Helper for Authenticating requests via Bearer Token, Server Session Token, or Session Cookie
   async function authenticateSessionOrBearer(req: express.Request): Promise<{ authenticated: boolean; statusCode: number; message: string; user?: any }> {
     let uid: string | null = null;
 
     // 1. Check Bearer Token from Authorization Header first (explicit active client token)
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith("Bearer ")) {
-      const idToken = authHeader.substring(7).trim();
-      if (idToken) {
+      const token = authHeader.substring(7).trim();
+      if (token) {
         try {
-          const decoded = await getAdminAuth(adminApp).verifyIdToken(idToken);
+          const decoded = await getAdminAuth(adminApp).verifyIdToken(token);
           uid = decoded.uid;
         } catch (_) {
-          // Invalid Bearer token, fall back to session cookie
+          // Fallback to server-signed session token
+          const serverToken = verifyServerSessionToken(token);
+          if (serverToken.valid && serverToken.uid) {
+            uid = serverToken.uid;
+          }
         }
       }
     }
 
-    // 2. Check Session Cookie if Bearer Token is missing/invalid
+    // 2. Check x-session-token custom header
+    if (!uid) {
+      const customHeaderToken = req.headers['x-session-token'];
+      if (typeof customHeaderToken === 'string' && customHeaderToken.trim()) {
+        const serverToken = verifyServerSessionToken(customHeaderToken.trim());
+        if (serverToken.valid && serverToken.uid) {
+          uid = serverToken.uid;
+        }
+      }
+    }
+
+    // 3. Check Session Cookie if Bearer Token is missing/invalid
     if (!uid) {
       const sessionCookie = req.cookies?.session;
       if (sessionCookie) {
@@ -561,7 +621,10 @@ async function startServer() {
           const decoded = await getAdminAuth(adminApp).verifySessionCookie(sessionCookie, true);
           uid = decoded.uid;
         } catch (_) {
-          // Invalid or expired session cookie
+          const serverToken = verifyServerSessionToken(sessionCookie);
+          if (serverToken.valid && serverToken.uid) {
+            uid = serverToken.uid;
+          }
         }
       }
     }
@@ -624,6 +687,7 @@ async function startServer() {
 
       // Determine effective password (manual if provided >= 12 chars, otherwise auto-generate >= 16 chars)
       let effectivePassword = "";
+      let isGeneratedPassword = false;
       if (password !== undefined && password !== null && typeof password === 'string' && password.trim() !== '') {
         const trimmed = password.trim();
         if (trimmed.length < 12) {
@@ -635,6 +699,7 @@ async function startServer() {
         effectivePassword = trimmed;
       } else {
         effectivePassword = generateSecureTemporaryPassword();
+        isGeneratedPassword = true;
       }
 
       // 3. Validation: Prevent creating SystemAdmin or setting is_platform_owner
@@ -727,6 +792,8 @@ async function startServer() {
         let isValidRegion = false;
         let regionFound = false;
         let infraError = false;
+        let matchedOrgUnitData: any = null;
+        let matchedOrgUnitId: string | null = null;
         try {
           const regDoc = await adminDb.collection("regions").doc(region_id).get();
           if (regDoc.exists) {
@@ -741,9 +808,11 @@ async function startServer() {
             const orgDoc = await adminDb.collection("organization_units").doc(region_id).get();
             if (orgDoc.exists) {
               const orgData = orgDoc.data();
-              const isRegionType = orgData?.typeId === 'out-region' || orgData?.type_id === 'out-region' || Boolean(orgData?.metadata?.legacyRegionId);
+              const isRegionType = orgData?.typeId === 'out-region' || orgData?.type_id === 'out-region' || orgData?.typeId === 'out-sector' || orgData?.type_id === 'out-sector' || Boolean(orgData?.metadata?.legacyRegionId);
               if (isRegionType) {
                 regionFound = true;
+                matchedOrgUnitData = orgData;
+                matchedOrgUnitId = orgDoc.id;
                 const orgCompId = orgData?.companyId || orgData?.company_id;
                 if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
                   isValidRegion = true;
@@ -754,9 +823,11 @@ async function startServer() {
               const orgCodeSnap = await adminDb.collection("organization_units").where("code", "==", region_id).limit(1).get();
               if (!orgCodeSnap.empty) {
                 const orgData = orgCodeSnap.docs[0].data();
-                const isRegionType = orgData?.typeId === 'out-region' || orgData?.type_id === 'out-region' || Boolean(orgData?.metadata?.legacyRegionId);
+                const isRegionType = orgData?.typeId === 'out-region' || orgData?.type_id === 'out-region' || orgData?.typeId === 'out-sector' || orgData?.type_id === 'out-sector' || Boolean(orgData?.metadata?.legacyRegionId);
                 if (isRegionType) {
                   regionFound = true;
+                  matchedOrgUnitData = orgData;
+                  matchedOrgUnitId = orgCodeSnap.docs[0].id;
                   const orgCompId = orgData?.companyId || orgData?.company_id;
                   if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
                     isValidRegion = true;
@@ -764,6 +835,22 @@ async function startServer() {
                   }
                 }
               }
+            }
+          }
+
+          // Auto-mirror legacy region document if resolved through organization_units
+          if (isValidRegion && matchedOrgUnitData && matchedOrgUnitId) {
+            try {
+              await adminDb.collection("regions").doc(matchedOrgUnitId).set({
+                id: matchedOrgUnitId,
+                name: matchedOrgUnitData.nameAr || matchedOrgUnitData.name || region_id,
+                code: matchedOrgUnitData.code || '',
+                company_id: effectiveCompanyId,
+                org_unit_id: matchedOrgUnitId,
+                created_at: new Date().toISOString()
+              }, { merge: true });
+            } catch (mirrorErr) {
+              console.warn("Could not mirror region doc:", mirrorErr);
             }
           }
         } catch (regLookupErr) {
@@ -791,6 +878,8 @@ async function startServer() {
         let isValidStation = false;
         let stationFound = false;
         let infraError = false;
+        let matchedStationOrgData: any = null;
+        let matchedStationOrgId: string | null = null;
         try {
           const stDoc = await adminDb.collection("stations").doc(station_id).get();
           if (stDoc.exists) {
@@ -806,7 +895,9 @@ async function startServer() {
             const orgDoc = await adminDb.collection("organization_units").doc(station_id).get();
             if (orgDoc.exists) {
               stationFound = true;
-              const orgData = orgDoc.data();
+              matchedStationOrgData = orgDoc.data();
+              matchedStationOrgId = orgDoc.id;
+              const orgData = matchedStationOrgData;
               const orgCompId = orgData?.companyId || orgData?.company_id;
               resolvedStationRegionId = orgData?.metadata?.legacyRegionId || orgData?.metadata?.legacy_region_id || null;
               if (!resolvedStationRegionId && orgData?.parentId) {
@@ -824,7 +915,9 @@ async function startServer() {
               const orgCodeSnap = await adminDb.collection("organization_units").where("code", "==", station_id).limit(1).get();
               if (!orgCodeSnap.empty) {
                 stationFound = true;
-                const orgData = orgCodeSnap.docs[0].data();
+                matchedStationOrgData = orgCodeSnap.docs[0].data();
+                matchedStationOrgId = orgCodeSnap.docs[0].id;
+                const orgData = matchedStationOrgData;
                 const orgCompId = orgData?.companyId || orgData?.company_id;
                 resolvedStationRegionId = orgData?.metadata?.legacyRegionId || orgData?.metadata?.legacy_region_id || null;
                 if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
@@ -832,6 +925,24 @@ async function startServer() {
                   if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
                 }
               }
+            }
+          }
+
+          // Auto-mirror legacy station document if resolved through organization_units
+          if (isValidStation && matchedStationOrgData && matchedStationOrgId) {
+            try {
+              await adminDb.collection("stations").doc(matchedStationOrgId).set({
+                id: matchedStationOrgId,
+                station_name: matchedStationOrgData.nameAr || matchedStationOrgData.name || station_id,
+                station_code: matchedStationOrgData.code || '',
+                custody_amount: matchedStationOrgData.metadata?.custodyAmount || 0,
+                company_id: effectiveCompanyId,
+                region_id: resolvedStationRegionId || null,
+                org_unit_id: matchedStationOrgId,
+                created_at: new Date().toISOString()
+              }, { merge: true });
+            } catch (mirrorErr) {
+              console.warn("Could not mirror station doc:", mirrorErr);
             }
           }
         } catch (stLookupErr) {
@@ -869,7 +980,81 @@ async function startServer() {
       // Unique email check in Firestore 'users' collection
       const existingUserSnap = await adminDb.collection("users").where("email", "==", emailLower).limit(1).get();
       if (!existingUserSnap.empty) {
-        return res.status(400).json({ success: false, message: "البريد الإلكتروني مسجل بالفعل / Email already exists." });
+        const existingDoc = existingUserSnap.docs[0];
+        const existingData = existingDoc.data();
+
+        // 1. Check if the user belongs to a deleted/non-existent company
+        let isOrphanedCompany = false;
+        if (existingData?.company_id) {
+          try {
+            const compDoc = await adminDb.collection("companies").doc(existingData.company_id).get();
+            if (!compDoc.exists) {
+              isOrphanedCompany = true;
+            }
+          } catch (_) {}
+        }
+
+        if (isOrphanedCompany) {
+          // Auto-purge ghost user record from the deleted company and allow provisioning
+          console.warn(`[POST /api/admin/users] Auto-purging orphaned user ${existingDoc.id} from deleted company ${existingData?.company_id}`);
+          try {
+            await adminDb.collection("users").doc(existingDoc.id).delete();
+            await adminDb.collection("user_credentials").doc(existingDoc.id).delete();
+            const authClient = getAdminAuth(adminApp);
+            if (authClient) await authClient.deleteUser(existingDoc.id).catch(() => {});
+          } catch (purgeErr) {
+            console.warn("Could not purge orphaned user:", purgeErr);
+          }
+        } else if (existingData?.company_id === effectiveCompanyId && existingData?.is_active === false) {
+          // 2. Reactivate and update previously deactivated user in the same company
+          console.warn(`[POST /api/admin/users] Reactivating inactive user ${existingDoc.id} in company ${effectiveCompanyId}`);
+          const updatedUserData = {
+            ...existingData,
+            role,
+            full_name: full_name.trim(),
+            company_id: effectiveCompanyId,
+            region_id: region_id || null,
+            station_id: station_id || null,
+            is_active: true,
+            updated_at: new Date().toISOString()
+          };
+          await adminDb.collection("users").doc(existingDoc.id).set(updatedUserData, { merge: true });
+
+          // Update password in credentials vault and Auth
+          const salt = crypto.randomUUID();
+          const pbkdf2Hash = hashPasswordPBKDF2_210k(effectivePassword, salt, 2);
+          await adminDb.collection("user_credentials").doc(existingDoc.id).set({
+            id: existingDoc.id,
+            company_id: effectiveCompanyId,
+            email: emailLower,
+            passwordHash: pbkdf2Hash,
+            salt,
+            kdf: 'sha256_pbkdf2_210k',
+            pepper_version: 2,
+            updated_at: new Date().toISOString()
+          }, { merge: true });
+
+          const authClient = getAdminAuth(adminApp);
+          if (authClient) {
+            try {
+              await authClient.updateUser(existingDoc.id, {
+                password: effectivePassword,
+                displayName: full_name.trim(),
+                disabled: false
+              });
+            } catch (_) {}
+          }
+
+          return res.status(201).json({
+            success: true,
+            message: "تم إعادة تفعيل وتحديث بيانات المستخدم بنجاح / User reactivated successfully.",
+            user: updatedUserData,
+            temporaryPassword: effectivePassword,
+            isGeneratedPassword
+          });
+        } else {
+          return res.status(400).json({ success: false, message: "البريد الإلكتروني مسجل بالفعل / Email already exists." });
+        }
       }
 
       // Check Firebase Auth
@@ -1081,6 +1266,8 @@ async function startServer() {
         let isValidRegion = false;
         let regionFound = false;
         let infraError = false;
+        let matchedOrgUnitData: any = null;
+        let matchedOrgUnitId: string | null = null;
         try {
           const regDoc = await adminDb.collection("regions").doc(region_id).get();
           if (regDoc.exists) {
@@ -1095,9 +1282,11 @@ async function startServer() {
             const orgDoc = await adminDb.collection("organization_units").doc(region_id).get();
             if (orgDoc.exists) {
               const orgData = orgDoc.data();
-              const isRegionType = orgData?.typeId === 'out-region' || orgData?.type_id === 'out-region' || Boolean(orgData?.metadata?.legacyRegionId);
+              const isRegionType = orgData?.typeId === 'out-region' || orgData?.type_id === 'out-region' || orgData?.typeId === 'out-sector' || orgData?.type_id === 'out-sector' || Boolean(orgData?.metadata?.legacyRegionId);
               if (isRegionType) {
                 regionFound = true;
+                matchedOrgUnitData = orgData;
+                matchedOrgUnitId = orgDoc.id;
                 const orgCompId = orgData?.companyId || orgData?.company_id;
                 if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
                   isValidRegion = true;
@@ -1108,9 +1297,11 @@ async function startServer() {
               const orgCodeSnap = await adminDb.collection("organization_units").where("code", "==", region_id).limit(1).get();
               if (!orgCodeSnap.empty) {
                 const orgData = orgCodeSnap.docs[0].data();
-                const isRegionType = orgData?.typeId === 'out-region' || orgData?.type_id === 'out-region' || Boolean(orgData?.metadata?.legacyRegionId);
+                const isRegionType = orgData?.typeId === 'out-region' || orgData?.type_id === 'out-region' || orgData?.typeId === 'out-sector' || orgData?.type_id === 'out-sector' || Boolean(orgData?.metadata?.legacyRegionId);
                 if (isRegionType) {
                   regionFound = true;
+                  matchedOrgUnitData = orgData;
+                  matchedOrgUnitId = orgCodeSnap.docs[0].id;
                   const orgCompId = orgData?.companyId || orgData?.company_id;
                   if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
                     isValidRegion = true;
@@ -1118,6 +1309,21 @@ async function startServer() {
                   }
                 }
               }
+            }
+          }
+
+          if (isValidRegion && matchedOrgUnitData && matchedOrgUnitId) {
+            try {
+              await adminDb.collection("regions").doc(matchedOrgUnitId).set({
+                id: matchedOrgUnitId,
+                name: matchedOrgUnitData.nameAr || matchedOrgUnitData.name || region_id,
+                code: matchedOrgUnitData.code || '',
+                company_id: effectiveCompanyId,
+                org_unit_id: matchedOrgUnitId,
+                created_at: new Date().toISOString()
+              }, { merge: true });
+            } catch (mErr) {
+              console.warn("Could not mirror region in PATCH:", mErr);
             }
           }
         } catch (regErr) {
@@ -1145,6 +1351,8 @@ async function startServer() {
         let isValidStation = false;
         let stationFound = false;
         let infraError = false;
+        let matchedStationOrgData: any = null;
+        let matchedStationOrgId: string | null = null;
         try {
           const stDoc = await adminDb.collection("stations").doc(station_id).get();
           if (stDoc.exists) {
@@ -1160,7 +1368,9 @@ async function startServer() {
             const orgDoc = await adminDb.collection("organization_units").doc(station_id).get();
             if (orgDoc.exists) {
               stationFound = true;
-              const orgData = orgDoc.data();
+              matchedStationOrgData = orgDoc.data();
+              matchedStationOrgId = orgDoc.id;
+              const orgData = matchedStationOrgData;
               const orgCompId = orgData?.companyId || orgData?.company_id;
               resolvedStationRegionId = orgData?.metadata?.legacyRegionId || orgData?.metadata?.legacy_region_id || null;
               if (!resolvedStationRegionId && orgData?.parentId) {
@@ -1178,7 +1388,9 @@ async function startServer() {
               const orgCodeSnap = await adminDb.collection("organization_units").where("code", "==", station_id).limit(1).get();
               if (!orgCodeSnap.empty) {
                 stationFound = true;
-                const orgData = orgCodeSnap.docs[0].data();
+                matchedStationOrgData = orgCodeSnap.docs[0].data();
+                matchedStationOrgId = orgCodeSnap.docs[0].id;
+                const orgData = matchedStationOrgData;
                 const orgCompId = orgData?.companyId || orgData?.company_id;
                 resolvedStationRegionId = orgData?.metadata?.legacyRegionId || orgData?.metadata?.legacy_region_id || null;
                 if (!effectiveCompanyId || orgCompId === effectiveCompanyId) {
@@ -1186,6 +1398,23 @@ async function startServer() {
                   if (!effectiveCompanyId && orgCompId) effectiveCompanyId = orgCompId;
                 }
               }
+            }
+          }
+
+          if (isValidStation && matchedStationOrgData && matchedStationOrgId) {
+            try {
+              await adminDb.collection("stations").doc(matchedStationOrgId).set({
+                id: matchedStationOrgId,
+                station_name: matchedStationOrgData.nameAr || matchedStationOrgData.name || station_id,
+                station_code: matchedStationOrgData.code || '',
+                custody_amount: matchedStationOrgData.metadata?.custodyAmount || 0,
+                company_id: effectiveCompanyId,
+                region_id: resolvedStationRegionId || null,
+                org_unit_id: matchedStationOrgId,
+                created_at: new Date().toISOString()
+              }, { merge: true });
+            } catch (mStErr) {
+              console.warn("Could not mirror station in PATCH:", mStErr);
             }
           }
         } catch (stErr) {
@@ -1303,11 +1532,6 @@ async function startServer() {
       const creator = authResult.user;
       const isPlatformAdmin = await isPlatformAdminUser(creator.email, creator);
 
-      // User deletion is strictly reserved for Platform Admins / SystemAdmin
-      if (!isPlatformAdmin) {
-        return res.status(403).json({ success: false, message: "Forbidden: Insufficient privileges to delete user. User deletion is reserved for Platform Admins / غير مصرح لك بحذف المستخدمين؛ هذه الصلاحية مخصصة لأدمن المنصة فقط." });
-      }
-
       const targetUserId = req.params.id;
       if (!targetUserId) {
         return res.status(400).json({ success: false, message: "User ID parameter is required." });
@@ -1325,6 +1549,22 @@ async function startServer() {
 
       const targetData = userDoc.data() || {};
       const targetEmail = (targetData.email || "").toLowerCase().trim();
+      const targetRole = targetData.role;
+      const targetCompanyId = targetData.company_id;
+
+      // Check authorization:
+      // - Platform Admin / SystemAdmin: Can delete any non-self user
+      // - Company Admin (role === 'Admin'): Can delete non-SystemAdmin users within their own assigned company
+      if (!isPlatformAdmin) {
+        const isCompanyAdmin = creator.role === 'Admin' && creator.company_id && creator.company_id === targetCompanyId;
+        const targetIsProtected = targetRole === 'SystemAdmin' || targetData.is_platform_owner === true;
+        if (!isCompanyAdmin || targetIsProtected) {
+          return res.status(403).json({
+            success: false,
+            message: "غير مصرح لك بحذف هذا المستخدم؛ يمكنك فقط حذف مستخدمي شركتك / Forbidden: You can only delete users belonging to your company."
+          });
+        }
+      }
 
       // 1. Delete/Disable Firebase Auth User
       try {
@@ -1819,10 +2059,18 @@ async function startServer() {
         customToken = null;
       }
 
+      const serverSessionToken = signServerSessionToken({
+        uid: userId,
+        email: emailLower,
+        role: publicUser.role,
+        company_id: publicUser.company_id
+      });
+
       return res.json({
         success: true,
         user: publicUser,
         customToken,
+        sessionToken: serverSessionToken,
         mustChangePassword: Boolean(publicUser.must_change_password)
       });
     } catch (err: any) {

@@ -429,6 +429,7 @@ export default function Settings({
   const [newUserRegionId, setNewUserRegionId] = useState('');
   const [newUserOrgUnitId, setNewUserOrgUnitId] = useState('');
   const [newUserAssignedOrgUnitIds, setNewUserAssignedOrgUnitIds] = useState<string[]>([]);
+  const [newUserCompanyId, setNewUserCompanyId] = useState('');
   const [createdUserSuccess, setCreatedUserSuccess] = useState<{
     fullName: string;
     email: string;
@@ -900,6 +901,7 @@ export default function Settings({
     } else {
       const companyId = CustodyDB.getSelectedCompanyId() || '';
       effectiveCompanyId =
+        newUserCompanyId ||
         companyId ||
         derived.company_id ||
         currentUser.company_id ||
@@ -1280,6 +1282,8 @@ export default function Settings({
           setNewUserOrgUnitId={setNewUserOrgUnitId}
           newUserAssignedOrgUnitIds={newUserAssignedOrgUnitIds}
           setNewUserAssignedOrgUnitIds={setNewUserAssignedOrgUnitIds}
+          newUserCompanyId={newUserCompanyId}
+          setNewUserCompanyId={setNewUserCompanyId}
           handleAddUser={handleAddUser}
           getAuthHeaders={getAuthHeaders}
           setUsers={setUsers}
